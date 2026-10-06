@@ -13,5 +13,8 @@ A Seaside-style web framework for SBCL. See README.md for the user-facing tour.
   - Rendering must not change state (`*rendering*` makes `show`/`answer`/`home` signal). Tasks are started by `prepare-tasks` after the callbacks run, never during render. Derived data, such as a report's rows, is computed on demand rather than stored at render time.
   - Every URL goes through `url-for` or `page-url`, so the mount prefix and `update-url` apply.
   - AJAX requests reuse the page's continuation and re-snapshot it; they do not create a new `_k`.
+  - Static files are served at `static-url`, which carries a content fingerprint (`?v=`). Only a URL with the matching fingerprint is cached as immutable, so browsers never run stale JS.
+  - Chrome restores even `no-store` pages from its back/forward cache, so `littoral.js` reloads on `pageshow` when the page was persisted. Browser tests of back-button behaviour must allow for that reload.
+  - Shared, cross-session state (the wiki and the chat room) lives outside `states`, behind a mutex.
 - `call` is a `defun/cc`, so it suspends only when called lexically inside `define-flow` (or another `/cc` function).
 - `sed` on this machine is GNU sed.

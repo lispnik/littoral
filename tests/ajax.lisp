@@ -9,7 +9,7 @@
   (with-fresh-applications (("/ajax" 'littoral-examples:ajax-demo :mode :deployment))
     (let ((b (make-instance 'browser)))
       (visit b "/ajax")
-      (is (search "<script src=\"/littoral/files/littoral.js\"" (browser-html b)))
+      (is (search "<script src=\"/littoral/files/littoral.js?v=" (browser-html b)))
       (let* ((specs (ajax-specs b "on-click"))
              (plus (first specs)))
         (is (= 2 (length specs)))

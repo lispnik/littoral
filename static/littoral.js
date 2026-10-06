@@ -36,12 +36,21 @@
         return r.json();
       })
       .then(function (data) {
+        var focused = document.activeElement && document.activeElement.id;
         Object.keys(data.fragments).forEach(function (id) {
           var old = document.getElementById(id);
-          if (old) old.outerHTML = data.fragments[id];
+          if (!old) return;
+          old.outerHTML = data.fragments[id];
+          // outerHTML drops focus; give it back, or honour autofocus.
+          var fresh = document.getElementById(id);
+          var target = (focused && fresh.querySelector("#" + CSS.escape(focused))) ||
+                       fresh.querySelector("[autofocus]");
+          if (target && target.focus) target.focus();
         });
         if (data.missing.length) window.location.reload();
         scanPeriodicals();
+        document.dispatchEvent(new CustomEvent("littoral:updated",
+          { detail: { ids: Object.keys(data.fragments) } }));
       })
       .catch(function () { window.location.reload(); });
   }
@@ -97,4 +106,11 @@
   }
 
   document.addEventListener("DOMContentLoaded", scanPeriodicals);
+
+  // A page restored from the back/forward cache shows state the server may
+  // have moved past (an isolated checkout, say), and Chrome restores even
+  // no-store pages.  Ask the server again.
+  window.addEventListener("pageshow", function (event) {
+    if (event.persisted) window.location.reload();
+  });
 })();

@@ -35,7 +35,13 @@ make run           # examples on http://127.0.0.1:8080/
 make e2e           # littoral.js in headless Chrome (needs Node 22+)
 ```
 
-The example applications are under `/examples/…`: counter, multi-counter, guess (a task), login (call/answer with validation), ajax, todo, upload, topics (bookmarkable URLs) and report (a sortable, paged table). The configuration application is at `/config`.
+`/examples` is a guide to the examples. Three of them are complete small applications:
+
+- **Sushi Store** (`/examples/store`): Seaside's classic demo. A catalog report and a cart share the page. Checkout is a task: review the cart, enter an address (validated), pick a delivery date with a reusable date-picker component, choose how to pay, then confirm. You can cancel at any step and the back button works throughout. Once the order is placed, the checkout pages are isolated, so going back can't place it twice.
+- **Wiki** (`/examples/wiki`): pages are shared by every session and kept out of backtracking. Each page has its own URL. There are `[[links]]` to new pages, editing with preview through `call`, history with revert, and search.
+- **Chat** (`/examples/chat`): many sessions in one room. Messages are posted with an AJAX form submit, and every message list polls the room with `periodical`.
+
+The smaller examples are counter, multi-counter, login, todo, guess (a task), topics (bookmarkable URLs), report, ajax and upload. The configuration application is at `/config`.
 
 ## Concepts
 
@@ -115,6 +121,19 @@ Common Lisp has no first-class continuations. `define-flow` therefore rewrites t
 - If you `setq` a variable after a `call`, every page that resumes from that call shares the change. Prefer fresh bindings when the back button matters.
 
 Outside a flow, `call` shows the component and returns immediately. Use `show` with `:on-answer` there.
+
+### Isolation
+
+After an irreversible step, such as placing an order, the user shouldn't be able to go back into the pages that led to it and do it again. Seaside's `isolate:` prevents this; littoral splits it in two:
+
+```lisp
+(let ((isolation (begin-isolation)))
+  … the checkout's calls …
+  (place-order …)
+  (end-isolation isolation))     ; the checkout pages are gone
+```
+
+Going back to one of those pages then shows the session as it is now. `littoral.js` also reloads any page Chrome restores from its back/forward cache, because Chrome does this even for `no-store` pages.
 
 ### AJAX
 

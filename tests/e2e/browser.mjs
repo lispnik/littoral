@@ -4,10 +4,13 @@
 import { spawn } from "node:child_process";
 const CHROME = process.env.CHROME || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const BASE = process.env.BASE || "http://127.0.0.1:8765";
+// A fresh profile per run: no cached files or cookies from the last one.
+const { mkdtempSync } = await import("node:fs");
+const PROFILE = mkdtempSync("/tmp/littoral-e2e-");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const chrome = spawn(CHROME, ["--headless=new", "--remote-debugging-port=9333",
-  "--user-data-dir=" + (process.env.PROFILE || "/tmp/littoral-e2e-profile"), "--no-first-run", "about:blank"], { stdio: "ignore" });
+  "--user-data-dir=" + PROFILE, "--no-first-run", "about:blank"], { stdio: "ignore" });
 let ws, id = 0; const pending = new Map(); const events = [];
 for (let i = 0; i < 50; i++) {
   try { const r = await fetch("http://127.0.0.1:9333/json/list"); const t = (await r.json()).find((x) => x.type === "page");
@@ -95,7 +98,7 @@ try {
 
   // File upload through a real multipart form.
   const { writeFileSync } = await import("node:fs");
-  const upload = (process.env.PROFILE || "/tmp/littoral-e2e-profile") + "-upload.txt";
+  const upload = PROFILE + "/littoral-e2e-profile-upload.txt";
   writeFileSync(upload, "hello from chrome\n");
   await go("/examples/upload");
   const doc = await send("DOM.getDocument");
@@ -105,8 +108,53 @@ try {
   const text = await evaluate("document.body.innerText");
   check("upload received", text.includes("littoral-e2e-profile-upload.txt") && text.includes("hello from chrome"), text.slice(0, 200));
 
+  // Chat: join, then send with a real Enter keypress; AJAX, no reload, focus kept.
+  await go("/examples/chat");
+  await clickLink("Join the room");
+  await evaluate(`document.querySelector("input[type=text]").value = "e2e"`);
+  await evaluate(`document.querySelector("button[type=submit]").click()`); await waitLoad();
+  await evaluate("window.__chat = 1");
+  await evaluate(`document.getElementById("draft").focus()`);
+  await send("Input.insertText", { text: "hello room" });
+  await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r" });
+  await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+  await sleep(600);
+  check("chat message shown", (await evaluate(`document.querySelector(".chat-messages").innerText`)).includes("hello room"));
+  check("chat did not reload", await evaluate("window.__chat") === 1);
+  const active = await evaluate(`JSON.stringify({id: document.activeElement.id, value: document.activeElement.value, hasFocus: document.hasFocus()})`);
+  check("chat input cleared and focused", JSON.parse(active).id === "draft" && JSON.parse(active).value === "", active);
+
+  // Store: add to cart, then the whole checkout by clicking.
+  await go("/examples/store");
+  const addLinks = `[...document.querySelectorAll("a.add")]`;
+  await evaluate(`${addLinks}[0].click()`); await waitLoad();
+  await evaluate(`${addLinks}[1].click()`); await waitLoad();
+  check("cart has two items", (await evaluate("document.body.innerText")).includes("2 items in your cart"));
+  await clickLink("Checkout");
+  const pressButton = async (label) => {
+    await evaluate(`[...document.querySelectorAll("button")].find(b => b.textContent.includes(${JSON.stringify(label)})).click()`);
+    await waitLoad();
+  };
+  await pressButton("Continue to delivery");
+  for (const [id, v] of [["name", "Ada"], ["street", "1 Main St"], ["city", "Springfield"], ["postcode", "12345"]])
+    await evaluate(`document.getElementById(${JSON.stringify(id)}).value = ${JSON.stringify(v)}`);
+  await pressButton("Continue");
+  await clickLink("›");
+  await evaluate(`[...document.querySelectorAll(".date-picker-grid a")].find(a => a.textContent === "15").click()`); await waitLoad();
+  await pressButton("OK");
+  await pressButton("Yes");
+  check("order placed", (await evaluate("document.body.innerText")).includes("Thank you! Order #"));
+  await evaluate("history.back()"); await waitLoad(); await sleep(500); await waitLoad();
+  const afterBack = await evaluate("location.search + ' | ' + document.body.innerText.slice(0, 300)");
+
+  check("back after ordering cannot re-confirm", !afterBack.includes("Place an order"), afterBack);
+
   const errors = events.filter((e) => e.method === "Runtime.exceptionThrown");
   check("no JS exceptions", errors.length === 0, JSON.stringify(errors.map((e) => e.params.exceptionDetails.text)));
 } catch (e) { console.log("ERROR " + e.message); failures++; }
-finally { ws.close(); chrome.kill(); }
+finally {
+  ws.close(); chrome.kill();
+  await sleep(300);
+  (await import("node:fs")).rmSync(PROFILE, { recursive: true, force: true });
+}
 process.exit(failures ? 1 : 0);

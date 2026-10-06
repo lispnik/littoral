@@ -65,6 +65,11 @@
                              (:file "upload")
                              (:file "topics")
                              (:file "report")
+                             (:file "date-picker")
+                             (:file "store")
+                             (:file "wiki")
+                             (:file "chat")
+                             (:file "index")
                              (:file "register")))))
 
 (asdf:defsystem #:littoral/tests
@@ -87,7 +92,8 @@
                              (:file "task")
                              (:file "ajax")
                              (:file "tools")
-                             (:file "widgets"))))
+                             (:file "widgets")
+                             (:file "examples"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
                                        (uiop:find-symbol* :littoral :littoral/tests))

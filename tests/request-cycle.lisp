@@ -136,7 +136,7 @@
       (visit b "/apps/counter")
       (is (= 200 (browser-status b)))
       (is (alexandria:starts-with-subseq "/apps/counter?" (browser-url b)))
-      (is (search "href=\"/apps/littoral/files/littoral.css\"" (browser-html b)))
+      (is (search "href=\"/apps/littoral/files/littoral.css?v=" (browser-html b)))
       (is (search "data-lt-action=\"/apps/counter?" (browser-html b)))
       (is (search "href=\"/apps/counter\">New Session" (browser-html b)))
       (click b "++")
@@ -211,3 +211,17 @@
 
 (test reserved-parameters
   (signals error (add-parameter (make-instance 'page-url) "_k" "x")))
+
+(test static-files-are-fingerprinted
+  (with-fresh-applications (("/counter" 'littoral-examples:counter :mode :deployment))
+    (let* ((b (make-instance 'browser))
+           (src (progn (visit b "/counter")
+                       (cl-ppcre:register-groups-bind (s) ("<script src=\"([^\"]*)\"" (browser-html b)) s))))
+      (is (cl-ppcre:scan "^/littoral/files/littoral\\.js\\?v=[0-9a-f]{10}$" src))
+      (multiple-value-bind (status headers) (raw-request b :get src)
+        (is (= 200 status))
+        (is (search "immutable" (getf headers :cache-control))))
+      ;; Without the current fingerprint, browsers must revalidate.
+      (multiple-value-bind (status headers) (raw-request b :get "/littoral/files/littoral.js?v=stale")
+        (is (= 200 status))
+        (is (string= "no-cache" (getf headers :cache-control)))))))

@@ -48,7 +48,7 @@
    #:batched-list #:batch #:batch-items #:batch-size #:batch-page #:go-to-page
    #:report #:column #:report-rows #:report-columns #:sort-by
    ;; Backtracking
-   #:snapshot #:take-snapshot #:restore-snapshot
+   #:snapshot #:take-snapshot #:restore-snapshot #:begin-isolation #:end-isolation
    ;; Tasks
    #:task #:define-flow #:flow
    ;; AJAX

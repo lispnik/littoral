@@ -4,6 +4,8 @@
 
 (defclass continuation ()
   ((key :initarg :key :reader continuation-key)
+   (serial :initarg :serial :reader continuation-serial
+           :documentation "Increasing within a session; END-ISOLATION compares them.")
    (snapshot :initarg :snapshot :accessor continuation-snapshot)
    (callbacks :initform (make-instance 'callback-registry) :reader continuation-callbacks))
   (:documentation "A page the user may act on: the state it was rendered
@@ -17,6 +19,7 @@ from and the callbacks its links and fields name."))
    (continuations :initform (make-hash-table :test 'equal) :reader session-continuations)
    (continuation-order :initform '() :accessor session-continuation-order
                        :documentation "Keys, newest first.")
+   (continuation-serial :initform 0 :accessor session-continuation-serial)
    (created :initform (now-seconds) :reader session-created)
    (last-access :initform (now-seconds) :accessor session-last-access)
    (halos-p :initform nil :accessor session-halos-p)
@@ -40,6 +43,7 @@ when there are more than the application allows."
   (let* ((key (random-key 12))
          (continuation (make-instance 'continuation
                                       :key key
+                                      :serial (incf (session-continuation-serial session))
                                       :snapshot (take-snapshot (session-root session))))
          (limit (application-max-continuations (session-application session))))
     (setf (gethash key (session-continuations session)) continuation)
@@ -51,6 +55,29 @@ when there are more than the application allows."
         (setf (session-continuation-order session)
               (ldiff (session-continuation-order session) excess))))
     continuation))
+
+;;; Isolation: Seaside's isolate:
+
+(defun begin-isolation (&optional (session *session*))
+  "Start a stretch of pages that END-ISOLATION will make unreachable.
+Returns a token for END-ISOLATION; it is a plain value, so a flow can hold
+it across CALLs."
+  (session-continuation-serial session))
+
+(defun end-isolation (token &optional (session *session*))
+  "Forget every page made since BEGIN-ISOLATION returned TOKEN, so the back
+button cannot return into them (to place an order twice, say).  Going back
+to one of them shows the session as it is now."
+  (let ((doomed (loop for key in (session-continuation-order session)
+                      for continuation = (gethash key (session-continuations session))
+                      when (and continuation (> (continuation-serial continuation) token))
+                        collect key)))
+    (dolist (key doomed)
+      (remhash key (session-continuations session)))
+    (setf (session-continuation-order session)
+          (remove-if (lambda (key) (member key doomed :test #'string=))
+                     (session-continuation-order session)))
+    (length doomed)))
 
 (defun find-continuation (session key)
   (and key (gethash key (session-continuations session))))

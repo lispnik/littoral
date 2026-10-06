@@ -14,15 +14,35 @@
 
 (defvar *static-directory* (asdf:system-relative-pathname :littoral "static/"))
 
-(defvar *static-cache* (make-hash-table :test 'equal))
-
 (defparameter *static-types*
   '(("js" . "text/javascript; charset=utf-8")
     ("css" . "text/css; charset=utf-8")))
 
+(defvar *static-cache* (make-hash-table :test 'equal)
+  "Static file name → (WRITE-DATE CONTENTS FINGERPRINT).")
+
+(defun static-file (name)
+  "The contents and fingerprint of static file NAME, or NIL.  Re-read when
+the file changes on disk."
+  (let ((path (merge-pathnames name *static-directory*)))
+    (when (and (not (search ".." name)) (probe-file path))
+      (let ((date (file-write-date path))
+            (cached (gethash name *static-cache*)))
+        (unless (eql date (first cached))
+          (let ((contents (alexandria:read-file-into-string path :external-format :utf-8)))
+            (setf cached (list date contents
+                               (subseq (ironclad:byte-array-to-hex-string
+                                        (ironclad:digest-sequence
+                                         :sha1 (sb-ext:string-to-octets contents :external-format :utf-8)))
+                                       0 10))
+                  (gethash name *static-cache*) cached)))
+        (values (second cached) (third cached))))))
+
 (defun static-url (name)
-  "The URL of littoral's static file NAME."
-  (url-for (concatenate 'string "/littoral/files/" name)))
+  "The URL of littoral's static file NAME, fingerprinted with its contents
+so browsers may cache it for good yet never run a stale copy."
+  (let ((fingerprint (nth-value 1 (static-file name))))
+    (url-for (format nil "/littoral/files/~A~@[?v=~A~]" name fingerprint))))
 
 ;;; Responses
 
@@ -44,14 +64,15 @@
    :status status))
 
 (defun serve-static (name)
-  (let* ((path (merge-pathnames name *static-directory*))
-         (type (cdr (assoc (pathname-type path) *static-types* :test #'equal))))
-    (if (and type (not (search ".." name)) (probe-file path))
-        (list 200 (list :content-type type :cache-control "max-age=3600")
-              (list (or (gethash name *static-cache*)
-                        (setf (gethash name *static-cache*)
-                              (alexandria:read-file-into-string path :external-format :utf-8)))))
-        (simple-page 404 "Not Found"))))
+  (let ((type (cdr (assoc (pathname-type (pathname name)) *static-types* :test #'equal))))
+    (multiple-value-bind (contents fingerprint) (and type (static-file name))
+      (if contents
+          (list 200 (list :content-type type
+                          :cache-control (if (equal (request-parameter "v") fingerprint)
+                                             "public, max-age=31536000, immutable"
+                                             "no-cache"))
+                (list contents))
+          (simple-page 404 "Not Found")))))
 
 (defun page-url (session continuation)
   "The URL of CONTINUATION: the application's path, what UPDATE-URL methods

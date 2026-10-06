@@ -140,6 +140,20 @@
     (unless href (error "No link ~S on the page:~%~A" text (page-text browser)))
     (visit browser href)))
 
+(defun find-links (browser text)
+  "The hrefs of every link whose text is exactly TEXT, in page order."
+  (let (hrefs)
+    (cl-ppcre:do-register-groups (tag content) ("(?s)<a\\b([^>]*)>(.*?)</a>" (browser-html browser))
+      (when (string= text (string-trim " " (strip-tags content)))
+        (push (attr (attributes tag) "href") hrefs)))
+    (nreverse hrefs)))
+
+(defun click-nth (browser text n)
+  "Follow the Nth (from 0) link whose text is exactly TEXT."
+  (let ((href (nth n (find-links browser text))))
+    (unless href (error "No link ~S number ~D on the page:~%~A" text n (page-text browser)))
+    (visit browser href)))
+
 (defun element-name (browser id)
   "The name of the field with DOM id ID."
   (cl-ppcre:do-register-groups (tag) ("<(?:input|textarea|select)\\b([^>]*)>" (browser-html browser))
