@@ -376,11 +376,13 @@ not set :SCRIPT-NAME (lack's mount middleware does not)."
   (setf *reaper* nil))
 
 (defun start (&key (port 8080) (address "127.0.0.1") (server :hunchentoot) (prefix "")
-                configuration-file)
+                configuration-file (instance-id *instance-id*))
   "Serve all registered applications with Clack on PORT, under PREFIX, and
 reap idle sessions in the background.  With CONFIGURATION-FILE, first load
-the applications saved there; /config then saves its changes to it."
+the applications saved there; /config then saves its changes to it.
+INSTANCE-ID prefixes session keys, for routing several processes."
   (when *handler* (stop))
+  (setf *instance-id* instance-id)
   (when configuration-file
     (setf *configuration-file* configuration-file)
     (load-configuration configuration-file))

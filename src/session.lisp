@@ -11,8 +11,18 @@
   (:documentation "A page the user may act on: the state it was rendered
 from and the callbacks its links and fields name."))
 
+(defvar *instance-id* nil
+  "A short name for this process, put at the front of every session key
+(\"a1.xxxx\") so a load balancer can send each session back to the process
+that holds it.  NIL for none.")
+
+(defun new-session-key ()
+  (if *instance-id*
+      (format nil "~A.~A" *instance-id* (random-key 20))
+      (random-key 20)))
+
 (defclass session ()
-  ((key :initform (random-key 20) :reader session-key)
+  ((key :initform (new-session-key) :reader session-key)
    (application :initarg :application :reader session-application)
    (root :initarg :root :accessor session-root)
    (lock :initform (sb-thread:make-mutex :name "littoral session") :reader session-lock)

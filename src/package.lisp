@@ -49,6 +49,7 @@
    #:report #:column #:report-rows #:report-columns #:sort-by
    ;; Backtracking
    #:snapshot #:take-snapshot #:restore-snapshot #:begin-isolation #:end-isolation
+   #:deep #:deep-copy #:snapshot-entries
    ;; Tasks
    #:task #:define-flow #:flow
    ;; AJAX and push
@@ -64,6 +65,7 @@
    #:application-max-sessions #:application-error-handler #:application-expired-notice
    #:application-stylesheets #:application-scripts #:application-credentials
    #:reap-all-sessions #:start-reaper #:stop-reaper #:session-expired-notice
+   #:*instance-id*
    #:*configuration-file* #:save-configuration #:load-configuration
    #:configure-application #:application-settings
    #:register-application #:unregister-application #:find-application

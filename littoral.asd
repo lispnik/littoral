@@ -99,8 +99,14 @@
                              (:file "tools")
                              (:file "widgets")
                              (:file "examples")
-                             (:file "push"))))
+                             (:file "push")
+                             (:file "robustness"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
                                        (uiop:find-symbol* :littoral :littoral/tests))
                (error "Littoral tests failed."))))
+
+(asdf:defsystem #:littoral/bench
+  :description "Benchmarks for Littoral: make bench."
+  :depends-on (#:littoral/tests)
+  :components ((:module "bench" :components ((:file "bench")))))

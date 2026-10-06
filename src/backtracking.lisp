@@ -2,7 +2,10 @@
 ;;;;
 ;;;; After each action the visible tree is walked and a snapshot taken of
 ;;;; every component's decorations (so call/answer backtracks) and of the
-;;;; slots of every object its STATES method names.  Each page's links
+;;;; slots of every object its STATES method names.  Slot values are kept
+;;;; as they are, so a list changed in place changes in every snapshot too;
+;;;; name the object as (DEEP object) to copy its lists, vectors, strings
+;;;; and hash tables as well.  Each page's links
 ;;;; lead back to that page's snapshot, so acting on an old page first puts
 ;;;; the state back the way the page showed it.
 
@@ -43,6 +46,40 @@ CAPTURE-STATE returned for it.")))
     (loop for (key . value) in saved
           do (setf (gethash key object) value))))
 
+(defstruct (deep-state (:constructor deep (object)))
+  "Wrap an object in DEEP in STATES to snapshot its slots deeply."
+  object)
+
+(defun deep-copy (value &optional (seen (make-hash-table :test 'eq)))
+  "A copy of VALUE's lists, vectors, strings and hash tables, all the way
+down.  Other objects (instances, structures, symbols, numbers) are shared;
+shared structure and cycles are kept."
+  (typecase value
+    ((or cons vector hash-table)
+     (or (gethash value seen)
+         (typecase value
+           (cons (let ((copy (cons nil nil)))
+                   (setf (gethash value seen) copy
+                         (car copy) (deep-copy (car value) seen)
+                         (cdr copy) (deep-copy (cdr value) seen))
+                   copy))
+           (string (setf (gethash value seen) (copy-seq value)))
+           (vector (let ((copy (make-array (length value)
+                                           :element-type (array-element-type value))))
+                     (setf (gethash value seen) copy)
+                     (dotimes (i (length value) copy)
+                       (setf (aref copy i) (deep-copy (aref value i) seen)))))
+           (hash-table (let ((copy (make-hash-table :test (hash-table-test value)
+                                                    :size (hash-table-size value))))
+                         (setf (gethash value seen) copy)
+                         (maphash (lambda (k v) (setf (gethash k copy) (deep-copy v seen))) value)
+                         copy)))))
+    (t value)))
+
+(defun deep-copy-saved (saved)
+  (let ((seen (make-hash-table :test 'eq)))
+    (mapcar (lambda (entry) (cons (car entry) (deep-copy (cdr entry) seen))) saved)))
+
 (defun take-snapshot (root)
   "Capture the state of everything visible from ROOT."
   (let ((entries '())
@@ -50,10 +87,14 @@ CAPTURE-STATE returned for it.")))
     (flet ((note (object saved)
              (push (cons object saved) entries)))
       (map-visible (lambda (component)
-                     (dolist (object (states component))
-                       (unless (gethash object seen)
-                         (setf (gethash object seen) t)
-                         (note object (capture-state object))))
+                     (dolist (state (states component))
+                       (let* ((deep (deep-state-p state))
+                              (object (if deep (deep-state-object state) state)))
+                         (unless (gethash object seen)
+                           (setf (gethash object seen) t)
+                           (note object (if deep
+                                            (list :deep (deep-copy-saved (capture-state object)))
+                                            (capture-state object))))))
                      ;; A component in its own STATES already has its
                      ;; decorations saved with its other slots.
                      (unless (gethash component seen)
@@ -64,6 +105,8 @@ CAPTURE-STATE returned for it.")))
 (defun restore-snapshot (snapshot)
   "Put back what SNAPSHOT captured."
   (loop for (object . saved) in (snapshot-entries snapshot)
-        do (if (eq (first saved) :decorations)
-               (setf (decorations object) (second saved))
-               (restore-state object saved))))
+        do (case (first saved)
+             (:decorations (setf (decorations object) (second saved)))
+             ;; Copy again, so later changes cannot reach the snapshot.
+             (:deep (restore-state object (deep-copy-saved (second saved))))
+             (t (restore-state object saved)))))

@@ -33,6 +33,7 @@ It runs on SBCL and serves through Clack (Hunchentoot by default). Dependencies 
 make test          # FiveAM suite, in-process, no sockets
 make run           # examples on http://127.0.0.1:8080/
 make e2e           # littoral.js in headless Chrome (needs Node 22+)
+make bench         # request and snapshot timings
 ```
 
 `/examples` is a guide to the examples. Three of them are complete small applications:
@@ -222,6 +223,38 @@ To keep configuration across restarts, start with a file:
 Any applications saved in the file are configured first, and every change made in `/config` is written back to it. The file is plain Lisp, one plist per application, and is created with mode 600 because it can hold basic-auth credentials. Classes are stored by name, so an application whose system isn't loaded is skipped with a warning. Error handlers are functions and aren't saved. From code, use `save-configuration`, `load-configuration`, and `configure-application`; the last changes an application's settings without dropping its sessions.
 
 `(make-lack-app)` returns a plain Lack application you can mount into a larger Lack/Clack stack. Lack's `:mount` middleware strips the prefix without setting `:script-name`, so pass the prefix yourself: `(:mount "/apps" (make-lack-app :prefix "/apps"))`. A `:script-name` set by the server or proxy is honoured as well. Set `*debug-errors*` to enter the debugger on errors instead of rendering an error page.
+
+## Deployment and scale
+
+**Performance.** `make bench` measures the request cycle in-process. On an Apple-silicon Mac with SBCL 2.6.8:
+
+| Operation | Time |
+|---|---|
+| a click on the counter (action and render) | ~60 µs |
+| a click in the sushi store | ~180 µs |
+| a snapshot of 100 objects | ~10 µs |
+| 16 threads, separate sessions | ~58,000 clicks/s |
+
+Requests in one session are serialised by its lock, and requests in different sessions run in parallel. The test suite runs concurrent sessions, many requests against one page, and concurrent AJAX.
+
+**State that the back button sees.** Snapshots copy the slots of the objects `states` names, but share the slots' values. A list changed in place therefore changes in every snapshot. Either replace such values (`(setf (items self) (append …))`) or name the object as `(deep object)` in `states`. A deep entry copies the object's lists, vectors, strings and hash tables. Other instances are still shared, and cycles are kept.
+
+**Several processes.** Sessions live in the memory of the process that made them. To run several processes behind one site, give each one an instance id; it prefixes every session key:
+
+```lisp
+(start :port 8081 :instance-id "a")   ; session keys look like a.Xq3…
+```
+
+Then route by that prefix. With nginx, for example:
+
+```nginx
+map $arg__s $littoral_backend { ~^a\. 127.0.0.1:8081; ~^b\. 127.0.0.1:8082; default 127.0.0.1:8081; }
+location / { proxy_pass http://$littoral_backend; proxy_buffering off; }
+```
+
+With cookie sessions, route on the cookie instead. Turning `proxy_buffering` off, or sending `X-Accel-Buffering: no` (littoral does this on its event streams), keeps server push working.
+
+**Restarts.** Sessions don't survive a restart. A session is a graph of live objects, the closures its pages' callbacks hold, and cl-cont continuations for flows in progress. None of these can be serialised, which is also true of Seaside outside image-based persistence. Configuration does survive (see `:configuration-file`). Keep data that must last in your own store, not in components. Use `:expired-notice` to tell people when their session is gone.
 
 ## License
 

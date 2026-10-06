@@ -1,10 +1,14 @@
 SBCL ?= sbcl
 PORT ?= 8080
 
-.PHONY: test e2e run lint clean
+.PHONY: test e2e bench run lint clean
 
 test:
 	$(SBCL) --non-interactive --eval '(asdf:test-system :littoral)'
+
+bench:
+	$(SBCL) --non-interactive --eval '(asdf:load-system :littoral/bench)' \
+	  --eval '(littoral/tests::run-benchmarks)' 2>&1 | grep -v '^;' | cat -s
 
 # littoral.js in headless Chrome against a fresh server on $(E2E_PORT).
 NODE ?= node

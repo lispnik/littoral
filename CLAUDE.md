@@ -5,6 +5,7 @@ A Seaside-style web framework for SBCL. See README.md for the user-facing tour.
 - Toolchain: SBCL only, ocicl for dependencies (`ocicl install <system>` updates `ocicl.csv`), FiveAM for tests. No Quicklisp. Use `sb-thread`/`sb-ext` directly.
 - `make test` runs `(asdf:test-system :littoral)` and must stay green. `make e2e NODE=…` checks `littoral.js` in headless Chrome (`tests/e2e/browser.mjs`). In this shell `node` is an nvm stub, so pass `NODE=~/.nvm/versions/node/v24.3.0/bin/node`.
 - SBCL servers ignore SIGTERM while Hunchentoot threads run, so stop a test server with `kill -9`.
+- Threads do not inherit dynamic bindings: tests that spawn threads must rebind `littoral::*applications*` (see `run-threads` in `tests/robustness.lisp`).
 - Tests drive the Lack app in-process through the fake browser in `tests/browser.lisp` (`visit`, `click`, `fill-in`, `press`, `back-to`, `ajax-request`); add tests in that style, not over sockets.
 - Packages: `littoral.html` holds the HTML tags and brushes, and `littoral` uses it. Keep generic tag names out of `littoral`'s exports.
 - Load order is serial (see `littoral.asd`): util → context → callbacks → html/{canvas,tags,brushes} → component → decoration → dialogs → backtracking → task → widgets → session → application → configuration → ajax → dispatcher → push → tools/{halos,config}.
