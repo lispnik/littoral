@@ -3,7 +3,8 @@
 (in-package #:littoral-examples)
 
 (defclass counter (component)
-  ((count :initform 0 :accessor count-of)))
+  ((count :initform 0 :accessor count-of))
+  (:documentation "A number with links to change it: Seaside's first example."))
 
 ;; Without this the back button would show an old count but act on the
 ;; current one.

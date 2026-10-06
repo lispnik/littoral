@@ -8,12 +8,14 @@
 ;;; Sushi store
 
 (defun store-browser ()
+  "A browser on the store with three items in the cart."
   (let ((b (make-instance 'browser)))
     (visit b "/store")
     (click-nth b "Add" 0) (click-nth b "Add" 0) (click-nth b "Add" 1)
     b))
 
 (defun fill-address (b &key (name "Ada") (street "1 Main St") (city "Springfield") (postcode "12345"))
+  "Fill in and submit the store's address form."
   (fill-in b "name" name) (fill-in b "street" street)
   (fill-in b "city" city) (fill-in b "postcode" postcode)
   (press b "Continue"))
@@ -66,7 +68,7 @@
       (click b "Checkout »")
       ;; Change a quantity in the review, then go back to the menu.
       (let ((qty (cl-ppcre:register-groups-bind (n) ("<input type=\"number\" name=\"(\\d+)\"" (browser-html b)) n)))
-        (setf (browser-fields b) (cons (cons qty "5") (remove qty (browser-fields b) :key #'car :test #'string=))))
+        (setf (browser-fields b) (acons qty "5" (remove qty (browser-fields b) :key #'car :test #'string=))))
       (press b "Update")
       (is (has-text-p b "Total: $26.50"))
       (press b "Back to the menu")
@@ -150,6 +152,7 @@
 ;;; Chat
 
 (defun join-chat (b nick)
+  "Join the chat as NICK."
   (visit b "/chat")
   (click b "Join the room")
   (answer-input b nick))
@@ -167,7 +170,7 @@
       (join-chat bob "bob")
       ;; Alice posts through the AJAX form submit.
       (let* ((spec (first (ajax-specs alice "on-submit")))
-             (json (ajax-request alice (car spec) (cdr spec)
+             (json (ajax-request alice (first spec) (rest spec)
                                  :fields (list (cons (element-name alice "draft") "hi <bob>")))))
         (is (search "hi &lt;bob&gt;" json))
         ;; The composer comes back empty.

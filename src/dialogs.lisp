@@ -3,9 +3,11 @@
 (in-package #:littoral)
 
 (defclass dialog (component)
-  ((message :initarg :message :initform nil :accessor dialog-message)))
+  ((message :initarg :message :initform nil :accessor dialog-message))
+  (:documentation "A component that shows an optional MESSAGE and answers one thing."))
 
 (defun render-dialog-message (dialog)
+  "Write DIALOG's message, if it has one."
   (when (dialog-message dialog)
     (p (:class "lt-dialog-message") (text (dialog-message dialog)))))
 
@@ -93,6 +95,16 @@ cons, or NIL on Cancel."))
 
 (defun/cc choose-from (self items &optional prompt)
   (call self (make-instance 'choice-dialog :message prompt :items items)))
+
+;; DEFUN/CC drops docstrings, so they are set here.
+(setf (documentation 'inform 'function)
+      "Show MESSAGE in place of SELF until it is acknowledged.  A CALL: blocking inside a flow."
+      (documentation 'confirm 'function)
+      "Ask QUESTION in place of SELF; T for yes, NIL for no.  A CALL: blocking inside a flow."
+      (documentation 'request-input 'function)
+      "Ask for a line of text with PROMPT, starting from DEFAULT; the string typed.  A CALL."
+      (documentation 'choose-from 'function)
+      "Ask for one of ITEMS, with PROMPT; the item chosen, or NIL.  A CALL.")
 
 (defclass session-expired-notice (dialog) ()
   (:default-initargs

@@ -4,7 +4,8 @@
 
 (defclass guess-game (task)
   ((target :initarg :target :initform nil :accessor target
-           :documentation "The number to guess; random when NIL.")))
+           :documentation "The number to guess; random when NIL."))
+  (:documentation "A task: guess the number, told higher or lower."))
 
 (define-flow guess-game (self)
   (let ((target (or (target self) (1+ (random 100))))
@@ -16,5 +17,6 @@
              (incf guesses)
              (cond ((null guess) (inform self "That's not a number."))
                    ((< guess target) (inform self "Higher."))
-                   ((> guess target) (inform self "Lower."))))
+                   ((> guess target) (inform self "Lower."))
+                   (t nil)))                ; right: the loop ends
     (inform self (format nil "Got it in ~D guesses!" guesses))))

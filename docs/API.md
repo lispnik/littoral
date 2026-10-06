@@ -1,0 +1,985 @@
+# Littoral API reference
+
+Generated from the docstrings by `make docs`; do not edit by hand.
+
+## Package `littoral`
+
+Littoral: a Seaside-style component web framework for Common Lisp.
+
+### Context
+
+#### `*request*` — variable
+
+The lack/request:request being handled.
+
+#### `*session*` — variable
+
+The `session` owning the current request.
+
+#### `*application*` — variable
+
+The `application` the current request was dispatched to.
+
+#### `*render-context*` — variable
+
+The `render-context` active while rendering: it knows where callbacks go
+and how to build URLs back into the session.
+
+#### `request-parameter` `name &optional (request *request*)` — function
+
+The value of the query or body parameter `name` in `request`, or `nil`.
+
+#### `request-parameter-p` `name &optional (request *request*)` — function
+
+True when `request` has the parameter `name`, even with no value (?flag).
+
+#### `request-path` `&optional (request *request*)` — function
+
+The path of `request` below the mount point.
+
+#### `render-phase-error` — condition
+
+Signalled by `call`, `show`, `answer` and `home` during rendering.
+
+### Components
+
+#### `component` — class
+
+A stateful piece of user interface.  Subclass it and
+specialise `render`.
+
+#### `component-id` `object` — generic function
+
+Reads the id of a component.  Unique and stable: the `dom` id `ajax` updates target.
+
+#### `render` `component` — generic function
+
+Write `component`'s `html` to *CANVAS*.  Embedded components
+are written with `render-component`, never by calling `render` on them.
+
+#### `render-component` `component` — generic function
+
+Render `component` where it is embedded: through its
+decorations, inside a halo when halos are on.
+
+#### `children` `component` — generic function
+
+The components `component` renders.  Halos, update-root,
+backtracking and `ajax` lookups find components through this.
+
+#### `states` `component` — generic function
+
+Objects whose slots are snapshotted after every action
+and restored when the user goes back to an earlier page.  Return `component`
+itself to make all its slots backtrack.
+
+#### `update-root` `component root` — generic function
+
+Contribute `component`'s title, stylesheets and scripts to
+the `html-root` of the page.  Call `call-next-method` to keep `style` and `script`.
+
+#### `style` `component` — generic function
+
+`css` text this component adds to the page head, or `nil`.
+
+#### `script` `component` — generic function
+
+JavaScript text this component adds to the page, or `nil`.
+
+#### `initial-request` `component request` — generic function
+
+Called on the root component when its session starts,
+with the request that started it.  A bookmarked `url` is read back here with
+`request-extra-path` and `request-parameter`.
+
+#### `update-url` `component url` — generic function
+
+Add to `url`, a `page-url`, whatever would let a bookmark of
+this page come back to it.  Called on every visible component, parents
+first; read it back in `initial-request` with `request-extra-path` and
+`request-parameter`.
+
+#### `page-url` — class
+
+What `update-url` methods add to the `url` of a page.
+
+#### `page-url` `session continuation` — function
+
+The `url` of `continuation`: the application's path, what `update-url` methods
+add, then the session and page keys.
+
+#### `add-to-path` `url &rest segments` — function
+
+Append `segments` (strings, or anything `princ` prints) to `url`'s path.
+
+#### `add-parameter` `url key &optional value` — function
+
+Add the query parameter `key` (with `value`, unless `nil`) to `url`.
+
+#### `url-path` `object` — generic function
+
+Reads the path of a page-url.  Segments after the application's path, in order.
+
+#### `url-parameters` `object` — generic function
+
+Reads the parameters of a page-url.  Alist of query parameters, in order.
+
+#### `request-extra-path` `&optional (app *application*) (request *request*)` — function
+
+The decoded path segments of `request` after `app`'s path.
+
+#### `call` `self other` — function
+
+Show `other` in place of `self` and return what it answers.
+
+Inside a flow (see `define-flow`) this reads as a blocking call: the rest of
+the flow is captured with cl-cont and resumed by `answer`.  Elsewhere, such
+as a callback, it shows `other` and returns at once, discarding the answer;
+use `show` with :`on-answer` there to act on it.
+
+#### `answer` `self &optional value` — function
+
+Return control, with `value`, to the component that called `self`.
+Validation decorations on `self` may refuse the answer.
+
+#### `show` `self other &key on-answer` — function
+
+Show `other` in place of `self` until `other` answers, then call `on-answer`
+with the answer.  Returns `other` at once: the non-blocking form of `call`.
+
+#### `home` `self` — function
+
+Dismiss whatever `self` has called, without answering.
+
+#### `visible-children` `component` — function
+
+The components `component` shows now: its delegate when it has called
+another, otherwise its `children`.
+
+#### `active-component` `component` — function
+
+The component actually showing in `component`'s place.
+
+#### `html-root` — class
+
+The document head a page collects from `update-root`: title, stylesheets and scripts.
+
+#### `root-title` `object` — generic function
+
+Reads the title of a html-root.
+
+#### `add-stylesheet` `root url` — function
+
+Link the stylesheet at `url` from the page.
+
+#### `add-script` `root url` — function
+
+Load the script at `url` in the page.
+
+#### `add-style` `root css` — function
+
+Add the `css` text `css` to the page head.
+
+### Decorations
+
+#### `decoration` — class
+
+Wraps a component's rendering or intercepts its answers.
+Specialise `render-decoration` and call `render-inner` for what it wraps.
+
+#### `add-decoration` `component decoration` — function
+
+Add `decoration` to `component`, outermost among those of its kind.
+Globals come first, then any delegation, then locals.
+
+#### `remove-decoration` `component decoration` — function
+
+Take `decoration` off `component`.
+
+#### `decorations` `object` — generic function
+
+Reads the decorations of a component.  Outermost first.  Replaced, never mutated, so
+backtracking can snapshot it as a value.
+
+#### `delegation` — class
+
+Shows the delegate in place of the decorated component.
+
+#### `answer-handler` — class
+
+Remembers who called a component and what to do with
+its answer.
+
+#### `message-decoration` — class
+
+A heading above the component.
+
+#### `form-decoration` — class
+
+Puts the component in a form with a row of buttons, the
+way Seaside's WAFormDecoration does.
+
+#### `validation-decoration` — class
+
+Refuses answers the validator rejects and shows why.
+
+#### `validate-with` `component validator` — function
+
+Answers from `component` must first pass `validator`, a function of the
+answer returning `nil` to accept or an error message to refuse.
+
+#### `render-inner` — function
+
+Render whatever the current decoration wraps.
+
+#### `render-decoration` `decoration component` — generic function
+
+Render `decoration` around `component`; `render-inner` renders
+the rest of the chain.
+
+#### `decoration-kind` `decoration` — generic function
+
+:`global` decorations sit outside a delegation and so stay
+visible while another component is shown in their owner's place; :`local`
+ones sit inside it.
+
+#### `updatable` — class
+
+Mixin for components `ajax` can re-render: each is written
+inside an element carrying its `component-id`.
+
+### Dialogs
+
+#### `message-dialog` — class
+
+Shows a message; answers T.
+
+#### `confirm-dialog` — class
+
+Asks a yes/no question; answers T or `nil`.
+
+#### `input-dialog` — class
+
+Asks for a line of text; answers the string.
+
+#### `choice-dialog` — class
+
+Asks for one of `items`; answers it, or `nil` on Cancel.
+
+#### `login-dialog` — class
+
+Asks for a username and password; answers them as a
+cons, or `nil` on Cancel.
+
+#### `inform` `self message` — function
+
+Show `message` in place of `self` until it is acknowledged.  A `call`: blocking inside a flow.
+
+#### `confirm` `self question` — function
+
+Ask `question` in place of `self`; T for yes, `nil` for no.  A `call`: blocking inside a flow.
+
+#### `request-input` `self prompt &optional (default "")` — function
+
+Ask for a line of text with `prompt`, starting from `default`; the string typed.  A `call`.
+
+#### `choose-from` `self items &optional prompt` — function
+
+Ask for one of `items`, with `prompt`; the item chosen, or `nil`.  A `call`.
+
+### Widgets
+
+#### `batched-list` — class
+
+Pages through `items`.  Render the current `batch` yourself
+and `render-component` the batched list for its page links, as with Seaside's
+WABatchedList.
+
+#### `batch` `list` — function
+
+The items on `list`'s current page.
+
+#### `batch-items` `list` — function
+
+All of `list`'s items.
+
+#### `batch-size` `object` — generic function
+
+Reads the batch-size of a batched-list.
+
+#### `batch-page` `object` — generic function
+
+Reads the page of a batched-list.  Zero-based.
+
+#### `go-to-page` `list page` — function
+
+Show page `page` (zero-based) of `list`, kept in range.
+
+#### `report` — class
+
+A table of `rows` with sortable `columns`, like Seaside's
+WATableReport.  Give :`batch-size` to page it.
+
+#### `column` `title value &rest initargs &key render sort-key sort-predicate sortable class` — function
+
+A `report` column titled `title` showing (`funcall` `value` `row`).
+
+#### `report-rows` `object` — generic function
+
+Reads the rows of a report.  A list, or a thunk returning one on every render.
+
+#### `report-columns` `object` — generic function
+
+Reads the columns of a report.
+
+#### `sort-by` `report column` — function
+
+Sort `report` by `column`, reversing the order when it already is.
+
+### Backtracking
+
+#### `snapshot` — class
+
+The saved state of a page: what `take-snapshot` captured and `restore-snapshot` puts back.
+
+#### `take-snapshot` `root` — function
+
+Capture the state of everything visible from `root`.
+
+#### `restore-snapshot` `snapshot` — function
+
+Put back what `snapshot` captured.
+
+#### `begin-isolation` `&optional (session *session*)` — function
+
+Start a stretch of pages that `end-isolation` will make unreachable.
+Returns a token for `end-isolation`; it is a plain value, so a flow can hold
+it across CALLs.
+
+#### `end-isolation` `token &optional (session *session*)` — function
+
+Forget every page made since `begin-isolation` returned `token`, so the back
+button cannot return into them (to place an order twice, say).  Going back
+to one of them shows the session as it is now.
+
+#### `deep` `object` — function
+
+Name `object` in `states` as (`deep` `object`) to snapshot its lists, vectors,
+strings and hash tables by copying them, not sharing them.
+
+#### `deep-copy` `value &optional (seen (make-hash-table :test (quote eq)))` — function
+
+A copy of `value`'s lists, vectors, strings and hash tables, all the way
+down.  Other objects (instances, structures, symbols, numbers) are shared;
+shared structure and cycles are kept.
+
+#### `snapshot-entries` `object` — generic function
+
+Reads the entries of a snapshot.  List of (`object` . `saved`) where `saved` is what
+`capture-state` returned for it.
+
+### Tasks
+
+#### `task` — class
+
+A component defined by a `flow` of calls.
+
+#### `define-flow` `class (self) &body body` — macro
+
+Define the flow of the task `class`, with `self` bound to the task.
+
+#### `flow` `task` — generic function
+
+The body of `task`.  Define methods with `define-flow`.
+
+### AJAX and push
+
+#### `ajax` `&key callback update value confirm on-complete` — function
+
+Run `callback` in the background, then re-render the component or list of
+components `update`.
+
+`value` is a JavaScript expression evaluated in the browser, with this bound
+to the element; when given, `callback` receives its result as a string.
+`callback`'s return value goes back to the browser, where `on-complete`, a
+JavaScript snippet, can use it as value.  `confirm` asks the user before
+anything is sent.
+
+#### `ajax-update` `&rest components` — function
+
+Re-render `components`, running no callback first.
+
+#### `periodical` `seconds &key callback update` — function
+
+For a :`periodical` attribute: every `seconds`, run `callback` and re-render `update`.
+
+#### `execute-script` `javascript` — function
+
+Run `javascript` in the browser once the current `ajax` request's updates are
+in place.  Outside an `ajax` request it does nothing and returns `nil`.
+
+#### `channel` — class
+
+Something components can subscribe to and threads `publish`.
+
+#### `make-channel` `&optional name` — function
+
+A new channel, named `name` for printing.
+
+#### `subscriptions` `component` — generic function
+
+The channels whose `publish` re-renders `component` on open pages.
+
+#### `publish` `channel` — function
+
+Re-render, on every open page, the visible components subscribed to `channel`.
+Safe to call from any thread.  Returns the number of pages told.
+
+#### `notify` `component &optional (session *session*)` — function
+
+Re-render `component` on `session`'s open pages.  Safe to call from any
+thread, given the session (capture *SESSION* in the callback that starts
+the work).
+
+#### `close-event-streams` — function
+
+End every open stream; browsers reconnect when their page is current.
+
+#### `with-session` `(session) &body body` — macro
+
+Run `body` as `session`'s requests do: holding its lock, with *SESSION* bound.
+For other threads that change a session's components.
+
+#### `*source-editor*` — variable
+
+A function of a pathname and a 1-based character position that opens the
+source there, for the halos' edit button.  `nil` uses the Emacs connected
+through Swank, when there is one.
+
+### Sessions & applications
+
+#### `session` — class
+
+One user's component tree, the pages it has shown, and its lock.
+
+#### `session-key` `object` — generic function
+
+Reads the key of a session.
+
+#### `session-root` `object` — generic function
+
+Reads the root of a session.
+
+#### `session-properties` `object` — generic function
+
+Reads the properties of a session.
+
+#### `session-property` `key &optional (session *session*)` — function
+
+The value stored under `key` in `session`, for application use.
+
+#### `expire-session` `session` — function
+
+Forget `session` at once.
+
+#### `list-sessions` `app` — function
+
+`app`'s sessions, most recently used first.
+
+#### `application` — class
+
+A root component class served at a path, with its settings and live sessions.
+
+#### `application-path` `object` — generic function
+
+Reads the path of an application.
+
+#### `application-root-class` `object` — generic function
+
+Reads the root-class of an application.
+
+#### `application-title` `object` — generic function
+
+Reads the title of an application.
+
+#### `application-mode` `object` — generic function
+
+Reads the mode of an application.  :`development` adds the toolbar and halos.
+
+#### `application-session-timeout` `object` — generic function
+
+Reads the session-timeout of an application.  Seconds a session may sit idle.
+
+#### `application-max-continuations` `object` — generic function
+
+Reads the max-continuations of an application.  Pages per session the back button can reach.
+
+#### `application-cookie-sessions-p` `object` — generic function
+
+Reads the cookie-sessions-p of an application.  Track the session in a cookie instead of the `url`.
+
+#### `application-sessions` `object` — generic function
+
+Reads the sessions of an application.
+
+#### `application-max-sessions` `object` — generic function
+
+Reads the max-sessions of an application.  Most live sessions; the least recently used go first.  `nil` for no limit.
+
+#### `application-error-handler` `object` — generic function
+
+Reads the error-handler of an application.  Function of a condition returning a component or an `html`
+string for the error page, or `nil` for the standard one.
+
+#### `application-expired-notice` `object` — generic function
+
+Reads the expired-notice of an application.  Component class shown, before the root, to someone whose
+session expired.  `nil` starts them over silently.
+
+#### `application-stylesheets` `object` — generic function
+
+Reads the stylesheets of an application.
+
+#### `application-scripts` `object` — generic function
+
+Reads the scripts of an application.
+
+#### `application-credentials` `object` — generic function
+
+Reads the credentials of an application.  (`user` . `password`) required by `http` basic auth, or `nil`.
+
+#### `reap-all-sessions` — function
+
+Forget the idle sessions of every application.
+
+#### `start-reaper` `&key (interval 60)` — function
+
+Reap idle sessions every `interval` seconds in a background thread.
+
+#### `stop-reaper` — function
+
+Stop the session reaper thread, if it is running.
+
+#### `session-expired-notice` — class
+
+A ready-made `expired-notice` for `register-application`.
+
+#### `*instance-id*` — variable
+
+A short name for this process, put at the front of every session key
+("a1.xxxx") so a load balancer can send each session back to the process
+that holds it.  `nil` for none.
+
+#### `*configuration-file*` — variable
+
+Where `save-configuration` writes, and the /config application saves after
+each change.  Set by `start`'s :`configuration-file`.
+
+#### `save-configuration` `&optional (file *configuration-file*)` — function
+
+Write every registered application's settings to `file`, readable only by
+its owner since it may hold credentials.  Returns `file`, or `nil` when there
+is none.
+
+#### `load-configuration` `&optional (file *configuration-file*)` — function
+
+Configure applications from `file`.  Applications whose classes are not
+loaded are skipped with a warning.  Returns the applications configured.
+
+#### `configure-application` `path &rest settings &key root-class title mode session-timeout max-continuations cookie-sessions stylesheets scripts credentials max-sessions expired-notice` — function
+
+Change the settings given for the application at `path`, registering it
+when there is none.  Sessions, and settings not given, are kept.
+
+#### `application-settings` `app` — function
+
+`app`'s configuration as a plist, as `save-configuration` writes it.
+
+#### `register-application` `path root-class &rest initargs &key title mode session-timeout max-continuations cookie-sessions stylesheets scripts credentials max-sessions error-handler expired-notice` — function
+
+Serve `root-class`, a component class, at `path`.  Replaces any application
+already there.  Returns the `application`.
+
+#### `unregister-application` `path` — function
+
+Stop serving the application at `path`.
+
+#### `find-application` `path` — function
+
+The application registered at exactly `path`, or `nil`.
+
+#### `list-applications` — function
+
+All registered applications, sorted by path.
+
+#### `make-lack-app` `&key (prefix "")` — function
+
+A Lack application serving every registered littoral application.
+`prefix` is the path it is mounted under when the mounting middleware does
+not set :`script-name` (lack's mount middleware does not).
+
+#### `start` `&key (port 8080) (address "127.0.0.1") (server :hunchentoot) (prefix "") configuration-file (instance-id *instance-id*)` — function
+
+Serve all registered applications with Clack on `port`, under `prefix`, and
+reap idle sessions in the background.  With `configuration-file`, first load
+the applications saved there; /config then saves its changes to it.
+`instance-id` prefixes session keys, for routing several processes.
+
+#### `stop` — function
+
+Stop serving, close open event streams and stop reaping sessions.
+
+#### `*debug-errors*` — variable
+
+When true, errors inside a request enter the debugger instead of
+rendering an error page.
+
+#### `url-for` `path` — function
+
+`path`, absolute within this littoral, as a `url` the browser can follow.
+
+#### `*base-path*` — variable
+
+Prepended to every `url` littoral writes: the mount prefix given to
+`make-lack-app` plus the request's script-name.  No trailing slash.
+
+#### `configure-admin` `&key user password (path "/config")` — function
+
+Serve the configuration application at `path`, behind `http` basic auth
+when `user` and `password` are given.
+
+## Package `littoral.html`
+
+Tags and brushes for writing HTML in RENDER methods.
+
+### Canvas
+
+#### `*canvas*` — variable
+
+The stream render methods write `html` to.
+
+#### `text` `thing` — function
+
+Write `thing`, printed with `princ` and HTML-escaped.
+
+#### `raw` `string` — function
+
+Write `string` verbatim.
+
+#### `with-canvas-to-string` `() &body body` — macro
+
+Evaluate `body` with *CANVAS* collecting into a string, which is returned.
+
+#### `html-escape` `thing` — function
+
+Return the printed representation of `thing` with `html` metacharacters escaped.
+
+### Plain tags
+
+#### `div` `&rest arguments` — macro
+
+Write a <div> element.
+
+#### `span` `&rest arguments` — macro
+
+Write a <span> element.
+
+#### `p` `&rest arguments` — macro
+
+Write a <p> element.
+
+#### `h1` `&rest arguments` — macro
+
+Write a <h1> element.
+
+#### `h2` `&rest arguments` — macro
+
+Write a <h2> element.
+
+#### `h3` `&rest arguments` — macro
+
+Write a <h3> element.
+
+#### `h4` `&rest arguments` — macro
+
+Write a <h4> element.
+
+#### `h5` `&rest arguments` — macro
+
+Write a <h5> element.
+
+#### `h6` `&rest arguments` — macro
+
+Write a <h6> element.
+
+#### `ul` `&rest arguments` — macro
+
+Write a <ul> element.
+
+#### `ol` `&rest arguments` — macro
+
+Write a <ol> element.
+
+#### `li` `&rest arguments` — macro
+
+Write a <li> element.
+
+#### `dl` `&rest arguments` — macro
+
+Write a <dl> element.
+
+#### `dt` `&rest arguments` — macro
+
+Write a <dt> element.
+
+#### `dd` `&rest arguments` — macro
+
+Write a <dd> element.
+
+#### `table` `&rest arguments` — macro
+
+Write a <table> element.
+
+#### `thead` `&rest arguments` — macro
+
+Write a <thead> element.
+
+#### `tbody` `&rest arguments` — macro
+
+Write a <tbody> element.
+
+#### `tfoot` `&rest arguments` — macro
+
+Write a <tfoot> element.
+
+#### `tr` `&rest arguments` — macro
+
+Write a <tr> element.
+
+#### `td` `&rest arguments` — macro
+
+Write a <td> element.
+
+#### `th` `&rest arguments` — macro
+
+Write a <th> element.
+
+#### `caption` `&rest arguments` — macro
+
+Write a <caption> element.
+
+#### `em` `&rest arguments` — macro
+
+Write a <em> element.
+
+#### `strong` `&rest arguments` — macro
+
+Write a <strong> element.
+
+#### `b` `&rest arguments` — macro
+
+Write a <b> element.
+
+#### `i` `&rest arguments` — macro
+
+Write a <i> element.
+
+#### `u` `&rest arguments` — macro
+
+Write a <u> element.
+
+#### `small` `&rest arguments` — macro
+
+Write a <small> element.
+
+#### `code` `&rest arguments` — macro
+
+Write a <code> element.
+
+#### `pre` `&rest arguments` — macro
+
+Write a <pre> element.
+
+#### `blockquote` `&rest arguments` — macro
+
+Write a <blockquote> element.
+
+#### `sup` `&rest arguments` — macro
+
+Write a <sup> element.
+
+#### `sub` `&rest arguments` — macro
+
+Write a <sub> element.
+
+#### `section` `&rest arguments` — macro
+
+Write a <section> element.
+
+#### `article` `&rest arguments` — macro
+
+Write a <article> element.
+
+#### `aside` `&rest arguments` — macro
+
+Write a <aside> element.
+
+#### `nav` `&rest arguments` — macro
+
+Write a <nav> element.
+
+#### `header` `&rest arguments` — macro
+
+Write a <header> element.
+
+#### `footer` `&rest arguments` — macro
+
+Write a <footer> element.
+
+#### `main` `&rest arguments` — macro
+
+Write a <main> element.
+
+#### `figure` `&rest arguments` — macro
+
+Write a <figure> element.
+
+#### `figcaption` `&rest arguments` — macro
+
+Write a <figcaption> element.
+
+#### `fieldset` `&rest arguments` — macro
+
+Write a <fieldset> element.
+
+#### `legend` `&rest arguments` — macro
+
+Write a <legend> element.
+
+#### `label` `&rest arguments` — macro
+
+Write a <label> element.
+
+#### `abbr` `&rest arguments` — macro
+
+Write a <abbr> element.
+
+#### `cite` `&rest arguments` — macro
+
+Write a <cite> element.
+
+#### `mark` `&rest arguments` — macro
+
+Write a <mark> element.
+
+#### `dfn` `&rest arguments` — macro
+
+Write a <dfn> element.
+
+#### `kbd` `&rest arguments` — macro
+
+Write a <kbd> element.
+
+#### `samp` `&rest arguments` — macro
+
+Write a <samp> element.
+
+#### `var-tag` `&rest arguments` — macro
+
+Write a <var> element.
+
+#### `img` `&rest arguments` — macro
+
+Write a <img> element.
+
+#### `br` `&rest arguments` — macro
+
+Write a <br> element.
+
+#### `hr` `&rest arguments` — macro
+
+Write a <hr> element.
+
+#### `tag` `name &rest arguments` — macro
+
+Write an element whose `name` (a string) is computed.
+
+### Brushes with callbacks
+
+#### `anchor` `&rest arguments` — macro
+
+A link.  :`callback` is a thunk run when it is followed; :`href` a plain `url`.
+
+#### `form` `&rest arguments` — macro
+
+A form posting back to the session.  Its fields' callbacks run before
+the action of the button that submitted it.  :`default-action` is a thunk run
+when the form is submitted without a button; :`multipart` T allows `file-input`.
+
+#### `text-input` `&optional attributes` — macro
+
+A text field.  :`callback` receives the submitted string.
+
+#### `password-input` `&optional attributes` — macro
+
+A password field.  :`callback` receives the submitted string.
+
+#### `number-input` `&optional attributes` — macro
+
+An integer field.  :`callback` receives an integer, or `nil` when the
+submission does not parse.
+
+#### `hidden-input` `&optional attributes` — macro
+
+A hidden field.  :`callback` receives its :`value` when the form is submitted.
+
+#### `text-area` `&optional attributes` — macro
+
+A multi-line text field showing :`value`.  :`callback` receives the submitted string.
+
+#### `checkbox` `&optional attributes` — macro
+
+A checkbox.  :`value` is its state; :`callback` receives T or `nil`.
+
+#### `select-list` `&optional attributes` — macro
+
+A drop-down of :`items` shown through :`labels` (a function, default `princ`).
+:`callback` receives the chosen item; :`selected` is the current one.
+
+#### `radio-group` `&optional attributes` — macro
+
+Radio buttons, one per item of :`items`; otherwise like `select-list`.
+
+#### `submit-button` `&rest arguments` — macro
+
+A button submitting its form, then running the thunk :`callback`.
+
+#### `cancel-button` `&rest arguments` — macro
+
+A button that runs the thunk :`callback` and nothing else: the form's
+fields are not applied.
+
+#### `button` `&rest arguments` — macro
+
+A button that submits nothing; give it an `ajax` :`on-click`.
+
+#### `file-input` `&optional attributes` — macro
+
+A file chooser.  :`callback` receives an `uploaded-file`, and is not called
+when no file was chosen.  The enclosing `form` needs :`multipart` T.
+
+#### `uploaded-file` — class
+
+A file submitted through `file-input`.
+
+#### `file-name` `object` — generic function
+
+Reads the filename of an uploaded-file.  The name the browser gave, without directories.
+
+#### `file-content-type` `object` — generic function
+
+Reads the content-type of an uploaded-file.  The `mime` type the browser gave.
+
+#### `file-contents` `object` — generic function
+
+Reads the contents of an uploaded-file.  The file's bytes, an (`unsigned-byte` 8) vector.

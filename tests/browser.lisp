@@ -11,13 +11,16 @@
    (fields :initform '() :accessor browser-fields
            :documentation "Alist of field name → value typed into the current page.")
    (files :initform '() :accessor browser-files
-          :documentation "Alist of field name → (FILENAME CONTENT-TYPE OCTETS).")))
+          :documentation "Alist of field name → (FILENAME CONTENT-TYPE OCTETS)."))
+  (:documentation "A fake browser driving the Lack app in-process."))
 
 (defun split-url (url)
+  "URL's path and query string."
   (let ((q (position #\? url)))
     (if q (values (subseq url 0 q) (subseq url (1+ q))) (values url nil))))
 
 (defun make-env (method url &key body cookies (content-type "application/x-www-form-urlencoded"))
+  "A Lack environment for a METHOD request to URL."
   (multiple-value-bind (path query) (split-url url)
     (let ((headers (make-hash-table :test 'equal))
           (octets (if (stringp body)
@@ -25,7 +28,7 @@
                       body)))
       (when cookies
         (setf (gethash "cookie" headers)
-              (format nil "~{~A~^; ~}" (mapcar (lambda (c) (format nil "~A=~A" (car c) (cdr c))) cookies))))
+              (format nil "~{~A~^; ~}" (mapcar (lambda (c) (format nil "~A=~A" (first c) (rest c))) cookies))))
       (append (list :request-method method
                     :script-name ""
                     :path-info (quri:url-decode path)
@@ -42,6 +45,7 @@
                       :raw-body (flexi-streams:make-in-memory-input-stream octets)))))))
 
 (defun response-header (headers name)
+  "The header NAME from a Lack response's HEADERS plist."
   (getf headers name))
 
 (defun raw-request (browser method url &key body content-type)
@@ -62,28 +66,32 @@
   (loop repeat 10
         do (multiple-value-bind (status headers html)
                (raw-request browser method url :body body :content-type content-type)
-             (if (= status 302)
-                 (setf url (response-header headers :location) method :get body nil content-type nil)
-                 (progn
-                   (setf (browser-url browser) url
-                         (browser-status browser) status
-                         (browser-html browser) html
-                         (browser-fields browser) (initial-fields html))
-                   (return browser))))
+             (cond ((= status 302)
+                    (setf url (response-header headers :location)
+                          method :get body nil content-type nil))
+                   (t
+                    (setf (browser-url browser) url
+                          (browser-status browser) status
+                          (browser-html browser) html
+                          (browser-fields browser) (initial-fields html))
+                    (return browser))))
         finally (error "Too many redirects")))
 
 ;;; Reading the page
 
 (defun attributes (tag)
+  "The attributes in TAG, the inside of an HTML start tag, as an alist."
   (let ((result '()))
     (cl-ppcre:do-register-groups (name value) ("([a-zA-Z_:-]+)(?:=\"([^\"]*)\")?" tag)
       (push (cons (string-downcase name) (and value (unescape value))) result))
     (nreverse result)))
 
 (defun attr (attributes name)
-  (cdr (assoc name attributes :test #'string=)))
+  "The value of attribute NAME in ATTRIBUTES."
+  (rest (assoc name attributes :test #'string=)))
 
 (defun unescape (string)
+  "STRING with the HTML escapes littoral writes undone."
   (cl-ppcre:regex-replace-all
    "&(lt|gt|amp|quot|#39);" string
    (lambda (match register)
@@ -93,12 +101,15 @@
    :simple-calls t))
 
 (defun strip-tags (html)
+  "HTML with its tags removed and escapes undone."
   (unescape (cl-ppcre:regex-replace-all "<[^>]*>" html "")))
 
 (defun page-text (browser)
+  "The current page's text without markup."
   (strip-tags (browser-html browser)))
 
 (defun has-text-p (browser text)
+  "True when the current page's text contains TEXT."
   (search text (page-text browser)))
 
 (defun initial-fields (html)
@@ -166,7 +177,7 @@
   "Type VALUE into the field with DOM id ID."
   (let ((name (element-name browser id)))
     (setf (browser-fields browser)
-          (cons (cons name value) (remove name (browser-fields browser) :key #'car :test #'string=)))
+          (acons name value (remove name (browser-fields browser) :key #'car :test #'string=)))
     browser))
 
 (defun set-checkbox (browser index checked)
@@ -178,7 +189,7 @@
     (let ((name (nth index (nreverse names))))
       ;; Its hidden twin is posted as "off" already; append the box last.
       (setf (browser-fields browser)
-            (append (remove-if (lambda (f) (and (string= (car f) name) (string= (cdr f) "on")))
+            (append (remove-if (lambda (f) (and (string= (first f) name) (string= (rest f) "on")))
                                (browser-fields browser))
                     (when checked (list (cons name "on")))))
       browser)))
@@ -194,13 +205,15 @@
   (error "No option ~S in ~S" label id))
 
 (defun form-action (browser)
+  "The action URL of the first form on the page."
   (cl-ppcre:do-register-groups (tag) ("<form\\b([^>]*)>" (browser-html browser))
     (return-from form-action (attr (attributes tag) "action")))
   (error "No form on the page"))
 
 (defun encode-fields (fields)
+  "FIELDS, an alist, as a URL-encoded form body."
   (format nil "~{~A~^&~}"
-          (mapcar (lambda (f) (format nil "~A=~A" (quri:url-encode (car f)) (quri:url-encode (or (cdr f) ""))))
+          (mapcar (lambda (f) (format nil "~A=~A" (quri:url-encode (first f)) (quri:url-encode (or (rest f) ""))))
                   fields)))
 
 (defun attach-file (browser id filename content-type contents)
@@ -221,7 +234,8 @@
                              boundary #\Return #\Newline name #\Return #\Newline #\Return #\Newline
                              (or value "") #\Return #\Newline)))
       (loop for (name filename type octets) in files
-            do (emit (format nil "--~A~C~CContent-Disposition: form-data; name=\"~A\"; filename=\"~A\"~C~CContent-Type: ~A~C~C~C~C"
+            do (emit (format nil "--~A~C~CContent-Disposition: form-data; name=\"~A\"; ~
+filename=\"~A\"~C~CContent-Type: ~A~C~C~C~C"
                              boundary #\Return #\Newline name filename #\Return #\Newline
                              type #\Return #\Newline #\Return #\Newline))
                (write-sequence octets out)

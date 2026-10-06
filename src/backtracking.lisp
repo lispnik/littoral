@@ -14,7 +14,8 @@
 (defclass snapshot ()
   ((entries :initarg :entries :reader snapshot-entries
             :documentation "List of (OBJECT . SAVED) where SAVED is what
-CAPTURE-STATE returned for it.")))
+CAPTURE-STATE returned for it."))
+  (:documentation "The saved state of a page: what TAKE-SNAPSHOT captured and RESTORE-SNAPSHOT puts back."))
 
 (defgeneric capture-state (object)
   (:documentation "A copy of OBJECT's state that RESTORE-STATE can put back.")
@@ -50,6 +51,10 @@ CAPTURE-STATE returned for it.")))
   "Wrap an object in DEEP in STATES to snapshot its slots deeply."
   object)
 
+(setf (documentation 'deep 'function)
+      "Name OBJECT in STATES as (DEEP OBJECT) to snapshot its lists, vectors,
+strings and hash tables by copying them, not sharing them.")
+
 (defun deep-copy (value &optional (seen (make-hash-table :test 'eq)))
   "A copy of VALUE's lists, vectors, strings and hash tables, all the way
 down.  Other objects (instances, structures, symbols, numbers) are shared;
@@ -58,10 +63,10 @@ shared structure and cycles are kept."
     ((or cons vector hash-table)
      (or (gethash value seen)
          (typecase value
-           (cons (let ((copy (cons nil nil)))
+           (cons (let ((copy (list nil)))
                    (setf (gethash value seen) copy
-                         (car copy) (deep-copy (car value) seen)
-                         (cdr copy) (deep-copy (cdr value) seen))
+                         (first copy) (deep-copy (first value) seen)
+                         (rest copy) (deep-copy (rest value) seen))
                    copy))
            (string (setf (gethash value seen) (copy-seq value)))
            (vector (let ((copy (make-array (length value)
@@ -73,12 +78,14 @@ shared structure and cycles are kept."
                                                     :size (hash-table-size value))))
                          (setf (gethash value seen) copy)
                          (maphash (lambda (k v) (setf (gethash k copy) (deep-copy v seen))) value)
-                         copy)))))
-    (t value)))
+                         copy))
+           (otherwise value))))
+    (otherwise value)))
 
 (defun deep-copy-saved (saved)
+  "SAVED, a slot alist from CAPTURE-STATE, with its values deep-copied."
   (let ((seen (make-hash-table :test 'eq)))
-    (mapcar (lambda (entry) (cons (car entry) (deep-copy (cdr entry) seen))) saved)))
+    (mapcar (lambda (entry) (cons (first entry) (deep-copy (rest entry) seen))) saved)))
 
 (defun take-snapshot (root)
   "Capture the state of everything visible from ROOT."
@@ -109,4 +116,4 @@ shared structure and cycles are kept."
              (:decorations (setf (decorations object) (second saved)))
              ;; Copy again, so later changes cannot reach the snapshot.
              (:deep (restore-state object (deep-copy-saved (second saved))))
-             (t (restore-state object saved)))))
+             (otherwise (restore-state object saved)))))

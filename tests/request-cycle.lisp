@@ -6,6 +6,7 @@
 (in-suite request-cycle)
 
 (defun count-shown (browser)
+  "The counter value on the current page."
   (parse-integer (cl-ppcre:scan-to-strings "(?<=<h1>)-?\\d+(?=</h1>)" (browser-html browser))))
 
 (test counter
@@ -14,7 +15,7 @@
       (visit b "/counter")
       (is (= 200 (browser-status b)))
       (is (search "_s=" (browser-url b)))
-      (is (= 0 (count-shown b)))
+      (is (zerop (count-shown b)))
       (click b "++") (click b "++") (click b "++")
       (is (= 3 (count-shown b)))
       (click b "--")
@@ -61,7 +62,7 @@
       (let ((old-url (browser-url b)))
         (sleep 2.1)
         (visit b old-url)
-        (is (= 0 (count-shown b)))
+        (is (zerop (count-shown b)))
         (is (not (string= old-url (browser-url b))))))))
 
 (test unknown-continuation-shows-current-state
@@ -110,7 +111,8 @@
       (visit b "/nowhere")
       (is (= 404 (browser-status b))))))
 
-(defclass broken (component) ())
+(defclass broken (component) ()
+  (:documentation "A component whose link signals an error."))
 (defmethod render ((self broken))
   (anchor (:callback (lambda () (error "Kaboom"))) "explode"))
 
@@ -273,7 +275,7 @@
       (is (= 1 (length (littoral::list-sessions (find-application "/counter")))))
       (sleep 2.1)                       ; idle time is counted in whole seconds
       (reap-all-sessions)
-      (is (= 0 (length (littoral::list-sessions (find-application "/counter")))))))
+      (is (zerop (length (littoral::list-sessions (find-application "/counter")))))))
   (start-reaper :interval 1)
   (is (sb-thread:thread-alive-p littoral::*reaper*))
   (stop-reaper)
@@ -281,10 +283,12 @@
 
 (defclass cancellable (component)
   ((name :initform "kept" :accessor cancellable-name)
-   (log :initform '() :accessor cancellable-log)))
+   (log :initform '() :accessor cancellable-log))
+  (:documentation "A form with save, cancel and default actions that logs which ran."))
 
 (defmethod render ((self cancellable))
-  (p () "Name: " (text (cancellable-name self)) " Log: " (text (format nil "~{~A~^,~}" (reverse (cancellable-log self)))))
+  (p () "Name: " (text (cancellable-name self))
+    " Log: " (text (format nil "~{~A~^,~}" (reverse (cancellable-log self)))))
   (form (:default-action (lambda () (push :default (cancellable-log self))))
     (text-input (:id "name" :value (cancellable-name self)
                  :callback (lambda (v) (setf (cancellable-name self) v))))
@@ -306,12 +310,14 @@
       (visit b (form-action b) :method :post :body (encode-fields (browser-fields b)))
       (is (has-text-p b "Name: entered Log: CANCEL,SAVE,DEFAULT")))))
 
-(defclass kaboom (component) ())
+(defclass kaboom (component) ()
+  (:documentation "A component whose link signals an error."))
 (defmethod render ((self kaboom))
   (anchor (:callback (lambda () (error "Kaboom"))) "explode"))
 
 (defclass sorry (component)
-  ((condition :initarg :condition :reader sorry-condition)))
+  ((condition :initarg :condition :reader sorry-condition))
+  (:documentation "A custom error page."))
 (defmethod render ((self sorry))
   (h1 () "Sorry") (p () (text (sorry-condition self))) (anchor (:href "/k") "Start again"))
 
@@ -343,7 +349,7 @@
       (visit b (browser-url b))
       (is (has-text-p b "Your session expired"))
       (press b "Continue")
-      (is (= 0 (count-shown b)))
+      (is (zerop (count-shown b)))
       ;; A first visit, naming no session, sees no notice.
       (let ((fresh (make-instance 'browser)))
         (visit fresh "/counter")

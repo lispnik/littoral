@@ -24,6 +24,7 @@
     (format stream "~@[~A~]" (channel-name channel))))
 
 (defun make-channel (&optional name)
+  "A new channel, named NAME for printing."
   (make-instance 'channel :name name))
 
 (defgeneric subscriptions (component)
@@ -38,7 +39,8 @@
             :documentation "Channels and component ids to re-render.")
    (open-p :initform t :accessor stream-open-p)
    (lock :initform (sb-thread:make-mutex :name "littoral event stream") :reader stream-lock)
-   (waitqueue :initform (sb-thread:make-waitqueue) :reader stream-waitqueue)))
+   (waitqueue :initform (sb-thread:make-waitqueue) :reader stream-waitqueue))
+  (:documentation "One open page's server-sent event connection and the work queued for it."))
 
 (defvar *event-streams* '())
 (defvar *event-streams-lock* (sb-thread:make-mutex :name "littoral event streams"))
@@ -47,9 +49,11 @@
   "How often an idle stream sends a comment, which also notices closed connections.")
 
 (defun open-event-streams ()
+  "The event streams open now."
   (sb-thread:with-mutex (*event-streams-lock*) (copy-list *event-streams*)))
 
 (defun wake (stream item)
+  "Queue ITEM, a channel or component id, for STREAM and wake it."
   (sb-thread:with-mutex ((stream-lock stream))
     (push item (stream-pending stream))
     (sb-thread:condition-broadcast (stream-waitqueue stream))))
@@ -118,12 +122,14 @@ the work)."
             (render-fragments (nreverse ids) root)))))))
 
 (defun stream-live-p (stream)
+  "True while STREAM's session and page still exist and it has not been closed."
   (let ((session (stream-session stream)))
     (and (stream-open-p stream)
          (not (session-expired-p session))
          (find-continuation session (continuation-key (stream-continuation stream))))))
 
 (defun run-event-stream (stream writer)
+  "Serve STREAM through WRITER until its page is gone or the browser leaves."
   (sb-thread:with-mutex (*event-streams-lock*) (push stream *event-streams*))
   (unwind-protect
        (handler-case
@@ -131,12 +137,12 @@ the work)."
              (funcall writer (format nil "retry: 3000~%~%"))
              (loop while (stream-live-p stream)
                    do (let ((pending (take-pending stream *keepalive-seconds*)))
-                        (cond ((not (stream-live-p stream)))
-                              (pending
-                               (let ((json (pushed-fragments stream pending)))
-                                 (when json
-                                   (funcall writer (format nil "event: update~%data: ~A~%~%" json)))))
-                              (t (funcall writer (format nil ": keepalive~%~%")))))))
+                        (when (stream-live-p stream)
+                          (if pending
+                              (let ((json (pushed-fragments stream pending)))
+                                (when json
+                                  (funcall writer (format nil "event: update~%data: ~A~%~%" json))))
+                              (funcall writer (format nil ": keepalive~%~%")))))))
          ;; The browser went away: writing to its socket fails.
          (error () nil))
     (sb-thread:with-mutex (*event-streams-lock*)
@@ -158,5 +164,6 @@ is gone."
                                                    *security-headers*)))))))
 
 (defun page-subscribes-p (root)
+  "True when a component visible from ROOT has subscriptions."
   (map-visible (lambda (c) (when (subscriptions c) (return-from page-subscribes-p t))) root)
   nil)

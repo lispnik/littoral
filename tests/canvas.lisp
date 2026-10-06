@@ -6,6 +6,7 @@
 (in-suite canvas)
 
 (defmacro html (&body body)
+  "The HTML BODY writes, with no render context."
   `(let ((littoral:*render-context* nil))
      (with-canvas-to-string () ,@body)))
 
@@ -66,7 +67,7 @@
         (is (search "<option value=\"1\" selected>b</option>" out))
         (is (search "type=\"checkbox\" name=\"2\" value=\"on\" checked" out))))
     (littoral::process-callbacks '(("1" . "2") ("2" . "off")) registry)
-    (is (eq :c chosen))
+    (is (eql :c chosen))
     (is (eq nil checked))
     (littoral::process-callbacks '(("2" . "off") ("2" . "on")) registry)
     (is (eq t checked))))

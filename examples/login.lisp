@@ -3,23 +3,27 @@
 (in-package #:littoral-examples)
 
 (defclass login-demo (component)
-  ((user :initform nil :accessor user)))
+  ((user :initform nil :accessor user))
+  (:documentation "Logging in and out through dialogs."))
 
 (defmethod states ((self login-demo))
   (list self))
 
-(defun check-credentials (answer)
+(defun credentials-problem (answer)
+  "NIL when ANSWER, a (USER . PASSWORD) cons or NIL, may log in; else why not."
   (cond ((null answer) nil)               ; Cancel is always fine
-        ((and (string= (car answer) "admin") (string= (cdr answer) "secret")) nil)
+        ((and (string= (first answer) "admin") (string= (rest answer) "secret")) nil)
         (t "Unknown user or wrong password.")))
 
 (defun log-in (self)
+  "Ask for credentials and remember the user they name."
   (show self (validate-with (make-instance 'login-dialog :message "Try admin / secret.")
-                            #'check-credentials)
+                            #'credentials-problem)
         :on-answer (lambda (answer)
-                     (when answer (setf (user self) (car answer))))))
+                     (when answer (setf (user self) (first answer))))))
 
 (defun log-out (self)
+  "Confirm, then forget the user."
   (show self (make-instance 'confirm-dialog :message "Really log out?")
         :on-answer (lambda (yes) (when yes (setf (user self) nil)))))
 

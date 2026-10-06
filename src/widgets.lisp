@@ -31,6 +31,7 @@ WABatchedList."))
     (if (functionp items) (funcall items) items)))
 
 (defun page-count (list)
+  "How many pages LIST's items fill; at least one."
   (max 1 (ceiling (length (batch-items list)) (batch-size list))))
 
 (defun (setf batch-items) (items list)
@@ -49,6 +50,7 @@ WABatchedList."))
             (min (+ start (batch-size list)) (length items)))))
 
 (defun go-to-page (list page)
+  "Show page PAGE (zero-based) of LIST, kept in range."
   (setf (batch-page list) (max 0 (min page (1- (page-count list))))))
 
 (defmethod render ((self batched-list))
@@ -79,7 +81,8 @@ WABatchedList."))
    (sort-key :initarg :sort-key :initform nil :reader column-sort-key)
    (sort-predicate :initarg :sort-predicate :initform #'value< :reader column-sort-predicate)
    (sortable :initarg :sortable :initform t :reader column-sortable-p)
-   (css-class :initarg :class :initform nil :reader column-class)))
+   (css-class :initarg :class :initform nil :reader column-class))
+  (:documentation "One column of a REPORT: its title, value, rendering and sorting."))
 
 (defun column (title value &rest initargs &key render sort-key sort-predicate sortable class)
   "A REPORT column titled TITLE showing (FUNCALL VALUE ROW)."
@@ -94,6 +97,7 @@ WABatchedList."))
         (t (string-lessp (princ-to-string a) (princ-to-string b)))))
 
 (defun column-cell-value (column row)
+  "The value COLUMN shows for ROW."
   (and (column-value column) (funcall (column-value column) row)))
 
 (defclass report (component)
@@ -121,10 +125,12 @@ WATableReport.  Give :BATCH-SIZE to page it."))
   (and (report-batcher self) (list (report-batcher self))))
 
 (defun current-rows (report)
+  "REPORT's rows, calling its thunk when it has one."
   (let ((rows (report-rows report)))
     (if (functionp rows) (funcall rows) rows)))
 
 (defun sorted-rows (report)
+  "REPORT's rows in its current sort order."
   (let ((rows (copy-list (current-rows report)))
         (column (report-sort-column report)))
     (if (null column)

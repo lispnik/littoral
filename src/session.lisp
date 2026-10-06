@@ -17,6 +17,7 @@ from and the callbacks its links and fields name."))
 that holds it.  NIL for none.")
 
 (defun new-session-key ()
+  "A fresh session key, prefixed with *INSTANCE-ID* when there is one."
   (if *instance-id*
       (format nil "~A.~A" *instance-id* (random-key 20))
       (random-key 20)))
@@ -38,15 +39,18 @@ that holds it.  NIL for none.")
    (profiling-p :initform nil :accessor session-profiling-p)
    (last-action :initform nil :accessor session-last-action
                 :documentation "Plist of the last action's :ACTIONS and :SNAPSHOT seconds and :OBJECTS.")
-   (properties :initform (make-hash-table :test 'equal) :reader session-properties)))
+   (properties :initform (make-hash-table :test 'equal) :reader session-properties))
+  (:documentation "One user's component tree, the pages it has shown, and its lock."))
 
 (defun session-property (key &optional (session *session*))
+  "The value stored under KEY in SESSION, for application use."
   (gethash key (session-properties session)))
 
 (defun (setf session-property) (value key &optional (session *session*))
   (setf (gethash key (session-properties session)) value))
 
 (defun session-expired-p (session &optional (now (now-seconds)))
+  "True when SESSION has been idle longer than its application allows."
   (> (- now (session-last-access session))
      (application-session-timeout (session-application session))))
 
@@ -93,6 +97,7 @@ to one of them shows the session as it is now."
     (length doomed)))
 
 (defun find-continuation (session key)
+  "SESSION's page with KEY, or NIL."
   (and key (gethash key (session-continuations session))))
 
 (defun session-snapshot-sizes (session)
@@ -105,4 +110,5 @@ to one of them shows the session as it is now."
             held)))
 
 (defun session-continuation-count (session)
+  "How many pages SESSION keeps."
   (hash-table-count (session-continuations session)))

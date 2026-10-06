@@ -8,7 +8,8 @@
 (defclass notebook (component)
   ((notes :initform (list "first") :accessor notes)
    (tags :initform (make-hash-table :test 'equal) :accessor tags)
-   (deep-p :initarg :deep :initform nil :reader deep-p)))
+   (deep-p :initarg :deep :initform nil :reader deep-p))
+  (:documentation "Notes and tags, snapshotted shallowly or deeply."))
 
 (defmethod states ((self notebook))
   (list (if (deep-p self) (deep self) self)))
@@ -103,7 +104,7 @@
              (errors (run-threads 8 (lambda (i)
                                       (declare (ignore i))
                                       (dotimes (k 20)
-                                        (ajax-request b (car plus) (cdr plus)))))))
+                                        (ajax-request b (first plus) (rest plus)))))))
         (is (null errors) "~A" errors)
         ;; AJAX acts on the live state, serialised by the session lock.
         (visit b (browser-url b))

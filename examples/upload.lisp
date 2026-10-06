@@ -3,7 +3,8 @@
 (in-package #:littoral-examples)
 
 (defclass upload-demo (component)
-  ((file :initform nil :accessor uploaded)))
+  ((file :initform nil :accessor uploaded))
+  (:documentation "Receives a file and describes it."))
 
 (defun text-preview (file)
   "The first lines of FILE when it looks like text, else NIL."

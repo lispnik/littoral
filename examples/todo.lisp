@@ -4,22 +4,26 @@
 
 (defclass todo-item ()
   ((title :initarg :title :accessor item-title)
-   (done :initform nil :accessor item-done-p)))
+   (done :initform nil :accessor item-done-p))
+  (:documentation "A thing to do, done or not."))
 
 (defclass todo-list (component)
   ((items :initform '() :accessor items)
-   (new-title :initform "" :accessor new-title)))
+   (new-title :initform "" :accessor new-title))
+  (:documentation "A to-do list: add, tick off, rename and remove items."))
 
 (defmethod states ((self todo-list))
   (cons self (items self)))
 
 (defun add-item (self)
+  "Add the typed title as a new item."
   (let ((title (string-trim " " (new-title self))))
     (unless (string= title "")
       (setf (items self) (append (items self) (list (make-instance 'todo-item :title title)))
             (new-title self) ""))))
 
 (defun edit-item (self item)
+  "Ask for a new title for ITEM."
   (show self (make-instance 'input-dialog :message "Rename" :value (item-title item))
         :on-answer (lambda (title)
                      (unless (string= title "")

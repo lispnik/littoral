@@ -31,7 +31,8 @@ string for the error page, or NIL for the standard one.")
                    :documentation "Component class shown, before the root, to someone whose
 session expired.  NIL starts them over silently.")
    (sessions :initform (make-hash-table :test 'equal) :reader application-sessions)
-   (lock :initform (sb-thread:make-mutex :name "littoral application") :reader application-lock)))
+   (lock :initform (sb-thread:make-mutex :name "littoral application") :reader application-lock))
+  (:documentation "A root component class served at a path, with its settings and live sessions."))
 
 (defmethod print-object ((app application) stream)
   (print-unreadable-object (app stream :type t)
@@ -43,6 +44,7 @@ session expired.  NIL starts them over silently.")
 (defvar *applications-lock* (sb-thread:make-mutex :name "littoral applications"))
 
 (defun normalize-path (path)
+  "PATH with a leading slash and no trailing one; \"/\" for the root."
   (let ((path (string-right-trim "/" (if (char= (char path 0) #\/) path (concatenate 'string "/" path)))))
     (if (string= path "") "/" path)))
 
@@ -61,13 +63,16 @@ already there.  Returns the APPLICATION."
     app))
 
 (defun unregister-application (path)
+  "Stop serving the application at PATH."
   (sb-thread:with-mutex (*applications-lock*)
     (remhash (normalize-path path) *applications*)))
 
 (defun find-application (path)
+  "The application registered at exactly PATH, or NIL."
   (gethash (normalize-path path) *applications*))
 
 (defun list-applications ()
+  "All registered applications, sorted by path."
   (sort (sb-thread:with-mutex (*applications-lock*)
           (alexandria:hash-table-values *applications*))
         #'string< :key #'application-path))
@@ -79,6 +84,7 @@ already there.  Returns the APPLICATION."
 ;;; Sessions
 
 (defun create-session (app)
+  "A new session of APP with a fresh root component, evicting the least recently used session when APP has a limit."
   (let* ((root (make-instance (application-root-class app)))
          (session (make-instance 'session :application app :root root)))
     (reap-sessions app)
@@ -99,6 +105,7 @@ already there.  Returns the APPLICATION."
     session))
 
 (defun find-session (app key)
+  "APP's live session with KEY, or NIL; an expired one is forgotten on the way."
   (when key
     (let ((session (sb-thread:with-mutex ((application-lock app))
                      (gethash key (application-sessions app)))))
@@ -107,6 +114,7 @@ already there.  Returns the APPLICATION."
             (t session)))))
 
 (defun expire-session (session)
+  "Forget SESSION at once."
   (let ((app (session-application session)))
     (sb-thread:with-mutex ((application-lock app))
       (remhash (session-key session) (application-sessions app)))))
@@ -120,6 +128,7 @@ already there.  Returns the APPLICATION."
               do (remhash key (application-sessions app))))))
 
 (defun list-sessions (app)
+  "APP's sessions, most recently used first."
   (sort (sb-thread:with-mutex ((application-lock app))
           (alexandria:hash-table-values (application-sessions app)))
         #'> :key #'session-last-access))

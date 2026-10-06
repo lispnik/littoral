@@ -17,7 +17,8 @@
 
 (defclass element-table (component)
   ((report :reader element-report)
-   (selected :initform nil :accessor selected-element)))
+   (selected :initform nil :accessor selected-element))
+  (:documentation "A sortable, paged table of chemical elements."))
 
 (defmethod initialize-instance :after ((self element-table) &key)
   (setf (slot-value self 'report)

@@ -30,31 +30,37 @@
         (make-dish :name "Green tea" :price 250 :description "Pot for one")))
 
 (defun money (cents)
+  "CENTS as dollars, such as $4.50."
   (format nil "$~D.~2,'0D" (floor cents 100) (mod cents 100)))
 
 (defclass cart ()
   ((lines :initform '() :accessor cart-lines
-          :documentation "Alist of DISH → quantity, in the order added.")))
+          :documentation "Alist of DISH → quantity, in the order added."))
+  (:documentation "The dishes chosen so far and how many of each."))
 
 (defun cart-quantity (cart)
+  "How many items are in CART."
   (reduce #'+ (cart-lines cart) :key #'cdr))
 
 (defun cart-total (cart)
-  (reduce #'+ (cart-lines cart) :key (lambda (line) (* (dish-price (car line)) (cdr line)))))
+  "What CART costs, in cents."
+  (reduce #'+ (cart-lines cart) :key (lambda (line) (* (dish-price (first line)) (rest line)))))
 
 (defun add-to-cart (cart dish &optional (quantity 1))
+  "Put QUANTITY more of DISH in CART."
   ;; Fresh conses throughout: snapshots share structure with the live cart.
   (setf (cart-lines cart)
         (if (assoc dish (cart-lines cart))
             (mapcar (lambda (line)
-                      (if (eq (car line) dish) (cons dish (+ (cdr line) quantity)) line))
+                      (if (eq (first line) dish) (cons dish (+ (rest line) quantity)) line))
                     (cart-lines cart))
             (append (cart-lines cart) (list (cons dish quantity))))))
 
 (defun set-quantity (cart dish quantity)
+  "Make CART hold QUANTITY of DISH, removing it at zero or NIL."
   (setf (cart-lines cart)
         (loop for line in (cart-lines cart)
-              if (not (eq (car line) dish)) collect line
+              if (not (eq (first line) dish)) collect line
               else if (and quantity (plusp quantity)) collect (cons dish quantity))))
 
 (defstruct address name street city postcode)
@@ -67,7 +73,8 @@
                      (address-city address) (address-postcode address)))
          "Please fill in every field.")
         ((not (every #'digit-char-p (address-postcode address)))
-         "The postcode should be digits only.")))
+         "The postcode should be digits only.")
+        (t nil)))
 
 (defvar *order-counter* (list 1000))
 
@@ -77,19 +84,22 @@
    (total :initarg :total :reader order-total)
    (address :initarg :address :reader order-address)
    (date :initarg :date :reader order-date)
-   (payment :initarg :payment :reader order-payment)))
+   (payment :initarg :payment :reader order-payment))
+  (:documentation "A placed order."))
 
 ;;; Small components used by the checkout
 
 (defun render-lines (lines)
+  "A table of cart LINES with their prices."
   (table (:class "lt-table cart-lines")
     (dolist (line lines)
-      (tr () (td () (text (cdr line)) " × ")
-        (td () (text (dish-name (car line))))
-        (td (:class "number") (text (money (* (cdr line) (dish-price (car line))))))))))
+      (tr () (td () (text (rest line)) " × ")
+        (td () (text (dish-name (first line))))
+        (td (:class "number") (text (money (* (rest line) (dish-price (first line))))))))))
 
 (defclass cart-review (component)
-  ((cart :initarg :cart :reader review-cart)))
+  ((cart :initarg :cart :reader review-cart))
+  (:documentation "Lets the shopper check and change the cart before checking out."))
 
 (defmethod render ((self cart-review))
   (let ((cart (review-cart self)))
@@ -97,12 +107,12 @@
     (form ()
       (table (:class "lt-table cart-lines")
         (dolist (line (cart-lines cart))
-          (let ((dish (car line)))
+          (let ((dish (first line)))
             (tr ()
-              (td () (number-input (:value (cdr line) :min 0 :class "qty"
+              (td () (number-input (:value (rest line) :min 0 :class "qty"
                                     :callback (lambda (n) (set-quantity cart dish n)))))
               (td () (text (dish-name dish)))
-              (td (:class "number") (text (money (* (cdr line) (dish-price dish)))))))))
+              (td (:class "number") (text (money (* (rest line) (dish-price dish)))))))))
       (p () "Total: " (strong () (text (money (cart-total cart)))))
       (div (:class "lt-buttons")
         (submit-button () "Update")
@@ -113,7 +123,8 @@
 
 (defclass address-form (component)
   ((address :initform (make-address :name "" :street "" :city "" :postcode "")
-            :reader form-address)))
+            :reader form-address))
+  (:documentation "Asks where to deliver; answers an ADDRESS or NIL."))
 
 (defmethod render ((self address-form))
   (let ((a (form-address self)))
@@ -132,7 +143,8 @@
         (cancel-button (:callback (lambda () (answer self nil))) "Cancel")))))
 
 (defclass receipt (component)
-  ((order :initarg :order :reader receipt-order)))
+  ((order :initarg :order :reader receipt-order))
+  (:documentation "Thanks the shopper and shows what was ordered."))
 
 (defmethod render ((self receipt))
   (let* ((order (receipt-order self))
@@ -150,9 +162,11 @@
 ;;; The checkout task
 
 (defclass checkout (task)
-  ((cart :initarg :cart :reader checkout-cart)))
+  ((cart :initarg :cart :reader checkout-cart))
+  (:documentation "The checkout task: cart, address, date, payment, confirmation, receipt."))
 
 (defun order-summary (cart address date payment)
+  "The question asked before an order is placed."
   (format nil "Place an order for ~D item~:P, ~A, delivered ~A to ~A, paid by ~(~A~)?"
           (cart-quantity cart) (money (cart-total cart)) (format-date date)
           (address-name address) payment))
@@ -185,30 +199,32 @@
 
 (defclass cart-view (component)
   ((cart :initarg :cart :reader view-cart)
-   (store :initarg :store :reader view-store)))
+   (store :initarg :store :reader view-store))
+  (:documentation "The cart beside the menu."))
 
 (defmethod render ((self cart-view))
   (let ((cart (view-cart self)))
     (aside (:class "cart")
       (h2 () "Cart")
-      (if (null (cart-lines cart))
-          (p (:class "empty") "Nothing yet.")
-          (progn
-            (ul ()
-              (dolist (line (cart-lines cart))
-                (let ((dish (car line)))
-                  (li () (text (cdr line)) " × " (text (dish-name dish)) " "
-                    (anchor (:callback (lambda () (set-quantity cart dish 0)) :title "Remove") "✕")))))
-            (p () "Total " (strong () (text (money (cart-total cart)))))
-            (anchor (:class "checkout" :callback (lambda () (start-checkout (view-store self))))
-              "Checkout »"))))))
+      (cond ((null (cart-lines cart))
+             (p (:class "empty") "Nothing yet."))
+            (t
+             (ul ()
+               (dolist (line (cart-lines cart))
+                 (let ((dish (first line)))
+                   (li () (text (rest line)) " × " (text (dish-name dish)) " "
+                     (anchor (:callback (lambda () (set-quantity cart dish 0)) :title "Remove") "✕")))))
+             (p () "Total " (strong () (text (money (cart-total cart)))))
+             (anchor (:class "checkout" :callback (lambda () (start-checkout (view-store self))))
+               "Checkout »"))))))
 
 (defclass store (component)
   ((cart :initform (make-instance 'cart) :reader store-cart)
    (catalog :reader store-catalog)
    (cart-view :reader store-cart-view)
    (orders :initform '() :accessor store-orders)
-   (notice :initform nil :accessor store-notice)))
+   (notice :initform nil :accessor store-notice))
+  (:documentation "The sushi store: menu, cart and past orders."))
 
 (defmethod initialize-instance :after ((self store) &key)
   (setf (slot-value self 'cart-view)
@@ -240,6 +256,7 @@
   (list (store-catalog self) (store-cart-view self)))
 
 (defun start-checkout (store)
+  "Run a checkout for STORE's cart, recording the order it answers."
   (show store (make-instance 'checkout :cart (store-cart store))
         :on-answer (lambda (order)
                      (when order

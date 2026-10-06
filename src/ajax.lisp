@@ -49,7 +49,7 @@ anything is sent."
 (defun execute-script (javascript)
   "Run JAVASCRIPT in the browser once the current AJAX request's updates are
 in place.  Outside an AJAX request it does nothing and returns NIL."
-  (unless (eq *ajax-scripts* :none)
+  (unless (eql *ajax-scripts* :none)
     (push javascript *ajax-scripts*)
     t))
 
@@ -99,7 +99,7 @@ and keyword plists as objects, other lists as arrays."
                 (loop for (k) on list by #'cddr always (keywordp k)))))
     (cond ((null value) "null")
           ((eq value t) "true")
-          ((eq value :false) "false")
+          ((eql value :false) "false")
           ((stringp value) (json-string value))
           ((integerp value) (princ-to-string value))
           ((realp value) (let ((*read-default-float-format* 'double-float))
@@ -130,7 +130,7 @@ and keyword plists as objects, other lists as arrays."
                (#\Newline (write-string "\\n" out))
                (#\Return (write-string "\\r" out))
                (#\Tab (write-string "\\t" out))
-               (t (if (< (char-code c) 32)
+               (otherwise (if (< (char-code c) 32)
                       (format out "\\u~4,'0X" (char-code c))
                       (write-char c out)))))
     (write-char #\" out)))

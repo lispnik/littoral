@@ -6,7 +6,8 @@
 (in-suite call-answer)
 
 (defclass parent (component)
-  ((result :initform nil :accessor result)))
+  ((result :initform nil :accessor result))
+  (:documentation "Asks for a name with SHOW and remembers the answer."))
 
 (defmethod states ((self parent)) (list self))
 
@@ -91,9 +92,10 @@
       (is (search "<form" out))
       (is (search ">Save</button>" out)))
     (littoral::process-callbacks '(("1" . "1")) registry)
-    (is (eq :save answered))))
+    (is (eql :save answered))))
 
-(defclass calls-while-rendering (component) ())
+(defclass calls-while-rendering (component) ()
+  (:documentation "Wrongly shows a dialog while rendering."))
 (defmethod render ((self calls-while-rendering))
   (show self (make-instance 'message-dialog :message "never")))
 

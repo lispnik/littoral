@@ -11,7 +11,8 @@
 
 (defclass topics (component)
   ((current :initform nil :accessor current-topic)
-   (zoom :initform nil :accessor zoomed-p)))
+   (zoom :initform nil :accessor zoomed-p))
+  (:documentation "Topics whose URL names the one shown, so they can be bookmarked."))
 
 (defmethod states ((self topics))
   (list self))
@@ -38,8 +39,8 @@
                         (text name))))))
   (let ((topic (assoc (current-topic self) *topics* :test #'equal)))
     (when topic
-      (h2 () (text (car topic)))
-      (p (:style (when (zoomed-p self) "font-size: 1.6rem")) (text (cdr topic)))
+      (h2 () (text (first topic)))
+      (p (:style (when (zoomed-p self) "font-size: 1.6rem")) (text (rest topic)))
       (anchor (:callback (lambda () (setf (zoomed-p self) (not (zoomed-p self)))))
         (text (if (zoomed-p self) "smaller" "bigger")))))
   (p (:class "hint") "The address bar names the topic: bookmark it and come back."))

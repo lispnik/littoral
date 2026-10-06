@@ -54,6 +54,7 @@ so browsers may cache it for good yet never run a stale copy."
   "Headers added to every page, redirect and AJAX response.")
 
 (defun html-response (html &key (status 200) headers)
+  "A Lack response carrying HTML, uncached, with the security headers."
   (list status
         (append (list :content-type "text/html; charset=utf-8"
                       :cache-control "no-store")
@@ -62,6 +63,7 @@ so browsers may cache it for good yet never run a stale copy."
         (list html)))
 
 (defun redirect-response (url &key headers)
+  "A Lack 302 response to URL."
   (list 302 (append (list :location url :cache-control "no-store") headers *security-headers*)
         (list "")))
 
@@ -71,6 +73,7 @@ so browsers may cache it for good yet never run a stale copy."
       (string-equal (gethash "x-forwarded-proto" (lack/request:request-headers request) "") "https")))
 
 (defun simple-page (status title &optional (message ""))
+  "A minimal HTML page with TITLE as its heading and the HTML MESSAGE below."
   (html-response
    (format nil "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>~A</title>~
 <link rel=\"stylesheet\" href=\"~A\"></head><body><h1>~A</h1>~A</body></html>"
@@ -78,7 +81,8 @@ so browsers may cache it for good yet never run a stale copy."
    :status status))
 
 (defun serve-static (name)
-  (let ((type (cdr (assoc (pathname-type (pathname name)) *static-types* :test #'equal))))
+  "The response for littoral's static file NAME, cached for good when the request names its current fingerprint."
+  (let ((type (rest (assoc (pathname-type (pathname name)) *static-types* :test #'equal))))
     (multiple-value-bind (contents fingerprint) (and type (static-file name))
       (if contents
           (list 200 (list :content-type type
@@ -110,9 +114,11 @@ add, then the session and page keys."
 ;;; Rendering a page
 
 (defun development-p (&optional (app *application*))
-  (eq (application-mode app) :development))
+  "True when APP shows the toolbar and halos."
+  (eql (application-mode app) :development))
 
 (defun render-document (session body-html action-url)
+  "The whole HTML document for SESSION's page: head from UPDATE-ROOT, then BODY-HTML."
   (let ((app (session-application session))
         (root (make-instance 'html-root)))
     (setf (root-title root) (or (application-title app) (application-path app)))
@@ -141,6 +147,7 @@ add, then the session and page keys."
       (format out "~%</body></html>~%"))))
 
 (defun render-page (session continuation)
+  "Render CONTINUATION's page, registering its callbacks afresh."
   (let* ((app (session-application session))
          (callbacks (continuation-callbacks continuation))
          (action-url (page-url session continuation))
@@ -162,8 +169,9 @@ add, then the session and page keys."
 ;;; The cycle
 
 (defun session-key-from-request (app)
+  "The session key the request names, from the URL or APP's cookie."
   (if (application-cookie-sessions-p app)
-      (cdr (assoc (session-cookie-name app) (lack/request:request-cookies *request*)
+      (rest (assoc (session-cookie-name app) (lack/request:request-cookies *request*)
                   :test #'string=))
       (request-parameter "_s")))
 
@@ -211,9 +219,27 @@ page, and answer the components to update as JSON."
                                       :value *ajax-result*
                                       :scripts (reverse *ajax-scripts*))))))))
 
+(defun run-actions (session continuation)
+  "Run the callbacks the request names on CONTINUATION's page.  When any
+ran, snapshot the result as a new page, note the timings for the toolbar
+and return a redirect to it; otherwise NIL."
+  (let ((start (get-internal-real-time)))
+    (when (process-callbacks (lack/request:request-parameters *request*)
+                             (continuation-callbacks continuation))
+      (prepare-tasks (session-root session))
+      (let* ((acted (get-internal-real-time))
+             (page (new-continuation session))
+             (done (get-internal-real-time)))
+        (setf (session-last-action session)
+              (list :actions (/ (- acted start) internal-time-units-per-second)
+                    :snapshot (/ (- done acted) internal-time-units-per-second)
+                    :objects (length (snapshot-entries (continuation-snapshot page)))))
+        (redirect-response (page-url session page))))))
+
 (defun handle-session-request (session)
-  (let* ((root (session-root session))
-         (continuation (find-continuation session (request-parameter "_k"))))
+  "Answer a request in SESSION: run the callbacks it names and redirect, or
+render the page it names."
+  (let ((continuation (find-continuation session (request-parameter "_k"))))
     (cond ((and (null continuation) (request-parameter "_lt_events"))
            ;; A stream for a page that is gone: 204 tells EventSource to stop.
            (list 204 *security-headers* (list "")))
@@ -226,22 +252,11 @@ page, and answer the components to update as JSON."
            (handle-events session continuation))
           (t
            (restore-snapshot (continuation-snapshot continuation))
-           (cond ((let ((start (get-internal-real-time)))
-                    (when (process-callbacks (lack/request:request-parameters *request*)
-                                             (continuation-callbacks continuation))
-                      (prepare-tasks root)
-                      (let* ((acted (get-internal-real-time))
-                             (page (new-continuation session))
-                             (done (get-internal-real-time)))
-                        (setf (session-last-action session)
-                              (list :actions (/ (- acted start) internal-time-units-per-second)
-                                    :snapshot (/ (- done acted) internal-time-units-per-second)
-                                    :objects (length (snapshot-entries (continuation-snapshot page)))))
-                        (redirect-response (page-url session page))))))
-                 (t
-                  (render-page session continuation)))))))
+           (or (run-actions session continuation)
+               (render-page session continuation))))))
 
 (defun backtrace-string ()
+  "The current backtrace, as text."
   (with-output-to-string (out)
     (sb-debug:print-backtrace :stream out :count 40)))
 
@@ -266,9 +281,10 @@ the handler falls back to the standard page."
          (typecase result
            (component (render-standalone result "Error" :status 500))
            (string (html-response result :status 500))
-           (t nil)))))))
+           (otherwise nil)))))))
 
 (defun call-with-error-page (app thunk)
+  "Call THUNK, answering an error with APP's error page unless *DEBUG-ERRORS*."
   (if *debug-errors*
       (funcall thunk)
       (block handled
@@ -284,6 +300,7 @@ the handler falls back to the standard page."
           (funcall thunk)))))
 
 (defun authorized-p (app)
+  "True when APP needs no credentials or the request carries them."
   (let ((credentials (application-credentials app)))
     (or (null credentials)
         (let ((header (gethash "authorization" (lack/request:request-headers *request*))))
@@ -291,9 +308,10 @@ the handler falls back to the standard page."
                (> (length header) 6)
                (string-equal "Basic " header :end2 6)
                (string= (ignore-errors (cl-base64:base64-string-to-string (subseq header 6)))
-                        (format nil "~A:~A" (car credentials) (cdr credentials))))))))
+                        (format nil "~A:~A" (first credentials) (rest credentials))))))))
 
 (defun handle-application (app)
+  "Answer a request for APP: authorise it, then find or start its session."
   (let ((*application* app))
     (if (not (authorized-p app))
         (list 401 (list :content-type "text/plain"
@@ -325,6 +343,7 @@ the handler falls back to the standard page."
                 return app))))
 
 (defun index-page ()
+  "A page listing the registered applications."
   (simple-page 200 "Littoral"
                (format nil "<ul>~{~A~}</ul>"
                        (loop for app in (list-applications)
@@ -334,6 +353,7 @@ the handler falls back to the standard page."
                                              (html-escape (or (application-title app) "")))))))
 
 (defun handle-request (env &optional (prefix ""))
+  "Answer the Lack request ENV, mounted under PREFIX."
   (let* ((*request* (lack/request:make-request env))
          (*base-path* (string-right-trim
                        "/" (concatenate 'string prefix (or (getf env :script-name) ""))))
@@ -371,6 +391,7 @@ not set :SCRIPT-NAME (lack's mount middleware does not)."
          :name "littoral session reaper")))
 
 (defun stop-reaper ()
+  "Stop the session reaper thread, if it is running."
   (when (and *reaper* (sb-thread:thread-alive-p *reaper*))
     (sb-thread:terminate-thread *reaper*))
   (setf *reaper* nil))
@@ -394,6 +415,7 @@ INSTANCE-ID prefixes session keys, for routing several processes."
   *handler*)
 
 (defun stop ()
+  "Stop serving, close open event streams and stop reaping sessions."
   (stop-reaper)
   (close-event-streams)
   (when *handler*

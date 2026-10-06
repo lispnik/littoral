@@ -20,21 +20,26 @@
 (defvar *wiki-lock* (sb-thread:make-mutex :name "wiki"))
 
 (defun page-revisions (name)
+  "The revisions of page NAME, newest first."
   (sb-thread:with-mutex (*wiki-lock*) (gethash name *wiki*)))
 
 (defun page-text (name)
+  "The current text of page NAME, or NIL when it does not exist."
   (let ((latest (first (page-revisions name))))
     (and latest (revision-text latest))))
 
 (defun save-page (name text summary)
+  "Store TEXT as a new revision of page NAME."
   (sb-thread:with-mutex (*wiki-lock*)
     (push (make-revision :text text :summary summary :time (get-universal-time))
           (gethash name *wiki*))))
 
 (defun all-pages ()
+  "The names of every page, alphabetically."
   (sort (sb-thread:with-mutex (*wiki-lock*) (alexandria:hash-table-keys *wiki*)) #'string-lessp))
 
 (defun reset-wiki ()
+  "Start the wiki over with its welcome pages."
   (sb-thread:with-mutex (*wiki-lock*) (clrhash *wiki*))
   (save-page "FrontPage"
              (format nil "= Welcome~%~%This wiki is a littoral example. Every page has its own URL, ~
@@ -63,19 +68,20 @@ so you can bookmark [[Littoral]] or [[Sandbox]].~%~%- Click *Edit* to change a p
                                :callback (lambda () (visit-page wiki name)))
                         (text name))))
               (bold (strong () (text bold)))
-              (italic (em () (text italic)))))
+              (t (em () (text italic)))))
       (setf start me))
     (text (subseq string start))))
 
 (defun render-markup (text wiki)
+  "Write TEXT's wiki markup as HTML, its links leading WIKI to other pages."
   (dolist (block (cl-ppcre:split "\\n\\s*\\n" text))
     (let ((lines (cl-ppcre:split "\\n" (string-trim '(#\Newline #\Return #\Space) block))))
-      (cond ((null lines))
-            ((every (lambda (l) (alexandria:starts-with-subseq "- " l)) lines)
-             (ul () (dolist (l lines) (li () (render-inline (subseq l 2) wiki)))))
-            ((alexandria:starts-with-subseq "= " (first lines))
-             (h2 () (render-inline (subseq (first lines) 2) wiki)))
-            (t (p () (render-inline (format nil "~{~A~^ ~}" lines) wiki)))))))
+      (when lines
+        (cond ((every (lambda (l) (alexandria:starts-with-subseq "- " l)) lines)
+               (ul () (dolist (l lines) (li () (render-inline (subseq l 2) wiki)))))
+              ((alexandria:starts-with-subseq "= " (first lines))
+               (h2 () (render-inline (subseq (first lines) 2) wiki)))
+              (t (p () (render-inline (format nil "~{~A~^ ~}" lines) wiki))))))))
 
 ;;; Components
 
@@ -83,7 +89,8 @@ so you can bookmark [[Littoral]] or [[Sandbox]].~%~%- Click *Edit* to change a p
   ((name :initarg :name :reader editor-page)
    (text :initarg :text :accessor editor-text)
    (summary :initform "" :accessor editor-summary)
-   (preview-p :initform nil :accessor editor-preview-p)))
+   (preview-p :initform nil :accessor editor-preview-p))
+  (:documentation "Edits a page's text; answers (TEXT . SUMMARY) or NIL."))
 
 (defmethod render ((self wiki-editor))
   (h2 () "Editing " (text (editor-page self)))
@@ -104,7 +111,8 @@ so you can bookmark [[Littoral]] or [[Sandbox]].~%~%- Click *Edit* to change a p
 
 (defclass wiki-history (component)
   ((name :initarg :name :reader history-page)
-   (shown :initform nil :accessor history-shown)))
+   (shown :initform nil :accessor history-shown))
+  (:documentation "Lists a page's revisions, with view and revert."))
 
 (defmethod render ((self wiki-history))
   (let* ((name (history-page self))
@@ -133,6 +141,7 @@ so you can bookmark [[Littoral]] or [[Sandbox]].~%~%- Click *Edit* to change a p
     (p () (anchor (:callback (lambda () (answer self nil))) "Back to the page"))))
 
 (defun format-time (universal-time)
+  "UNIVERSAL-TIME as YYYY-MM-DD HH:MM."
   (multiple-value-bind (s m h day month year) (decode-universal-time universal-time)
     (declare (ignore s))
     (format nil "~D-~2,'0D-~2,'0D ~2,'0D:~2,'0D" year month day h m)))
@@ -141,7 +150,8 @@ so you can bookmark [[Littoral]] or [[Sandbox]].~%~%- Click *Edit* to change a p
   ((page :initform "FrontPage" :accessor wiki-page)
    (query :initform "" :accessor wiki-query)
    (results :initform nil :accessor wiki-results)
-   (trail :initform '() :accessor wiki-trail :documentation "Pages visited, newest first.")))
+   (trail :initform '() :accessor wiki-trail :documentation "Pages visited, newest first."))
+  (:documentation "The wiki: one page at a time, with search, editing and history."))
 
 ;; The page being viewed backtracks; the wiki's contents do not.
 (defmethod states ((self wiki))
@@ -157,21 +167,24 @@ so you can bookmark [[Littoral]] or [[Sandbox]].~%~%- Click *Edit* to change a p
       (setf (wiki-page self) name))))
 
 (defun visit-page (wiki name)
+  "Show page NAME in WIKI."
   (when wiki                              ; previews render links inertly
     (setf (wiki-trail wiki) (cons (wiki-page wiki) (remove name (wiki-trail wiki) :test #'string=))
           (wiki-page wiki) name
           (wiki-results wiki) nil)))
 
 (defun edit-page (wiki)
+  "Edit WIKI's current page and save what the editor answers."
   (let ((name (wiki-page wiki)))
     (show wiki (make-instance 'wiki-editor :name name
                                            :text (or (page-text name) ""))
           :on-answer (lambda (edit)
                        (when edit
-                         (save-page name (car edit)
-                                    (if (string= (cdr edit) "") "Edited" (cdr edit))))))))
+                         (save-page name (first edit)
+                                    (if (string= (rest edit) "") "Edited" (rest edit))))))))
 
 (defun search-wiki (wiki)
+  "Find the pages whose name or text holds WIKI's query."
   (let ((query (string-trim " " (wiki-query wiki))))
     (setf (wiki-results wiki)
           (if (string= query "")
@@ -193,13 +206,13 @@ so you can bookmark [[Littoral]] or [[Sandbox]].~%~%- Click *Edit* to change a p
     (let ((results (wiki-results self)))
       (when results
         (div (:class "lt-dialog")
-          (if (eq results :none)
-              (p () "Nothing matches.")
-              (progn
-                (p () (text (format nil "~D page~:P match:" (length results))))
-                (ul () (dolist (r results)
-                         (let ((r r))
-                           (li () (anchor (:callback (lambda () (visit-page self r))) (text r)))))))))))
+          (cond ((eql results :none)
+                 (p () "Nothing matches."))
+                (t
+                 (p () (text (format nil "~D page~:P match:" (length results))))
+                 (ul () (dolist (r results)
+                          (let ((r r))
+                            (li () (anchor (:callback (lambda () (visit-page self r))) (text r)))))))))))
     (article (:class "wiki-page")
       (h1 () (text name))
       (let ((text (page-text name)))

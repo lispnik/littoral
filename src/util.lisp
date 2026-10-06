@@ -15,7 +15,7 @@
                      (#\& (write-string "&amp;" out))
                      (#\" (write-string "&quot;" out))
                      (#\' (write-string "&#39;" out))
-                     (t (write-char c out))))))))
+                     (otherwise (write-char c out))))))))
 
 (defvar *key-alphabet* "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 
@@ -26,6 +26,7 @@
     (map 'string (lambda (b) (char *key-alphabet* (mod b n))) bytes)))
 
 (defun now-seconds ()
+  "The current universal time."
   (get-universal-time))
 
 (defun url-with-params (path params)
@@ -44,7 +45,9 @@ emits the bare key, the way Seaside writes action callback ids."
                    (write-string (quri:url-encode (princ-to-string value)) out))))))
 
 (defun class-name-string (object)
+  "The lower-case name of OBJECT's class."
   (string-downcase (symbol-name (class-name (class-of object)))))
 
 (defun join-strings (strings &optional (separator " "))
+  "STRINGS joined with SEPARATOR."
   (format nil (concatenate 'string "~{~A~^" separator "~}") strings))

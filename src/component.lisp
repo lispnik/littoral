@@ -13,6 +13,8 @@
 unique for the life of the image.")
 
 (defun next-component-id ()
+  "A fresh component id, unique in this image."
+  ;; ATOMIC-INCF takes CAR as a place, not FIRST.
   (format nil "c~(~36R~)" (sb-ext:atomic-incf (car *component-counter*))))
 
 (defclass component ()
@@ -64,18 +66,23 @@ REQUEST-EXTRA-PATH and REQUEST-PARAMETER.")
    (stylesheets :initform '() :accessor root-stylesheets)
    (scripts :initform '() :accessor root-scripts)
    (styles :initform '() :accessor root-styles)
-   (inline-scripts :initform '() :accessor root-inline-scripts)))
+   (inline-scripts :initform '() :accessor root-inline-scripts))
+  (:documentation "The document head a page collects from UPDATE-ROOT: title, stylesheets and scripts."))
 
 (defun add-stylesheet (root url)
+  "Link the stylesheet at URL from the page."
   (pushnew url (root-stylesheets root) :test #'string=))
 
 (defun add-script (root url)
+  "Load the script at URL in the page."
   (pushnew url (root-scripts root) :test #'string=))
 
 (defun add-style (root css)
+  "Add the CSS text CSS to the page head."
   (pushnew css (root-styles root) :test #'string=))
 
 (defun add-inline-script (root js)
+  "Add the JavaScript text JS at the end of the page."
   (pushnew js (root-inline-scripts root) :test #'string=))
 
 (defgeneric update-root (component root)
@@ -144,12 +151,14 @@ the rest of the chain.")
   (funcall *render-inner*))
 
 (defun render-chain (component chain)
+  "Render COMPONENT through the decorations in CHAIN, outermost first."
   (if (null chain)
       (render component)
       (let ((*render-inner* (lambda () (render-chain component (rest chain)))))
         (render-decoration (first chain) component))))
 
 (defun render-decorated (component)
+  "Render COMPONENT through all its decorations."
   (render-chain component (decorations component)))
 
 (defclass updatable ()
@@ -187,6 +196,7 @@ another, otherwise its CHILDREN."
       (walk component))))
 
 (defun find-visible (id root)
+  "The component with ID visible from ROOT, or NIL."
   (map-visible (lambda (c) (when (string= (component-id c) id)
                              (return-from find-visible c)))
                root)

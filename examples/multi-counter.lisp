@@ -4,7 +4,8 @@
 
 (defclass multi-counter (component)
   ((counters :initform (loop repeat 5 collect (make-instance 'counter))
-             :reader counters)))
+             :reader counters))
+  (:documentation "Five counters on one page."))
 
 (defmethod children ((self multi-counter))
   (counters self))

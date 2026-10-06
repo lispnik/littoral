@@ -21,11 +21,13 @@
      ("upload" "Upload" "Receiving files.")
      ("progress" "Progress" "A background job updating the page through server push."))))
 
-(defclass example-index (component) ())
+(defclass example-index (component) ()
+  (:documentation "A guide to the examples."))
 
 (defmethod render ((self example-index))
   (h1 () "Littoral examples")
-  (p () "Each example is its own application. In development mode the toolbar at the bottom of every page turns on halos, so you can inspect any component.")
+  (p () "Each example is its own application. In development mode the toolbar at the "
+    "bottom of every page turns on halos, so you can inspect any component.")
   (loop for (heading . examples) in *example-guide*
         do (h2 () (text heading))
            (dl (:class "example-index")

@@ -30,7 +30,7 @@ rendering an error page.")
 (defun request-parameter (name &optional (request *request*))
   "The value of the query or body parameter NAME in REQUEST, or NIL."
   (when request
-    (cdr (assoc name (lack/request:request-parameters request) :test #'string=))))
+    (rest (assoc name (lack/request:request-parameters request) :test #'string=))))
 
 (defun request-parameter-p (name &optional (request *request*))
   "True when REQUEST has the parameter NAME, even with no value (?flag)."
@@ -39,6 +39,7 @@ rendering an error page.")
        t))
 
 (defun request-path (&optional (request *request*))
+  "The path of REQUEST below the mount point."
   (lack/request:request-path-info request))
 
 (defvar *render-profile* :off
@@ -56,7 +57,8 @@ change state: do it in a callback instead."
                      (render-phase-operation condition))))
   (:documentation "Signalled by CALL, SHOW, ANSWER and HOME during rendering."))
 
-(defun check-not-rendering (operation)
+(defun signal-if-rendering (operation)
+  "Signal RENDER-PHASE-ERROR, naming OPERATION, when a page is rendering."
   (when *rendering*
     (error 'render-phase-error :operation operation)))
 
@@ -65,7 +67,8 @@ change state: do it in a callback instead."
    (action-url :initarg :action-url :reader render-action-url
                :documentation "Base URL (path plus _s/_k) callbacks are appended to.")
    (halos-p :initarg :halos-p :initform nil :reader render-halos-p)
-   (ajax-p :initarg :ajax-p :initform nil :reader render-ajax-p)))
+   (ajax-p :initarg :ajax-p :initform nil :reader render-ajax-p))
+  (:documentation "Where callbacks registered while rendering go, and the URL they are appended to."))
 
 (defun action-url-params (session continuation-key)
   "The query parameters that lead back to CONTINUATION-KEY in SESSION."

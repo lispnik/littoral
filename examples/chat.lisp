@@ -15,6 +15,7 @@
 (defvar *room-channel* (make-channel "chat room"))
 
 (defun post-message (nick text)
+  "Add TEXT from NICK to the room and tell every open page."
   (sb-thread:with-mutex (*room-lock*)
     (push (make-chat-message :nick nick :text text :time (get-universal-time)) *room*)
     (when (> (length *room*) *room-size*)
@@ -22,14 +23,17 @@
   (publish *room-channel*))
 
 (defun room-messages ()
+  "The room's messages, oldest first."
   (sb-thread:with-mutex (*room-lock*) (reverse *room*)))
 
 (defun clear-room ()
+  "Empty the room."
   (sb-thread:with-mutex (*room-lock*) (setf *room* '()))
   (publish *room-channel*))
 
 (defclass message-list (component updatable)
-  ((chat :initarg :chat :reader list-chat)))
+  ((chat :initarg :chat :reader list-chat))
+  (:documentation "The room's messages, re-rendered whenever anyone posts."))
 
 (defmethod subscriptions ((self message-list))
   (list *room-channel*))
@@ -51,9 +55,11 @@
 
 (defclass composer (component updatable)
   ((chat :initarg :chat :reader composer-chat)
-   (draft :initform "" :accessor composer-draft)))
+   (draft :initform "" :accessor composer-draft))
+  (:documentation "The field for writing a message."))
 
 (defun send-draft (composer)
+  "Post COMPOSER's draft, if it says anything, and clear it."
   (let ((text (string-trim " " (composer-draft composer))))
     (unless (string= text "")
       (post-message (chat-nick (composer-chat composer)) text))
@@ -72,7 +78,8 @@
 (defclass chat (component)
   ((nick :initform nil :accessor chat-nick)
    (messages :reader chat-messages)
-   (composer :reader chat-composer)))
+   (composer :reader chat-composer))
+  (:documentation "The chat page: ask for a nickname, then show the room."))
 
 (defmethod initialize-instance :after ((self chat) &key)
   (setf (slot-value self 'messages) (make-instance 'message-list :chat self)
@@ -82,6 +89,7 @@
   (list (chat-messages self) (chat-composer self)))
 
 (defun ask-nick (chat)
+  "Ask for a nickname, refusing blank ones."
   (show chat (validate-with (make-instance 'input-dialog :message "Pick a nickname")
                             (lambda (nick)
                               (when (string= (string-trim " " nick) "")

@@ -2,9 +2,13 @@
 
 (asdf:defsystem #:littoral
   :description "Littoral: a Seaside-style component web framework for Common Lisp."
+  :long-description #.(uiop:read-file-string (uiop:subpathname *load-pathname* "README.md"))
   :author "Matthew Kennedy"
   :license "MIT"
   :version "0.1.0"
+  :homepage "https://github.com/lispnik/littoral"
+  :bug-tracker "https://github.com/lispnik/littoral/issues"
+  :source-control (:git "https://github.com/lispnik/littoral.git")
   :serial t
   :depends-on (#:sb-posix
                #:sb-introspect
@@ -110,3 +114,8 @@
   :description "Benchmarks for Littoral: make bench."
   :depends-on (#:littoral/tests)
   :components ((:module "bench" :components ((:file "bench")))))
+
+(asdf:defsystem #:littoral/docs
+  :description "Writes docs/API.md from the docstrings: make docs."
+  :depends-on (#:littoral #:sb-introspect)
+  :components ((:module "tools" :components ((:file "api-docs")))))

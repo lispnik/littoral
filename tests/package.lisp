@@ -2,7 +2,8 @@
 
 (defpackage #:littoral/tests
   (:use #:cl #:littoral #:littoral.html #:fiveam)
-  (:export #:littoral))
+  (:export #:littoral)
+  (:documentation "The FiveAM suite for Littoral."))
 
 (in-package #:littoral/tests)
 

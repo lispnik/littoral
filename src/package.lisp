@@ -19,7 +19,8 @@
    ;; Brushes with callbacks
    #:anchor #:form #:text-input #:password-input #:number-input #:hidden-input
    #:text-area #:checkbox #:select-list #:radio-group #:submit-button #:cancel-button #:button
-   #:file-input #:uploaded-file #:file-name #:file-content-type #:file-contents))
+   #:file-input #:uploaded-file #:file-name #:file-content-type #:file-contents)
+  (:documentation "Tags and brushes for writing HTML in RENDER methods."))
 
 (defpackage #:littoral
   (:use #:cl #:littoral.html)
@@ -71,4 +72,5 @@
    #:register-application #:unregister-application #:find-application
    #:list-applications
    #:make-lack-app #:start #:stop #:*debug-errors* #:url-for #:*base-path*
-   #:configure-admin))
+   #:configure-admin)
+  (:documentation "Littoral: a Seaside-style component web framework for Common Lisp."))

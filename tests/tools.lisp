@@ -41,7 +41,7 @@
       (let ((names (let (r) (cl-ppcre:do-register-groups (n) ("<input type=\"text\" name=\"(\\d+)\"" (browser-html b))
                               (push n r))
                      (nreverse r))))
-        (setf (browser-fields b) (list (cons (car (last names)) "41"))))
+        (setf (browser-fields b) (list (cons (first (last names)) "41"))))
       (press b "Close")
       (click b "Halos off")
       (is (= 41 (count-shown b))))))
@@ -57,7 +57,7 @@
       (click a "expire")
       (is (= 1 (length (littoral::list-sessions (find-application "/counter")))))
       (click a "Close")
-      (is (= 0 (count-shown a))))))
+      (is (zerop (count-shown a))))))
 
 (test config-app
   (with-fresh-applications (("/config" 'littoral::config-root :mode :deployment)
@@ -92,7 +92,7 @@
       (press b "Save")
       (let ((app (find-application "/counter")))
         (is (string= "Counting" (application-title app)))
-        (is (eq :deployment (application-mode app)))
+        (is (eql :deployment (application-mode app)))
         (is (= 60 (application-session-timeout app)))
         (is (application-cookie-sessions-p app)))
       ;; Remove /todo, confirming.
@@ -126,7 +126,7 @@
              (let ((app (find-application "/counter")))
                (is (eq 'littoral-examples:counter (application-root-class app)))
                (is (string= "Counting" (application-title app)))
-               (is (eq :deployment (application-mode app)))
+               (is (eql :deployment (application-mode app)))
                (is (= 99 (application-session-timeout app)))
                (is (equal '("/a.css") (application-stylesheets app)))
                (is (equal '("u" . "p") (application-credentials app)))
@@ -158,6 +158,13 @@
       (is (= 2 (count-shown b)))
       (is (string= "Renamed" (application-title (find-application "/counter")))))))
 
+(defun configure-link (browser path)
+  "The href of the configure link for the application at PATH in /config."
+  (cl-ppcre:register-groups-bind (href)
+      ((format nil "(?s)href=\"~A\">~:*~A</a>.*?<a href=\"([^\"]*)\">configure</a>" path)
+       (browser-html browser))
+    (unescape href)))
+
 (test config-app-saves-to-file
   (let* ((file (format nil "/tmp/littoral-config-~D.lisp" (random 1000000)))
          (*configuration-file* file))
@@ -167,10 +174,7 @@
            (let ((b (make-instance 'browser)))
              (visit b "/config")
              (is (has-text-p b "Changes are saved to"))
-             (let ((href (cl-ppcre:register-groups-bind (h)
-                             ("(?s)href=\"/counter\">/counter</a>.*?<a href=\"([^\"]*)\">configure</a>" (browser-html b))
-                           (unescape h))))
-               (visit b href))
+             (visit b (configure-link b "/counter"))
              (fill-in b "stylesheets" (format nil "/one.css~%~%  /two.css  ~%"))
              (fill-in b "user" "admin")
              (fill-in b "password" "pw")
@@ -183,10 +187,7 @@
                (is (equal '("admin" . "pw") (getf saved :credentials)))
                (is (null (getf saved :max-sessions))))
              ;; A password without a user is refused.
-             (let ((href (cl-ppcre:register-groups-bind (h)
-                             ("(?s)href=\"/counter\">/counter</a>.*?<a href=\"([^\"]*)\">configure</a>" (browser-html b))
-                           (unescape h))))
-               (visit b href))
+             (visit b (configure-link b "/counter"))
              (fill-in b "user" "")
              (press b "Save")
              (is (has-text-p b "A password needs a user name."))))
@@ -218,7 +219,7 @@
 (test toplevel-form-bounds
   (let ((text (format nil "; comment~%(a (b))~%~%  ;; another~%(c \"x)\" #\\))~%")))
     (is (equal '("(a (b))" "(c \"x)\" #\\))")
-               (mapcar (lambda (b) (subseq text (car b) (cdr b)))
+               (mapcar (lambda (b) (subseq text (first b) (rest b)))
                        (littoral::toplevel-form-bounds text))))))
 
 (test profiler

@@ -84,6 +84,7 @@ when the form is submitted without a button; :MULTIPART T allows FILE-INPUT."
   `(%input "text" (list ,@attributes)))
 
 (defmacro password-input (&optional attributes)
+  "A password field.  :CALLBACK receives the submitted string."
   `(%input "password" (list ,@attributes)))
 
 (defun parse-number-or-nil (string)
@@ -96,6 +97,7 @@ submission does not parse."
   `(%input "number" (list ,@attributes) #'parse-number-or-nil))
 
 (defmacro hidden-input (&optional attributes)
+  "A hidden field.  :CALLBACK receives its :VALUE when the form is submitted."
   `(%input "hidden" (list ,@attributes)))
 
 (defun %text-area (attributes)
@@ -106,6 +108,7 @@ submission does not parse."
               (lambda () (when value (text value))))))
 
 (defmacro text-area (&optional attributes)
+  "A multi-line text field showing :VALUE.  :CALLBACK receives the submitted string."
   `(%text-area (list ,@attributes)))
 
 (defun %checkbox (attributes)
@@ -187,8 +190,10 @@ submission does not parse."
 ;;; File upload
 
 (defclass uploaded-file ()
-  ((filename :initarg :filename :reader file-name)
-   (content-type :initarg :content-type :reader file-content-type)
+  ((filename :initarg :filename :reader file-name
+             :documentation "The name the browser gave, without directories.")
+   (content-type :initarg :content-type :reader file-content-type
+                 :documentation "The MIME type the browser gave.")
    (contents :initarg :contents :reader file-contents
              :documentation "The file's bytes, an (UNSIGNED-BYTE 8) vector."))
   (:documentation "A file submitted through FILE-INPUT."))

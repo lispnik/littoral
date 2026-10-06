@@ -15,10 +15,12 @@ Globals come first, then any delegation, then locals."
     decoration))
 
 (defun remove-decoration (component decoration)
+  "Take DECORATION off COMPONENT."
   (setf (decorations component) (remove decoration (decorations component)))
   decoration)
 
 (defun find-decoration (component type)
+  "COMPONENT's first decoration of TYPE, or NIL."
   (find-if (lambda (d) (typep d type)) (decorations component)))
 
 ;;; Delegation: CALL and SHOW
@@ -45,7 +47,7 @@ its answer."))
 (defun show (self other &key on-answer)
   "Show OTHER in place of SELF until OTHER answers, then call ON-ANSWER
 with the answer.  Returns OTHER at once: the non-blocking form of CALL."
-  (check-not-rendering 'show)
+  (signal-if-rendering 'show)
   (let ((delegation (make-instance 'delegation :delegate other)))
     (add-decoration self delegation)
     (add-decoration other (make-instance 'answer-handler
@@ -65,6 +67,15 @@ as a callback, it shows OTHER and returns at once, discarding the answer;
 use SHOW with :ON-ANSWER there to act on it."
   (let/cc k (show self other :on-answer k)))
 
+;; DEFUN/CC makes a funcallable instance, which drops the docstring.
+(setf (documentation 'call 'function)
+      "Show OTHER in place of SELF and return what it answers.
+
+Inside a flow (see DEFINE-FLOW) this reads as a blocking call: the rest of
+the flow is captured with cl-cont and resumed by ANSWER.  Elsewhere, such
+as a callback, it shows OTHER and returns at once, discarding the answer;
+use SHOW with :ON-ANSWER there to act on it.")
+
 (defgeneric validate-answer (decoration value)
   (:documentation "NIL when VALUE may be answered, else an error message.")
   (:method ((decoration decoration) value)
@@ -74,7 +85,7 @@ use SHOW with :ON-ANSWER there to act on it."
 (defun answer (self &optional value)
   "Return control, with VALUE, to the component that called SELF.
 Validation decorations on SELF may refuse the answer."
-  (check-not-rendering 'answer)
+  (signal-if-rendering 'answer)
   (dolist (d (decorations self))
     (when (validate-answer d value)
       (return-from answer nil)))
@@ -88,7 +99,7 @@ Validation decorations on SELF may refuse the answer."
 
 (defun home (self)
   "Dismiss whatever SELF has called, without answering."
-  (check-not-rendering 'home)
+  (signal-if-rendering 'home)
   (setf (decorations self)
         (remove-if (lambda (d) (typep d 'delegation)) (decorations self))))
 

@@ -43,7 +43,7 @@
       (incf (slot-value (first (slot-value c 'littoral-examples::counters)) 'littoral-examples::count))
       (restore-snapshot snap)
       ;; Children's STATES are included.
-      (is (= 0 (slot-value (first (slot-value c 'littoral-examples::counters)) 'littoral-examples::count))))))
+      (is (zerop (slot-value (first (slot-value c 'littoral-examples::counters)) 'littoral-examples::count))))))
 
 (test hash-tables-backtrack
   (let ((table (make-hash-table)))

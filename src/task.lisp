@@ -44,12 +44,14 @@ from its decorations keeps it right when the back button restores them."
          (finish-task ,self (progn ,@forms))))))
 
 (defun finish-task (task value)
+  "End TASK's flow, answering VALUE."
   (answer task value))
 
 (defmethod render ((self task))
   nil)
 
 (defun start-task (task)
+  "Run TASK's flow until its first CALL."
   (flow task))
 
 (defun prepare-tasks (root)

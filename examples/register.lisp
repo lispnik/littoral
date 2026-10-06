@@ -3,6 +3,7 @@
 (in-package #:littoral-examples)
 
 (defun register-examples ()
+  "Serve every example under /examples."
   (register-application "/examples" 'example-index :title "Littoral Examples")
   (register-application "/examples/counter" 'counter :title "Counter")
   (register-application "/examples/multi-counter" 'multi-counter :title "Multi-Counter")

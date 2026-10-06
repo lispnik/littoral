@@ -6,9 +6,11 @@
 (in-suite tasks)
 
 (defclass fixed-guess (littoral-examples:guess-game) ()
-  (:default-initargs :target 42))
+  (:default-initargs :target 42)
+  (:documentation "A guessing game whose number is 42."))
 
 (defun guess (browser n)
+  "Guess N in the guessing game."
   (let ((name (cl-ppcre:register-groups-bind (n) ("<input type=\"text\" name=\"(\\d+)\"" (browser-html browser)) n)))
     (setf (browser-fields browser) (list (cons name (princ-to-string n))))
     (press browser "OK")))
@@ -33,7 +35,8 @@
       (is (has-text-p b "thinking of a number")))))
 
 (defclass two-step (task)
-  ((log :initform '() :accessor two-step-log)))
+  ((log :initform '() :accessor two-step-log))
+  (:documentation "A task asking two questions and answering both."))
 
 (define-flow two-step (self)
   (let ((a (request-input self "First?")))
@@ -43,7 +46,8 @@
       (list a b))))
 
 (defclass task-host (component)
-  ((result :initform nil :accessor result)))
+  ((result :initform nil :accessor result))
+  (:documentation "Calls a TWO-STEP task and shows its answer."))
 
 (defmethod render ((self task-host))
   (p () "Host: " (text (prin1-to-string (result self))))
@@ -53,6 +57,7 @@
     "start"))
 
 (defun answer-input (browser value)
+  "Answer the input dialog on the page with VALUE."
   (let ((name (cl-ppcre:register-groups-bind (n) ("<input type=\"text\" name=\"(\\d+)\"" (browser-html browser)) n)))
     (setf (browser-fields browser) (list (cons name value)))
     (press browser "OK")))

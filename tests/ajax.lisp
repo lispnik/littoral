@@ -13,11 +13,11 @@
       (let* ((specs (ajax-specs b "on-click"))
              (plus (first specs)))
         (is (= 5 (length specs)))         ; ++, -- and the three server-talk buttons
-        (multiple-value-bind (json status) (ajax-request b (car plus) (cdr plus))
+        (multiple-value-bind (json status) (ajax-request b (first plus) (rest plus))
           (is (= 200 status))
           (is (search "ajax-count\\\">1<" json))
           (is (search "\"missing\":[]" json)))
-        (ajax-request b (car plus) (cdr plus))
+        (ajax-request b (first plus) (rest plus))
         ;; AJAX changes stay when the page is reloaded or acted on.
         (visit b (browser-url b))
         (is (search "<span class=\"ajax-count\">2</span>" (browser-html b)))))))
@@ -28,8 +28,8 @@
       (visit b "/ajax")
       (let* ((spec (first (ajax-specs b "on-input")))
              (field (cl-ppcre:register-groups-bind (n) ("<input type=\"text\" name=\"(\\d+)\"" (browser-html b)) n))
-             (json (ajax-request b (car spec) (cdr spec) :fields (list (cons field "hello <you>")))))
-        (is (string= "" (car spec)))
+             (json (ajax-request b (first spec) (rest spec) :fields (list (cons field "hello <you>")))))
+        (is (string= "" (first spec)))
         (is (search "You typed: <strong>hello &lt;you&gt;</strong>" json))))))
 
 (test ajax-periodical-attribute
@@ -60,16 +60,16 @@
       (is (search "data-lt-on-click-confirm=\"Reset the counter to zero?\"" (browser-html b)))
       ;; The browser's value reaches the callback; its result comes back.
       (let* ((spec (element-spec b "measure" "on-click"))
-             (json (ajax-request b (car spec) (cdr spec) :fields '(("_lt_value" . "800x600")))))
+             (json (ajax-request b (first spec) (rest spec) :fields '(("_lt_value" . "800x600")))))
         (is (search "\"value\":\"The server heard 800x600.\"" json)))
       ;; Scripts queued by the callback come back to run.
       (let ((plus (first (ajax-specs b "on-click"))))
-        (ajax-request b (car plus) (cdr plus)))
+        (ajax-request b (first plus) (rest plus)))
       (let* ((spec (element-spec b "retitle" "on-click"))
-             (json (ajax-request b (car spec) (cdr spec))))
+             (json (ajax-request b (first spec) (rest spec))))
         (is (search "\"scripts\":[\"document.title = \\\"Counter at 1\\\"\"]" json)))
       (let* ((spec (element-spec b "reset" "on-click"))
-             (json (ajax-request b (car spec) (cdr spec))))
+             (json (ajax-request b (first spec) (rest spec))))
         (is (search "ajax-count\\\">0<" json))))))
 
 (test execute-script-outside-ajax

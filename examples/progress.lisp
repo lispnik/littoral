@@ -12,7 +12,8 @@ NOTIFY then uses.")
 (defclass progress-bar (component updatable)
   ((done :initform 0 :accessor done-steps)
    (running :initform nil :accessor job-running-p)
-   (finished :initform nil :accessor job-finished-p)))
+   (finished :initform nil :accessor job-finished-p))
+  (:documentation "A bar showing a background job's progress, updated by NOTIFY."))
 
 (defun run-job (bar session)
   "Work in another thread, telling the page after every step."
@@ -29,6 +30,7 @@ NOTIFY then uses.")
    :name "progress example job"))
 
 (defun start-job (bar)
+  "Start BAR's job in another thread unless it is already running."
   (unless (job-running-p bar)
     (setf (done-steps bar) 0
           (job-running-p bar) t
@@ -48,7 +50,8 @@ NOTIFY then uses.")
         (text (if (job-finished-p self) "Run again" "Start the job"))))))
 
 (defclass progress-demo (component)
-  ((bar :initform (make-instance 'progress-bar) :reader demo-bar)))
+  ((bar :initform (make-instance 'progress-bar) :reader demo-bar))
+  (:documentation "The progress example page."))
 
 (defmethod children ((self progress-demo))
   (list (demo-bar self)))

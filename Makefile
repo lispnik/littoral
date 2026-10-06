@@ -1,10 +1,19 @@
 SBCL ?= sbcl
 PORT ?= 8080
 
-.PHONY: test e2e bench run lint clean
+.PHONY: test e2e bench docs clean-check run lint clean
 
 test:
 	$(SBCL) --non-interactive --eval '(asdf:test-system :littoral)'
+
+# A fresh clone, built against nothing but its own ocicl.csv.
+clean-check:
+	tools/clean-check.sh
+
+docs:
+	$(SBCL) --non-interactive --eval '(asdf:load-system :littoral/docs)' \
+	  --eval '(let ((missing (littoral-api-docs:write-api-docs))) (when missing (format t "~&Undocumented: ~{~(~A~)~^, ~}~%" missing)))' \
+	  2>&1 | grep -v '^;' | grep -v '^$$'
 
 bench:
 	$(SBCL) --non-interactive --eval '(asdf:load-system :littoral/bench)' \
