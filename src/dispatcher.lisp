@@ -67,6 +67,81 @@ so browsers may cache it for good yet never run a stale copy."
   (list 302 (append (list :location url :cache-control "no-store") headers *security-headers*)
         (list "")))
 
+(defvar *max-request-size* (* 10 1024 1024)
+  "Largest request body littoral reads, in bytes, unless the application
+says otherwise.  Larger requests get 413 before their body is read.")
+
+(defvar *new-sessions-per-minute* 120
+  "How many sessions one client address may start a minute; more get 429.
+NIL for no limit.")
+
+(defvar *max-event-streams* 1000
+  "Most event streams open at once; more get 503.")
+
+(defvar *max-event-streams-per-session* 8
+  "Most event streams one session may hold open.")
+
+(defvar *trust-forwarded-for* nil
+  "When true, take the client address from X-Forwarded-For.  Set it only
+behind a proxy that sets that header itself.")
+
+(defun client-address (&optional (request *request*))
+  "The address the request came from, by X-Forwarded-For when trusted."
+  (let ((forwarded (gethash "x-forwarded-for" (lack/request:request-headers request))))
+    (if (and *trust-forwarded-for* forwarded)
+        (string-trim " " (first (cl-ppcre:split "," forwarded)))
+        (lack/request:request-remote-addr request))))
+
+(defun local-request-p (&optional (request *request*))
+  "True when REQUEST comes from this machine and not through a proxy we
+were not told to trust."
+  (and (member (client-address request) '("127.0.0.1" "::1" "0:0:0:0:0:0:0:1") :test #'equal)
+       (or *trust-forwarded-for*
+           (null (gethash "x-forwarded-for" (lack/request:request-headers request))))))
+
+(defvar *session-starts* (make-hash-table :test 'equal)
+  "Client address → (MINUTE . SESSIONS-STARTED).")
+
+(defvar *session-starts-lock* (sb-thread:make-mutex :name "littoral session starts"))
+
+(defun allow-new-session-p ()
+  "Count a new session for this client; NIL when it is over its limit."
+  (or (null *new-sessions-per-minute*)
+      (let ((address (or (client-address) "unknown"))
+            (minute (floor (get-universal-time) 60)))
+        (sb-thread:with-mutex (*session-starts-lock*)
+          (let ((entry (gethash address *session-starts*)))
+            (when (or (null entry) (/= (car entry) minute))
+              ;; A new minute: forget the old counts.
+              (when (> (hash-table-count *session-starts*) 10000)
+                (clrhash *session-starts*))
+              (setf entry (cons minute 0)
+                    (gethash address *session-starts*) entry))
+            (<= (incf (cdr entry)) *new-sessions-per-minute*))))))
+
+(defun browser-cookie-name (app)
+  "The cookie that ties APP's URL sessions to the browser that started them."
+  (format nil "_ltb~A" (substitute #\_ #\/ (application-path app))))
+
+(defun request-cookie (name)
+  (cdr (assoc name (lack/request:request-cookies *request*) :test #'string=)))
+
+(defun session-cookie-header (name value app)
+  (format nil "~A=~A; Path=~A; HttpOnly; SameSite=Lax~:[~;; Secure~]"
+          name value (application-base-url app) (secure-request-p)))
+
+(defun browser-matches-p (session)
+  "True when this request may use SESSION: it carries the session's browser
+cookie, or the browser has never sent cookies (so cannot be told apart).
+Binds the session to its cookie the first time it comes back."
+  (let* ((app (session-application session))
+         (cookie (request-cookie (browser-cookie-name app))))
+    (cond ((application-cookie-sessions-p app) t)
+          ((null cookie) (not (session-browser-bound-p session)))
+          ((string= cookie (session-browser-key session))
+           (setf (session-browser-bound-p session) t))
+          (t nil))))
+
 (defun secure-request-p (&optional (request *request*))
   "True when REQUEST came over HTTPS, directly or through a proxy that says so."
   (or (string-equal (princ-to-string (lack/request:request-uri-scheme request)) "https")
@@ -187,13 +262,12 @@ session that has gone; the application's EXPIRED-NOTICE is shown first."
         (when (and expired (application-expired-notice app))
           (show root (make-instance (application-expired-notice app)))))
       (redirect-response (page-url session (new-continuation session))
-                         :headers (when (application-cookie-sessions-p app)
-                                    (list :set-cookie
-                                          (format nil "~A=~A; Path=~A; HttpOnly; SameSite=Lax~:[~;; Secure~]"
-                                                  (session-cookie-name app)
-                                                  (session-key session)
-                                                  (application-base-url app)
-                                                  (secure-request-p))))))))
+                         :headers (list :set-cookie
+                                        (if (application-cookie-sessions-p app)
+                                            (session-cookie-header (session-cookie-name app)
+                                                                   (session-key session) app)
+                                            (session-cookie-header (browser-cookie-name app)
+                                                                   (session-browser-key session) app)))))))
 
 (defun handle-ajax (session continuation)
   "Run an AJAX request's callbacks on CONTINUATION, without making a new
@@ -307,27 +381,44 @@ the handler falls back to the standard page."
           (and header
                (> (length header) 6)
                (string-equal "Basic " header :end2 6)
-               (string= (ignore-errors (cl-base64:base64-string-to-string (subseq header 6)))
-                        (format nil "~A:~A" (first credentials) (rest credentials))))))))
+               (let ((given (ignore-errors (cl-base64:base64-string-to-string (subseq header 6))))
+                     (expected (format nil "~A:~A" (first credentials) (rest credentials))))
+                 (and given
+                      (= (length given) (length expected))
+                      (ironclad:constant-time-equal
+                       (sb-ext:string-to-octets given :external-format :utf-8)
+                       (sb-ext:string-to-octets expected :external-format :utf-8)))))))))
 
 (defun handle-application (app)
   "Answer a request for APP: authorise it, then find or start its session."
   (let ((*application* app))
-    (if (not (authorized-p app))
+    (cond
+      ((and (application-local-only-p app) (not (local-request-p)))
+       (list 403 (list* :content-type "text/plain" *security-headers*)
+             (list "This application only answers requests from the machine it runs on.")))
+      ((not (authorized-p app))
         (list 401 (list :content-type "text/plain"
                         :www-authenticate (format nil "Basic realm=~S" (application-path app)))
-              (list "Authorization required."))
-        (call-with-error-page
+              (list "Authorization required.")))
+      (t
+       (call-with-error-page
          app
          (lambda ()
            (let* ((key (session-key-from-request app))
-                  (session (find-session app key)))
-             (if (null session)
-                 (start-session app :expired (and key t))
-                 (let ((*session* session))
-                   (sb-thread:with-recursive-lock ((session-lock session))
-                     (setf (session-last-access session) (now-seconds))
-                     (handle-session-request session))))))))))
+                  (found (find-session app key))
+                  ;; Someone else's session, reached by a shared link: start
+                  ;; this browser its own instead (no session fixation).
+                  (session (and found (browser-matches-p found) found)))
+             (cond ((and (null session) (not (allow-new-session-p)))
+                    (list 429 (list* :content-type "text/plain" :retry-after "60" *security-headers*)
+                          (list "Too many new sessions from this address; try again in a minute.")))
+                   ((null session)
+                    (start-session app :expired (and key (null found) t)))
+                   (t
+                    (let ((*session* session))
+                      (sb-thread:with-recursive-lock ((session-lock session))
+                        (setf (session-last-access session) (now-seconds))
+                        (handle-session-request session))))))))))))
 
 ;;; Dispatch
 
@@ -352,8 +443,29 @@ the handler falls back to the standard page."
                                              (html-escape (application-path app))
                                              (html-escape (or (application-title app) "")))))))
 
+(defun oversized-response (env)
+  "413 or 411 when ENV's body may not be read, else NIL.  Checked before
+the body is touched."
+  (let* ((app (application-for-path (or (getf env :path-info) "/")))
+         (limit (or (and app (application-max-request-size app)) *max-request-size*))
+         (length (getf env :content-length))
+         (headers (getf env :headers))
+         (chunked (and headers (search "chunked" (or (gethash "transfer-encoding" headers) "")))))
+    (cond ((and length (> length limit))
+           (list 413 (list* :content-type "text/plain" :connection "close" *security-headers*)
+                 (list (format nil "The request is larger than the ~:D bytes allowed." limit))))
+          ((and chunked (null length))
+           (list 411 (list* :content-type "text/plain" *security-headers*)
+                 (list "A request body needs a Content-Length.")))
+          (t nil))))
+
 (defun handle-request (env &optional (prefix ""))
   "Answer the Lack request ENV, mounted under PREFIX."
+  (or (oversized-response env)
+      (handle-sized-request env prefix)))
+
+(defun handle-sized-request (env prefix)
+  "Answer the Lack request ENV, whose size has been checked."
   (let* ((*request* (lack/request:make-request env))
          (*base-path* (string-right-trim
                        "/" (concatenate 'string prefix (or (getf env :script-name) ""))))
@@ -408,6 +520,12 @@ INSTANCE-ID prefixes session keys, for routing several processes."
     (setf *configuration-file* configuration-file)
     (load-configuration configuration-file))
   (start-reaper)
+  (unless (member address '("127.0.0.1" "localhost" "::1") :test #'equal)
+    (let ((open (remove-if-not #'development-p (list-applications))))
+      (when open
+        (warn "Littoral: serving ~{~A~^, ~} in development mode on ~A: halos let anyone ~
+who can reach them inspect and change component state."
+              (mapcar #'application-path open) address))))
   (setf *handler* (clack:clackup (make-lack-app :prefix prefix)
                                  :server server :port port :address address
                                  :use-default-middlewares nil :silent t :debug nil))

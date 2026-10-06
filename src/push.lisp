@@ -151,7 +151,13 @@ the work)."
 
 (defun handle-events (session continuation)
   "The response to a page's EventSource: a stream that runs until the page
-is gone."
+is gone.  503 when too many are open."
+  (let ((open (open-event-streams)))
+    (when (or (>= (length open) *max-event-streams*)
+              (>= (count session open :key #'stream-session) *max-event-streams-per-session*))
+      (return-from handle-events
+        (list 503 (list* :content-type "text/plain" :retry-after "30" *security-headers*)
+              (list "Too many open event streams.")))))
   (let ((stream (make-instance 'event-stream :session session :continuation continuation
                                              :base-path *base-path*)))
     (lambda (responder)

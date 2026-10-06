@@ -8,3 +8,7 @@
 (in-package #:littoral/tests)
 
 (def-suite littoral :description "All Littoral tests.")
+
+;; The suite starts hundreds of sessions from 127.0.0.1 a minute; the rate
+;; limit has a test of its own.
+(setf littoral:*new-sessions-per-minute* nil)

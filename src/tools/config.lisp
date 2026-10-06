@@ -216,11 +216,14 @@
 ;;; Registration
 
 (defun configure-admin (&key user password (path "/config"))
-  "Serve the configuration application at PATH, behind HTTP basic auth
-when USER and PASSWORD are given."
-  (register-application path 'config-root
-                        :title "Littoral Configuration"
-                        :mode :deployment
-                        :credentials (when (and user password) (cons user password))))
+  "Serve the configuration application at PATH.  With USER and PASSWORD it
+is behind HTTP basic auth; without, it answers only requests from this
+machine."
+  (let ((credentials (when (and user password) (cons user password))))
+    (register-application path 'config-root
+                          :title "Littoral Configuration"
+                          :mode :deployment
+                          :credentials credentials
+                          :local-only (null credentials))))
 
 (configure-admin)

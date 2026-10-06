@@ -92,6 +92,8 @@
              (errors (run-threads 16 (lambda (i)
                                        (declare (ignore i))
                                        (let ((c (make-instance 'browser :app (browser-app b))))
+                                         ;; The same browser, as far as the session can tell.
+                                         (setf (browser-cookies c) (browser-cookies b))
                                          (dotimes (k 10) (visit c href))
                                          (assert (= 2 (count-shown c))))))))
         (is (null errors) "~A" errors)))))

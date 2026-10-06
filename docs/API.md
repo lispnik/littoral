@@ -570,6 +570,37 @@ A short name for this process, put at the front of every session key
 ("a1.xxxx") so a load balancer can send each session back to the process
 that holds it.  `nil` for none.
 
+#### `*max-request-size*` — variable
+
+Largest request body littoral reads, in bytes, unless the application
+says otherwise.  Larger requests get 413 before their body is read.
+
+#### `*new-sessions-per-minute*` — variable
+
+How many sessions one client address may start a minute; more get 429.
+`nil` for no limit.
+
+#### `*trust-forwarded-for*` — variable
+
+When true, take the client address from X-Forwarded-For.  Set it only
+behind a proxy that sets that header itself.
+
+#### `*max-event-streams*` — variable
+
+Most event streams open at once; more get 503.
+
+#### `*max-event-streams-per-session*` — variable
+
+Most event streams one session may hold open.
+
+#### `application-max-request-size` `object` — generic function
+
+Reads the max-request-size of an application.  Largest request body in bytes, or `nil` for *MAX-REQUEST-SIZE*.
+
+#### `application-local-only-p` `object` — generic function
+
+Reads the local-only-p of an application.  Answer only requests from this machine.
+
 #### `*configuration-file*` — variable
 
 Where `save-configuration` writes, and the /config application saves after
@@ -595,7 +626,7 @@ when there is none.  Sessions, and settings not given, are kept.
 
 `app`'s configuration as a plist, as `save-configuration` writes it.
 
-#### `register-application` `path root-class &rest initargs &key title mode session-timeout max-continuations cookie-sessions stylesheets scripts credentials max-sessions error-handler expired-notice` — function
+#### `register-application` `path root-class &rest initargs &key title mode session-timeout max-continuations cookie-sessions stylesheets scripts credentials max-sessions error-handler expired-notice max-request-size local-only` — function
 
 Serve `root-class`, a component class, at `path`.  Replaces any application
 already there.  Returns the `application`.
@@ -645,8 +676,9 @@ Prepended to every `url` littoral writes: the mount prefix given to
 
 #### `configure-admin` `&key user password (path "/config")` — function
 
-Serve the configuration application at `path`, behind `http` basic auth
-when `user` and `password` are given.
+Serve the configuration application at `path`.  With `user` and `password` it
+is behind `http` basic auth; without, it answers only requests from this
+machine.
 
 ## Package `littoral.html`
 

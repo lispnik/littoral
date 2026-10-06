@@ -19,7 +19,8 @@
   "Open the current page's event stream in a thread, writing into SINK."
   (let* ((url (cl-ppcre:register-groups-bind (u) ("data-lt-events=\"([^\"]*)\"" (browser-html browser))
                 (unescape u)))
-         (response (funcall (browser-app browser) (make-env :get url))))
+         (response (funcall (browser-app browser)
+                            (make-env :get url :cookies (browser-cookies browser)))))
     (is (functionp response))
     (sb-thread:make-thread
      (lambda ()
@@ -66,7 +67,8 @@
       (join-chat b "carol")
       (let ((url (cl-ppcre:register-groups-bind (u) ("data-lt-events=\"([^\"]*)\"" (browser-html b)) (unescape u))))
         (is (= 204 (first (funcall (browser-app b)
-                                   (make-env :get (cl-ppcre:regex-replace "_k=[^&]*" url "_k=gone"))))))))))
+                                   (make-env :get (cl-ppcre:regex-replace "_k=[^&]*" url "_k=gone")
+                                             :cookies (browser-cookies b))))))))))
 
 (test notify-from-a-background-thread
   (with-fresh-applications (("/progress" 'littoral-examples:progress-demo :mode :deployment))

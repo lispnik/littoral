@@ -66,7 +66,9 @@
    #:application-max-sessions #:application-error-handler #:application-expired-notice
    #:application-stylesheets #:application-scripts #:application-credentials
    #:reap-all-sessions #:start-reaper #:stop-reaper #:session-expired-notice
-   #:*instance-id*
+   #:*instance-id* #:*max-request-size* #:*new-sessions-per-minute* #:*trust-forwarded-for*
+   #:*max-event-streams* #:*max-event-streams-per-session*
+   #:application-max-request-size #:application-local-only-p
    #:*configuration-file* #:save-configuration #:load-configuration
    #:configure-application #:application-settings
    #:register-application #:unregister-application #:find-application

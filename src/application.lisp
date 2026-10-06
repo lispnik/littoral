@@ -27,6 +27,10 @@
    (error-handler :initarg :error-handler :initform nil :accessor application-error-handler
                   :documentation "Function of a condition returning a component or an HTML
 string for the error page, or NIL for the standard one.")
+   (max-request-size :initarg :max-request-size :initform nil :accessor application-max-request-size
+                     :documentation "Largest request body in bytes, or NIL for *MAX-REQUEST-SIZE*.")
+   (local-only-p :initarg :local-only :initform nil :accessor application-local-only-p
+                 :documentation "Answer only requests from this machine.")
    (expired-notice :initarg :expired-notice :initform nil :accessor application-expired-notice
                    :documentation "Component class shown, before the root, to someone whose
 session expired.  NIL starts them over silently.")
@@ -51,11 +55,13 @@ session expired.  NIL starts them over silently.")
 (defun register-application (path root-class &rest initargs
                              &key title mode session-timeout max-continuations
                                cookie-sessions stylesheets scripts credentials
-                               max-sessions error-handler expired-notice)
+                               max-sessions error-handler expired-notice
+                               max-request-size local-only)
   "Serve ROOT-CLASS, a component class, at PATH.  Replaces any application
 already there.  Returns the APPLICATION."
   (declare (ignore title mode session-timeout max-continuations cookie-sessions
-                   stylesheets scripts credentials max-sessions error-handler expired-notice))
+                   stylesheets scripts credentials max-sessions error-handler expired-notice
+                   max-request-size local-only))
   (let* ((path (normalize-path path))
          (app (apply #'make-instance 'application :path path :root-class root-class initargs)))
     (sb-thread:with-mutex (*applications-lock*)

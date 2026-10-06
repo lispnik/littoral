@@ -20,10 +20,19 @@
 (defvar *key-alphabet* "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 
 (defun random-key (&optional (length 16))
-  "A URL-safe key drawn from a cryptographic random source."
-  (let ((bytes (ironclad:random-data length))
-        (n (length *key-alphabet*)))
-    (map 'string (lambda (b) (char *key-alphabet* (mod b n))) bytes)))
+  "A URL-safe key drawn from a cryptographic random source, every character
+equally likely."
+  (let* ((n (length *key-alphabet*))
+         (limit (* n (floor 256 n)))     ; bytes at or above this would bias MOD
+         (key (make-string length))
+         (filled 0))
+    (loop while (< filled length)
+          do (loop for b across (ironclad:random-data (* 2 length))
+                   while (< filled length)
+                   when (< b limit)
+                     do (setf (char key filled) (char *key-alphabet* (mod b n)))
+                        (incf filled)))
+    key))
 
 (defun now-seconds ()
   "The current universal time."

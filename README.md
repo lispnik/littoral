@@ -239,6 +239,20 @@ Any applications saved in the file are configured first, and every change made i
 
 `(make-lack-app)` returns a plain Lack application you can mount into a larger Lack/Clack stack. Lack's `:mount` middleware strips the prefix without setting `:script-name`, so pass the prefix yourself: `(:mount "/apps" (make-lack-app :prefix "/apps"))`. A `:script-name` set by the server or proxy is honoured as well. Set `*debug-errors*` to enter the debugger on errors instead of rendering an error page.
 
+## Security
+
+- **CSRF.** Every action names its page's key (`_k`, random, per page), so a forged request from another site can't act without knowing it. Callbacks are never addressed by guessable URLs.
+- **Session fixation.** When a session starts, littoral sets an HttpOnly cookie. From then on, a URL session key only works in the browser that holds that cookie, so a shared link opens a fresh session instead of the sender's. Browsers that never return cookies keep working through the URL.
+- **Leaking session keys.** Every response sends `Referrer-Policy: same-origin`, so URLs carrying session keys aren't sent to other sites. Responses also carry `X-Content-Type-Options: nosniff` and `X-Frame-Options: SAMEORIGIN`. Cookies get `Secure` over HTTPS.
+- **Request size.** Bodies larger than `*max-request-size*` (10 MB), or an application's `:max-request-size`, get 413 before they're read. A chunked body without a length gets 411.
+- **Abuse limits.**
+  - Each client address may start `*new-sessions-per-minute*` sessions a minute (default 120); beyond that it gets 429.
+  - Open event streams are capped in total (`*max-event-streams*`) and per session (`*max-event-streams-per-session*`); beyond that, 503.
+  - Behind a proxy, set `*trust-forwarded-for*` so the client address comes from `X-Forwarded-For`.
+- **`/config`.** Without credentials, it only answers requests from the machine it runs on. A request forwarded by a proxy doesn't count as local unless you trust the proxy. Give it credentials with `(configure-admin :user … :password …)`, which are checked in constant time.
+- **Development mode.** Halos can inspect and change component state, so `start` warns when an application in development mode is served on a public address. Deploy with `:mode :deployment`.
+- **Escaping.** Text and attribute values are escaped; `raw` is the one way around that. `:href` is written as given, so don't pass it a URL you haven't checked (it could be `javascript:`). An upload's `file-name` comes from the browser; don't use it as a path.
+
 ## Deployment and scale
 
 **Performance.** `make bench` measures the request cycle in-process. On an Apple-silicon Mac with SBCL 2.6.8:

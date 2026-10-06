@@ -104,7 +104,8 @@
                              (:file "widgets")
                              (:file "examples")
                              (:file "push")
-                             (:file "robustness"))))
+                             (:file "robustness")
+                             (:file "security"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
                                        (uiop:find-symbol* :littoral :littoral/tests))
