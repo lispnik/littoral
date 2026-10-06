@@ -34,3 +34,7 @@ label { margin-right: 1em; }
 .lt-halo-class { font-weight: 600; }
 .lt-halo-body { padding: .3rem; }
 .lt-source { white-space: pre-wrap; font-size: .8rem; overflow-x: auto; }
+.lt-batch { display: flex; gap: .5rem; margin: .5rem 0; align-items: baseline; }
+.lt-batch .lt-disabled { color: var(--lt-muted); }
+.lt-report th a { text-decoration: none; }
+.lt-report td.number, .lt-report th.number { text-align: right; font-variant-numeric: tabular-nums; }

@@ -2,5 +2,5 @@
 
 (defpackage #:littoral-examples
   (:use #:cl #:littoral #:littoral.html)
-  (:export #:counter #:multi-counter #:guess-game #:login-demo #:ajax-demo #:todo-list #:upload-demo #:topics
+  (:export #:counter #:multi-counter #:guess-game #:login-demo #:ajax-demo #:todo-list #:upload-demo #:topics #:element-table
            #:register-examples))

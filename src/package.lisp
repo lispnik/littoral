@@ -43,6 +43,9 @@
    ;; Dialogs
    #:message-dialog #:confirm-dialog #:input-dialog #:choice-dialog #:login-dialog
    #:inform #:confirm #:request-input #:choose-from
+   ;; Widgets
+   #:batched-list #:batch #:batch-items #:batch-size #:batch-page #:go-to-page
+   #:report #:column #:report-rows #:report-columns #:sort-by
    ;; Backtracking
    #:snapshot #:take-snapshot #:restore-snapshot
    ;; Tasks

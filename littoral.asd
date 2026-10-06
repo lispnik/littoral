@@ -33,6 +33,7 @@
                              (:file "dialogs")
                              (:file "backtracking")
                              (:file "task")
+                             (:file "widgets")
                              (:file "session")
                              (:file "application")
                              (:file "ajax")
@@ -63,6 +64,7 @@
                              (:file "todo")
                              (:file "upload")
                              (:file "topics")
+                             (:file "report")
                              (:file "register")))))
 
 (asdf:defsystem #:littoral/tests
@@ -84,7 +86,8 @@
                              (:file "backtracking")
                              (:file "task")
                              (:file "ajax")
-                             (:file "tools"))))
+                             (:file "tools")
+                             (:file "widgets"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
                                        (uiop:find-symbol* :littoral :littoral/tests))

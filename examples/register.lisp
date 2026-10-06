@@ -10,6 +10,7 @@
   (register-application "/examples/ajax" 'ajax-demo :title "AJAX")
   (register-application "/examples/todo" 'todo-list :title "To Do")
   (register-application "/examples/upload" 'upload-demo :title "Upload")
-  (register-application "/examples/topics" 'topics :title "Topics"))
+  (register-application "/examples/topics" 'topics :title "Topics")
+  (register-application "/examples/report" 'element-table :title "Report"))
 
 (register-examples)
