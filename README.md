@@ -68,9 +68,11 @@ The smaller examples are counter, multi-counter, login, todo, guess (a task), to
 
 The tag and brush macros are in the `littoral.html` package. They live in their own package because names such as `main`, `header`, `label` and `table` are too common to push onto every package that uses `littoral`. A tag's first argument is its attribute plist, and you can omit it. Literal strings in a tag body are written as escaped text. To write any other value, call `text` (escaped) or `raw` (unescaped).
 
-The brushes are `anchor`, `form`, `text-input`, `password-input`, `number-input`, `hidden-input`, `text-area`, `checkbox`, `select-list`, `radio-group`, `file-input`, `submit-button` and `button`. Each takes a `:callback`. When a form is submitted, the field callbacks run first, in render order, and the button's action runs after them.
+The brushes are `anchor`, `form`, `text-input`, `password-input`, `number-input`, `hidden-input`, `text-area`, `checkbox`, `select-list`, `radio-group`, `file-input`, `submit-button`, `cancel-button` and `button`. Each takes a `:callback`. When a form is submitted, the field callbacks run first, in render order, and the button's action runs after them.
 
 A `file-input` needs its form to be `(form (:multipart t) …)`. Its callback receives an `uploaded-file`, with `file-name`, `file-content-type` and `file-contents` (octets), and is not called when no file was chosen.
+
+A `cancel-button` runs its callback and nothing else: what was typed into the form is not applied. `(form (:default-action thunk) …)` runs the thunk when the form is submitted without a button.
 
 Rendering must not change state. Calling `call`, `show`, `answer` or `home` while a page renders signals `render-phase-error`; do it in a callback instead.
 
@@ -161,8 +163,16 @@ Applications in `:development` mode, the default, end each page with a toolbar:
   :max-continuations 50      ; pages the back button can reach
   :cookie-sessions t         ; session key in a cookie, not the URL
   :stylesheets '("/static/shop.css")
-  :credentials '("user" . "password"))
+  :credentials '("user" . "password")
+  :max-sessions 10000        ; the least recently used are evicted
+  :expired-notice 'session-expired-notice   ; say so when a session has gone
+  :error-handler (lambda (condition)        ; a component or HTML string
+                   (make-instance 'oops :condition condition)))
 ```
+
+`start` also runs a thread that reaps idle sessions every minute (`start-reaper`, `stop-reaper`, `reap-all-sessions`).
+
+Every response carries `Referrer-Policy: same-origin`, so session keys in URLs never leak to other sites, plus `X-Content-Type-Options: nosniff` and `X-Frame-Options: SAMEORIGIN`. Session cookies get `Secure` when the request came over HTTPS, either directly or through a proxy that sets `X-Forwarded-Proto: https`.
 
 `(make-lack-app)` returns a plain Lack application you can mount into a larger Lack/Clack stack. Lack's `:mount` middleware strips the prefix without setting `:script-name`, so pass the prefix yourself: `(:mount "/apps" (make-lack-app :prefix "/apps"))`. A `:script-name` set by the server or proxy is honoured as well. Set `*debug-errors*` to enter the debugger on errors instead of rendering an error page.
 

@@ -100,7 +100,7 @@ so you can bookmark [[Littoral]] or [[Sandbox]].~%~%- Click *Edit* to change a p
       (submit-button (:callback (lambda () (setf (editor-preview-p self) t))) "Preview")
       (submit-button (:callback (lambda () (answer self (cons (editor-text self) (editor-summary self)))))
         "Save")
-      (submit-button (:callback (lambda () (answer self nil))) "Cancel"))))
+      (cancel-button (:callback (lambda () (answer self nil))) "Cancel"))))
 
 (defclass wiki-history (component)
   ((name :initarg :name :reader history-page)

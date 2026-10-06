@@ -225,3 +225,126 @@
       (multiple-value-bind (status headers) (raw-request b :get "/littoral/files/littoral.js?v=stale")
         (is (= 200 status))
         (is (string= "no-cache" (getf headers :cache-control)))))))
+
+;;; Hardening
+
+(test security-headers
+  (with-fresh-applications (("/counter" 'littoral-examples:counter :mode :deployment))
+    (let ((b (make-instance 'browser)))
+      (multiple-value-bind (status headers) (raw-request b :get "/counter")
+        (is (= 302 status))
+        (is (string= "same-origin" (getf headers :referrer-policy))))
+      (visit b "/counter")
+      (multiple-value-bind (status headers) (raw-request b :get (browser-url b))
+        (is (= 200 status))
+        (is (string= "same-origin" (getf headers :referrer-policy)))
+        (is (string= "nosniff" (getf headers :x-content-type-options)))))))
+
+(test secure-cookie-over-https
+  (with-fresh-applications (("/c" 'littoral-examples:counter :cookie-sessions t))
+    (let ((app (make-lack-app)))
+      (flet ((cookie (env)
+               (getf (second (funcall app env)) :set-cookie)))
+        (is (not (search "Secure" (cookie (make-env :get "/c")))))
+        (let ((env (make-env :get "/c")))
+          (setf (gethash "x-forwarded-proto" (getf env :headers)) "https")
+          (is (search "; Secure" (cookie env))))))))
+
+(test max-sessions-evicts-least-recent
+  (with-fresh-applications (("/counter" 'littoral-examples:counter :max-sessions 2))
+    (let ((a (make-instance 'browser)) (b (make-instance 'browser)) (c (make-instance 'browser)))
+      (visit a "/counter")
+      (sleep 1.1)
+      (visit b "/counter")
+      (sleep 1.1)                       ; last access is kept in whole seconds
+      (click a "++")                    ; a is now more recent than b
+      (sleep 1.1)
+      (visit c "/counter")
+      (let ((live (littoral::list-sessions (find-application "/counter"))))
+        (is (= 2 (length live))))
+      ;; a survived; b was evicted and starts over.
+      (click a "++")
+      (is (= 2 (count-shown a))))))
+
+(test reaper-thread
+  (with-fresh-applications (("/counter" 'littoral-examples:counter :session-timeout 1))
+    (let ((b (make-instance 'browser)))
+      (visit b "/counter")
+      (is (= 1 (length (littoral::list-sessions (find-application "/counter")))))
+      (sleep 2.1)                       ; idle time is counted in whole seconds
+      (reap-all-sessions)
+      (is (= 0 (length (littoral::list-sessions (find-application "/counter")))))))
+  (start-reaper :interval 1)
+  (is (sb-thread:thread-alive-p littoral::*reaper*))
+  (stop-reaper)
+  (is (null littoral::*reaper*)))
+
+(defclass cancellable (component)
+  ((name :initform "kept" :accessor cancellable-name)
+   (log :initform '() :accessor cancellable-log)))
+
+(defmethod render ((self cancellable))
+  (p () "Name: " (text (cancellable-name self)) " Log: " (text (format nil "~{~A~^,~}" (reverse (cancellable-log self)))))
+  (form (:default-action (lambda () (push :default (cancellable-log self))))
+    (text-input (:id "name" :value (cancellable-name self)
+                 :callback (lambda (v) (setf (cancellable-name self) v))))
+    (submit-button (:callback (lambda () (push :save (cancellable-log self)))) "Save")
+    (cancel-button (:callback (lambda () (push :cancel (cancellable-log self)))) "Cancel")))
+
+(test cancel-and-default-action
+  (with-fresh-applications (("/c" 'cancellable :mode :deployment))
+    (let ((b (make-instance 'browser)))
+      (visit b "/c")
+      (fill-in b "name" "changed")
+      (press b "Cancel")
+      (is (has-text-p b "Name: kept Log: CANCEL"))
+      (fill-in b "name" "changed")
+      (press b "Save")
+      (is (has-text-p b "Name: changed Log: CANCEL,SAVE"))
+      ;; Submitting with no button (Enter in a form without one) runs the default.
+      (fill-in b "name" "entered")
+      (visit b (form-action b) :method :post :body (encode-fields (browser-fields b)))
+      (is (has-text-p b "Name: entered Log: CANCEL,SAVE,DEFAULT")))))
+
+(defclass kaboom (component) ())
+(defmethod render ((self kaboom))
+  (anchor (:callback (lambda () (error "Kaboom"))) "explode"))
+
+(defclass sorry (component)
+  ((condition :initarg :condition :reader sorry-condition)))
+(defmethod render ((self sorry))
+  (h1 () "Sorry") (p () (text (sorry-condition self))) (anchor (:href "/k") "Start again"))
+
+(test custom-error-handler
+  (with-fresh-applications (("/k" 'kaboom :mode :deployment
+                                  :error-handler (lambda (c) (make-instance 'sorry :condition c))))
+    (let ((b (make-instance 'browser)))
+      (visit b "/k")
+      (click b "explode")
+      (is (= 500 (browser-status b)))
+      (is (has-text-p b "Sorry"))
+      (is (has-text-p b "Kaboom"))))
+  ;; A handler that fails itself falls back to the standard page.
+  (with-fresh-applications (("/k" 'kaboom :mode :deployment
+                                  :error-handler (lambda (c) (declare (ignore c)) (error "worse"))))
+    (let ((b (make-instance 'browser)))
+      (visit b "/k")
+      (click b "explode")
+      (is (= 500 (browser-status b)))
+      (is (has-text-p b "Internal Server Error")))))
+
+(test expired-notice
+  (with-fresh-applications (("/counter" 'littoral-examples:counter :mode :deployment
+                                        :session-timeout 1 :expired-notice 'session-expired-notice))
+    (let ((b (make-instance 'browser)))
+      (visit b "/counter")
+      (click b "++")
+      (sleep 2.1)
+      (visit b (browser-url b))
+      (is (has-text-p b "Your session expired"))
+      (press b "Continue")
+      (is (= 0 (count-shown b)))
+      ;; A first visit, naming no session, sees no notice.
+      (let ((fresh (make-instance 'browser)))
+        (visit fresh "/counter")
+        (is (not (has-text-p fresh "expired")))))))

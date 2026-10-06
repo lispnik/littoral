@@ -22,6 +22,14 @@
    (scripts :initarg :scripts :initform '() :accessor application-scripts)
    (credentials :initarg :credentials :initform nil :accessor application-credentials
                 :documentation "(USER . PASSWORD) required by HTTP basic auth, or NIL.")
+   (max-sessions :initarg :max-sessions :initform nil :accessor application-max-sessions
+                 :documentation "Most live sessions; the least recently used go first.  NIL for no limit.")
+   (error-handler :initarg :error-handler :initform nil :accessor application-error-handler
+                  :documentation "Function of a condition returning a component or an HTML
+string for the error page, or NIL for the standard one.")
+   (expired-notice :initarg :expired-notice :initform nil :accessor application-expired-notice
+                   :documentation "Component class shown, before the root, to someone whose
+session expired.  NIL starts them over silently.")
    (sessions :initform (make-hash-table :test 'equal) :reader application-sessions)
    (lock :initform (sb-thread:make-mutex :name "littoral application") :reader application-lock)))
 
@@ -40,11 +48,12 @@
 
 (defun register-application (path root-class &rest initargs
                              &key title mode session-timeout max-continuations
-                               cookie-sessions stylesheets scripts credentials)
+                               cookie-sessions stylesheets scripts credentials
+                               max-sessions error-handler expired-notice)
   "Serve ROOT-CLASS, a component class, at PATH.  Replaces any application
 already there.  Returns the APPLICATION."
   (declare (ignore title mode session-timeout max-continuations cookie-sessions
-                   stylesheets scripts credentials))
+                   stylesheets scripts credentials max-sessions error-handler expired-notice))
   (let* ((path (normalize-path path))
          (app (apply #'make-instance 'application :path path :root-class root-class initargs)))
     (sb-thread:with-mutex (*applications-lock*)
@@ -74,7 +83,19 @@ already there.  Returns the APPLICATION."
          (session (make-instance 'session :application app :root root)))
     (reap-sessions app)
     (sb-thread:with-mutex ((application-lock app))
-      (setf (gethash (session-key session) (application-sessions app)) session))
+      (let ((limit (application-max-sessions app))
+            (sessions (application-sessions app)))
+        (when limit
+          ;; Evict the least recently used to make room.
+          (loop while (>= (hash-table-count sessions) (max limit 1))
+                do (let ((oldest (loop with best = nil
+                                       for s being the hash-values of sessions
+                                       when (or (null best) (< (session-last-access s)
+                                                               (session-last-access best)))
+                                         do (setf best s)
+                                       finally (return best))))
+                     (remhash (session-key oldest) sessions))))
+        (setf (gethash (session-key session) sessions) session)))
     session))
 
 (defun find-session (app key)

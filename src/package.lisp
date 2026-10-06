@@ -18,7 +18,7 @@
    #:img #:br #:hr #:tag
    ;; Brushes with callbacks
    #:anchor #:form #:text-input #:password-input #:number-input #:hidden-input
-   #:text-area #:checkbox #:select-list #:radio-group #:submit-button #:button
+   #:text-area #:checkbox #:select-list #:radio-group #:submit-button #:cancel-button #:button
    #:file-input #:uploaded-file #:file-name #:file-content-type #:file-contents))
 
 (defpackage #:littoral
@@ -59,6 +59,9 @@
    #:application #:application-path #:application-root-class #:application-title
    #:application-mode #:application-session-timeout #:application-max-continuations
    #:application-cookie-sessions-p #:application-sessions
+   #:application-max-sessions #:application-error-handler #:application-expired-notice
+   #:application-stylesheets #:application-scripts #:application-credentials
+   #:reap-all-sessions #:start-reaper #:stop-reaper #:session-expired-notice
    #:register-application #:unregister-application #:find-application
    #:list-applications
    #:make-lack-app #:start #:stop #:*debug-errors* #:url-for #:*base-path*

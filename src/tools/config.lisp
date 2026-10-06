@@ -154,7 +154,7 @@ names, or NIL."
                             :callback (lambda (v) (setf (editor-cookie-sessions-p self) v)))))))
       (div (:class "lt-buttons")
         (submit-button (:callback (lambda () (save-application self))) "Save")
-        (submit-button (:callback (lambda () (answer self nil))) "Cancel")))))
+        (cancel-button (:callback (lambda () (answer self nil))) "Cancel")))))
 
 ;;; Registration
 

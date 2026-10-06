@@ -56,7 +56,7 @@
                     :selected (dialog-selected self)
                     :callback (lambda (item) (setf (dialog-selected self) item))))
       (submit-button (:callback (lambda () (answer self (dialog-selected self)))) "OK")
-      (submit-button (:callback (lambda () (answer self nil))) "Cancel"))))
+      (cancel-button (:callback (lambda () (answer self nil))) "Cancel"))))
 
 (defclass login-dialog (dialog)
   ((username :initform "" :accessor dialog-username)
@@ -78,7 +78,7 @@ cons, or NIL on Cancel."))
                                   (answer self (cons (dialog-username self)
                                                      (dialog-password self)))))
         "Log in")
-      (submit-button (:callback (lambda () (answer self nil))) "Cancel"))))
+      (cancel-button (:callback (lambda () (answer self nil))) "Cancel"))))
 
 ;;; Seaside's inform:, confirm:, request: and chooseFrom:
 
@@ -93,3 +93,14 @@ cons, or NIL on Cancel."))
 
 (defun/cc choose-from (self items &optional prompt)
   (call self (make-instance 'choice-dialog :message prompt :items items)))
+
+(defclass session-expired-notice (dialog) ()
+  (:default-initargs
+   :message "Your session expired, so you are starting again from the beginning.")
+  (:documentation "A ready-made EXPIRED-NOTICE for REGISTER-APPLICATION."))
+
+(defmethod render ((self session-expired-notice))
+  (div (:class "lt-dialog lt-expired")
+    (render-dialog-message self)
+    (form ()
+      (submit-button (:callback (lambda () (answer self t))) "Continue"))))

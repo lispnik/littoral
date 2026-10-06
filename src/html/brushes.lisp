@@ -44,17 +44,23 @@ request (to a string, in a test)."
     `(%anchor (list ,@attributes) ,(body-thunk body))))
 
 (defun %form (attributes body)
-  (emit-tag "form"
-            (list* :method "post"
-                   :action (render-action-url (ensure-render-context))
-                   :accept-charset "utf-8"
-                   :enctype (when (getf attributes :multipart) "multipart/form-data")
-                   (strip-attributes attributes :multipart))
-            body))
+  (let ((default (getf attributes :default-action)))
+    (emit-tag "form"
+              (list* :method "post"
+                     :action (render-action-url (ensure-render-context))
+                     :accept-charset "utf-8"
+                     :enctype (when (getf attributes :multipart) "multipart/form-data")
+                     (strip-attributes attributes :multipart :default-action))
+              (lambda ()
+                ;; Always submitted, but run only when no button was.
+                (when default
+                  (emit-tag "input" (list :type "hidden" :name (register :default default) :value "1") nil))
+                (when body (funcall body))))))
 
 (defmacro form (&rest arguments)
   "A form posting back to the session.  Its fields' callbacks run before
-the action of the button that submitted it."
+the action of the button that submitted it.  :DEFAULT-ACTION is a thunk run
+when the form is submitted without a button; :MULTIPART T allows FILE-INPUT."
   (multiple-value-bind (attributes body) (split-tag-arguments arguments)
     `(%form (list ,@attributes) ,(body-thunk body))))
 
@@ -241,6 +247,21 @@ when no file was chosen.  The enclosing FORM needs :MULTIPART T."
   "A button submitting its form, then running the thunk :CALLBACK."
   (multiple-value-bind (attributes body) (split-tag-arguments arguments)
     `(%submit-button (list ,@attributes) ,(body-thunk body))))
+
+(defun %cancel-button (attributes body)
+  (let ((callback (getf attributes :callback)))
+    (emit-tag "button"
+              (list* :type "submit" :formnovalidate t
+                     :name (when callback (register :cancel callback))
+                     :value (when callback "1")
+                     (strip-attributes attributes :callback))
+              body)))
+
+(defmacro cancel-button (&rest arguments)
+  "A button that runs the thunk :CALLBACK and nothing else: the form's
+fields are not applied."
+  (multiple-value-bind (attributes body) (split-tag-arguments arguments)
+    `(%cancel-button (list ,@attributes) ,(body-thunk body))))
 
 (defmacro button (&rest arguments)
   "A button that submits nothing; give it an AJAX :ON-CLICK."

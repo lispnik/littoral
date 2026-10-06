@@ -129,7 +129,7 @@
         (field "Postcode" "postcode" address-postcode))
       (div (:class "lt-buttons")
         (submit-button (:callback (lambda () (answer self (copy-address a)))) "Continue")
-        (submit-button (:callback (lambda () (answer self nil))) "Cancel")))))
+        (cancel-button (:callback (lambda () (answer self nil))) "Cancel")))))
 
 (defclass receipt (component)
   ((order :initarg :order :reader receipt-order)))

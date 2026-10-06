@@ -9,7 +9,7 @@
 
 (defstruct (callback (:constructor make-callback (id kind function)))
   id
-  (kind :action :type (member :action :value))
+  (kind :action :type (member :action :value :cancel :default))
   function)
 
 (defclass callback-registry ()
@@ -47,12 +47,22 @@ value callbacks (in render order) and the action callbacks."
       (values (order value-pairs) (order action-pairs)))))
 
 (defun process-callbacks (parameters registry)
-  "Run the callbacks PARAMETERS name.  True when any callback ran."
+  "Run the callbacks PARAMETERS name.  True when any callback ran.
+
+A cancel button runs alone: what was typed into the form is ignored.
+Otherwise field callbacks run first, then one action: the last button or
+link named, or failing that the form's default action."
   (multiple-value-bind (value-pairs action-pairs) (request-callbacks parameters registry)
-    (loop for (callback . value) in value-pairs
-          do (funcall (callback-function callback) (or value "")))
-    ;; Only one action per request, as in Seaside: the last button or
-    ;; link named wins.
-    (when action-pairs
-      (funcall (callback-function (car (first (last action-pairs))))))
+    (flet ((of-kind (kind)
+             (remove kind action-pairs :key (lambda (pair) (callback-kind (car pair))) :test-not #'eq)))
+      (let ((cancel (first (of-kind :cancel)))
+            (actions (of-kind :action))
+            (default (first (of-kind :default))))
+        (cond (cancel
+               (funcall (callback-function (car cancel))))
+              (t
+               (loop for (callback . value) in value-pairs
+                     do (funcall (callback-function callback) (or value "")))
+               (cond (actions (funcall (callback-function (car (first (last actions))))))
+                     (default (funcall (callback-function (car default)))))))))
     (or value-pairs action-pairs)))

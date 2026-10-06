@@ -46,15 +46,29 @@ so browsers may cache it for good yet never run a stale copy."
 
 ;;; Responses
 
+(defparameter *security-headers*
+  '(;; Session keys ride in URLs: never send them to other sites.
+    :referrer-policy "same-origin"
+    :x-content-type-options "nosniff"
+    :x-frame-options "SAMEORIGIN")
+  "Headers added to every page, redirect and AJAX response.")
+
 (defun html-response (html &key (status 200) headers)
   (list status
-        (list* :content-type "text/html; charset=utf-8"
-               :cache-control "no-store"
-               headers)
+        (append (list :content-type "text/html; charset=utf-8"
+                      :cache-control "no-store")
+                headers
+                *security-headers*)
         (list html)))
 
 (defun redirect-response (url &key headers)
-  (list 302 (list* :location url :cache-control "no-store" headers) (list "")))
+  (list 302 (append (list :location url :cache-control "no-store") headers *security-headers*)
+        (list "")))
+
+(defun secure-request-p (&optional (request *request*))
+  "True when REQUEST came over HTTPS, directly or through a proxy that says so."
+  (or (string-equal (princ-to-string (lack/request:request-uri-scheme request)) "https")
+      (string-equal (gethash "x-forwarded-proto" (lack/request:request-headers request) "") "https")))
 
 (defun simple-page (status title &optional (message ""))
   (html-response
@@ -149,20 +163,25 @@ add, then the session and page keys."
                   :test #'string=))
       (request-parameter "_s")))
 
-(defun start-session (app)
+(defun start-session (app &key expired)
+  "Start a session of APP.  EXPIRED is true when the request named a
+session that has gone; the application's EXPIRED-NOTICE is shown first."
   (let* ((session (create-session app))
          (*session* session))
     (sb-thread:with-recursive-lock ((session-lock session))
       (let ((root (session-root session)))
         (initial-request root *request*)
-        (prepare-tasks root))
+        (prepare-tasks root)
+        (when (and expired (application-expired-notice app))
+          (show root (make-instance (application-expired-notice app)))))
       (redirect-response (page-url session (new-continuation session))
                          :headers (when (application-cookie-sessions-p app)
                                     (list :set-cookie
-                                          (format nil "~A=~A; Path=~A; HttpOnly; SameSite=Lax"
+                                          (format nil "~A=~A; Path=~A; HttpOnly; SameSite=Lax~:[~;; Secure~]"
                                                   (session-cookie-name app)
                                                   (session-key session)
-                                                  (application-base-url app))))))))
+                                                  (application-base-url app)
+                                                  (secure-request-p))))))))
 
 (defun handle-ajax (session continuation)
   (let* ((root (session-root session))
@@ -176,7 +195,8 @@ add, then the session and page keys."
                                            :halos-p (and (development-p)
                                                          (session-halos-p session))
                                            :ajax-p t)))
-      (list 200 (list :content-type "application/json; charset=utf-8" :cache-control "no-store")
+      (list 200 (list* :content-type "application/json; charset=utf-8" :cache-control "no-store"
+                       *security-headers*)
             (list (let ((*rendering* t))
                     (render-fragments (cl-ppcre:split "\\s+" (or (request-parameter "_lt_update") ""))
                                       root)))))))
@@ -202,18 +222,42 @@ add, then the session and page keys."
   (with-output-to-string (out)
     (sb-debug:print-backtrace :stream out :count 40)))
 
+(defun render-standalone (component title &key (status 200))
+  "A page showing COMPONENT outside any session.  Its callbacks go nowhere,
+so it should use plain links."
+  (let ((*render-context* nil))
+    (html-response
+     (format nil "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>~A</title>~
+<link rel=\"stylesheet\" href=\"~A\"></head><body>~A</body></html>"
+             (html-escape title) (static-url "littoral.css")
+             (with-canvas-to-string () (render component)))
+     :status status)))
+
+(defun custom-error-page (app condition)
+  "The application's own response to CONDITION, or NIL.  An error inside
+the handler falls back to the standard page."
+  (let ((handler (application-error-handler app)))
+    (when handler
+      (ignore-errors
+       (let ((result (funcall handler condition)))
+         (typecase result
+           (component (render-standalone result "Error" :status 500))
+           (string (html-response result :status 500))
+           (t nil)))))))
+
 (defun call-with-error-page (app thunk)
   (if *debug-errors*
       (funcall thunk)
       (block handled
         (handler-bind ((error (lambda (condition)
                                 (return-from handled
-                                  (if (development-p app)
+                                  (or (custom-error-page app condition)
+                                   (if (development-p app)
                                       (simple-page 500 "Internal Server Error"
                                                    (format nil "<p class=\"lt-error\">~A</p><pre>~A</pre>"
                                                            (html-escape condition)
                                                            (html-escape (backtrace-string))))
-                                      (simple-page 500 "Internal Server Error"))))))
+                                      (simple-page 500 "Internal Server Error")))))))
           (funcall thunk)))))
 
 (defun authorized-p (app)
@@ -235,9 +279,10 @@ add, then the session and page keys."
         (call-with-error-page
          app
          (lambda ()
-           (let ((session (find-session app (session-key-from-request app))))
+           (let* ((key (session-key-from-request app))
+                  (session (find-session app key)))
              (if (null session)
-                 (start-session app)
+                 (start-session app :expired (and key t))
                  (let ((*session* session))
                    (sb-thread:with-recursive-lock ((session-lock session))
                      (setf (session-last-access session) (now-seconds))
@@ -286,9 +331,32 @@ not set :SCRIPT-NAME (lack's mount middleware does not)."
 
 (defvar *handler* nil)
 
+(defvar *reaper* nil)
+
+(defun reap-all-sessions ()
+  "Forget the idle sessions of every application."
+  (mapc #'reap-sessions (list-applications)))
+
+(defun start-reaper (&key (interval 60))
+  "Reap idle sessions every INTERVAL seconds in a background thread."
+  (stop-reaper)
+  (setf *reaper*
+        (sb-thread:make-thread
+         (lambda ()
+           (loop (sleep interval)
+                 (ignore-errors (reap-all-sessions))))
+         :name "littoral session reaper")))
+
+(defun stop-reaper ()
+  (when (and *reaper* (sb-thread:thread-alive-p *reaper*))
+    (sb-thread:terminate-thread *reaper*))
+  (setf *reaper* nil))
+
 (defun start (&key (port 8080) (address "127.0.0.1") (server :hunchentoot) (prefix ""))
-  "Serve all registered applications with Clack on PORT, under PREFIX."
+  "Serve all registered applications with Clack on PORT, under PREFIX, and
+reap idle sessions in the background."
   (when *handler* (stop))
+  (start-reaper)
   (setf *handler* (clack:clackup (make-lack-app :prefix prefix)
                                  :server server :port port :address address
                                  :use-default-middlewares nil :silent t :debug nil))
@@ -296,6 +364,7 @@ not set :SCRIPT-NAME (lack's mount middleware does not)."
   *handler*)
 
 (defun stop ()
+  (stop-reaper)
   (when *handler*
     (clack:stop *handler*)
     (setf *handler* nil)))
