@@ -38,3 +38,7 @@ label { margin-right: 1em; }
 .lt-batch .lt-disabled { color: var(--lt-muted); }
 .lt-report th a { text-decoration: none; }
 .lt-report td.number, .lt-report th.number { text-align: right; font-variant-numeric: tabular-nums; }
+.lt-code { margin: .3rem 0; }
+.lt-code-title { font-size: .8rem; margin-bottom: .2rem; }
+.lt-profile { margin: 1rem 0 3rem; font-size: .85rem; }
+.lt-profile td.number { text-align: right; font-variant-numeric: tabular-nums; }

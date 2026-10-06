@@ -22,8 +22,8 @@
       (click b "Halos")
       (is (= 6 (length (cl-ppcre:all-matches-as-strings "class=\"lt-halo\"" (browser-html b)))))
       (is (has-text-p b "MULTI-COUNTER"))
-      ;; Source view of the first counter.
-      (click b "source")
+      ;; The HTML of the first counter.
+      (click b "html")
       (is (search "&lt;h1&gt;" (browser-html b)))
       (click b "render")
       (click b "Halos off")
@@ -191,3 +191,71 @@
              (press b "Save")
              (is (has-text-p b "A password needs a user name."))))
       (ignore-errors (delete-file file)))))
+
+;;; Developer tools
+
+(test halo-code-view
+  (with-fresh-applications (("/counter" 'littoral-examples:counter :mode :development))
+    (let ((b (make-instance 'browser)))
+      (visit b "/counter")
+      (click b "Halos")
+      (click b "code")
+      (is (has-text-p b "Class counter"))
+      (is (has-text-p b "Method render on counter"))
+      (is (has-text-p b "(defmethod render ((self counter))"))
+      (is (has-text-p b "(defclass counter (component)"))
+      (is (has-text-p b "counter.lisp"))
+      ;; No Emacs connected, so no edit button.
+      (is (not (find-link b "edit")))
+      (click b "render")
+      (is (not (has-text-p b "(defmethod"))))))
+
+(test halo-code-for-inherited-render
+  ;; ajax-counter inherits counter's class but defines its own render.
+  (let ((defs (littoral::component-definitions (make-instance 'littoral-examples::ajax-counter))))
+    (is (find "Method render on ajax-counter" defs :key #'first :test #'string=))))
+
+(test toplevel-form-bounds
+  (let ((text (format nil "; comment~%(a (b))~%~%  ;; another~%(c \"x)\" #\\))~%")))
+    (is (equal '("(a (b))" "(c \"x)\" #\\))")
+               (mapcar (lambda (b) (subseq text (car b) (cdr b)))
+                       (littoral::toplevel-form-bounds text))))))
+
+(test profiler
+  (with-fresh-applications (("/multi" 'littoral-examples:multi-counter :mode :development))
+    (let ((b (make-instance 'browser)))
+      (visit b "/multi")
+      (is (not (has-text-p b "Render profile")))
+      (click b "++")
+      (is (cl-ppcre:scan "actions [0-9.]+ ms · snapshot [0-9.]+ ms \\(6 objects\\) · render" (page-text b)))
+      (click b "Profile")
+      (is (has-text-p b "Render profile"))
+      (is (= 6 (length (cl-ppcre:all-matches-as-strings "<td style=\"padding-left" (browser-html b)))))
+      (is (has-text-p b "multi-counter"))
+      (click b "Profile off")
+      (is (not (has-text-p b "Render profile"))))))
+
+(test session-browser-sizes
+  (with-fresh-applications (("/counter" 'littoral-examples:counter :mode :development))
+    (let ((b (make-instance 'browser)))
+      (visit b "/counter")
+      (click b "++")
+      (click b "Sessions")
+      (is (has-text-p b "Objects"))
+      (is (has-text-p b "Held")))))
+
+(test halo-edit-button
+  (let* ((calls '())
+         (*source-editor* (lambda (pathname position) (push (list pathname position) calls))))
+    (with-fresh-applications (("/counter" 'littoral-examples:counter :mode :development))
+      (let ((b (make-instance 'browser)))
+        (visit b "/counter")
+        (click b "Halos")
+        (click b "code")
+        (click-nth b "edit" 1)          ; the render method
+        (is (= 1 (length calls)))
+        (destructuring-bind (file position) (first calls)
+          (is (string= "counter.lisp" (file-namestring file)))
+          (is (alexandria:starts-with-subseq
+               "(defmethod render ((self counter))"
+               (subseq (alexandria:read-file-into-string file) (1- position)))))))))

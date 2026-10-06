@@ -54,7 +54,7 @@
    ;; AJAX and push
    #:ajax #:ajax-update #:periodical #:execute-script
    #:channel #:make-channel #:subscriptions #:publish #:notify #:close-event-streams
-   #:with-session
+   #:with-session #:*source-editor*
    ;; Sessions & applications
    #:session #:session-key #:session-root #:session-properties #:session-property
    #:expire-session #:list-sessions

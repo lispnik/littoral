@@ -146,7 +146,8 @@ add, then the session and page keys."
          (action-url (page-url session continuation))
          (start (get-internal-real-time)))
     (clear-callbacks callbacks)
-    (let* ((*render-context* (make-instance 'render-context
+    (let* ((*render-profile* (if (session-profiling-p session) '() :off))
+           (*render-context* (make-instance 'render-context
                                             :callbacks callbacks
                                             :action-url action-url
                                             :halos-p (and (development-p app)
@@ -225,10 +226,18 @@ page, and answer the components to update as JSON."
            (handle-events session continuation))
           (t
            (restore-snapshot (continuation-snapshot continuation))
-           (cond ((process-callbacks (lack/request:request-parameters *request*)
-                                     (continuation-callbacks continuation))
-                  (prepare-tasks root)
-                  (redirect-response (page-url session (new-continuation session))))
+           (cond ((let ((start (get-internal-real-time)))
+                    (when (process-callbacks (lack/request:request-parameters *request*)
+                                             (continuation-callbacks continuation))
+                      (prepare-tasks root)
+                      (let* ((acted (get-internal-real-time))
+                             (page (new-continuation session))
+                             (done (get-internal-real-time)))
+                        (setf (session-last-action session)
+                              (list :actions (/ (- acted start) internal-time-units-per-second)
+                                    :snapshot (/ (- done acted) internal-time-units-per-second)
+                                    :objects (length (snapshot-entries (continuation-snapshot page)))))
+                        (redirect-response (page-url session page))))))
                  (t
                   (render-page session continuation)))))))
 

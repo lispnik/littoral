@@ -41,6 +41,10 @@ rendering an error page.")
 (defun request-path (&optional (request *request*))
   (lack/request:request-path-info request))
 
+(defvar *render-profile* :off
+  "While profiling a render, a list of (COMPONENT SECONDS DEPTH), newest
+first; :OFF otherwise.")
+
 (defvar *rendering* nil
   "True while a page or fragment renders, when state must not change.")
 

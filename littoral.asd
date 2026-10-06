@@ -7,6 +7,7 @@
   :version "0.1.0"
   :serial t
   :depends-on (#:sb-posix
+               #:sb-introspect
                #:alexandria
                #:cl-ppcre
                #:closer-mop

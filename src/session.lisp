@@ -24,7 +24,10 @@ from and the callbacks its links and fields name."))
    (last-access :initform (now-seconds) :accessor session-last-access)
    (halos-p :initform nil :accessor session-halos-p)
    (source-views :initform '() :accessor session-source-views
-                 :documentation "Ids of components whose halo shows source.")
+                 :documentation "Alist of component id → halo view (:HTML or :CODE).")
+   (profiling-p :initform nil :accessor session-profiling-p)
+   (last-action :initform nil :accessor session-last-action
+                :documentation "Plist of the last action's :ACTIONS and :SNAPSHOT seconds and :OBJECTS.")
    (properties :initform (make-hash-table :test 'equal) :reader session-properties)))
 
 (defun session-property (key &optional (session *session*))
@@ -81,6 +84,15 @@ to one of them shows the session as it is now."
 
 (defun find-continuation (session key)
   (and key (gethash key (session-continuations session))))
+
+(defun session-snapshot-sizes (session)
+  "Entries in the newest page's snapshot, and in all of SESSION's pages."
+  (let ((newest (find-continuation session (first (session-continuation-order session))))
+        (held 0))
+    (loop for continuation being the hash-values of (session-continuations session)
+          do (incf held (length (snapshot-entries (continuation-snapshot continuation)))))
+    (values (if newest (length (snapshot-entries (continuation-snapshot newest))) 0)
+            held)))
 
 (defun session-continuation-count (session)
   (hash-table-count (session-continuations session)))

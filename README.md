@@ -175,9 +175,20 @@ Applications in `:development` mode, the default, end each page with a toolbar:
 
 - **New Session**
 - **Configure**: opens `/config`.
-- **Halos**: frames every component, with buttons to inspect and edit its slots or to view its HTML source.
+- **Halos**: frames every component, with buttons to inspect it, see its HTML, or see (and edit) its Lisp source.
+- **Profile**: per-component render times.
 - **Sessions**: a session browser.
-- The render time.
+- Timings for the last action, snapshot and render.
+
+Each halo has three buttons:
+
+- **inspect** shows the component's slots and lets you edit them.
+- **html** shows the HTML the component writes.
+- **code** shows its class definition and the `render` method that applies, read from the source files.
+
+When Emacs is connected through SLIME/Swank, the code view also has an **edit** button that opens that definition in Emacs. Set `*source-editor*` to a function of a pathname and a character position to use another editor.
+
+The toolbar reports the last action's callback time, snapshot time and size, and the render time. **Profile** adds a table of every component's inclusive render time, indented by nesting. The session browser shows each session's age, idle time, pages kept, the objects in its newest snapshot, and the snapshot entries held across all its pages.
 
 `/config` lists the registered applications. From there you can add, remove and configure them and browse their sessions. The configurable settings are title, root class, mode, session timeout, pages kept, session limit, cookie sessions, the expiry notice, stylesheets, scripts and basic-auth credentials. Use `(configure-admin :user "u" :password "p")` to put it behind HTTP basic auth.
 
