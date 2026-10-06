@@ -15,6 +15,14 @@
   "The RENDER-CONTEXT active while rendering: it knows where callbacks go
 and how to build URLs back into the session.")
 
+(defvar *base-path* ""
+  "Prepended to every URL littoral writes: the mount prefix given to
+MAKE-LACK-APP plus the request's script-name.  No trailing slash.")
+
+(defun url-for (path)
+  "PATH, absolute within this littoral, as a URL the browser can follow."
+  (concatenate 'string *base-path* path))
+
 (defvar *debug-errors* nil
   "When true, errors inside a request enter the debugger instead of
 rendering an error page.")

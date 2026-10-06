@@ -3,7 +3,7 @@
 (in-package #:littoral/tests)
 
 (defclass browser ()
-  ((app :initform (make-lack-app) :reader browser-app)
+  ((app :initarg :app :initform (make-lack-app) :reader browser-app)
    (url :initform nil :accessor browser-url)
    (status :initform nil :accessor browser-status)
    (html :initform "" :accessor browser-html)

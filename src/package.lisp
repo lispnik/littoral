@@ -54,5 +54,5 @@
    #:application-cookie-sessions-p #:application-sessions
    #:register-application #:unregister-application #:find-application
    #:list-applications
-   #:make-lack-app #:start #:stop #:*debug-errors*
+   #:make-lack-app #:start #:stop #:*debug-errors* #:url-for #:*base-path*
    #:configure-admin))

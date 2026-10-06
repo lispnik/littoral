@@ -68,7 +68,9 @@
   :depends-on (#:littoral
                #:littoral/examples
                #:fiveam
-               #:flexi-streams)
+               #:flexi-streams
+               #:lack
+               #:lack-middleware-mount)
   :serial t
   :components ((:module "tests"
                 :serial t

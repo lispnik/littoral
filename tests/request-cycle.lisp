@@ -126,3 +126,29 @@
   (with-fresh-applications (("/secret" 'littoral-examples:counter :credentials '("u" . "p")))
     (let ((b (make-instance 'browser)))
       (is (= 401 (raw-request b :get "/secret"))))))
+
+(test mounted-under-a-prefix
+  (with-fresh-applications (("/counter" 'littoral-examples:counter :mode :development))
+    (let* ((app (lack:builder
+                 (:mount "/apps" (make-lack-app :prefix "/apps"))
+                 (lambda (env) (declare (ignore env)) '(404 () ("outside")))))
+           (b (make-instance 'browser :app app)))
+      (visit b "/apps/counter")
+      (is (= 200 (browser-status b)))
+      (is (alexandria:starts-with-subseq "/apps/counter?" (browser-url b)))
+      (is (search "href=\"/apps/littoral/files/littoral.css\"" (browser-html b)))
+      (is (search "data-lt-action=\"/apps/counter?" (browser-html b)))
+      (is (search "href=\"/apps/counter\">New Session" (browser-html b)))
+      (click b "++")
+      (is (= 1 (count-shown b)))
+      (visit b "/apps/littoral/files/littoral.js")
+      (is (= 200 (browser-status b))))))
+
+(test script-name-is-honoured
+  (with-fresh-applications (("/counter" 'littoral-examples:counter :mode :deployment))
+    (let ((app (make-lack-app)))
+      (destructuring-bind (status headers body)
+          (funcall app (append (list :script-name "/proxy") (make-env :get "/counter")))
+        (declare (ignore body))
+        (is (= 302 status))
+        (is (alexandria:starts-with-subseq "/proxy/counter?" (getf headers :location)))))))

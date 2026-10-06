@@ -135,7 +135,7 @@
     (div (:class "lt-toolbar")
       (anchor (:href (application-base-url app)) "New Session")
       (when (find-application "/config")
-        (anchor (:href "/config") "Configure"))
+        (anchor (:href (url-for "/config")) "Configure"))
       (anchor (:callback (lambda () (setf (session-halos-p session) (not (session-halos-p session)))))
         (text (if (session-halos-p session) "Halos off" "Halos")))
       (anchor (:callback (lambda ()

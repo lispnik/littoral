@@ -21,7 +21,8 @@
     ("css" . "text/css; charset=utf-8")))
 
 (defun static-url (name)
-  (concatenate 'string "/littoral/files/" name))
+  "The URL of littoral's static file NAME."
+  (url-for (concatenate 'string "/littoral/files/" name)))
 
 ;;; Responses
 
@@ -124,7 +125,7 @@
                                           (format nil "~A=~A; Path=~A; HttpOnly; SameSite=Lax"
                                                   (session-cookie-name app)
                                                   (session-key session)
-                                                  (application-path app))))))))
+                                                  (application-base-url app))))))))
 
 (defun handle-ajax (session continuation)
   (let* ((root (session-root session))
@@ -222,12 +223,14 @@
                (format nil "<ul>~{~A~}</ul>"
                        (loop for app in (list-applications)
                              collect (format nil "<li><a href=\"~A\">~A</a> — ~A</li>"
-                                             (html-escape (application-path app))
+                                             (html-escape (application-base-url app))
                                              (html-escape (application-path app))
                                              (html-escape (or (application-title app) "")))))))
 
-(defun handle-request (env)
+(defun handle-request (env &optional (prefix ""))
   (let* ((*request* (lack/request:make-request env))
+         (*base-path* (string-right-trim
+                       "/" (concatenate 'string prefix (or (getf env :script-name) ""))))
          (path (or (request-path) "/")))
     (cond ((alexandria:starts-with-subseq "/littoral/files/" path)
            (serve-static (subseq path (length "/littoral/files/"))))
@@ -236,16 +239,19 @@
           ((string= path "/") (index-page))
           (t (simple-page 404 "Not Found")))))
 
-(defun make-lack-app ()
-  "A Lack application serving every registered littoral application."
-  (lambda (env) (handle-request env)))
+(defun make-lack-app (&key (prefix ""))
+  "A Lack application serving every registered littoral application.
+PREFIX is the path it is mounted under when the mounting middleware does
+not set :SCRIPT-NAME (lack's mount middleware does not)."
+  (let ((prefix (string-right-trim "/" prefix)))
+    (lambda (env) (handle-request env prefix))))
 
 (defvar *handler* nil)
 
-(defun start (&key (port 8080) (address "127.0.0.1") (server :hunchentoot))
-  "Serve all registered applications with Clack on PORT."
+(defun start (&key (port 8080) (address "127.0.0.1") (server :hunchentoot) (prefix ""))
+  "Serve all registered applications with Clack on PORT, under PREFIX."
   (when *handler* (stop))
-  (setf *handler* (clack:clackup (make-lack-app)
+  (setf *handler* (clack:clackup (make-lack-app :prefix prefix)
                                  :server server :port port :address address
                                  :use-default-middlewares nil :silent t :debug nil))
   (format t "~&Littoral listening on http://~A:~D/~%" address port)

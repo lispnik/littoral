@@ -50,7 +50,7 @@ names, or NIL."
       (dolist (app (list-applications))
         (let ((app app))
           (tr ()
-            (td () (anchor (:href (application-path app)) (text (application-path app))))
+            (td () (anchor (:href (application-base-url app)) (text (application-path app))))
             (td () (text (or (application-title app) "")))
             (td () (code () (text (prin1-to-string (application-root-class app)))))
             (td () (text (string-downcase (application-mode app))))

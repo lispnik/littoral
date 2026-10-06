@@ -64,7 +64,8 @@ already there.  Returns the APPLICATION."
         #'string< :key #'application-path))
 
 (defun application-base-url (app)
-  (application-path app))
+  "The URL that starts a new session of APP."
+  (url-for (application-path app)))
 
 ;;; Sessions
 
@@ -103,4 +104,5 @@ already there.  Returns the APPLICATION."
         #'> :key #'session-last-access))
 
 (defun session-cookie-name (app)
+  "The cookie that carries APP's session key when it uses cookie sessions."
   (format nil "_s~A" (substitute #\_ #\/ (application-path app))))
