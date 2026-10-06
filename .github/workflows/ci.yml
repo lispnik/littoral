@@ -37,7 +37,14 @@ jobs:
         run: ocicl setup > ~/.sbclrc
 
       - name: Fetch dependencies
-        run: ocicl install
+        # Registry downloads occasionally drop; ocicl install is resumable.
+        run: |
+          for attempt in 1 2 3 4; do
+            ocicl install && exit 0
+            echo "ocicl install failed (attempt $attempt); retrying"
+            sleep $((attempt * 10))
+          done
+          exit 1
 
       - name: Unit tests
         run: |
