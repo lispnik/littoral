@@ -200,9 +200,15 @@ CALLBACK receives what is submitted.")
              :callback (lambda (on) (funcall callback (if on "on" "off"))))))
 
 (defclass choice-field (field)
-  ((choices :initarg :choices :initform '() :reader field-choices)
+  ((choices :initarg :choices :initform '() :reader choices-designator
+            :documentation "A list, or a function returning one each time it is needed.")
    (label-function :initarg :labels :initform #'princ-to-string :reader field-labels))
   (:documentation "One of CHOICES, shown through LABELS."))
+
+(defun field-choices (field)
+  "FIELD's choices now."
+  (let ((choices (choices-designator field)))
+    (if (functionp choices) (funcall choices) choices)))
 
 (defmethod parse-field ((field choice-field) string)
   ;; The input posts the chosen item's position.
@@ -352,6 +358,8 @@ checks, then (NIL . PROBLEM) when the values fail the description's own."
    (description :initarg :description :reader editor-description)
    (title :initarg :title :initform nil :reader editor-title)
    (save-label :initarg :save-label :initform "Save" :reader editor-save-label)
+   (write-p :initarg :write :initform t :reader editor-write-p
+            :documentation "When NIL, Save answers the values as a plist instead of writing them.")
    (texts :initform (make-hash-table) :reader editor-texts
           :documentation "Field name → the text entered, the editor's memento.")
    (problems :initform '() :accessor editor-problems))
@@ -367,10 +375,14 @@ object on Save (after writing the values back) and NIL on Cancel."))
 (defmethod states ((self description-editor))
   (list self (editor-texts self)))
 
-(defun make-editor (object &key (description object) title (save-label "Save"))
-  "An editor for OBJECT, described by DESCRIPTION (default: by its class)."
+(defun make-editor (object &key (description object) title (save-label "Save") (write t))
+  "An editor for OBJECT, described by DESCRIPTION (default: by its class).
+On Save it writes the values to OBJECT and answers it; with WRITE NIL it
+leaves OBJECT alone and answers the values as a plist keyed by field name
+keywords, for objects shared between sessions that the application changes
+under its own lock."
   (make-instance 'description-editor :object object :description (find-description description)
-                                     :title title :save-label save-label))
+                                     :title title :save-label save-label :write write))
 
 (defun editor-values (editor)
   "Parse every field's text: an alist of (FIELD . VALUE) and an alist of
@@ -404,9 +416,14 @@ keep the problems to show."
       (setf (editor-problems editor)
             (append problems (when whole (list (cons nil whole)))))
       (unless (editor-problems editor)
-        (loop for (field . value) in values
-              do (setf (field-value field (editor-object editor)) value))
-        (answer editor (editor-object editor))))))
+        (if (editor-write-p editor)
+            (progn
+              (loop for (field . value) in values
+                    do (setf (field-value field (editor-object editor)) value))
+              (answer editor (editor-object editor)))
+            (answer editor (loop for (field . value) in values
+                                 append (list (intern (symbol-name (field-name field)) :keyword)
+                                              value))))))))
 
 (defmethod render ((self description-editor))
   (let ((problems (editor-problems self)))

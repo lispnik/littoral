@@ -486,6 +486,10 @@ One of `choices`, shown through `labels`.
 
 A calendar date, held as (`year` `month` `day`).
 
+#### `field-choices` `field` — function
+
+`field`'s choices now.
+
 #### `parse-field` `field string` — generic function
 
 The value `string`, as typed, stands for; `nil` for blank.
@@ -522,9 +526,13 @@ Signal a `field-error` with the formatted message.
 Alist of (`field-name` . `problem`) for the fields of `object` that fail their
 checks, then (`nil` . `problem`) when the values fail the description's own.
 
-#### `make-editor` `object &key (description object) title (save-label "Save")` — function
+#### `make-editor` `object &key (description object) title (save-label "Save") (write t)` — function
 
 An editor for `object`, described by `description` (default: by its class).
+On Save it writes the values to `object` and answers it; with `write` `nil` it
+leaves `object` alone and answers the values as a plist keyed by field name
+keywords, for objects shared between sessions that the application changes
+under its own lock.
 
 #### `make-viewer` `object &key (description object)` — function
 

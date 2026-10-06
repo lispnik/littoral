@@ -31,8 +31,9 @@ that holds it.  NIL for none.")
    (continuation-order :initform '() :accessor session-continuation-order
                        :documentation "Keys, newest first.")
    (continuation-serial :initform 0 :accessor session-continuation-serial)
-   (browser-key :initform (random-key 20) :reader session-browser-key
-                :documentation "Sent in a cookie; a URL session key only works with it.")
+   (browser-key :initform (random-key 20) :accessor session-browser-key
+                :documentation "The browser's identity, kept in a cookie; a URL session key
+only works with it.  Every session one browser starts shares it.")
    (browser-bound-p :initform nil :accessor session-browser-bound-p
                     :documentation "True once a request has come back with the cookie.")
    (created :initform (now-seconds) :reader session-created)

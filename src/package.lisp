@@ -56,7 +56,7 @@
    #:define-description #:description #:find-description #:description-fields
    #:field #:field-name #:field-label #:field-value #:find-field #:*field-kinds*
    #:string-field #:text-field #:password-field #:email-field #:url-field
-   #:integer-field #:boolean-field #:choice-field #:date-field
+   #:integer-field #:boolean-field #:choice-field #:date-field #:field-choices
    #:parse-field #:format-field #:check-field #:render-field-input #:render-field-value
    #:field-error #:field-problem
    #:validate #:make-editor #:make-viewer #:description-editor #:description-viewer

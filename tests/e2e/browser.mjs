@@ -211,6 +211,37 @@ try {
   check("drag reorders on the server",
         (await evaluate("document.body.innerText")).includes("Order: Make them pass, Refactor, Ship it, Write the tests"));
 
+  // Tracker: two people; the second's list updates live when the first files an issue.
+  const press = async (t, label) => {
+    await t.evaluate(`[...document.querySelectorAll("button")].find(b => b.textContent.includes(${JSON.stringify(label)})).click()`);
+    await t.waitLoad();
+  };
+  const fill = (t, id, value) =>
+    t.evaluate(`document.getElementById(${JSON.stringify(id)}).value = ${JSON.stringify(value)}`);
+  const signUp = async (t, name) => {
+    await t.go("/tracker");
+    await t.clickLink("create an account");
+    await fill(t, "name", name); await fill(t, "email", name + "@example.org");
+    await fill(t, "password", "correct horse"); await fill(t, "confirm", "correct horse");
+    await press(t, "Create account");
+  };
+  const stamp = Date.now().toString(36);
+  const me = { evaluate, waitLoad, go, clickLink };
+  await signUp(me, "ada" + stamp);
+  const watcher = await openTab();
+  await signUp(watcher, "bob" + stamp);
+  await watcher.evaluate("window.__tracker = 1");
+  await sleep(500);
+  await clickLink("New issue");
+  await fill(me, "title", "Live issue " + stamp);
+  await press(me, "File issue");
+  check("issue filed", (await evaluate("document.body.innerText")).includes("Live issue " + stamp));
+  await sleep(1200);
+  check("other user's list updates live",
+        (await watcher.evaluate("document.body.innerText")).includes("Live issue " + stamp));
+  check("without a reload", await watcher.evaluate("window.__tracker") === 1);
+  await watcher.close();
+
   // Store: add to cart, then the whole checkout by clicking.
   await go("/examples/store");
   const addLinks = `[...document.querySelectorAll("a.add")]`;

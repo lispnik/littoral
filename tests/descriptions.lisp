@@ -105,3 +105,33 @@
         (back-to b page)
         ;; The entry as that page showed it.
         (is (search "value=\"First\"" (browser-html b)))))))
+
+(defvar *colours* '(:red :green))
+
+(defclass swatch ()
+  ((colour :initform nil)
+   (title :initform "untitled"))
+  (:documentation "Something with a colour chosen from a list that changes."))
+
+(define-description swatch
+  ((title :required t)
+   (colour :type :choice :choices (lambda () *colours*) :labels #'string-downcase)))
+
+(test dynamic-choices
+  (let ((field (find-field 'swatch 'colour)))
+    (is (equal '(:red :green) (field-choices field)))
+    (let ((*colours* '(:blue)))
+      (is (equal '(:blue) (field-choices field)))
+      (is (eq :blue (parse-field field "0"))))))
+
+(test editor-without-writing
+  (let* ((swatch (make-instance 'swatch))
+         (editor (make-editor swatch :write nil))
+         (answer :none))
+    (show (make-instance 'component) editor :on-answer (lambda (v) (setf answer v)))
+    (setf (gethash 'title (littoral::editor-texts editor)) "Sunset"
+          (gethash 'colour (littoral::editor-texts editor)) "1")
+    (littoral::save-editor editor)
+    (is (equal '(:title "Sunset" :colour :green) answer))
+    ;; The object itself is untouched.
+    (is (string= "untitled" (slot-value swatch 'title)))))

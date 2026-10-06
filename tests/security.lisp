@@ -129,3 +129,22 @@
     (let ((low (loop for v being the hash-values of counts minimize v))
           (high (loop for v being the hash-values of counts maximize v)))
       (is (< (/ high low) 1.25) "spread ~A..~A" low high))))
+
+(test two-tabs-in-one-browser
+  ;; Opening an application again in another tab must not lock the first
+  ;; tab out of its session: both are tied to the same browser.
+  (with-fresh-applications (("/counter" 'littoral-examples:counter :mode :deployment))
+    (let ((first-tab (make-instance 'browser)))
+      (visit first-tab "/counter")
+      (click first-tab "++")
+      (let ((second-tab (make-instance 'browser :app (browser-app first-tab))))
+        ;; The same cookie jar.
+        (setf (browser-cookies second-tab) (browser-cookies first-tab))
+        (visit second-tab "/counter")
+        (click second-tab "++") (click second-tab "++")
+        (setf (browser-cookies first-tab) (browser-cookies second-tab))
+        (click first-tab "++")
+        (is (= 2 (count-shown first-tab)))
+        (is (= 2 (count-shown second-tab)))
+        (is (not (string= (subseq (browser-url first-tab) 0 (search "&_k" (browser-url first-tab)))
+                          (subseq (browser-url second-tab) 0 (search "&_k" (browser-url second-tab))))))))))

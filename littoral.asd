@@ -89,6 +89,7 @@
   :description "FiveAM test suite for Littoral."
   :depends-on (#:littoral
                #:littoral/examples
+               #:littoral/tracker
                #:fiveam
                #:flexi-streams
                #:lack
@@ -111,7 +112,8 @@
                              (:file "robustness")
                              (:file "security")
                              (:file "descriptions")
-                             (:file "widgets-more"))))
+                             (:file "widgets-more")
+                             (:file "tracker"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
                                        (uiop:find-symbol* :littoral :littoral/tests))
@@ -126,3 +128,15 @@
   :description "Writes docs/API.md from the docstrings: make docs."
   :depends-on (#:littoral #:sb-introspect)
   :components ((:module "tools" :components ((:file "api-docs")))))
+
+(asdf:defsystem #:littoral/tracker
+  :description "Tracker: an issue tracker built with Littoral."
+  :author "Matthew Kennedy"
+  :license "MIT"
+  :depends-on (#:littoral)
+  :serial t
+  :components ((:module "apps/tracker"
+                :serial t
+                :components ((:file "package")
+                             (:file "model")
+                             (:file "ui")))))

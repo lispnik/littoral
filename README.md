@@ -37,6 +37,7 @@ cd littoral
 ocicl install      # fetches everything in ocicl.csv into ./ocicl
 make test          # FiveAM suite, in-process, no sockets
 make run           # examples on http://127.0.0.1:8080/
+make tracker       # the issue tracker on http://127.0.0.1:8080/tracker
 ```
 
 Other targets:
@@ -56,6 +57,17 @@ The full API reference is [docs/API.md](docs/API.md).
 - **Sushi Store** (`/examples/store`): Seaside's classic demo. A catalog report and a cart share the page. Checkout is a task: review the cart, enter an address (validated), pick a delivery date with a reusable date-picker component, choose how to pay, then confirm. You can cancel at any step and the back button works throughout. Once the order is placed, the checkout pages are isolated, so going back can't place it twice.
 - **Wiki** (`/examples/wiki`): pages are shared by every session and kept out of backtracking. Each page has its own URL. There are `[[links]]` to new pages, editing with preview through `call`, history with revert, and search.
 - **Chat** (`/examples/chat`): many sessions in one room. Messages are posted with an AJAX form submit, and every open page receives them by server push.
+
+**Tracker** (`make tracker`, then `/tracker`) is a complete issue tracker built to try littoral on something real. It has:
+
+- accounts, with PBKDF2 password hashes
+- issues with status, priority, assignee and due date, plus comments
+- filters and search
+- live updates to everyone's lists through server push
+- bookmarkable issue URLs
+- data saved to a file
+
+It lives in `apps/tracker`, in its own system, `littoral/tracker`.
 
 The smaller examples are counter, multi-counter, login, todo, guess (a task), topics (bookmarkable URLs), report, ajax, upload and progress (a background job reporting through server push). The configuration application is at `/config`.
 

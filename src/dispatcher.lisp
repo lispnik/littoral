@@ -254,7 +254,13 @@ add, then the session and page keys."
   "Start a session of APP.  EXPIRED is true when the request named a
 session that has gone; the application's EXPIRED-NOTICE is shown first."
   (let* ((session (create-session app))
-         (*session* session))
+         (*session* session)
+         (browser (request-cookie (browser-cookie-name app))))
+    ;; A browser that already has an identity keeps it, so its other tabs'
+    ;; sessions stay tied to it too.
+    (when browser
+      (setf (session-browser-key session) browser
+            (session-browser-bound-p session) t))
     (sb-thread:with-recursive-lock ((session-lock session))
       (let ((root (session-root session)))
         (initial-request root *request*)
