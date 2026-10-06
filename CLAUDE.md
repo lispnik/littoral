@@ -7,7 +7,7 @@ A Seaside-style web framework for SBCL. See README.md for the user-facing tour.
 - SBCL servers ignore SIGTERM while Hunchentoot threads run, so stop a test server with `kill -9`.
 - Tests drive the Lack app in-process through the fake browser in `tests/browser.lisp` (`visit`, `click`, `fill-in`, `press`, `back-to`, `ajax-request`); add tests in that style, not over sockets.
 - Packages: `littoral.html` holds the HTML tags and brushes, and `littoral` uses it. Keep generic tag names out of `littoral`'s exports.
-- Load order is serial (see `littoral.asd`): util → context → callbacks → html/{canvas,tags,brushes} → component → decoration → dialogs → backtracking → task → widgets → session → application → ajax → dispatcher → tools/{halos,config}.
+- Load order is serial (see `littoral.asd`): util → context → callbacks → html/{canvas,tags,brushes} → component → decoration → dialogs → backtracking → task → widgets → session → application → ajax → dispatcher → push → tools/{halos,config}.
 - Invariants:
   - `decorations` lists are replaced, never mutated, because snapshots store them by value.
   - Rendering must not change state (`*rendering*` makes `show`/`answer`/`home` signal). Tasks are started by `prepare-tasks` after the callbacks run, never during render. Derived data, such as a report's rows, is computed on demand rather than stored at render time.
@@ -16,5 +16,6 @@ A Seaside-style web framework for SBCL. See README.md for the user-facing tour.
   - Static files are served at `static-url`, which carries a content fingerprint (`?v=`). Only a URL with the matching fingerprint is cached as immutable, so browsers never run stale JS.
   - Chrome restores even `no-store` pages from its back/forward cache, so `littoral.js` reloads on `pageshow` when the page was persisted. Browser tests of back-button behaviour must allow for that reload.
   - Shared, cross-session state (the wiki and the chat room) lives outside `states`, behind a mutex.
+  - Server push: each open page's EventSource is a Clack streaming response (a function) running in its request thread. `publish` and `notify` only queue work and wake the stream; rendering happens in the stream thread under the session lock. Tests drive streams in-process (`tests/push.lisp`).
 - `call` is a `defun/cc`, so it suspends only when called lexically inside `define-flow` (or another `/cc` function).
 - `sed` on this machine is GNU sed.

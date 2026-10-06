@@ -15,10 +15,11 @@
     ("Applications"
      ("store" "Sushi Store" "Catalog, cart and a checkout task with validation, a date picker and isolation.")
      ("wiki" "Wiki" "Shared pages, links, editing, history and search.")
-     ("chat" "Chat" "Many sessions in one room, with AJAX posting and polling."))
+     ("chat" "Chat" "Many sessions in one room, updated by server push."))
     ("Browser features"
      ("ajax" "AJAX" "Updating components in place, a live preview and a clock.")
-     ("upload" "Upload" "Receiving files."))))
+     ("upload" "Upload" "Receiving files.")
+     ("progress" "Progress" "A background job updating the page through server push."))))
 
 (defclass example-index (component) ())
 

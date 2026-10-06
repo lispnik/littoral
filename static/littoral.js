@@ -35,24 +35,38 @@
         if (!r.ok) throw new Error("HTTP " + r.status);
         return r.json();
       })
-      .then(function (data) {
-        var focused = document.activeElement && document.activeElement.id;
-        Object.keys(data.fragments).forEach(function (id) {
-          var old = document.getElementById(id);
-          if (!old) return;
-          old.outerHTML = data.fragments[id];
-          // outerHTML drops focus; give it back, or honour autofocus.
-          var fresh = document.getElementById(id);
-          var target = (focused && fresh.querySelector("#" + CSS.escape(focused))) ||
-                       fresh.querySelector("[autofocus]");
-          if (target && target.focus) target.focus();
-        });
-        if (data.missing.length) window.location.reload();
-        scanPeriodicals();
-        document.dispatchEvent(new CustomEvent("littoral:updated",
-          { detail: { ids: Object.keys(data.fragments) } }));
-      })
+      .then(apply)
       .catch(function () { window.location.reload(); });
+  }
+
+  // Swap in the components a response or a pushed event carries.
+  function apply(data) {
+    var focused = document.activeElement && document.activeElement.id;
+    Object.keys(data.fragments).forEach(function (id) {
+      var old = document.getElementById(id);
+      if (!old) return;
+      old.outerHTML = data.fragments[id];
+      // outerHTML drops focus; give it back, or honour autofocus.
+      var fresh = document.getElementById(id);
+      var target = (focused && fresh.querySelector("#" + CSS.escape(focused))) ||
+                   fresh.querySelector("[autofocus]");
+      if (target && target.focus) target.focus();
+    });
+    if (data.missing.length) window.location.reload();
+    scanPeriodicals();
+    document.dispatchEvent(new CustomEvent("littoral:updated",
+      { detail: { ids: Object.keys(data.fragments) } }));
+  }
+
+  // Server push: pages showing subscribed components listen for updates.
+  function listen() {
+    var url = document.body.getAttribute("data-lt-events");
+    if (!url || !window.EventSource) return;
+    var source = new EventSource(url);
+    source.addEventListener("update", function (event) {
+      apply(JSON.parse(event.data));
+    });
+    window.addEventListener("pagehide", function () { source.close(); });
   }
 
   function split(spec) {
@@ -105,7 +119,10 @@
     });
   }
 
-  document.addEventListener("DOMContentLoaded", scanPeriodicals);
+  document.addEventListener("DOMContentLoaded", function () {
+    scanPeriodicals();
+    listen();
+  });
 
   // A page restored from the back/forward cache shows state the server may
   // have moved past (an isolated checkout, say), and Chrome restores even

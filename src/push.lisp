@@ -1,0 +1,162 @@
+;;;; push.lisp — the server re-renders components on open pages
+;;;;
+;;;; Seaside's Comet, done with server-sent events.  A component names the
+;;;; CHANNELs it listens to with SUBSCRIPTIONS; any thread may PUBLISH a
+;;;; channel, and every open page showing a subscriber gets that component
+;;;; re-rendered and swapped in.  NOTIFY does the same for one component of
+;;;; one session, for a background job reporting progress, say.
+;;;;
+;;;;   (defvar *news* (make-channel "news"))
+;;;;   (defmethod subscriptions ((self headlines)) (list *news*))
+;;;;   … (publish *news*) …
+;;;;
+;;;; Subscribers must be UPDATABLE.  Each open page holds one HTTP
+;;;; connection, and with Hunchentoot one thread.
+
+(in-package #:littoral)
+
+(defclass channel ()
+  ((name :initarg :name :initform nil :reader channel-name))
+  (:documentation "Something components can subscribe to and threads PUBLISH."))
+
+(defmethod print-object ((channel channel) stream)
+  (print-unreadable-object (channel stream :type t :identity t)
+    (format stream "~@[~A~]" (channel-name channel))))
+
+(defun make-channel (&optional name)
+  (make-instance 'channel :name name))
+
+(defgeneric subscriptions (component)
+  (:documentation "The channels whose PUBLISH re-renders COMPONENT on open pages.")
+  (:method ((component component)) '()))
+
+(defclass event-stream ()
+  ((session :initarg :session :reader stream-session)
+   (continuation :initarg :continuation :reader stream-continuation)
+   (base-path :initarg :base-path :reader stream-base-path)
+   (pending :initform '() :accessor stream-pending
+            :documentation "Channels and component ids to re-render.")
+   (open-p :initform t :accessor stream-open-p)
+   (lock :initform (sb-thread:make-mutex :name "littoral event stream") :reader stream-lock)
+   (waitqueue :initform (sb-thread:make-waitqueue) :reader stream-waitqueue)))
+
+(defvar *event-streams* '())
+(defvar *event-streams-lock* (sb-thread:make-mutex :name "littoral event streams"))
+
+(defparameter *keepalive-seconds* 15
+  "How often an idle stream sends a comment, which also notices closed connections.")
+
+(defun open-event-streams ()
+  (sb-thread:with-mutex (*event-streams-lock*) (copy-list *event-streams*)))
+
+(defun wake (stream item)
+  (sb-thread:with-mutex ((stream-lock stream))
+    (push item (stream-pending stream))
+    (sb-thread:condition-broadcast (stream-waitqueue stream))))
+
+(defun publish (channel)
+  "Re-render, on every open page, the visible components subscribed to CHANNEL.
+Safe to call from any thread.  Returns the number of pages told."
+  (let ((count 0))
+    (dolist (stream (open-event-streams) count)
+      (wake stream channel)
+      (incf count))))
+
+(defmacro with-session ((session) &body body)
+  "Run BODY as SESSION's requests do: holding its lock, with *SESSION* bound.
+For other threads that change a session's components."
+  (let ((s (gensym "SESSION")))
+    `(let* ((,s ,session)
+            (*session* ,s))
+       (sb-thread:with-recursive-lock ((session-lock ,s))
+         ,@body))))
+
+(defun notify (component &optional (session *session*))
+  "Re-render COMPONENT on SESSION's open pages.  Safe to call from any
+thread, given the session (capture *SESSION* in the callback that starts
+the work)."
+  (dolist (stream (open-event-streams))
+    (when (eq (stream-session stream) session)
+      (wake stream (component-id component)))))
+
+(defun close-event-streams ()
+  "End every open stream; browsers reconnect when their page is current."
+  (dolist (stream (open-event-streams))
+    (sb-thread:with-mutex ((stream-lock stream))
+      (setf (stream-open-p stream) nil)
+      (sb-thread:condition-broadcast (stream-waitqueue stream)))))
+
+(defun take-pending (stream timeout)
+  "Wait up to TIMEOUT seconds for work; return it, or NIL."
+  (sb-thread:with-mutex ((stream-lock stream))
+    (when (and (null (stream-pending stream)) (stream-open-p stream))
+      (sb-thread:condition-wait (stream-waitqueue stream) (stream-lock stream) :timeout timeout))
+    (shiftf (stream-pending stream) '())))
+
+(defun pushed-fragments (stream pending)
+  "JSON for the visible components PENDING names, or NIL when none are."
+  (let* ((session (stream-session stream))
+         (continuation (stream-continuation stream))
+         (*session* session)
+         (*application* (session-application session))
+         (*base-path* (stream-base-path stream)))
+    (sb-thread:with-recursive-lock ((session-lock session))
+      (let* ((root (session-root session))
+             (ids '()))
+        (map-visible (lambda (c)
+                       (when (or (member (component-id c) pending :test #'equal)
+                                 (intersection (subscriptions c) pending))
+                         (push (component-id c) ids)))
+                     root)
+        (when ids
+          (let ((*render-context* (make-instance 'render-context
+                                                 :callbacks (continuation-callbacks continuation)
+                                                 :action-url (page-url session continuation)
+                                                 :halos-p (and (development-p) (session-halos-p session))
+                                                 :ajax-p t))
+                (*rendering* t))
+            (render-fragments (nreverse ids) root)))))))
+
+(defun stream-live-p (stream)
+  (let ((session (stream-session stream)))
+    (and (stream-open-p stream)
+         (not (session-expired-p session))
+         (find-continuation session (continuation-key (stream-continuation stream))))))
+
+(defun run-event-stream (stream writer)
+  (sb-thread:with-mutex (*event-streams-lock*) (push stream *event-streams*))
+  (unwind-protect
+       (handler-case
+           (progn
+             (funcall writer (format nil "retry: 3000~%~%"))
+             (loop while (stream-live-p stream)
+                   do (let ((pending (take-pending stream *keepalive-seconds*)))
+                        (cond ((not (stream-live-p stream)))
+                              (pending
+                               (let ((json (pushed-fragments stream pending)))
+                                 (when json
+                                   (funcall writer (format nil "event: update~%data: ~A~%~%" json)))))
+                              (t (funcall writer (format nil ": keepalive~%~%")))))))
+         ;; The browser went away: writing to its socket fails.
+         (error () nil))
+    (sb-thread:with-mutex (*event-streams-lock*)
+      (setf *event-streams* (remove stream *event-streams*)))
+    (ignore-errors (funcall writer nil :close t))))
+
+(defun handle-events (session continuation)
+  "The response to a page's EventSource: a stream that runs until the page
+is gone."
+  (let ((stream (make-instance 'event-stream :session session :continuation continuation
+                                             :base-path *base-path*)))
+    (lambda (responder)
+      (run-event-stream stream
+                        (funcall responder
+                                 (list 200 (append (list :content-type "text/event-stream"
+                                                         :cache-control "no-store"
+                                                         ;; Tell nginx not to buffer the stream.
+                                                         :x-accel-buffering "no")
+                                                   *security-headers*)))))))
+
+(defun page-subscribes-p (root)
+  (map-visible (lambda (c) (when (subscriptions c) (return-from page-subscribes-p t))) root)
+  nil)

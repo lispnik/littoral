@@ -1,8 +1,9 @@
-;;;; chat.lisp — many sessions, one room, updated with AJAX
+;;;; chat.lisp — many sessions, one room, updated by server push
 ;;;;
-;;;; The room is shared state: every session's message list polls it with a
-;;;; PERIODICAL, and posting goes through an AJAX form submit, so the page
-;;;; never reloads.  The nickname is asked for with an ordinary CALL.
+;;;; The room is shared state.  Every message list subscribes to the room's
+;;;; channel, and posting PUBLISHes it, so each open page re-renders its
+;;;; list as soon as anyone speaks.  Posting is an AJAX form submit, so the
+;;;; page never reloads.  The nickname is asked for with an ordinary CALL.
 
 (in-package #:littoral-examples)
 
@@ -11,26 +12,32 @@
 (defvar *room* '() "Messages, newest first.")
 (defvar *room-lock* (sb-thread:make-mutex :name "chat room"))
 (defparameter *room-size* 100)
+(defvar *room-channel* (make-channel "chat room"))
 
 (defun post-message (nick text)
   (sb-thread:with-mutex (*room-lock*)
     (push (make-chat-message :nick nick :text text :time (get-universal-time)) *room*)
     (when (> (length *room*) *room-size*)
-      (setf *room* (subseq *room* 0 *room-size*)))))
+      (setf *room* (subseq *room* 0 *room-size*))))
+  (publish *room-channel*))
 
 (defun room-messages ()
   (sb-thread:with-mutex (*room-lock*) (reverse *room*)))
 
 (defun clear-room ()
-  (sb-thread:with-mutex (*room-lock*) (setf *room* '())))
+  (sb-thread:with-mutex (*room-lock*) (setf *room* '()))
+  (publish *room-channel*))
 
 (defclass message-list (component updatable)
   ((chat :initarg :chat :reader list-chat)))
 
+(defmethod subscriptions ((self message-list))
+  (list *room-channel*))
+
 (defmethod render ((self message-list))
   (let ((messages (room-messages))
         (me (chat-nick (list-chat self))))
-    (div (:class "chat-messages" :periodical (periodical 2 :update self))
+    (div (:class "chat-messages")
       (if (null messages)
           (p (:class "empty") "No messages yet. Say hello!")
           (dolist (m messages)

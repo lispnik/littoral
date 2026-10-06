@@ -51,8 +51,10 @@
    #:snapshot #:take-snapshot #:restore-snapshot #:begin-isolation #:end-isolation
    ;; Tasks
    #:task #:define-flow #:flow
-   ;; AJAX
+   ;; AJAX and push
    #:ajax #:ajax-update #:periodical
+   #:channel #:make-channel #:subscriptions #:publish #:notify #:close-event-streams
+   #:with-session
    ;; Sessions & applications
    #:session #:session-key #:session-root #:session-properties #:session-property
    #:expire-session #:list-sessions

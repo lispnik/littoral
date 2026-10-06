@@ -27,6 +27,27 @@ const evaluate = async (expr) => { const r = await send("Runtime.evaluate", { ex
 const waitLoad = async () => { await sleep(300); for (let i = 0; i < 50; i++) { if (await evaluate("document.readyState") === "complete") return; await sleep(100); } };
 const go = async (path) => { await send("Page.navigate", { url: BASE + path }); await waitLoad(); };
 const clickLink = async (text) => { await evaluate(`[...document.querySelectorAll("a")].find(a => a.textContent.includes(${JSON.stringify(text)})).click()`); await waitLoad(); };
+// A second tab with its own DevTools connection (a separate session).
+async function openTab() {
+  const t = await (await fetch("http://127.0.0.1:9333/json/new?about:blank", { method: "PUT" })).json();
+  const sock = new WebSocket(t.webSocketDebuggerUrl);
+  await new Promise((r) => sock.addEventListener("open", r));
+  let n = 0; const waiting = new Map();
+  sock.addEventListener("message", (m) => { const d = JSON.parse(m.data);
+    if (d.id && waiting.has(d.id)) { waiting.get(d.id)(d); waiting.delete(d.id); } });
+  const tsend = (method, params = {}) => new Promise((r) => { const k = ++n; waiting.set(k, r); sock.send(JSON.stringify({ id: k, method, params })); });
+  await tsend("Page.enable"); await tsend("Runtime.enable");
+  const teval = async (expr) => { const r = await tsend("Runtime.evaluate", { expression: expr, awaitPromise: true, returnByValue: true });
+    if (r.result.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails)); return r.result.result.value; };
+  const tload = async () => { await sleep(300); for (let i = 0; i < 50; i++) { if (await teval("document.readyState") === "complete") return; await sleep(100); } };
+  return {
+    evaluate: teval, waitLoad: tload,
+    go: async (path) => { await tsend("Page.navigate", { url: BASE + path }); await tload(); },
+    clickLink: async (text) => { await teval(`[...document.querySelectorAll("a")].find(a => a.textContent.includes(${JSON.stringify(text)})).click()`); await tload(); },
+    close: () => fetch("http://127.0.0.1:9333/json/close/" + t.id),
+  };
+}
+
 let failures = 0;
 const check = (name, ok, detail = "") => { console.log((ok ? "PASS " : "FAIL ") + name + (ok ? "" : "  " + detail)); if (!ok) failures++; };
 
@@ -123,6 +144,27 @@ try {
   check("chat did not reload", await evaluate("window.__chat") === 1);
   const active = await evaluate(`JSON.stringify({id: document.activeElement.id, value: document.activeElement.value, hasFocus: document.hasFocus()})`);
   check("chat input cleared and focused", JSON.parse(active).id === "draft" && JSON.parse(active).value === "", active);
+
+  // Server push: a second session's message appears without polling or reload.
+  const other = await openTab();
+  await other.go("/examples/chat");
+  await other.clickLink("Join the room");
+  await other.evaluate(`document.querySelector("input[type=text]").value = "pusher"`);
+  await other.evaluate(`document.querySelector("button[type=submit]").click()`); await other.waitLoad();
+  await sleep(500);                                  // let the first tab's stream settle
+  await other.evaluate(`(() => { const d = document.getElementById("draft"); d.value = "pushed across sessions";
+                                 d.form.requestSubmit(); })()`);
+  await sleep(1000);
+  check("push reaches another session",
+        (await evaluate(`document.querySelector(".chat-messages").innerText`)).includes("pushed across sessions"));
+  check("push did not reload", await evaluate("window.__chat") === 1);
+  await other.close();
+
+  // A background job reports progress through notify.
+  await go("/examples/progress");
+  await evaluate(`document.querySelector("button").click()`);
+  await sleep(4500);
+  check("background job progress pushed", (await evaluate("document.body.innerText")).includes("Done."));
 
   // Store: add to cart, then the whole checkout by clicking.
   await go("/examples/store");

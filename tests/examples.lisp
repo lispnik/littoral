@@ -154,10 +154,6 @@
   (click b "Join the room")
   (answer-input b nick))
 
-(defun periodical-target (b)
-  (let ((spec (cl-ppcre:register-groups-bind (s) ("data-lt-periodical=\"([^\"]*)\"" (browser-html b)) s)))
-    (subseq spec (1+ (position #\; spec :from-end t)))))
-
 (test chat
   (littoral-examples:clear-room)
   (with-fresh-applications (("/chat" 'littoral-examples:chat :mode :deployment))
@@ -176,11 +172,6 @@
         (is (search "hi &lt;bob&gt;" json))
         ;; The composer comes back empty.
         (is (search "value=\\\"\\\" id=\\\"draft\\\"" json)))
-      ;; Bob's periodical update shows it, marked as someone else's.
-      (let ((json (ajax-request bob "" (periodical-target bob))))
-        (is (search "hi &lt;bob&gt;" json))
-        (is (search "alice" json))
-        (is (not (search "mine" json))))
       ;; A reload shows the room too.
       (visit bob (browser-url bob))
       (is (has-text-p bob "hi <bob>")))))

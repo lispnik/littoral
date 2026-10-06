@@ -38,6 +38,7 @@
                              (:file "application")
                              (:file "ajax")
                              (:file "dispatcher")
+                             (:file "push")
                              (:module "tools"
                               :serial t
                               :components ((:file "halos")
@@ -69,6 +70,7 @@
                              (:file "store")
                              (:file "wiki")
                              (:file "chat")
+                             (:file "progress")
                              (:file "index")
                              (:file "register")))))
 
@@ -93,7 +95,8 @@
                              (:file "ajax")
                              (:file "tools")
                              (:file "widgets")
-                             (:file "examples"))))
+                             (:file "examples")
+                             (:file "push"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
                                        (uiop:find-symbol* :littoral :littoral/tests))

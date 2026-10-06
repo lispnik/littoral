@@ -131,7 +131,10 @@ add, then the session and page keys."
                            (application-scripts app)
                            (reverse (root-scripts root))))
         (format out "<script src=\"~A\" defer></script>~%" (html-escape url)))
-      (format out "</head>~%<body data-lt-action=\"~A\">~%" (html-escape action-url))
+      (format out "</head>~%<body data-lt-action=\"~A\"~@[ data-lt-events=\"~A\"~]>~%"
+              (html-escape action-url)
+              (when (page-subscribes-p (session-root session))
+                (html-escape (concatenate 'string action-url "&_lt_events=1"))))
       (write-string body-html out)
       (when (root-inline-scripts root)
         (format out "~%<script>~%~{~A~%~}</script>" (reverse (root-inline-scripts root))))
@@ -204,11 +207,16 @@ session that has gone; the application's EXPIRED-NOTICE is shown first."
 (defun handle-session-request (session)
   (let* ((root (session-root session))
          (continuation (find-continuation session (request-parameter "_k"))))
-    (cond ((null continuation)
+    (cond ((and (null continuation) (request-parameter "_lt_events"))
+           ;; A stream for a page that is gone: 204 tells EventSource to stop.
+           (list 204 *security-headers* (list "")))
+          ((null continuation)
            ;; A page forgotten or never made: show the session as it is now.
            (redirect-response (page-url session (new-continuation session))))
           ((request-parameter "_lt_ajax")
            (handle-ajax session continuation))
+          ((request-parameter "_lt_events")
+           (handle-events session continuation))
           (t
            (restore-snapshot (continuation-snapshot continuation))
            (cond ((process-callbacks (lack/request:request-parameters *request*)
@@ -365,6 +373,7 @@ reap idle sessions in the background."
 
 (defun stop ()
   (stop-reaper)
+  (close-event-streams)
   (when *handler*
     (clack:stop *handler*)
     (setf *handler* nil)))
