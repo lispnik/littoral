@@ -31,6 +31,7 @@
                 "Family members need a birthday.")))
 
 (defun sample-contacts ()
+  "A few contacts to start with."
   (list (make-instance 'contact :name "Ada Lovelace" :email "ada@example.org" :role :colleague
                                 :birthday '(1815 12 10) :favourite t)
         (make-instance 'contact :name "Charles Babbage" :email "charles@example.org" :role :colleague
@@ -72,9 +73,11 @@
   (list (contacts-report self)))
 
 (defun edit-contact (app contact)
+  "Edit CONTACT with its generated editor."
   (show app (make-editor contact :title (format nil "Edit ~A" (slot-value contact 'name)))))
 
 (defun add-contact (app)
+  "Ask for a new contact and add it."
   (let ((contact (make-instance 'contact)))
     (show app (make-editor contact :title "New contact" :save-label "Add")
           :on-answer (lambda (added)
@@ -82,6 +85,7 @@
                          (setf (contacts app) (append (contacts app) (list added))))))))
 
 (defun remove-contact (app contact)
+  "Ask, then remove CONTACT."
   (show app (make-instance 'confirm-dialog
                            :message (format nil "Remove ~A?" (slot-value contact 'name)))
         :on-answer (lambda (yes)

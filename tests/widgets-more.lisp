@@ -6,11 +6,13 @@
 (in-suite widgets-more)
 
 (defun widgets-browser ()
+  "A browser on the widgets example."
   (let ((b (make-instance 'browser)))
     (visit b "/widgets")
     b))
 
 (defmacro with-widgets ((b) &body body)
+  "Run BODY with the widgets example served and a browser on it as B."
   `(with-fresh-applications (("/widgets" 'littoral-examples:widget-demo :mode :deployment))
      (let ((,b (widgets-browser)))
        ,@body)))
@@ -39,7 +41,8 @@
       (is (plusp (length toggles))))
     (labels ((expand (label)
                (let ((href (cl-ppcre:register-groups-bind (h)
-                               ((format nil "<a href=\"([^\"]*)\" class=\"lt-tree-toggle\" title=\"Expand\">▸</a> <a[^>]*>~A</a>" label)
+                               ((format nil "<a href=\"([^\"]*)\" class=\"lt-tree-toggle\" ~
+title=\"Expand\">▸</a> <a[^>]*>~A</a>" label)
                                 (browser-html b))
                              (unescape h))))
                  (is (not (null href)) "no expander for ~A" label)

@@ -124,9 +124,11 @@ were not told to trust."
   (format nil "_ltb~A" (substitute #\_ #\/ (application-path app))))
 
 (defun request-cookie (name)
+  "The value of the request's cookie NAME, or NIL."
   (cdr (assoc name (lack/request:request-cookies *request*) :test #'string=)))
 
 (defun session-cookie-header (name value app)
+  "A Set-Cookie value for NAME=VALUE scoped to APP, Secure over HTTPS."
   (format nil "~A=~A; Path=~A; HttpOnly; SameSite=Lax~:[~;; Secure~]"
           name value (application-base-url app) (secure-request-p)))
 

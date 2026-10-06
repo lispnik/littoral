@@ -301,6 +301,16 @@ CALLBACK receives what is submitted.")
            :reader reader :writer writer
            (alexandria:remove-from-plist options :type :label :accessor :reader :writer))))
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun field-form (field)
+    "The MAKE-FIELD form for FIELD, a (PROPERTY &rest OPTIONS) list.
+  :ACCESSOR names a function, so it is quoted; the other options are evaluated."
+    (destructuring-bind (property &rest options) field
+      (let ((accessor (getf options :accessor)))
+        `(make-field ',property
+                     ,@(when accessor `(:accessor ',accessor))
+                     ,@(alexandria:remove-from-plist options :accessor))))))
+
 (defmacro define-description (name fields &key validate)
   "Describe the objects of class NAME: each of FIELDS is (PROPERTY &rest
 options), options being :TYPE (see *FIELD-KINDS*), :LABEL, :REQUIRED,
@@ -312,12 +322,7 @@ options), options being :TYPE (see *FIELD-KINDS*), :LABEL, :REQUIRED,
                         :name ',name
                         :validate ,validate
                         :fields (list ,@(mapcar (lambda (field)
-                                                  (destructuring-bind (property &rest options) field
-                                                    ;; :ACCESSOR names a function; the rest are evaluated.
-                                                    (let ((accessor (getf options :accessor)))
-                                                      `(make-field ',property
-                                                                   ,@(when accessor `(:accessor ',accessor))
-                                                                   ,@(alexandria:remove-from-plist options :accessor)))))
+                                                  (field-form field))
                                                 fields)))))
 
 (defun field-value (field object)

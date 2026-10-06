@@ -6,12 +6,14 @@
 (in-suite tracker)
 
 (defmacro with-tracker ((&key file) &body body)
+  "Run BODY with an empty tracker served at /tracker, saving to FILE if given."
   `(let ((littoral-tracker:*tracker-file* ,file))
      (littoral-tracker:reset-tracker)
      (with-fresh-applications (("/tracker" 'littoral-tracker:tracker :mode :deployment))
        ,@body)))
 
 (defun register-user (b name &optional (password "correct horse"))
+  "Create an account called NAME and log in."
   (visit b "/tracker")
   (click b "create an account")
   (fill-in b "name" name)
@@ -21,6 +23,7 @@
   (press b "Create account"))
 
 (defun log-in-as (b name &optional (password "correct horse"))
+  "Log in to the tracker as NAME."
   (visit b "/tracker")
   (click b "Log in")
   (fill-in b "username" name)
@@ -28,6 +31,7 @@
   (press b "Log in"))
 
 (defun file-issue (b title &key (priority "Normal") body)
+  "File an issue called TITLE from the issue list."
   (click b "New issue")
   (fill-in b "title" title)
   (when body (fill-in b "body" body))

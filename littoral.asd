@@ -90,6 +90,7 @@
   :depends-on (#:littoral
                #:littoral/examples
                #:littoral/tracker
+               #:littoral/tutorial
                #:fiveam
                #:flexi-streams
                #:lack
@@ -113,7 +114,8 @@
                              (:file "security")
                              (:file "descriptions")
                              (:file "widgets-more")
-                             (:file "tracker"))))
+                             (:file "tracker")
+                             (:file "tutorial"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
                                        (uiop:find-symbol* :littoral :littoral/tests))
@@ -140,3 +142,8 @@
                 :components ((:file "package")
                              (:file "model")
                              (:file "ui")))))
+
+(asdf:defsystem #:littoral/tutorial
+  :description "The reading list application docs/tutorial.md builds."
+  :depends-on (#:littoral)
+  :components ((:module "docs/tutorial" :components ((:file "reading-list")))))

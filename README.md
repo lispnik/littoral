@@ -50,7 +50,7 @@ make clean-check   # build a fresh clone against nothing but its ocicl.csv
 make lint          # ocicl lint
 ```
 
-The full API reference is [docs/API.md](docs/API.md).
+New to littoral? Start with **[the tutorial](docs/tutorial.md)**, which builds a reading list one idea at a time. The full API reference is [docs/API.md](docs/API.md).
 
 `/examples` is a guide to the examples. Three of them are complete small applications:
 

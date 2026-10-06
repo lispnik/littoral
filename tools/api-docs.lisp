@@ -7,7 +7,8 @@
 
 (defpackage #:littoral-api-docs
   (:use #:cl)
-  (:export #:write-api-docs))
+  (:export #:write-api-docs)
+  (:documentation "Writes docs/API.md from Littoral's docstrings."))
 
 (in-package #:littoral-api-docs)
 
@@ -83,6 +84,7 @@
         (t (prin1-to-string form))))
 
 (defun lambda-list-string (symbol)
+  "SYMBOL's lambda list as callers write it."
   (let ((list (or (rest (assoc symbol *cc-lambda-lists*))
                   (sb-introspect:function-lambda-list symbol))))
     (format nil "~{~A~^ ~}" (mapcar #'unqualified list))))
@@ -97,6 +99,7 @@
    :simple-calls t))
 
 (defun write-entry (symbol out)
+  "Write SYMBOL's reference entries to OUT; true when it is undocumented."
   (let ((kinds (kinds symbol))
         (name (string-downcase (symbol-name symbol))))
     (dolist (kind kinds)
