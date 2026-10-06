@@ -179,3 +179,35 @@
       (setf (browser-files b) (list (list "unused" "x.bin" "application/octet-stream" #())))
       (press b "Add")
       (is (has-text-p b "From multipart")))))
+
+(test bookmarkable-urls
+  (with-fresh-applications (("/topics" 'littoral-examples:topics :mode :deployment))
+    (let ((b (make-instance 'browser)))
+      (visit b "/topics")
+      (click b "tasks")
+      (is (alexandria:starts-with-subseq "/topics/tasks?_s=" (browser-url b)))
+      (click b "bigger")
+      (is (alexandria:starts-with-subseq "/topics/tasks?big&_s=" (browser-url b)))
+      (is (search "data-lt-action=\"/topics/tasks?big&amp;_s=" (browser-html b)))
+      ;; A bookmark, opened in a new session, comes back to the same page.
+      (let ((bookmark (subseq (browser-url b) 0 (search "&_s=" (browser-url b))))
+            (fresh (make-instance 'browser)))
+        (is (string= "/topics/tasks?big" bookmark))
+        (visit fresh bookmark)
+        (is (has-text-p fresh "A flow of calls"))
+        (is (has-text-p fresh "smaller"))
+        (is (alexandria:starts-with-subseq "/topics/tasks?big&_s=" (browser-url fresh))))
+      ;; Unknown topics are ignored.
+      (let ((fresh (make-instance 'browser)))
+        (visit fresh "/topics/nonsense")
+        (is (= 200 (browser-status fresh)))
+        (is (alexandria:starts-with-subseq "/topics?_s=" (browser-url fresh)))))))
+
+(test extra-path-segments
+  (with-fresh-applications (("/a" 'littoral-examples:counter))
+    (let ((*request* (lack/request:make-request (make-env :get "/a/b%20c/d/")))
+          (littoral:*application* (find-application "/a")))
+      (is (equal '("b c" "d") (request-extra-path))))))
+
+(test reserved-parameters
+  (signals error (add-parameter (make-instance 'page-url) "_k" "x")))

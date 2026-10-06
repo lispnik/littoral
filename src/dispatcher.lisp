@@ -54,8 +54,23 @@
         (simple-page 404 "Not Found"))))
 
 (defun page-url (session continuation)
-  (url-with-params (application-base-url (session-application session))
-                   (action-url-params session (continuation-key continuation))))
+  "The URL of CONTINUATION: the application's path, what UPDATE-URL methods
+add, then the session and page keys."
+  (let ((url (make-instance 'page-url)))
+    (map-visible (lambda (c) (update-url c url)) (session-root session))
+    (url-with-params (format nil "~A~{/~A~}"
+                             (application-base-url (session-application session))
+                             (mapcar #'quri:url-encode (url-path url)))
+                     (append (url-parameters url)
+                             (action-url-params session (continuation-key continuation))))))
+
+(defun request-extra-path (&optional (app *application*) (request *request*))
+  "The decoded path segments of REQUEST after APP's path."
+  (let* ((path (normalize-path (or (lack/request:request-path-info request) "/")))
+         (base (application-path app))
+         (rest (if (string= base "/") path (subseq path (min (length path) (length base))))))
+    (mapcar #'quri:url-decode
+            (remove "" (cl-ppcre:split "/" rest) :test #'string=))))
 
 ;;; Rendering a page
 

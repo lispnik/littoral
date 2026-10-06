@@ -27,10 +27,12 @@
   (:export
    ;; Context
    #:*request* #:*session* #:*application* #:*render-context*
-   #:request-parameter #:request-path
+   #:request-parameter #:request-parameter-p #:request-path
    ;; Components
    #:component #:component-id #:render #:render-component #:children #:states
    #:update-root #:style #:script #:initial-request
+   #:update-url #:page-url #:add-to-path #:add-parameter #:url-path #:url-parameters
+   #:request-extra-path
    #:call #:answer #:show #:home #:visible-children #:active-component
    #:html-root #:root-title #:add-stylesheet #:add-script #:add-style
    ;; Decorations

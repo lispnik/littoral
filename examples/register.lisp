@@ -9,6 +9,7 @@
   (register-application "/examples/login" 'login-demo :title "Login")
   (register-application "/examples/ajax" 'ajax-demo :title "AJAX")
   (register-application "/examples/todo" 'todo-list :title "To Do")
-  (register-application "/examples/upload" 'upload-demo :title "Upload"))
+  (register-application "/examples/upload" 'upload-demo :title "Upload")
+  (register-application "/examples/topics" 'topics :title "Topics"))
 
 (register-examples)

@@ -32,6 +32,12 @@ rendering an error page.")
   (when request
     (cdr (assoc name (lack/request:request-parameters request) :test #'string=))))
 
+(defun request-parameter-p (name &optional (request *request*))
+  "True when REQUEST has the parameter NAME, even with no value (?flag)."
+  (and request
+       (assoc name (lack/request:request-parameters request) :test #'string=)
+       t))
+
 (defun request-path (&optional (request *request*))
   (lack/request:request-path-info request))
 

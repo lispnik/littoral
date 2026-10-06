@@ -62,6 +62,7 @@
                              (:file "ajax")
                              (:file "todo")
                              (:file "upload")
+                             (:file "topics")
                              (:file "register")))))
 
 (asdf:defsystem #:littoral/tests

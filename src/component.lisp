@@ -51,7 +51,8 @@ itself to make all its slots backtrack.")
 
 (defgeneric initial-request (component request)
   (:documentation "Called on the root component when its session starts,
-with the request that started it.")
+with the request that started it.  A bookmarked URL is read back here with
+REQUEST-EXTRA-PATH and REQUEST-PARAMETER.")
   (:method ((component component) request)
     (declare (ignore request))
     nil))
@@ -84,6 +85,37 @@ the HTML-ROOT of the page.  Call CALL-NEXT-METHOD to keep STYLE and SCRIPT.")
     (let ((css (style component)) (js (script component)))
       (when css (add-style root css))
       (when js (add-inline-script root js)))))
+
+;;; Bookmarkable URLs
+
+(defclass page-url ()
+  ((path :initform '() :accessor url-path
+         :documentation "Segments after the application's path, in order.")
+   (parameters :initform '() :accessor url-parameters
+               :documentation "Alist of query parameters, in order."))
+  (:documentation "What UPDATE-URL methods add to the URL of a page."))
+
+(defun add-to-path (url &rest segments)
+  "Append SEGMENTS (strings, or anything PRINC prints) to URL's path."
+  (setf (url-path url) (append (url-path url) (mapcar #'princ-to-string segments)))
+  url)
+
+(defun add-parameter (url key &optional value)
+  "Add the query parameter KEY (with VALUE, unless NIL) to URL."
+  (when (member key '("_s" "_k") :test #'string=)
+    (error "~S is reserved for littoral's own parameters." key))
+  (setf (url-parameters url)
+        (append (url-parameters url) (list (cons key (and value (princ-to-string value))))))
+  url)
+
+(defgeneric update-url (component url)
+  (:documentation "Add to URL, a PAGE-URL, whatever would let a bookmark of
+this page come back to it.  Called on every visible component, parents
+first; read it back in INITIAL-REQUEST with REQUEST-EXTRA-PATH and
+REQUEST-PARAMETER.")
+  (:method ((component component) url)
+    (declare (ignore url))
+    nil))
 
 ;;; Rendering through decorations
 
