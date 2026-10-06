@@ -187,8 +187,12 @@ session that has gone; the application's EXPIRED-NOTICE is shown first."
                                                   (secure-request-p))))))))
 
 (defun handle-ajax (session continuation)
+  "Run an AJAX request's callbacks on CONTINUATION, without making a new
+page, and answer the components to update as JSON."
   (let* ((root (session-root session))
-         (callbacks (continuation-callbacks continuation)))
+         (callbacks (continuation-callbacks continuation))
+         (*ajax-result* nil)
+         (*ajax-scripts* '()))
     (process-callbacks (lack/request:request-parameters *request*) callbacks)
     (prepare-tasks root)
     (setf (continuation-snapshot continuation) (take-snapshot root))
@@ -202,7 +206,9 @@ session that has gone; the application's EXPIRED-NOTICE is shown first."
                        *security-headers*)
             (list (let ((*rendering* t))
                     (render-fragments (cl-ppcre:split "\\s+" (or (request-parameter "_lt_update") ""))
-                                      root)))))))
+                                      root
+                                      :value *ajax-result*
+                                      :scripts (reverse *ajax-scripts*))))))))
 
 (defun handle-session-request (session)
   (let* ((root (session-root session))

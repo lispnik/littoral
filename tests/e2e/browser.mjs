@@ -66,6 +66,21 @@ try {
   await evaluate(`(() => { const i = document.querySelector("[data-lt-on-input]"); i.value = "hi <there>"; i.dispatchEvent(new Event("input", {bubbles: true})); })()`);
   await sleep(500);
   check("on-input preview", (await evaluate(`document.querySelector("strong").textContent`)) === "hi <there>");
+  // Values from the browser, results back, confirm and server scripts.
+  await evaluate(`document.getElementById("measure").click()`); await sleep(500);
+  check("browser value reaches server and result comes back",
+        /The server heard \d+x\d+\./.test(await evaluate(`document.getElementById("reply").textContent`)));
+  await evaluate("window.confirm = () => false");
+  await evaluate(`document.getElementById("reset").click()`); await sleep(500);
+  check("declined confirm sends nothing", await evaluate(`document.querySelector(".ajax-count").textContent`) === "1");
+  await evaluate("window.confirm = () => true");
+  await evaluate(`document.getElementById("reset").click()`); await sleep(500);
+  check("accepted confirm runs", await evaluate(`document.querySelector(".ajax-count").textContent`) === "0");
+  await evaluate(`document.getElementById("retitle").click()`); await sleep(500);
+  check("server script ran", await evaluate("document.title") === "Counter at 0");
+  // Leave the counter where the reload check below expects it.
+  await evaluate(`document.querySelector("[data-lt-on-click]").click()`); await sleep(400);
+
   // Periodical clock.
   const t1 = await evaluate(`document.querySelector("[data-lt-periodical]").textContent`);
   await sleep(2300);

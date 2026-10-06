@@ -38,6 +38,33 @@
 (defmethod children ((self ajax-demo))
   (list (demo-counter self) (demo-clock self) (demo-preview self)))
 
+(defun render-server-talk (self)
+  (h2 () "Talking to the server")
+  (p ()
+    ;; A value computed in the browser goes to the callback; what the
+    ;; callback returns comes back to :on-complete as value.
+    (button (:id "measure"
+             :on-click (ajax :value "window.innerWidth + 'x' + window.innerHeight"
+                             :callback (lambda (size) (format nil "The server heard ~A." size))
+                             :on-complete "document.getElementById('reply').textContent = value"))
+      "Tell the server my window size")
+    (text " ")
+    ;; Ask first, then act.
+    (button (:id "reset"
+             :on-click (ajax :confirm "Reset the counter to zero?"
+                             :callback (lambda () (setf (count-of (demo-counter self)) 0))
+                             :update (demo-counter self)))
+      "Reset the counter")
+    (text " ")
+    ;; The server decides what the browser does next.
+    (button (:id "retitle"
+             :on-click (ajax :callback (lambda ()
+                                         (execute-script
+                                          (format nil "document.title = ~S"
+                                                  (format nil "Counter at ~D" (count-of (demo-counter self))))))))
+      "Put the count in the title"))
+  (p (:id "reply" :class "reply") ""))
+
 (defmethod render ((self ajax-demo))
   (h1 () "AJAX")
   (h2 () "Counter")
@@ -48,4 +75,5 @@
   (text-input (:value (echo-text (demo-echo self))
                :callback (lambda (v) (setf (echo-text (demo-echo self)) v))
                :on-input (ajax-update (demo-preview self))))
-  (render-component (demo-preview self)))
+  (render-component (demo-preview self))
+  (render-server-talk self))

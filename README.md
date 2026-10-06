@@ -141,6 +141,22 @@ Going back to one of those pages then shows the session as it is now. `littoral.
 
 To make a component re-renderable in place, mix `updatable` into its class. Then give an element an `:on-click`, `:on-change` or `:on-input` attribute whose value is `(ajax :callback thunk :update component)`. Use `(periodical seconds :update component)` instead to re-render on a timer. `static/littoral.js` is small and has no dependencies; it posts the request and swaps the HTML.
 
+`ajax` takes more options:
+
+- `:value` is a JavaScript expression, evaluated in the browser with `this` bound to the element. The callback receives its result as a string.
+- The callback's return value is sent back to the browser as JSON (strings, numbers, lists, keyword plists and hash tables). The `:on-complete` JavaScript snippet receives it as `value`.
+- `:confirm "Really?"` asks the user before anything is sent.
+- `(execute-script "…")`, called from a callback, runs JavaScript once the updates are in place.
+
+```lisp
+(button (:on-click (ajax :value "this.dataset.size"
+                         :callback (lambda (size) (price-for size))
+                         :on-complete "document.getElementById('price').textContent = value"))
+  "Price it")
+```
+
+After every update, `littoral.js` fires a `littoral:updated` event on `document`.
+
 ### Server push
 
 Components can be re-rendered on open pages by the server, without polling (this is Seaside's Comet, built on server-sent events). A component lists the channels it listens to in its `subscriptions` method. `publish`, called from any thread, re-renders every visible subscriber on every open page:

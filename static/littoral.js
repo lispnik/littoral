@@ -21,7 +21,7 @@
     }
   }
 
-  function post(callback, targets, params) {
+  function post(callback, targets, params, el, attr) {
     params.append("_lt_ajax", "1");
     params.append("_lt_update", targets);
     if (callback) params.append(callback, "1");
@@ -35,7 +35,11 @@
         if (!r.ok) throw new Error("HTTP " + r.status);
         return r.json();
       })
-      .then(apply)
+      .then(function (data) {
+        apply(data);
+        var complete = el && attr && el.getAttribute(attr + "-complete");
+        if (complete) new Function("value", complete).call(el, data.value);
+      })
       .catch(function () { window.location.reload(); });
   }
 
@@ -53,6 +57,7 @@
       if (target && target.focus) target.focus();
     });
     if (data.missing.length) window.location.reload();
+    (data.scripts || []).forEach(function (script) { new Function(script)(); });
     scanPeriodicals();
     document.dispatchEvent(new CustomEvent("littoral:updated",
       { detail: { ids: Object.keys(data.fragments) } }));
@@ -76,7 +81,17 @@
 
   function trigger(el, attr, event) {
     var spec = split(el.getAttribute(attr));
+    var question = el.getAttribute(attr + "-confirm");
+    if (question && !window.confirm(question)) {
+      if (event) event.preventDefault();
+      return;
+    }
     var params = new URLSearchParams();
+    var valueExpression = el.getAttribute(attr + "-value");
+    if (valueExpression) {
+      var value = new Function("return (" + valueExpression + ");").call(el);
+      params.append("_lt_value", value == null ? "" : String(value));
+    }
     if (el.form && (el.type === "submit" || attr === "data-lt-on-submit")) {
       new FormData(el.form).forEach(function (v, k) {
         if (typeof v === "string") params.append(k, v);
@@ -89,7 +104,7 @@
       fieldParams(el, params);
     }
     if (event) event.preventDefault();
-    post(spec.callback, spec.targets, params);
+    post(spec.callback, spec.targets, params, el, attr);
   }
 
   function delegate(type, attr) {

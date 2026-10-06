@@ -52,7 +52,7 @@
    ;; Tasks
    #:task #:define-flow #:flow
    ;; AJAX and push
-   #:ajax #:ajax-update #:periodical
+   #:ajax #:ajax-update #:periodical #:execute-script
    #:channel #:make-channel #:subscriptions #:publish #:notify #:close-event-streams
    #:with-session
    ;; Sessions & applications
