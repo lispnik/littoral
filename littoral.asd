@@ -40,6 +40,7 @@
                              (:file "backtracking")
                              (:file "task")
                              (:file "widgets")
+                             (:file "descriptions")
                              (:file "session")
                              (:file "application")
                              (:file "configuration")
@@ -78,6 +79,7 @@
                              (:file "wiki")
                              (:file "chat")
                              (:file "progress")
+                             (:file "contacts")
                              (:file "index")
                              (:file "register")))))
 
@@ -105,7 +107,8 @@
                              (:file "examples")
                              (:file "push")
                              (:file "robustness")
-                             (:file "security"))))
+                             (:file "security")
+                             (:file "descriptions"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
                                        (uiop:find-symbol* :littoral :littoral/tests))

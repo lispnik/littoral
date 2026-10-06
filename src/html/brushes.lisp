@@ -66,7 +66,7 @@ when the form is submitted without a button; :MULTIPART T allows FILE-INPUT."
 
 ;;; Fields
 
-(defun field-name (attributes &optional (convert #'identity))
+(defun field-callback-name (attributes &optional (convert #'identity))
   (let ((callback (getf attributes :callback)))
     (when callback
       (register :value (lambda (value) (funcall callback (funcall convert value)))))))
@@ -74,7 +74,7 @@ when the form is submitted without a button; :MULTIPART T allows FILE-INPUT."
 (defun %input (type attributes &optional (convert #'identity))
   (emit-tag "input"
             (list* :type type
-                   :name (or (field-name attributes convert) (getf attributes :name))
+                   :name (or (field-callback-name attributes convert) (getf attributes :name))
                    :value (getf attributes :value)
                    (strip-attributes attributes :callback :name :value))
             nil))
@@ -103,7 +103,7 @@ submission does not parse."
 (defun %text-area (attributes)
   (let ((value (getf attributes :value)))
     (emit-tag "textarea"
-              (list* :name (or (field-name attributes) (getf attributes :name))
+              (list* :name (or (field-callback-name attributes) (getf attributes :name))
                      (strip-attributes attributes :callback :name :value))
               (lambda () (when value (text value))))))
 
@@ -112,7 +112,7 @@ submission does not parse."
   `(%text-area (list ,@attributes)))
 
 (defun %checkbox (attributes)
-  (let ((name (field-name attributes (lambda (value) (string= value "on")))))
+  (let ((name (field-callback-name attributes (lambda (value) (string= value "on")))))
     ;; An unchecked box submits nothing, so a hidden twin of the same name
     ;; goes first: the box's own value, when sent, comes last and wins.
     (when name

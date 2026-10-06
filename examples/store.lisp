@@ -65,16 +65,12 @@
 
 (defstruct address name street city postcode)
 
-(defun address-problem (address)
-  "NIL when ADDRESS is complete, else what is wrong with it."
-  (cond ((null address) nil)              ; Cancel
-        ((some (lambda (s) (string= (string-trim " " s) ""))
-               (list (address-name address) (address-street address)
-                     (address-city address) (address-postcode address)))
-         "Please fill in every field.")
-        ((not (every #'digit-char-p (address-postcode address)))
-         "The postcode should be digits only.")
-        (t nil)))
+(define-description address
+  ((name :required t :accessor address-name)
+   (street :required t :accessor address-street)
+   (city :required t :accessor address-city)
+   (postcode :required t :accessor address-postcode
+             :pattern "[0-9]+" :pattern-message "The postcode should be digits only.")))
 
 (defvar *order-counter* (list 1000))
 
@@ -121,27 +117,6 @@
           "Continue to delivery")
         (submit-button (:callback (lambda () (answer self nil))) "Back to the menu")))))
 
-(defclass address-form (component)
-  ((address :initform (make-address :name "" :street "" :city "" :postcode "")
-            :reader form-address))
-  (:documentation "Asks where to deliver; answers an ADDRESS or NIL."))
-
-(defmethod render ((self address-form))
-  (let ((a (form-address self)))
-    (h2 () "Where should we deliver?")
-    (form (:class "address-form")
-      (macrolet ((field (label id accessor)
-                   `(label () ,label
-                      (text-input (:id ,id :value (,accessor a)
-                                   :callback (lambda (v) (setf (,accessor a) v)))))))
-        (field "Name" "name" address-name)
-        (field "Street" "street" address-street)
-        (field "City" "city" address-city)
-        (field "Postcode" "postcode" address-postcode))
-      (div (:class "lt-buttons")
-        (submit-button (:callback (lambda () (answer self (copy-address a)))) "Continue")
-        (cancel-button (:callback (lambda () (answer self nil))) "Cancel")))))
-
 (defclass receipt (component)
   ((order :initarg :order :reader receipt-order))
   (:documentation "Thanks the shopper and shows what was ordered."))
@@ -175,7 +150,8 @@
   (let ((cart (checkout-cart self))
         (isolation (begin-isolation)))
     (when (call self (make-instance 'cart-review :cart cart))
-      (let ((address (call self (validate-with (make-instance 'address-form) #'address-problem))))
+      (let ((address (call self (make-editor (make-address) :title "Where should we deliver?"
+                                                            :save-label "Continue"))))
         (when address
           (let ((date (call self (make-instance 'date-picker
                                                 :prompt "When should we deliver?"
@@ -294,5 +270,4 @@
 .cart ul { padding-left: 1rem; } .cart a { text-decoration: none; }
 .cart .checkout { display: inline-block; margin-top: .3rem; font-weight: 600; }
 .notice { color: var(--lt-accent); }
-input.qty { width: 4rem; }
-.address-form label { display: block; margin: .4rem 0; }")
+input.qty { width: 4rem; }")

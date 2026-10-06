@@ -42,3 +42,11 @@ label { margin-right: 1em; }
 .lt-code-title { font-size: .8rem; margin-bottom: .2rem; }
 .lt-profile { margin: 1rem 0 3rem; font-size: .85rem; }
 .lt-profile td.number { text-align: right; font-variant-numeric: tabular-nums; }
+.lt-editor .lt-field { margin: .6rem 0; }
+.lt-editor label { display: block; font-weight: 600; margin-bottom: .15rem; }
+.lt-editor input[type=text], .lt-editor input[type=email], .lt-editor input[type=password],
+.lt-editor textarea { width: min(100%, 28rem); }
+.lt-required { color: var(--lt-error); }
+.lt-field-invalid input, .lt-field-invalid textarea, .lt-field-invalid select { outline: 1px solid var(--lt-error); }
+.lt-help { font-size: .8rem; color: var(--lt-muted); }
+.lt-viewer th { width: 10rem; }

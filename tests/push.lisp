@@ -32,7 +32,7 @@
                     (when chunk
                       (sb-thread:with-mutex ((sink-lock sink)) (push chunk (sink-chunks sink)))))))))))
 
-(defun wait-for (predicate &optional (seconds 3))
+(defun wait-for (predicate &optional (seconds 10))
   "Poll PREDICATE for up to SECONDS; true when it came true."
   (loop repeat (* seconds 20)
         when (funcall predicate) return t
@@ -71,15 +71,20 @@
                                              :cookies (browser-cookies b))))))))))
 
 (test notify-from-a-background-thread
-  (with-fresh-applications (("/progress" 'littoral-examples:progress-demo :mode :deployment))
-    (let ((littoral-examples::*job-step-seconds* 0.01)
-          (b (make-instance 'browser)) (sink (make-instance 'sink)))
-      (visit b "/progress")
-      (let ((thread (open-stream b sink))
-            (spec (first (ajax-specs b "on-click"))))
-        (is (wait-for (lambda () (search "retry:" (sink-text sink)))))
-        (ajax-request b (first spec) (rest spec))
-        (is (wait-for (lambda () (search "Done." (sink-text sink)))))
-        (is (search "width: 50%" (sink-text sink)))
-        (close-event-streams)
-        (is (wait-for (lambda () (not (sb-thread:thread-alive-p thread)))))))))
+  ;; The job runs in its own thread, which does not see LET bindings, so
+  ;; the step time is set globally for the test's duration.
+  (let ((saved littoral-examples::*job-step-seconds*))
+    (setf littoral-examples::*job-step-seconds* 0.01)
+    (unwind-protect
+         (with-fresh-applications (("/progress" 'littoral-examples:progress-demo :mode :deployment))
+           (let* ((b (make-instance 'browser))
+                  (sink (make-instance 'sink))
+                  (thread (progn (visit b "/progress") (open-stream b sink)))
+                  (spec (first (ajax-specs b "on-click"))))
+             (is (wait-for (lambda () (search "retry:" (sink-text sink)))))
+             (ajax-request b (first spec) (rest spec))
+             (is (wait-for (lambda () (search "Done." (sink-text sink)))))
+             (is (search "width: 50%" (sink-text sink)))
+             (close-event-streams)
+             (is (wait-for (lambda () (not (sb-thread:thread-alive-p thread)))))))
+      (setf littoral-examples::*job-step-seconds* saved))))

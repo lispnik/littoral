@@ -15,7 +15,8 @@
     ("Applications"
      ("store" "Sushi Store" "Catalog, cart and a checkout task with validation, a date picker and isolation.")
      ("wiki" "Wiki" "Shared pages, links, editing, history and search.")
-     ("chat" "Chat" "Many sessions in one room, updated by server push."))
+     ("chat" "Chat" "Many sessions in one room, updated by server push.")
+     ("contacts" "Contacts" "An address book generated from one description: table, editor, validation, viewer."))
     ("Browser features"
      ("ajax" "AJAX" "Updating components in place, a live preview and a clock.")
      ("upload" "Upload" "Receiving files.")

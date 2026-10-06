@@ -32,7 +32,7 @@
         (is (has-text-p b "Where should we deliver?"))
         ;; Validation refuses an incomplete address, then a bad postcode.
         (fill-address b :street "")
-        (is (has-text-p b "Please fill in every field."))
+        (is (has-text-p b "Street is required."))
         (fill-address b :postcode "12a")
         (is (has-text-p b "digits only"))
         (fill-address b)

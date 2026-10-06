@@ -336,6 +336,147 @@ Reads the columns of a report.
 
 Sort `report` by `column`, reversing the order when it already is.
 
+### Descriptions
+
+#### `define-description` `name fields &key validate` — macro
+
+Describe the objects of class `name`: each of `fields` is (`property` &rest
+options), options being :`type` (see *FIELD-KINDS*), :`label`, :`required`,
+:`default`, :`help`, :`validate`, :`read-only`, :`in-report`, :`accessor` or :`reader` and
+:`writer`, and those of the field's kind (:`max-length`, :`pattern`, :`min`, :`max`,
+:`choices`, :`labels`).  `validate` checks the values together.
+
+#### `description` — class
+
+The fields of a kind of object, in order.
+
+#### `find-description` `designator` — function
+
+The description `designator` names, or that of `designator`'s class.
+
+#### `description-fields` `object` — generic function
+
+Reads the fields of a description.
+
+#### `field` — class
+
+One described property of an object.  Subclasses say how
+its values are entered, parsed, shown and checked.
+
+#### `field-name` `object` — generic function
+
+Reads the name of a field.
+
+#### `field-label` `object` — generic function
+
+Reads the label of a field.
+
+#### `field-value` `field object` — function
+
+`field`'s value in `object`.
+
+#### `find-field` `description name` — function
+
+The field of `description` for the property `name`.
+
+#### `*field-kinds*` — variable
+
+Keyword → field class, for :`type` in `define-description`.  Push your own.
+
+#### `string-field` — class
+
+A line of text.
+
+#### `text-field` — class
+
+Several lines of text.
+
+#### `password-field` — class
+
+Text that is never shown.
+
+#### `email-field` — class
+
+An email address.
+
+#### `url-field` — class
+
+An http or https `url`.
+
+#### `integer-field` — class
+
+A whole number, optionally between `min` and `max`.
+
+#### `boolean-field` — class
+
+Yes or no.  Never required: unchecked is an answer.
+
+#### `choice-field` — class
+
+One of `choices`, shown through `labels`.
+
+#### `date-field` — class
+
+A calendar date, held as (`year` `month` `day`).
+
+#### `parse-field` `field string` — generic function
+
+The value `string`, as typed, stands for; `nil` for blank.
+Signals `field-error` when `string` is not acceptable input.
+
+#### `format-field` `field value` — generic function
+
+`value` as text, for showing and for an input to start from.
+
+#### `check-field` `field value` — generic function
+
+`nil` when `value` suits `field`, or a sentence saying why not.
+Methods should call `call-next-method` to keep the general checks.
+
+#### `render-field-input` `field id text callback` — generic function
+
+Write the input for `field`, with `dom` id `id`, showing `text`;
+`callback` receives what is submitted.
+
+#### `render-field-value` `field value` — generic function
+
+Write `value` for reading, in a viewer or report.
+
+#### `field-error` — condition
+
+Signalled by `parse-field` when input is not a value of the field's kind.
+
+#### `field-problem` `format-control &rest arguments` — function
+
+Signal a `field-error` with the formatted message.
+
+#### `validate` `object &optional (description object)` — function
+
+Alist of (`field-name` . `problem`) for the fields of `object` that fail their
+checks, then (`nil` . `problem`) when the values fail the description's own.
+
+#### `make-editor` `object &key (description object) title (save-label "Save")` — function
+
+An editor for `object`, described by `description` (default: by its class).
+
+#### `make-viewer` `object &key (description object)` — function
+
+A read-only view of `object`, described by `description`.
+
+#### `description-editor` — class
+
+Edits an object through its description; answers the
+object on Save (after writing the values back) and `nil` on Cancel.
+
+#### `description-viewer` — class
+
+Shows an object's described values; answers on Close.
+
+#### `description-columns` `description &rest names` — function
+
+`report` columns for `description`'s fields: those named in `names`, or every
+field shown in reports.
+
 ### Backtracking
 
 #### `snapshot` — class
