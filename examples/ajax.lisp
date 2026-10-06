@@ -1,0 +1,51 @@
+;;;; ajax.lisp — updating parts of a page in place
+
+(in-package #:littoral-examples)
+
+(defclass ajax-counter (counter updatable) ())
+
+(defmethod render ((self ajax-counter))
+  (span (:class "ajax-count") (text (count-of self)))
+  (text " ")
+  (button (:on-click (ajax :callback (lambda () (incf (count-of self))) :update self)) "++")
+  (button (:on-click (ajax :callback (lambda () (decf (count-of self))) :update self)) "--"))
+
+(defclass clock (component updatable) ())
+
+(defmethod render ((self clock))
+  (multiple-value-bind (s m h) (get-decoded-time)
+    (span (:periodical (periodical 1 :update self))
+      (text (format nil "~2,'0D:~2,'0D:~2,'0D" h m s)))))
+
+(defclass echo (component updatable)
+  ((text :initform "" :accessor echo-text)))
+
+(defclass echo-preview (component updatable)
+  ((echo :initarg :echo :reader preview-echo)))
+
+(defmethod render ((self echo-preview))
+  (p () "You typed: " (strong () (text (echo-text (preview-echo self))))))
+
+(defclass ajax-demo (component)
+  ((counter :initform (make-instance 'ajax-counter) :reader demo-counter)
+   (clock :initform (make-instance 'clock) :reader demo-clock)
+   (echo :initform (make-instance 'echo) :reader demo-echo)
+   (preview :reader demo-preview)))
+
+(defmethod initialize-instance :after ((self ajax-demo) &key)
+  (setf (slot-value self 'preview) (make-instance 'echo-preview :echo (demo-echo self))))
+
+(defmethod children ((self ajax-demo))
+  (list (demo-counter self) (demo-clock self) (demo-preview self)))
+
+(defmethod render ((self ajax-demo))
+  (h1 () "AJAX")
+  (h2 () "Counter")
+  (render-component (demo-counter self))
+  (h2 () "Clock")
+  (render-component (demo-clock self))
+  (h2 () "Echo")
+  (text-input (:value (echo-text (demo-echo self))
+               :callback (lambda (v) (setf (echo-text (demo-echo self)) v))
+               :on-input (ajax-update (demo-preview self))))
+  (render-component (demo-preview self)))

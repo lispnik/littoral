@@ -1,0 +1,36 @@
+/* littoral.css — defaults for Littoral pages and tools. */
+:root {
+  --lt-fg: #1d2330; --lt-bg: #ffffff; --lt-muted: #6b7280;
+  --lt-accent: #0e7490; --lt-border: #d6dbe3; --lt-panel: #f4f6f9;
+  --lt-error: #b42318;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --lt-fg: #e6e9ef; --lt-bg: #14171d; --lt-muted: #9aa3b2;
+    --lt-accent: #38bdf8; --lt-border: #333a46; --lt-panel: #1d222b;
+    --lt-error: #f97066;
+  }
+}
+body { font-family: system-ui, sans-serif; color: var(--lt-fg); background: var(--lt-bg);
+       margin: 0 auto; padding: 1rem 1rem 4rem; max-width: 60rem; line-height: 1.45; }
+a { color: var(--lt-accent); }
+input, select, textarea, button { font: inherit; }
+label { margin-right: 1em; }
+.lt-table { border-collapse: collapse; margin: .5rem 0; }
+.lt-table th, .lt-table td { border-bottom: 1px solid var(--lt-border); padding: .3rem .6rem;
+                             text-align: left; vertical-align: top; }
+.lt-buttons { margin-top: .6rem; display: flex; gap: .4rem; }
+.lt-dialog { padding: 1rem; border: 1px solid var(--lt-border); border-radius: 6px;
+             background: var(--lt-panel); margin: .5rem 0; }
+.lt-message { font-weight: 600; }
+.lt-validation-error, .lt-error { color: var(--lt-error); font-weight: 600; }
+.lt-toolbar { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 1rem;
+              padding: .4rem 1rem; font-size: .85rem; background: var(--lt-panel);
+              border-top: 1px solid var(--lt-border); }
+.lt-toolbar-time { margin-left: auto; color: var(--lt-muted); }
+.lt-halo { border: 1px dashed var(--lt-accent); margin: .3rem 0; }
+.lt-halo-bar { display: flex; gap: .6rem; font-size: .75rem; padding: .1rem .4rem;
+               background: var(--lt-panel); border-bottom: 1px dashed var(--lt-accent); }
+.lt-halo-class { font-weight: 600; }
+.lt-halo-body { padding: .3rem; }
+.lt-source { white-space: pre-wrap; font-size: .8rem; overflow-x: auto; }

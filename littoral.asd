@@ -1,0 +1,87 @@
+;;;; littoral.asd
+
+(asdf:defsystem #:littoral
+  :description "Littoral: a Seaside-style component web framework for Common Lisp."
+  :author "Matthew Kennedy"
+  :license "MIT"
+  :version "0.1.0"
+  :serial t
+  :depends-on (#:alexandria
+               #:cl-ppcre
+               #:closer-mop
+               #:cl-cont
+               #:ironclad
+               #:quri
+               #:cl-base64
+               #:lack-request
+               #:clack
+               ;; Clack finds handlers by package; load the default one.
+               #:clack-handler-hunchentoot)
+  :components ((:module "src"
+                :serial t
+                :components ((:file "package")
+                             (:file "util")
+                             (:file "context")
+                             (:file "callbacks")
+                             (:module "html"
+                              :serial t
+                              :components ((:file "canvas")
+                                           (:file "tags")
+                                           (:file "brushes")))
+                             (:file "component")
+                             (:file "decoration")
+                             (:file "dialogs")
+                             (:file "backtracking")
+                             (:file "task")
+                             (:file "session")
+                             (:file "application")
+                             (:file "ajax")
+                             (:file "dispatcher")
+                             (:module "tools"
+                              :serial t
+                              :components ((:file "halos")
+                                           (:file "config")))))
+               (:module "static"
+                :components ((:static-file "littoral.js")
+                             (:static-file "littoral.css"))))
+  :in-order-to ((test-op (test-op #:littoral/tests))))
+
+(asdf:defsystem #:littoral/examples
+  :description "Example applications for Littoral."
+  :author "Matthew Kennedy"
+  :license "MIT"
+  :depends-on (#:littoral)
+  :serial t
+  :components ((:module "examples"
+                :serial t
+                :components ((:file "package")
+                             (:file "counter")
+                             (:file "multi-counter")
+                             (:file "guess")
+                             (:file "login")
+                             (:file "ajax")
+                             (:file "todo")
+                             (:file "register")))))
+
+(asdf:defsystem #:littoral/tests
+  :description "FiveAM test suite for Littoral."
+  :depends-on (#:littoral
+               #:littoral/examples
+               #:fiveam
+               #:flexi-streams)
+  :serial t
+  :components ((:module "tests"
+                :serial t
+                :components ((:file "package")
+                             (:file "browser")
+                             (:file "canvas")
+                             (:file "request-cycle")
+                             (:file "call-answer")
+                             (:file "backtracking")
+                             (:file "task")
+                             (:file "ajax")
+                             (:file "tools"))))
+  :perform (asdf:test-op (op c)
+             (unless (uiop:symbol-call :fiveam :run!
+                                       (uiop:find-symbol* :littoral :littoral/tests))
+               (error "Littoral tests failed."))))
