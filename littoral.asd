@@ -6,7 +6,8 @@
   :license "MIT"
   :version "0.1.0"
   :serial t
-  :depends-on (#:alexandria
+  :depends-on (#:sb-posix
+               #:alexandria
                #:cl-ppcre
                #:closer-mop
                #:cl-cont
@@ -36,6 +37,7 @@
                              (:file "widgets")
                              (:file "session")
                              (:file "application")
+                             (:file "configuration")
                              (:file "ajax")
                              (:file "dispatcher")
                              (:file "push")

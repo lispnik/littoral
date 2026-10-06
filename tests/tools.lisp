@@ -106,3 +106,88 @@
 
 (test config-is-registered-by-default
   (is (find-application "/config")))
+
+;;; Saved configuration
+
+(test configuration-round-trip
+  (let ((file (format nil "/tmp/littoral-config-~D.lisp" (random 1000000))))
+    (unwind-protect
+         (progn
+           (with-fresh-applications (("/counter" 'littoral-examples:counter :title "Counting"
+                                                 :mode :deployment :session-timeout 99
+                                                 :stylesheets '("/a.css") :credentials '("u" . "p")
+                                                 :max-sessions 7 :expired-notice 'session-expired-notice))
+             (is (string= file (save-configuration file)))
+             ;; Owner-only: it may hold credentials.
+             (is (= #o600 (logand #o777 (sb-posix:stat-mode (sb-posix:stat file))))))
+           (with-fresh-applications ()
+             (let ((apps (load-configuration file)))
+               (is (= 1 (length apps))))
+             (let ((app (find-application "/counter")))
+               (is (eq 'littoral-examples:counter (application-root-class app)))
+               (is (string= "Counting" (application-title app)))
+               (is (eq :deployment (application-mode app)))
+               (is (= 99 (application-session-timeout app)))
+               (is (equal '("/a.css") (application-stylesheets app)))
+               (is (equal '("u" . "p") (application-credentials app)))
+               (is (= 7 (application-max-sessions app)))
+               (is (eq 'session-expired-notice (application-expired-notice app))))))
+      (ignore-errors (delete-file file)))))
+
+(test configuration-skips-unknown-classes
+  (let ((file (format nil "/tmp/littoral-config-~D.lisp" (random 1000000))))
+    (unwind-protect
+         (progn
+           (with-open-file (out file :direction :output :if-exists :supersede)
+             (format out "(:path \"/gone\" :root-class \"NO-SUCH-PACKAGE::GONE\")~%~
+(:path \"/here\" :root-class \"LITTORAL-EXAMPLES::COUNTER\" :title \"Here\")~%"))
+           (with-fresh-applications ()
+             (let ((apps (handler-bind ((warning #'muffle-warning)) (load-configuration file))))
+               (is (= 1 (length apps)))
+               (is (null (find-application "/gone")))
+               (is (string= "Here" (application-title (find-application "/here")))))))
+      (ignore-errors (delete-file file)))))
+
+(test configure-keeps-sessions
+  (with-fresh-applications (("/counter" 'littoral-examples:counter))
+    (let ((b (make-instance 'browser)))
+      (visit b "/counter")
+      (click b "++")
+      (configure-application "/counter" :title "Renamed")
+      (click b "++")
+      (is (= 2 (count-shown b)))
+      (is (string= "Renamed" (application-title (find-application "/counter")))))))
+
+(test config-app-saves-to-file
+  (let* ((file (format nil "/tmp/littoral-config-~D.lisp" (random 1000000)))
+         (*configuration-file* file))
+    (unwind-protect
+         (with-fresh-applications (("/config" 'littoral::config-root :mode :deployment)
+                                   ("/counter" 'littoral-examples:counter))
+           (let ((b (make-instance 'browser)))
+             (visit b "/config")
+             (is (has-text-p b "Changes are saved to"))
+             (let ((href (cl-ppcre:register-groups-bind (h)
+                             ("(?s)href=\"/counter\">/counter</a>.*?<a href=\"([^\"]*)\">configure</a>" (browser-html b))
+                           (unescape h))))
+               (visit b href))
+             (fill-in b "stylesheets" (format nil "/one.css~%~%  /two.css  ~%"))
+             (fill-in b "user" "admin")
+             (fill-in b "password" "pw")
+             (fill-in b "max-sessions" "")
+             (press b "Save")
+             (is (has-text-p b "Saved /counter."))
+             (let ((saved (find "/counter" (littoral::read-configuration file)
+                                :key (lambda (s) (getf s :path)) :test #'equal)))
+               (is (equal '("/one.css" "/two.css") (getf saved :stylesheets)))
+               (is (equal '("admin" . "pw") (getf saved :credentials)))
+               (is (null (getf saved :max-sessions))))
+             ;; A password without a user is refused.
+             (let ((href (cl-ppcre:register-groups-bind (h)
+                             ("(?s)href=\"/counter\">/counter</a>.*?<a href=\"([^\"]*)\">configure</a>" (browser-html b))
+                           (unescape h))))
+               (visit b href))
+             (fill-in b "user" "")
+             (press b "Save")
+             (is (has-text-p b "A password needs a user name."))))
+      (ignore-errors (delete-file file)))))

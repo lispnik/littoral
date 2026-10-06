@@ -64,6 +64,8 @@
    #:application-max-sessions #:application-error-handler #:application-expired-notice
    #:application-stylesheets #:application-scripts #:application-credentials
    #:reap-all-sessions #:start-reaper #:stop-reaper #:session-expired-notice
+   #:*configuration-file* #:save-configuration #:load-configuration
+   #:configure-application #:application-settings
    #:register-application #:unregister-application #:find-application
    #:list-applications
    #:make-lack-app #:start #:stop #:*debug-errors* #:url-for #:*base-path*

@@ -179,7 +179,7 @@ Applications in `:development` mode, the default, end each page with a toolbar:
 - **Sessions**: a session browser.
 - The render time.
 
-`/config` lists the registered applications. From there you can add, remove and configure them (title, root class, mode, session timeout, pages kept, cookie sessions) and browse their sessions. Use `(configure-admin :user "u" :password "p")` to put it behind HTTP basic auth.
+`/config` lists the registered applications. From there you can add, remove and configure them and browse their sessions. The configurable settings are title, root class, mode, session timeout, pages kept, session limit, cookie sessions, the expiry notice, stylesheets, scripts and basic-auth credentials. Use `(configure-admin :user "u" :password "p")` to put it behind HTTP basic auth.
 
 ### Configuration
 
@@ -201,6 +201,14 @@ Applications in `:development` mode, the default, end each page with a toolbar:
 `start` also runs a thread that reaps idle sessions every minute (`start-reaper`, `stop-reaper`, `reap-all-sessions`).
 
 Every response carries `Referrer-Policy: same-origin`, so session keys in URLs never leak to other sites, plus `X-Content-Type-Options: nosniff` and `X-Frame-Options: SAMEORIGIN`. Session cookies get `Secure` when the request came over HTTPS, either directly or through a proxy that sets `X-Forwarded-Proto: https`.
+
+To keep configuration across restarts, start with a file:
+
+```lisp
+(start :port 8080 :configuration-file "littoral.conf")
+```
+
+Any applications saved in the file are configured first, and every change made in `/config` is written back to it. The file is plain Lisp, one plist per application, and is created with mode 600 because it can hold basic-auth credentials. Classes are stored by name, so an application whose system isn't loaded is skipped with a warning. Error handlers are functions and aren't saved. From code, use `save-configuration`, `load-configuration`, and `configure-application`; the last changes an application's settings without dropping its sessions.
 
 `(make-lack-app)` returns a plain Lack application you can mount into a larger Lack/Clack stack. Lack's `:mount` middleware strips the prefix without setting `:script-name`, so pass the prefix yourself: `(:mount "/apps" (make-lack-app :prefix "/apps"))`. A `:script-name` set by the server or proxy is honoured as well. Set `*debug-errors*` to enter the debugger on errors instead of rendering an error page.
 

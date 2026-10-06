@@ -366,10 +366,15 @@ not set :SCRIPT-NAME (lack's mount middleware does not)."
     (sb-thread:terminate-thread *reaper*))
   (setf *reaper* nil))
 
-(defun start (&key (port 8080) (address "127.0.0.1") (server :hunchentoot) (prefix ""))
+(defun start (&key (port 8080) (address "127.0.0.1") (server :hunchentoot) (prefix "")
+                configuration-file)
   "Serve all registered applications with Clack on PORT, under PREFIX, and
-reap idle sessions in the background."
+reap idle sessions in the background.  With CONFIGURATION-FILE, first load
+the applications saved there; /config then saves its changes to it."
   (when *handler* (stop))
+  (when configuration-file
+    (setf *configuration-file* configuration-file)
+    (load-configuration configuration-file))
   (start-reaper)
   (setf *handler* (clack:clackup (make-lack-app :prefix prefix)
                                  :server server :port port :address address
