@@ -1,5 +1,7 @@
 # Littoral
 
+[![CI](https://github.com/lispnik/littoral/actions/workflows/ci.yml/badge.svg)](https://github.com/lispnik/littoral/actions/workflows/ci.yml)
+
 Littoral is a Common Lisp port of Smalltalk's [Seaside](https://seaside.st) web framework. You build an application from stateful components instead of routes and templates:
 
 - Links and buttons carry closures (**callbacks**), not URLs you design.
