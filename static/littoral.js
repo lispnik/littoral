@@ -119,6 +119,47 @@
   delegate("input", "data-lt-on-input");
   delegate("submit", "data-lt-on-submit");
 
+  // Sortable lists: drag an item over its siblings; on release, post the
+  // new order (old positions, comma-separated) through the list's callback.
+  var dragged = null;
+  function sortableItem(target) {
+    return target.closest ? target.closest("[data-lt-sortable] > li") : null;
+  }
+  document.addEventListener("dragstart", function (event) {
+    var item = sortableItem(event.target);
+    if (!item) return;
+    dragged = item;
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", "");
+    item.classList.add("lt-dragging");
+  });
+  document.addEventListener("dragover", function (event) {
+    if (!dragged) return;
+    var item = sortableItem(event.target);
+    if (!item || item.parentNode !== dragged.parentNode) return;
+    event.preventDefault();
+    if (item === dragged) return;
+    var box = item.getBoundingClientRect();
+    var after = event.clientY > box.top + box.height / 2;
+    item.parentNode.insertBefore(dragged, after ? item.nextSibling : item);
+  });
+  document.addEventListener("drop", function (event) {
+    if (dragged) event.preventDefault();
+  });
+  document.addEventListener("dragend", function () {
+    if (!dragged) return;
+    var list = dragged.parentNode;
+    dragged.classList.remove("lt-dragging");
+    dragged = null;
+    var order = Array.prototype.map.call(list.children, function (li) {
+      return li.getAttribute("data-lt-index");
+    });
+    var moved = order.some(function (index, position) { return Number(index) !== position; });
+    if (!moved) return;
+    list.dataset.order = order.join(",");
+    trigger(list, "data-lt-sortable", null);
+  });
+
   var timers = [];
   function scanPeriodicals() {
     timers.forEach(clearInterval);

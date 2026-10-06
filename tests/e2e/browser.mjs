@@ -181,6 +181,36 @@ try {
   await sleep(4500);
   check("background job progress pushed", (await evaluate("document.body.innerText")).includes("Done."));
 
+  // Widgets: typing into the autocomplete, then choosing a suggestion.
+  await go("/examples/widgets");
+  await clickLink("Autocomplete");
+  await evaluate(`document.getElementById("symbol").focus()`);
+  await send("Input.insertText", { text: "mapca" });
+  await sleep(700);
+  const suggestions = await evaluate(`[...document.querySelectorAll(".lt-suggestion")].map(b => b.textContent)`);
+  check("autocomplete suggests", suggestions.includes("mapcar") && suggestions.includes("mapcan"), JSON.stringify(suggestions));
+  await evaluate(`[...document.querySelectorAll(".lt-suggestion")].find(b => b.textContent === "mapcar").click()`);
+  await sleep(600);
+  check("choosing a suggestion fills the field", await evaluate(`document.getElementById("symbol").value`) === "mapcar");
+
+  // Dragging an item in the sortable list.
+  await clickLink("Sortable");
+  await evaluate(`(() => {
+    const items = () => [...document.querySelectorAll("[data-lt-sortable] > li")];
+    const first = items()[0], last = items()[3];
+    const data = new DataTransfer();
+    const box = last.getBoundingClientRect();
+    first.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: data }));
+    last.dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer: data,
+                                                   clientY: box.bottom - 1 }));
+    last.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: data }));
+    first.dispatchEvent(new DragEvent("dragend", { bubbles: true, dataTransfer: data }));
+  })()`);
+  await sleep(700);
+  await send("Page.reload"); await waitLoad();
+  check("drag reorders on the server",
+        (await evaluate("document.body.innerText")).includes("Order: Make them pass, Refactor, Ship it, Write the tests"));
+
   // Store: add to cart, then the whole checkout by clicking.
   await go("/examples/store");
   const addLinks = `[...document.querySelectorAll("a.add")]`;

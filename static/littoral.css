@@ -50,3 +50,31 @@ label { margin-right: 1em; }
 .lt-field-invalid input, .lt-field-invalid textarea, .lt-field-invalid select { outline: 1px solid var(--lt-error); }
 .lt-help { font-size: .8rem; color: var(--lt-muted); }
 .lt-viewer th { width: 10rem; }
+.lt-tabs { display: flex; gap: .2rem; list-style: none; padding: 0; margin: 0;
+           border-bottom: 1px solid var(--lt-border); }
+.lt-tabs li a, .lt-tabs li span { display: block; padding: .35rem .8rem; text-decoration: none;
+                                  border: 1px solid transparent; border-bottom: none; border-radius: 6px 6px 0 0; }
+.lt-tabs li.lt-active span { border-color: var(--lt-border); background: var(--lt-bg); margin-bottom: -1px;
+                             font-weight: 600; }
+.lt-tab-body { padding: .8rem 0; }
+.lt-navigation { display: grid; grid-template-columns: 12rem 1fr; gap: 1.5rem; }
+@media (max-width: 40rem) { .lt-navigation { grid-template-columns: 1fr; } }
+.lt-menu { list-style: none; padding: 0; margin: 0; }
+.lt-menu li a, .lt-menu li span { display: block; padding: .3rem .6rem; text-decoration: none; border-radius: 4px; }
+.lt-menu li.lt-active span { background: var(--lt-panel); font-weight: 600; }
+.lt-tree { list-style: none; padding-left: 1.1rem; margin: .1rem 0; }
+.lt-tree-toggle, .lt-tree-leaf { display: inline-block; width: 1rem; text-decoration: none; color: var(--lt-muted); }
+.lt-tree a.lt-selected { font-weight: 600; text-decoration: none; }
+.lt-autocomplete { position: relative; display: inline-block; }
+.lt-suggestions { position: absolute; z-index: 10; left: 0; right: 0; list-style: none; margin: .1rem 0;
+                  padding: .2rem 0; background: var(--lt-bg); border: 1px solid var(--lt-border); border-radius: 4px; }
+.lt-suggestion { display: block; width: 100%; text-align: left; border: none; background: none;
+                 padding: .25rem .6rem; cursor: pointer; color: inherit; }
+.lt-suggestion:hover, .lt-suggestion:focus { background: var(--lt-panel); }
+.lt-sortable { padding-left: 1.6rem; }
+.lt-sortable li { display: flex; gap: .5rem; align-items: center; padding: .3rem .4rem; margin: .2rem 0;
+                  border: 1px solid var(--lt-border); border-radius: 4px; background: var(--lt-bg); cursor: grab; }
+.lt-sortable li.lt-dragging { opacity: .5; }
+.lt-handle { color: var(--lt-muted); }
+.lt-sortable-item { flex: 1; }
+.lt-sortable-buttons a { text-decoration: none; padding: 0 .2rem; }

@@ -48,6 +48,10 @@
    ;; Widgets
    #:batched-list #:batch #:batch-items #:batch-size #:batch-page #:go-to-page
    #:report #:column #:report-rows #:report-columns #:sort-by
+   #:tab-panel #:navigation #:panel-tabs #:panel-selected #:selected-tab #:select-tab
+   #:tree #:tree-expanded #:tree-selected #:toggle-item #:expand-all
+   #:autocomplete #:autocomplete-value
+   #:sortable-list #:sortable-items #:move-item
    ;; Descriptions
    #:define-description #:description #:find-description #:description-fields
    #:field #:field-name #:field-label #:field-value #:find-field #:*field-kinds*

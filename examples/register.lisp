@@ -18,6 +18,7 @@
   (register-application "/examples/wiki" 'wiki :title "Wiki")
   (register-application "/examples/chat" 'chat :title "Chat")
   (register-application "/examples/progress" 'progress-demo :title "Progress")
-  (register-application "/examples/contacts" 'contacts-app :title "Contacts"))
+  (register-application "/examples/contacts" 'contacts-app :title "Contacts")
+  (register-application "/examples/widgets" 'widget-demo :title "Widgets"))
 
 (register-examples)

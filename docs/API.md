@@ -336,6 +336,73 @@ Reads the columns of a report.
 
 Sort `report` by `column`, reversing the order when it already is.
 
+#### `tab-panel` — class
+
+Shows one of several components, chosen by a row of tabs,
+like Seaside's WATabPanel.
+
+#### `navigation` — class
+
+A `tab-panel` drawn as a menu beside its content, like
+Seaside's WASimpleNavigation.
+
+#### `panel-tabs` `object` — generic function
+
+Reads the tabs of a tab-panel.  Alist of (`label` . `component`).
+
+#### `panel-selected` `object` — generic function
+
+Reads the selected of a tab-panel.  Index of the tab shown.
+
+#### `selected-tab` `panel` — function
+
+The component `panel` shows, or `nil` when it has no tabs.
+
+#### `select-tab` `panel label` — function
+
+Show the tab of `panel` labelled `label`.
+
+#### `tree` — class
+
+Items in a hierarchy, each expandable, like Seaside's WATree.
+
+#### `tree-expanded` `object` — generic function
+
+Reads the expanded of a tree.  The items whose children show.  Replaced, never changed in place.
+
+#### `tree-selected` `object` — generic function
+
+Reads the selected of a tree.
+
+#### `toggle-item` `tree item` — function
+
+Expand `item` in `tree`, or collapse it.
+
+#### `expand-all` `tree` — function
+
+Expand every item of `tree` that has children.
+
+#### `autocomplete` — class
+
+A text field suggesting completions as you type.
+
+#### `autocomplete-value` `object` — generic function
+
+Reads the value of an autocomplete.
+
+#### `sortable-list` — class
+
+A list the user can reorder by dragging, or with the
+up and down buttons beside each item (which work without JavaScript).
+
+#### `sortable-items` `object` — generic function
+
+Reads the items of a sortable-list.
+
+#### `move-item` `list from to` — function
+
+Move the item at `from` to position `to` in `list`.
+
 ### Descriptions
 
 #### `define-description` `name fields &key validate` — macro
