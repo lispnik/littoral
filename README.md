@@ -27,14 +27,29 @@ It runs on SBCL and serves through Clack (Hunchentoot by default). Dependencies 
 (start :port 8080)
 ```
 
-## Running
+## Getting started
+
+You need SBCL and [ocicl](https://github.com/ocicl/ocicl).
 
 ```sh
+git clone https://github.com/lispnik/littoral.git
+cd littoral
+ocicl install      # fetches everything in ocicl.csv into ./ocicl
 make test          # FiveAM suite, in-process, no sockets
 make run           # examples on http://127.0.0.1:8080/
+```
+
+Other targets:
+
+```sh
 make e2e           # littoral.js in headless Chrome (needs Node 22+)
 make bench         # request and snapshot timings
+make docs          # regenerate docs/API.md from the docstrings
+make clean-check   # build a fresh clone against nothing but its ocicl.csv
+make lint          # ocicl lint
 ```
+
+The full API reference is [docs/API.md](docs/API.md).
 
 `/examples` is a guide to the examples. Three of them are complete small applications:
 

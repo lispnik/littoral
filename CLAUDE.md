@@ -20,3 +20,6 @@ A Seaside-style web framework for SBCL. See README.md for the user-facing tour.
   - Server push: each open page's EventSource is a Clack streaming response (a function) running in its request thread. `publish` and `notify` only queue work and wake the stream; rendering happens in the stream thread under the session lock. Tests drive streams in-process (`tests/push.lisp`).
 - `call` is a `defun/cc`, so it suspends only when called lexically inside `define-flow` (or another `/cc` function).
 - `sed` on this machine is GNU sed.
+- This machine's ASDF configuration includes `(:tree ~/Projects/common-lisp/)`, so `make test` may load dependencies from other projects' `ocicl/` directories. `make clean-check` (`tools/clean-check.sh`) builds a fresh clone of HEAD against only its own `ocicl.csv`; run it after changing dependencies, and commit first.
+- `ocicl lint --fix` is unsafe here: its `needless-shiftf` fix rewrites `(shiftf place '())` to `(setf place nil)`, losing the returned old value, and its `bare-progn-in-if` fix flattens forms onto one line. It also leaves `.bak` files. Fix lint findings by hand. Six findings are deliberate (see the commit that cleaned lint).
+- `docs/API.md` is generated (`make docs`); edit docstrings, not the file. `defun/cc` drops docstrings, so `/cc` functions get theirs with `(setf (documentation …))`.
