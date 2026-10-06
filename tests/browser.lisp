@@ -9,16 +9,20 @@
    (html :initform "" :accessor browser-html)
    (cookies :initform '() :accessor browser-cookies)
    (fields :initform '() :accessor browser-fields
-           :documentation "Alist of field name → value typed into the current page.")))
+           :documentation "Alist of field name → value typed into the current page.")
+   (files :initform '() :accessor browser-files
+          :documentation "Alist of field name → (FILENAME CONTENT-TYPE OCTETS).")))
 
 (defun split-url (url)
   (let ((q (position #\? url)))
     (if q (values (subseq url 0 q) (subseq url (1+ q))) (values url nil))))
 
-(defun make-env (method url &key body cookies)
+(defun make-env (method url &key body cookies (content-type "application/x-www-form-urlencoded"))
   (multiple-value-bind (path query) (split-url url)
     (let ((headers (make-hash-table :test 'equal))
-          (octets (and body (flexi-streams:string-to-octets body :external-format :utf-8))))
+          (octets (if (stringp body)
+                      (flexi-streams:string-to-octets body :external-format :utf-8)
+                      body)))
       (when cookies
         (setf (gethash "cookie" headers)
               (format nil "~{~A~^; ~}" (mapcar (lambda (c) (format nil "~A=~A" (car c) (cdr c))) cookies))))
@@ -31,19 +35,21 @@
                     :url-scheme "http" :remote-addr "127.0.0.1" :remote-port 1234
                     :headers headers)
               (when octets
-                (setf (gethash "content-type" headers) "application/x-www-form-urlencoded"
+                (setf (gethash "content-type" headers) content-type
                       (gethash "content-length" headers) (princ-to-string (length octets)))
-                (list :content-type "application/x-www-form-urlencoded"
+                (list :content-type content-type
                       :content-length (length octets)
                       :raw-body (flexi-streams:make-in-memory-input-stream octets)))))))
 
 (defun response-header (headers name)
   (getf headers name))
 
-(defun raw-request (browser method url &key body)
+(defun raw-request (browser method url &key body content-type)
   "One request, no redirects followed.  Returns status, headers, body string."
   (destructuring-bind (status headers body-parts)
-      (funcall (browser-app browser) (make-env method url :body body :cookies (browser-cookies browser)))
+      (funcall (browser-app browser)
+               (apply #'make-env method url :body body :cookies (browser-cookies browser)
+                      (when content-type (list :content-type content-type))))
     (let ((cookie (response-header headers :set-cookie)))
       (when cookie
         (let* ((pair (subseq cookie 0 (position #\; cookie)))
@@ -51,12 +57,13 @@
           (push (cons (subseq pair 0 eq) (subseq pair (1+ eq))) (browser-cookies browser)))))
     (values status headers (apply #'concatenate 'string body-parts))))
 
-(defun visit (browser url &key (method :get) body)
+(defun visit (browser url &key (method :get) body content-type)
   "Request URL, following redirects, and make the result the current page."
   (loop repeat 10
-        do (multiple-value-bind (status headers html) (raw-request browser method url :body body)
+        do (multiple-value-bind (status headers html)
+               (raw-request browser method url :body body :content-type content-type)
              (if (= status 302)
-                 (setf url (response-header headers :location) method :get body nil)
+                 (setf url (response-header headers :location) method :get body nil content-type nil)
                  (progn
                    (setf (browser-url browser) url
                          (browser-status browser) status
@@ -182,6 +189,32 @@
           (mapcar (lambda (f) (format nil "~A=~A" (quri:url-encode (car f)) (quri:url-encode (or (cdr f) ""))))
                   fields)))
 
+(defun attach-file (browser id filename content-type contents)
+  "Choose a file for the file input with DOM id ID.  CONTENTS is a string."
+  (let ((name (element-name browser id)))
+    (push (list name filename content-type
+                (flexi-streams:string-to-octets contents :external-format :utf-8))
+          (browser-files browser))
+    browser))
+
+(defun multipart-body (fields files boundary)
+  "FIELDS and FILES encoded as multipart/form-data, as octets."
+  (let ((out (flexi-streams:make-in-memory-output-stream)))
+    (flet ((emit (string)
+             (write-sequence (flexi-streams:string-to-octets string :external-format :utf-8) out)))
+      (loop for (name . value) in fields
+            do (emit (format nil "--~A~C~CContent-Disposition: form-data; name=\"~A\"~C~C~C~C~A~C~C"
+                             boundary #\Return #\Newline name #\Return #\Newline #\Return #\Newline
+                             (or value "") #\Return #\Newline)))
+      (loop for (name filename type octets) in files
+            do (emit (format nil "--~A~C~CContent-Disposition: form-data; name=\"~A\"; filename=\"~A\"~C~CContent-Type: ~A~C~C~C~C"
+                             boundary #\Return #\Newline name filename #\Return #\Newline
+                             type #\Return #\Newline #\Return #\Newline))
+               (write-sequence octets out)
+               (emit (format nil "~C~C" #\Return #\Newline)))
+      (emit (format nil "--~A--~C~C" boundary #\Return #\Newline)))
+    (flexi-streams:get-output-stream-sequence out)))
+
 (defun press (browser text)
   "Submit the form with the button whose label contains TEXT."
   (let ((name nil))
@@ -189,10 +222,15 @@
       (when (and (null name) (search text (strip-tags content)))
         (setf name (or (attr (attributes tag) "name") ""))))
     (unless name (error "No button ~S on the page:~%~A" text (page-text browser)))
-    (visit browser (form-action browser)
-           :method :post
-           :body (encode-fields (append (browser-fields browser)
-                                        (unless (string= name "") (list (cons name "1"))))))))
+    (let ((fields (append (browser-fields browser)
+                          (unless (string= name "") (list (cons name "1")))))
+          (files (shiftf (browser-files browser) '())))
+      (if files
+          (visit browser (form-action browser)
+                 :method :post
+                 :body (multipart-body fields files "littoral-test-boundary")
+                 :content-type "multipart/form-data; boundary=littoral-test-boundary")
+          (visit browser (form-action browser) :method :post :body (encode-fields fields))))))
 
 (defun back-to (browser url)
   "Return to an earlier page, as the back button (with no cache) would."

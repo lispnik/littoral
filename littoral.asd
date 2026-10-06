@@ -61,6 +61,7 @@
                              (:file "login")
                              (:file "ajax")
                              (:file "todo")
+                             (:file "upload")
                              (:file "register")))))
 
 (asdf:defsystem #:littoral/tests

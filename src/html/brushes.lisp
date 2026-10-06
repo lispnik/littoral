@@ -178,6 +178,54 @@ submission does not parse."
   "Radio buttons, one per item of :ITEMS; otherwise like SELECT-LIST."
   `(%radio-group (list ,@attributes)))
 
+;;; File upload
+
+(defclass uploaded-file ()
+  ((filename :initarg :filename :reader file-name)
+   (content-type :initarg :content-type :reader file-content-type)
+   (contents :initarg :contents :reader file-contents
+             :documentation "The file's bytes, an (UNSIGNED-BYTE 8) vector."))
+  (:documentation "A file submitted through FILE-INPUT."))
+
+(defmethod print-object ((file uploaded-file) stream)
+  (print-unreadable-object (file stream :type t)
+    (format stream "~S ~A ~D bytes" (file-name file) (file-content-type file)
+            (length (file-contents file)))))
+
+(defun read-octets (stream)
+  (let ((out (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0))
+        (buffer (make-array 8192 :element-type '(unsigned-byte 8))))
+    (loop for n = (read-sequence buffer stream)
+          while (plusp n)
+          do (loop for i below n do (vector-push-extend (aref buffer i) out)))
+    (coerce out '(simple-array (unsigned-byte 8) (*)))))
+
+(defun parse-upload (value)
+  "An UPLOADED-FILE from lack's (STREAM FILENAME CONTENT-TYPE), or NIL when
+no file was chosen."
+  (when (and (consp value) (streamp (first value))
+             (second value) (string/= (second value) ""))
+    (make-instance 'uploaded-file
+                   :filename (second value)
+                   :content-type (or (third value) "application/octet-stream")
+                   :contents (read-octets (first value)))))
+
+(defun %file-input (attributes)
+  (let* ((callback (getf attributes :callback))
+         (name (when callback
+                 (register :value (lambda (value)
+                                    (let ((file (parse-upload value)))
+                                      (when file (funcall callback file))))))))
+    (emit-tag "input"
+              (list* :type "file" :name (or name (getf attributes :name))
+                     (strip-attributes attributes :callback :name))
+              nil)))
+
+(defmacro file-input (&optional attributes)
+  "A file chooser.  :CALLBACK receives an UPLOADED-FILE, and is not called
+when no file was chosen.  The enclosing FORM needs :MULTIPART T."
+  `(%file-input (list ,@attributes)))
+
 ;;; Buttons
 
 (defun %submit-button (attributes body)

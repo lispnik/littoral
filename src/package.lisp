@@ -18,7 +18,8 @@
    #:img #:br #:hr #:tag
    ;; Brushes with callbacks
    #:anchor #:form #:text-input #:password-input #:number-input #:hidden-input
-   #:text-area #:checkbox #:select-list #:radio-group #:submit-button #:button))
+   #:text-area #:checkbox #:select-list #:radio-group #:submit-button #:button
+   #:file-input #:uploaded-file #:file-name #:file-content-type #:file-contents))
 
 (defpackage #:littoral
   (:use #:cl #:littoral.html)

@@ -152,3 +152,30 @@
         (declare (ignore body))
         (is (= 302 status))
         (is (alexandria:starts-with-subseq "/proxy/counter?" (getf headers :location)))))))
+
+(test file-upload
+  (with-fresh-applications (("/upload" 'littoral-examples:upload-demo :mode :deployment))
+    (let ((b (make-instance 'browser)))
+      (visit b "/upload")
+      (is (search "enctype=\"multipart/form-data\"" (browser-html b)))
+      (attach-file b "file" "notes.txt" "text/plain" "héllo <world>")
+      (press b "Upload")
+      (is (has-text-p b "notes.txt"))
+      (is (has-text-p b "text/plain"))
+      (is (has-text-p b "14 bytes"))
+      (is (search "héllo &lt;world&gt;" (browser-html b)))
+      ;; Browsers send an empty filename when no file is chosen; that
+      ;; leaves the last upload alone.
+      (attach-file b "file" "" "application/octet-stream" "")
+      (press b "Upload")
+      (is (has-text-p b "notes.txt")))))
+
+(test multipart-text-fields
+  ;; Ordinary fields still reach their callbacks in a multipart form.
+  (with-fresh-applications (("/todo" 'littoral-examples:todo-list :mode :deployment))
+    (let ((b (make-instance 'browser)))
+      (visit b "/todo")
+      (fill-in b "new-title" "From multipart")
+      (setf (browser-files b) (list (list "unused" "x.bin" "application/octet-stream" #())))
+      (press b "Add")
+      (is (has-text-p b "From multipart")))))
