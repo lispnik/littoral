@@ -41,6 +41,21 @@ rendering an error page.")
 (defun request-path (&optional (request *request*))
   (lack/request:request-path-info request))
 
+(defvar *rendering* nil
+  "True while a page or fragment renders, when state must not change.")
+
+(define-condition render-phase-error (error)
+  ((operation :initarg :operation :reader render-phase-operation))
+  (:report (lambda (condition stream)
+             (format stream "~(~A~) was used while rendering.  Rendering must not ~
+change state: do it in a callback instead."
+                     (render-phase-operation condition))))
+  (:documentation "Signalled by CALL, SHOW, ANSWER and HOME during rendering."))
+
+(defun check-not-rendering (operation)
+  (when *rendering*
+    (error 'render-phase-error :operation operation)))
+
 (defclass render-context ()
   ((callbacks :initarg :callbacks :reader render-callbacks)
    (action-url :initarg :action-url :reader render-action-url

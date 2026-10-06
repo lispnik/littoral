@@ -32,9 +32,10 @@ It runs on SBCL and serves through Clack (Hunchentoot by default). Dependencies 
 ```sh
 make test          # FiveAM suite, in-process, no sockets
 make run           # examples on http://127.0.0.1:8080/
+make e2e           # littoral.js in headless Chrome (needs Node 22+)
 ```
 
-The example applications are under `/examples/…`: counter, multi-counter, guess (a task), login (call/answer with validation), ajax and todo. The configuration application is at `/config`.
+The example applications are under `/examples/…`: counter, multi-counter, guess (a task), login (call/answer with validation), ajax, todo, upload, topics (bookmarkable URLs) and report (a sortable, paged table). The configuration application is at `/config`.
 
 ## Concepts
 
@@ -53,12 +54,47 @@ The example applications are under `/examples/…`: counter, multi-counter, gues
 | decorations                     | `add-decoration`, `form-decoration`, `validate-with`, … |
 | `updateRoot:`, `style`, `script` | `update-root`, `style`, `script`                |
 | jQuery `load html:`             | `:on-click (ajax :callback … :update component)` |
+| `updateUrl:`, `initialRequest:` | `update-url`, `initial-request`, `request-extra-path` |
+| `html fileUpload callback:`     | `(file-input (:callback (lambda (file) …)))`    |
+| `WABatchedList`, `WATableReport` | `batched-list`, `report` + `column`            |
 
 ### HTML
 
 The tag and brush macros are in the `littoral.html` package. They live in their own package because names such as `main`, `header`, `label` and `table` are too common to push onto every package that uses `littoral`. A tag's first argument is its attribute plist, and you can omit it. Literal strings in a tag body are written as escaped text. To write any other value, call `text` (escaped) or `raw` (unescaped).
 
-The brushes are `anchor`, `form`, `text-input`, `password-input`, `number-input`, `hidden-input`, `text-area`, `checkbox`, `select-list`, `radio-group`, `submit-button` and `button`. Each takes a `:callback`. When a form is submitted, the field callbacks run first, in render order, and the button's action runs after them.
+The brushes are `anchor`, `form`, `text-input`, `password-input`, `number-input`, `hidden-input`, `text-area`, `checkbox`, `select-list`, `radio-group`, `file-input`, `submit-button` and `button`. Each takes a `:callback`. When a form is submitted, the field callbacks run first, in render order, and the button's action runs after them.
+
+A `file-input` needs its form to be `(form (:multipart t) …)`. Its callback receives an `uploaded-file`, with `file-name`, `file-content-type` and `file-contents` (octets), and is not called when no file was chosen.
+
+Rendering must not change state. Calling `call`, `show`, `answer` or `home` while a page renders signals `render-phase-error`; do it in a callback instead.
+
+### Bookmarkable URLs
+
+Every page URL starts with the application's path. Each visible component's `update-url` method can then add to it:
+
+```lisp
+(defmethod update-url ((self topics) url)
+  (when (current-topic self) (add-to-path url (current-topic self)))
+  (when (zoomed-p self) (add-parameter url "big")))
+```
+
+That gives URLs like `/examples/topics/tasks?big&_s=…&_k=…`. When someone opens the bookmark without `_s` and `_k`, a new session starts, and the root's `initial-request` reads the URL back with `request-extra-path` and `request-parameter` (or `request-parameter-p`).
+
+### Widgets
+
+A `report` is a table. Clicking a column heading sorts by that column, and clicking it again reverses the order. Cells can be rendered with your own functions, and `:batch-size` pages the rows. A `batched-list` pages any list: render its `batch` yourself, then `render-component` the list to get its page links.
+
+```lisp
+(make-instance 'report
+  :rows (lambda () (all-orders))
+  :batch-size 20
+  :columns (list (column "Order" #'order-id)
+                 (column "Total" #'order-total :class "number")
+                 (column "" nil :sortable nil
+                         :render (lambda (row value)
+                                   (declare (ignore value))
+                                   (anchor (:callback (lambda () (open-order row))) "open")))))
+```
 
 ### Request cycle
 
@@ -109,7 +145,7 @@ Applications in `:development` mode, the default, end each page with a toolbar:
   :credentials '("user" . "password"))
 ```
 
-`(make-lack-app)` returns a plain Lack application you can mount into a larger Lack/Clack stack. Set `*debug-errors*` to enter the debugger on errors instead of rendering an error page.
+`(make-lack-app)` returns a plain Lack application you can mount into a larger Lack/Clack stack. Lack's `:mount` middleware strips the prefix without setting `:script-name`, so pass the prefix yourself: `(:mount "/apps" (make-lack-app :prefix "/apps"))`. A `:script-name` set by the server or proxy is honoured as well. Set `*debug-errors*` to enter the debugger on errors instead of rendering an error page.
 
 ## License
 

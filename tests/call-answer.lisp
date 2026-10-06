@@ -92,3 +92,17 @@
       (is (search ">Save</button>" out)))
     (littoral::process-callbacks '(("1" . "1")) registry)
     (is (eq :save answered))))
+
+(defclass calls-while-rendering (component) ())
+(defmethod render ((self calls-while-rendering))
+  (show self (make-instance 'message-dialog :message "never")))
+
+(test call-during-render-is-an-error
+  (with-fresh-applications (("/bad" 'calls-while-rendering :mode :development))
+    (let ((b (make-instance 'browser)))
+      (visit b "/bad")
+      (is (= 500 (browser-status b)))
+      (is (has-text-p b "show was used while rendering"))))
+  (let ((littoral::*rendering* t))
+    (signals render-phase-error (answer (make-instance 'component) 1))
+    (signals render-phase-error (home (make-instance 'component)))))

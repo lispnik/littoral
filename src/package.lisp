@@ -28,6 +28,7 @@
    ;; Context
    #:*request* #:*session* #:*application* #:*render-context*
    #:request-parameter #:request-parameter-p #:request-path
+   #:render-phase-error
    ;; Components
    #:component #:component-id #:render #:render-component #:children #:states
    #:update-root #:style #:script #:initial-request
