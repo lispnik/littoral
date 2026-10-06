@@ -72,6 +72,39 @@ try {
   await evaluate(`document.querySelector("button").click()`); await waitLoad();
   check("task asks for a guess", (await evaluate("document.body.innerText")).includes("Your guess?"));
 
+  // Report: sort, reverse, page.
+  await go("/examples/report");
+  const firstCell = () => evaluate(`document.querySelector(".lt-report tbody td").textContent`);
+  check("report first page", await firstCell() === "1");
+  await clickLink("Next");
+  check("report next page", await firstCell() === "11");
+  await clickLink("Name");
+  check("report sorted by name", await firstCell() === "13");
+  await clickLink("Name");
+  check("report sort reversed", await firstCell() === "30");
+
+  // Bookmarkable URLs: the address bar names the topic, and opening it fresh comes back.
+  await go("/examples/topics");
+  await clickLink("tasks");
+  await clickLink("bigger");
+  const href = await evaluate("location.pathname + location.search");
+  check("topic in the URL", href.startsWith("/examples/topics/tasks?big&_s="), href);
+  await send("Network.clearBrowserCookies");
+  await go("/examples/topics/tasks?big");
+  check("bookmark restores topic", (await evaluate("document.body.innerText")).includes("A flow of calls"));
+
+  // File upload through a real multipart form.
+  const { writeFileSync } = await import("node:fs");
+  const upload = (process.env.PROFILE || "/tmp/littoral-e2e-profile") + "-upload.txt";
+  writeFileSync(upload, "hello from chrome\n");
+  await go("/examples/upload");
+  const doc = await send("DOM.getDocument");
+  const node = await send("DOM.querySelector", { nodeId: doc.result.root.nodeId, selector: "input[type=file]" });
+  await send("DOM.setFileInputFiles", { files: [upload], nodeId: node.result.nodeId });
+  await evaluate(`document.querySelector("button[type=submit]").click()`); await waitLoad();
+  const text = await evaluate("document.body.innerText");
+  check("upload received", text.includes("littoral-e2e-profile-upload.txt") && text.includes("hello from chrome"), text.slice(0, 200));
+
   const errors = events.filter((e) => e.method === "Runtime.exceptionThrown");
   check("no JS exceptions", errors.length === 0, JSON.stringify(errors.map((e) => e.params.exceptionDetails.text)));
 } catch (e) { console.log("ERROR " + e.message); failures++; }
