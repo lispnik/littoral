@@ -69,7 +69,8 @@ async function auditAs(label) {
 const pages = ["/examples", "/examples/counter", "/examples/multi-counter", "/examples/guess",
   "/examples/login", "/examples/ajax", "/examples/todo", "/examples/upload", "/examples/topics",
   "/examples/report", "/examples/store", "/examples/wiki", "/examples/chat", "/examples/progress",
-  "/examples/contacts", "/examples/widgets", "/tracker", "/config", "/tutorial/reading-list"];
+  "/examples/contacts", "/examples/widgets", "/tracker", "/config", "/tutorial/reading-list",
+  "/examples/admin"];
 
 try {
  // Both colour schemes: contrast differs between them.

@@ -242,6 +242,13 @@ try {
   check("without a reload", await watcher.evaluate("window.__tracker") === 1);
   await watcher.close();
 
+  // The generated admin: list, open a task, follow its project.
+  await go("/examples/admin");
+  check("admin lists projects", (await evaluate("document.body.innerText")).includes("Littoral"));
+  await clickLink("Tasks");
+  await evaluate(`document.querySelector(".lt-report tbody a").click()`); await waitLoad();
+  check("admin opens a task", /Task #\d+/.test(await evaluate("document.body.innerText")));
+
   // Store: add to cart, then the whole checkout by clicking.
   await go("/examples/store");
   const addLinks = `[...document.querySelectorAll("a.add")]`;

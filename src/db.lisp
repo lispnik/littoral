@@ -28,9 +28,9 @@
            #:persistent #:object-id #:object-version
            #:define-table #:find-table #:table-name #:table-class #:create-table #:drop-table
            #:db-find #:db-select #:db-count #:db-insert #:db-update #:db-save #:db-delete
-           #:db-reload #:with-transaction #:transactional
+           #:db-reload #:with-transaction #:transactional #:using-database
            #:stale-object #:stale-object-object
-           #:reference-field #:sql-type #:to-sql #:from-sql))
+           #:reference-field #:reference-class #:object-label #:sql-type #:to-sql #:from-sql))
 
 (in-package #:littoral.db)
 
@@ -300,6 +300,15 @@ signals.  Inside another, just BODY."
       (let ((*in-transaction* t))
         (dbi:with-transaction (database-connection)
           (funcall thunk)))))
+
+(defun using-database (driver &rest parameters)
+  "An :AROUND-REQUEST function giving an application its own database,
+whatever else the process connects to: DRIVER and PARAMETERS as for
+CONNECT-DATABASE."
+  (let ((spec (cons driver parameters)))
+    (lambda (thunk)
+      (let ((*database* spec))
+        (funcall thunk)))))
 
 (defun transactional ()
   "An :AROUND-ACTIONS function running each request's callbacks in one

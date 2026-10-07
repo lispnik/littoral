@@ -44,6 +44,7 @@ e2e:
 	$(SBCL) --non-interactive --eval '(asdf:load-system :littoral/examples)' \
 	  --eval '(asdf:load-system :littoral/tracker)' --eval '(littoral-tracker:register-tracker)' \
 	  --eval '(asdf:load-system :littoral/tutorial)' --eval '(reading-list:register)' \
+	  --eval '(asdf:load-system :littoral/admin-demo)' --eval '(littoral-admin-demo:register)' \
 	  --eval '(when (eq :$(SERVER) :woo) (asdf:load-system :littoral/woo))' \
 	  --eval '(littoral:start :port $(E2E_PORT) :server :$(SERVER))' --eval '(sleep 600)' >/dev/null 2>&1 & pid=$$!; \
 	for i in $$(seq 1 60); do curl -s -o /dev/null http://127.0.0.1:$(E2E_PORT)/ && break; sleep 1; done; \
@@ -57,6 +58,7 @@ a11y:
 	$(SBCL) --non-interactive --eval '(asdf:load-system :littoral/examples)' \
 	  --eval '(asdf:load-system :littoral/tracker)' --eval '(littoral-tracker:register-tracker)' \
 	  --eval '(asdf:load-system :littoral/tutorial)' --eval '(reading-list:register)' \
+	  --eval '(asdf:load-system :littoral/admin-demo)' --eval '(littoral-admin-demo:register)' \
 	  --eval '(littoral:start :port $(E2E_PORT))' --eval '(sleep 600)' >/dev/null 2>&1 & pid=$$!; \
 	for i in $$(seq 1 60); do curl -s -o /dev/null http://127.0.0.1:$(E2E_PORT)/ && break; sleep 1; done; \
 	BASE=http://127.0.0.1:$(E2E_PORT) $(NODE) tests/e2e/accessibility.mjs; status=$$?; \

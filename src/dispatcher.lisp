@@ -303,6 +303,11 @@ page, and answer the components to update as JSON."
                                       :value *ajax-result*
                                       :scripts (reverse *ajax-scripts*))))))))
 
+(defun call-around-request (app thunk)
+  "Call THUNK through APP's AROUND-REQUEST, if it has one."
+  (let ((around (application-around-request app)))
+    (if around (funcall around thunk) (funcall thunk))))
+
 (defun call-around-actions (session thunk)
   "Call THUNK through SESSION's application's AROUND-ACTIONS, if it has any."
   (let ((around (application-around-actions (session-application session))))
@@ -423,6 +428,9 @@ the handler falls back to the standard page."
        (call-with-error-page
          app
          (lambda ()
+          (call-around-request
+           app
+           (lambda ()
            (let* ((key (session-key-from-request app))
                   (found (find-session app key))
                   ;; Someone else's session, reached by a shared link: start
@@ -437,7 +445,7 @@ the handler falls back to the standard page."
                     (let ((*session* session))
                       (sb-thread:with-recursive-lock ((session-lock session))
                         (setf (session-last-access session) (now-seconds))
-                        (handle-session-request session))))))))))))
+                        (handle-session-request session))))))))))))))
 
 ;;; Dispatch
 

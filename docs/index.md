@@ -285,6 +285,25 @@ Any applications saved in the file are configured first, and every change made i
 - **References:** a field of `:type :reference :to 'project` holds another stored object. It's chosen from that table in editors and kept as its id.
 - **Transactions:** `(register-application … :around-actions (littoral.db:transactional))` runs each request's callbacks, page or AJAX, in one transaction, rolled back if any of them signals.
 
+## A generated admin
+
+`littoral/admin` builds a whole administration interface from descriptions and tables:
+
+```lisp
+(littoral.admin:register-admin "/admin" '(project task)
+  :database '(:sqlite3 :database-name "app.db")
+  :credentials '("admin" . "a long passphrase"))
+```
+
+For each class it gives:
+
+- a list with search over the text fields, filters for the choice and yes/no fields, sorting and paging
+- a page per record, whose references link to the records they point at, and which lists the records that refer to it
+- editing with validation, which notices when someone else changed the record meanwhile
+- creation, and deletion after asking
+
+Each request's changes run in one transaction. `:database` gives the admin its own database (through the new `:around-request` hook). Without credentials it only answers requests from the machine it runs on. To try it, load `littoral/admin-demo`, call `(littoral-admin-demo:register)`, and open `/examples/admin`.
+
 ## Testing your application
 
 `littoral/test` is the fake browser littoral's own test suite uses. It calls your application's Lack handler directly, with no sockets and no real browser, so tests are fast and need nothing installed. It keeps cookies, follows redirects, and reads links, fields and buttons out of the HTML. It posts forms (multipart too), AJAX requests and event streams the way a browser running `littoral.js` would. It works with any test framework; with FiveAM:

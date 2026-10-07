@@ -31,6 +31,10 @@
 string for the error page, or NIL for the standard one.")
    (max-request-size :initarg :max-request-size :initform nil :accessor application-max-request-size
                      :documentation "Largest request body in bytes, or NIL for *MAX-REQUEST-SIZE*.")
+   (around-request :initarg :around-request :initform nil :accessor application-around-request
+                   :documentation "A function called with a thunk that handles a whole
+request, rendering included, or NIL.  littoral/db uses it to choose the
+application's database.")
    (around-actions :initarg :around-actions :initform nil :accessor application-around-actions
                    :documentation "A function called with a thunk that runs a request's
 callbacks, or NIL.  littoral/db uses it to run them in a transaction.")
@@ -61,12 +65,12 @@ session expired.  NIL starts them over silently.")
                              &key title mode session-timeout max-continuations
                                cookie-sessions stylesheets scripts credentials
                                max-sessions error-handler expired-notice
-                               max-request-size local-only language around-actions)
+                               max-request-size local-only language around-actions around-request)
   "Serve ROOT-CLASS, a component class, at PATH.  Replaces any application
 already there.  Returns the APPLICATION."
   (declare (ignore title mode session-timeout max-continuations cookie-sessions
                    stylesheets scripts credentials max-sessions error-handler expired-notice
-                   max-request-size local-only language around-actions))
+                   max-request-size local-only language around-actions around-request))
   (let* ((path (normalize-path path))
          (app (apply #'make-instance 'application :path path :root-class root-class initargs)))
     (sb-thread:with-mutex (*applications-lock*)

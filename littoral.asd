@@ -105,6 +105,7 @@
                #:littoral/tutorial
                #:littoral/test
                #:littoral/db
+               #:littoral/admin
                #:dbd-sqlite3
                #:fiveam
                #:flexi-streams
@@ -131,7 +132,8 @@
                              (:file "tracker")
                              (:file "tutorial")
                              (:file "live")
-                             (:file "db"))))
+                             (:file "db")
+                             (:file "admin"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
                                        (uiop:find-symbol* :littoral :littoral/tests))
@@ -175,3 +177,15 @@
   :license "MIT"
   :depends-on (#:littoral #:dbi)
   :components ((:module "src" :components ((:file "db")))))
+
+(asdf:defsystem #:littoral/admin
+  :description "An administration interface generated from descriptions and tables."
+  :author "Matthew Kennedy"
+  :license "MIT"
+  :depends-on (#:littoral #:littoral/db)
+  :components ((:module "src" :components ((:file "admin")))))
+
+(asdf:defsystem #:littoral/admin-demo
+  :description "A generated admin over projects and tasks in SQLite."
+  :depends-on (#:littoral/admin #:dbd-sqlite3)
+  :components ((:module "examples" :components ((:file "admin-demo")))))

@@ -145,6 +145,9 @@ the work)."
          (*session* session)
          (*application* (session-application session))
          (*base-path* (stream-base-path stream)))
+    (call-around-request
+     *application*
+     (lambda ()
     (sb-thread:with-recursive-lock ((session-lock session))
       (let* ((root (session-root session))
              (ids '()))
@@ -160,7 +163,7 @@ the work)."
                                                  :halos-p (and (development-p) (session-halos-p session))
                                                  :ajax-p t))
                 (*rendering* t))
-            (render-fragments (nreverse ids) root)))))))
+            (render-fragments (nreverse ids) root)))))))))
 
 (defun stream-live-p (stream)
   "True while STREAM's session and page still exist and it has not been closed."
