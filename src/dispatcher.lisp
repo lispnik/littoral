@@ -285,7 +285,8 @@ page, and answer the components to update as JSON."
   (let* ((root (session-root session))
          (callbacks (continuation-callbacks continuation))
          (*ajax-result* nil)
-         (*ajax-scripts* '()))
+         (*ajax-scripts* '())
+         (*redirect* nil))
     (call-around-actions session
                          (lambda ()
                            (process-callbacks (lack/request:request-parameters *request*) callbacks)
@@ -303,7 +304,8 @@ page, and answer the components to update as JSON."
                     (render-fragments (cl-ppcre:split "\\s+" (or (request-parameter "_lt_update") ""))
                                       root
                                       :value *ajax-result*
-                                      :scripts (reverse *ajax-scripts*))))))))
+                                      :scripts (reverse *ajax-scripts*)
+                                      :redirect *redirect*)))))))
 
 (defun call-around-request (app thunk)
   "Call THUNK through APP's AROUND-REQUEST, if it has one."
@@ -319,7 +321,8 @@ page, and answer the components to update as JSON."
   "Run the callbacks the request names on CONTINUATION's page.  When any
 ran, snapshot the result as a new page, note the timings for the toolbar
 and return a redirect to it; otherwise NIL."
-  (let ((start (get-internal-real-time)))
+  (let ((start (get-internal-real-time))
+        (*redirect* nil))
     (when (call-around-actions
            session
            (lambda ()
@@ -334,7 +337,7 @@ and return a redirect to it; otherwise NIL."
               (list :actions (/ (- acted start) internal-time-units-per-second)
                     :snapshot (/ (- done acted) internal-time-units-per-second)
                     :objects (length (snapshot-entries (continuation-snapshot page)))))
-        (redirect-response (page-url session page))))))
+        (redirect-response (or *redirect* (page-url session page)))))))
 
 (defun handle-session-request (session)
   "Answer a request in SESSION: run the callbacks it names and redirect, or
@@ -395,7 +398,11 @@ the handler falls back to the standard page."
       (block handled
         (handler-bind ((error (lambda (condition)
                                 (return-from handled
-                                  (or (custom-error-page app condition)
+                                  (or (and (typep condition 'forbidden)
+                                           (simple-page 403 "Forbidden"
+                                                        (format nil "<p>~A</p>"
+                                                                (html-escape (forbidden-message condition)))))
+                                      (custom-error-page app condition)
                                    (if (development-p app)
                                       (simple-page 500 "Internal Server Error"
                                                    (format nil "<p class=\"lt-error\">~A</p><pre>~A</pre>"

@@ -46,6 +46,19 @@ none and each stream gets a waiting thread.")
   "When true, open pages of applications in development mode reload after
 their components' rendering methods are redefined (see live.lisp).")
 
+(defvar *redirect* nil
+  "A URL a callback asked to send the browser to, with REDIRECT-TO.")
+
+(defun redirect-to (url)
+  "From a callback: when the request's callbacks are done, send the browser
+to URL (another site, say) instead of the next page."
+  (setf *redirect* url))
+
+(define-condition forbidden (error)
+  ((message :initarg :message :initform "You are not allowed to do that." :reader forbidden-message))
+  (:report (lambda (condition stream) (write-string (forbidden-message condition) stream)))
+  (:documentation "Signal it to refuse a request: the user sees a 403 page."))
+
 (defvar *debug-errors* nil
   "When true, errors inside a request enter the debugger instead of
 rendering an error page.")

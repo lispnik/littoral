@@ -37,6 +37,19 @@ True when `request` has the parameter `name`, even with no value (?flag).
 
 The path of `request` below the mount point.
 
+#### `redirect-to` `url` — function
+
+From a callback: when the request's callbacks are done, send the browser
+to `url` (another site, say) instead of the next page.
+
+#### `forbidden` — condition
+
+Signal it to refuse a request: the user sees a 403 page.
+
+#### `forbidden-message` `condition` — generic function
+
+*Undocumented.*
+
 #### `render-phase-error` — condition
 
 Signalled by `call`, `show`, `answer` and `home` during rendering.

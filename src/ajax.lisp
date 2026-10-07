@@ -135,7 +135,7 @@ and keyword plists as objects, other lists as arrays."
                       (write-char c out)))))
     (write-char #\" out)))
 
-(defun render-fragments (ids root &key value scripts)
+(defun render-fragments (ids root &key value scripts redirect)
   "JSON object mapping each id to the HTML of that visible component, the
 ids no longer visible under \"missing\", the callback's VALUE and the
 SCRIPTS to run."
@@ -146,9 +146,10 @@ SCRIPTS to run."
             (push (cons id (with-canvas-to-string () (render-component component))) found)
             (push id missing))))
     (with-output-to-string (out)
-      (format out "{\"fragments\":{~{~A~^,~}},\"missing\":[~{~A~^,~}],\"value\":~A,\"scripts\":[~{~A~^,~}]}"
+      (format out "{\"fragments\":{~{~A~^,~}},\"missing\":[~{~A~^,~}],\"value\":~A,\"scripts\":[~{~A~^,~}]~@[,\"redirect\":~A~]}"
               (loop for (id . html) in (nreverse found)
                     collect (format nil "~A:~A" (json-string id) (json-string html)))
               (mapcar #'json-string (nreverse missing))
               (json-value value)
-              (mapcar #'json-string scripts)))))
+              (mapcar #'json-string scripts)
+              (and redirect (json-string redirect))))))

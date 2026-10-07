@@ -45,6 +45,7 @@
 
   // Swap in the components a response or a pushed event carries.
   function apply(data) {
+    if (data.redirect) { window.location.href = data.redirect; return; }
     var focused = document.activeElement && document.activeElement.id;
     Object.keys(data.fragments).forEach(function (id) {
       var old = document.getElementById(id);

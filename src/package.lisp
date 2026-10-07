@@ -29,6 +29,7 @@
    ;; Context
    #:*request* #:*session* #:*application* #:*render-context*
    #:request-parameter #:request-parameter-p #:request-path
+   #:redirect-to #:forbidden #:forbidden-message
    #:render-phase-error
    ;; Components
    #:component #:component-id #:render #:render-component #:children #:states

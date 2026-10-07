@@ -354,3 +354,26 @@
       (let ((fresh (make-instance 'browser)))
         (visit fresh "/counter")
         (is (not (has-text-p fresh "expired")))))))
+
+(defclass leaver (component) ()
+  (:documentation "Sends the browser elsewhere, or refuses."))
+
+(defmethod render ((self leaver))
+  (anchor (:callback (lambda () (redirect-to "https://example.org/elsewhere"))) "leave")
+  (anchor (:callback (lambda () (error 'forbidden :message "Admins only."))) "forbidden")
+  (button (:id "ajax-leave" :on-click (ajax :callback (lambda () (redirect-to "https://example.org/ajax")))) "go"))
+
+(test redirect-to-and-forbidden
+  (with-fresh-applications (("/l" 'leaver :mode :deployment))
+    (let ((b (make-instance 'browser)))
+      (visit b "/l")
+      (multiple-value-bind (status headers) (raw-request b :get (find-link b "leave"))
+        (is (= 302 status))
+        (is (string= "https://example.org/elsewhere" (getf headers :location))))
+      (click b "forbidden")
+      (is (= 403 (browser-status b)))
+      (is (has-text-p b "Admins only."))
+      (visit b "/l")
+      (let* ((spec (element-spec b "ajax-leave" "on-click"))
+             (json (ajax-request b (first spec) (rest spec))))
+        (is (search "\"redirect\":\"https://example.org/ajax\"" json))))))
