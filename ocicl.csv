@@ -21,12 +21,14 @@ cl-cont-test, ghcr.io/ocicl/cl-cont@sha256:a08944900637ab4e8a705f863f9d209eef8f2
 cl-fad, ghcr.io/ocicl/cl-fad@sha256:c0aaffc859e419e0a94cedb08f48c2484da404363fb0fe4ffd6e09a80aadafe1, cl-fad-0.7.6/cl-fad.asd
 cl-ppcre, ghcr.io/ocicl/cl-ppcre@sha256:bf073924cf4fd5957a4fd961a95d446ed0e53fa32a5002cbd2d52182874f45e5, cl-ppcre-20250606-a2ea581/cl-ppcre.asd
 cl-ppcre-unicode, ghcr.io/ocicl/cl-ppcre@sha256:bf073924cf4fd5957a4fd961a95d446ed0e53fa32a5002cbd2d52182874f45e5, cl-ppcre-20250606-a2ea581/cl-ppcre-unicode.asd
+cl-speedy-queue, ghcr.io/ocicl/cl-speedy-queue@sha256:11c3c23233ae74fe439147e4e392a2f57d26c7e7aa0498283fe97dfd7e52417d, cl-speedy-queue-20230808-0425c7c/cl-speedy-queue.asd
 cl-utilities, ghcr.io/ocicl/cl-utilities@sha256:e5e0676a4e0627332a0fe64d56ed4f1890f0466d715a11e8d95561b4c2baa38f, cl-utilities-20240503-6b4de39/cl-utilities.asd
 cl_plus_ssl, ghcr.io/ocicl/cl_plus_ssl@sha256:d50fbbba38827e835eec2415744e0fb05a2a0bf4d44940cdc23922f15036efe5, cl-plus-ssl-20251220-499b2f5/cl+ssl.asd
 cl_plus_ssl.test, ghcr.io/ocicl/cl_plus_ssl@sha256:d50fbbba38827e835eec2415744e0fb05a2a0bf4d44940cdc23922f15036efe5, cl-plus-ssl-20251220-499b2f5/cl+ssl.test.asd
 clack, ghcr.io/ocicl/clack@sha256:9457bea28f1ee9c49a7626c2ee23c181b5af3636b5e64a27a46ef8535818947f, clack-20241101-935be5b/clack.asd
 clack-handler-hunchentoot, ghcr.io/ocicl/clack@sha256:9457bea28f1ee9c49a7626c2ee23c181b5af3636b5e64a27a46ef8535818947f, clack-20241101-935be5b/clack-handler-hunchentoot.asd
 clack-handler-toot, ghcr.io/ocicl/clack@sha256:9457bea28f1ee9c49a7626c2ee23c181b5af3636b5e64a27a46ef8535818947f, clack-20241101-935be5b/clack-handler-toot.asd
+clack-handler-woo, ghcr.io/ocicl/woo@sha256:d14f9876ea2105452eaabb52ddc902768147a3e576bf1912cee942a5d5c6b563, woo-20240906-7f5219c/clack-handler-woo.asd
 clack-handler-wookie, ghcr.io/ocicl/clack@sha256:9457bea28f1ee9c49a7626c2ee23c181b5af3636b5e64a27a46ef8535818947f, clack-20241101-935be5b/clack-handler-wookie.asd
 clack-socket, ghcr.io/ocicl/clack@sha256:9457bea28f1ee9c49a7626c2ee23c181b5af3636b5e64a27a46ef8535818947f, clack-20241101-935be5b/clack-socket.asd
 clack-test, ghcr.io/ocicl/clack@sha256:9457bea28f1ee9c49a7626c2ee23c181b5af3636b5e64a27a46ef8535818947f, clack-20241101-935be5b/clack-test.asd
@@ -72,6 +74,8 @@ lack-session-store-redis, ghcr.io/ocicl/lack@sha256:cca30f5e88c2b0813f41a5bbcc44
 lack-test, ghcr.io/ocicl/lack@sha256:cca30f5e88c2b0813f41a5bbcc44517edc7e95b9cd2aef0ae0df0044571e8673, lack-20260814-35d8b0a/lack-test.asd
 lack-util, ghcr.io/ocicl/lack@sha256:cca30f5e88c2b0813f41a5bbcc44517edc7e95b9cd2aef0ae0df0044571e8673, lack-20260814-35d8b0a/lack-util.asd
 lack-util-writer-stream, ghcr.io/ocicl/lack@sha256:cca30f5e88c2b0813f41a5bbcc44517edc7e95b9cd2aef0ae0df0044571e8673, lack-20260814-35d8b0a/lack-util-writer-stream.asd
+lev, ghcr.io/ocicl/lev@sha256:186548108c7dab9625e73e403fccd3f501ac0d75b510f1cf1d1323f25cc8d651, lev-20240503-b43e700/lev.asd
+lev-config, ghcr.io/ocicl/lev@sha256:186548108c7dab9625e73e403fccd3f501ac0d75b510f1cf1d1323f25cc8d651, lev-20240503-b43e700/lev-config.asd
 md5, ghcr.io/ocicl/md5@sha256:7d8a8d7af07a2bcbca05ad839555730a0e021c697bf13cc02279669c7a9b038b, md5-2.0.5/md5.asd
 net.didierverna.asdf-flv, ghcr.io/ocicl/net.didierverna.asdf-flv@sha256:e5cd087d41cf24302a92d9bac426a925f8868b554be2414c0f012c961e3ddb8c, asdf-flv-20240503-3f1de41/net.didierverna.asdf-flv.asd
 proc-parse, ghcr.io/ocicl/proc-parse@sha256:0880f9acb35eb9efbe1f77a981e36e84e8f29a22b14f680c7686eb381fa87bd6, proc-parse-20240503-3afe2b7/proc-parse.asd
@@ -84,6 +88,7 @@ smart-buffer-test, ghcr.io/ocicl/smart-buffer@sha256:b8d194f5881c415fd7f0099b88d
 split-sequence, ghcr.io/ocicl/split-sequence@sha256:3a37662eedd99c42995587b9d443c4631f25c4c523091bcca31a27b880585b8e, split-sequence-2.0.1/split-sequence.asd
 static-vectors, ghcr.io/ocicl/static-vectors@sha256:53e11e5689c3dbea6a3017760b55f052588003d774913539930ddc4330a69970, static-vectors-20240624-3d9d89b/static-vectors.asd
 swank, ghcr.io/ocicl/swank@sha256:07487b3404a149ac39619bd340f49cd8b953f76f6d8fa6198cfc1e91d8a3076b, slime-2.32/swank.asd
+swap-bytes, ghcr.io/ocicl/swap-bytes@sha256:06edc17deb0f27cdf6290689711ece670a8282dfd07b732a9adc541af1ce7ed6, swap-bytes-20240503-43ab141/swap-bytes.asd
 t-clack-handler-hunchentoot, ghcr.io/ocicl/clack@sha256:9457bea28f1ee9c49a7626c2ee23c181b5af3636b5e64a27a46ef8535818947f, clack-20241101-935be5b/t-clack-handler-hunchentoot.asd
 t-clack-handler-toot, ghcr.io/ocicl/clack@sha256:9457bea28f1ee9c49a7626c2ee23c181b5af3636b5e64a27a46ef8535818947f, clack-20241101-935be5b/t-clack-handler-toot.asd
 t-clack-handler-wookie, ghcr.io/ocicl/clack@sha256:9457bea28f1ee9c49a7626c2ee23c181b5af3636b5e64a27a46ef8535818947f, clack-20241101-935be5b/t-clack-handler-wookie.asd
@@ -94,10 +99,15 @@ trivial-features-tests, ghcr.io/ocicl/trivial-features@sha256:ab71fa7a6cbef84578
 trivial-garbage, ghcr.io/ocicl/trivial-garbage@sha256:e76c38568f7ff0a2564ab47e27e0b2293f00f258e6510f2abec4d46920f2c4db, trivial-garbage-20260829-f0663f7/trivial-garbage.asd
 trivial-gray-streams, ghcr.io/ocicl/trivial-gray-streams@sha256:9d702556e5973fd18e67642b18bd5a2f901972ef7d5b134615e2f5fd77396bb9, trivial-gray-streams-20260818-257d73e/trivial-gray-streams.asd
 trivial-gray-streams-test, ghcr.io/ocicl/trivial-gray-streams@sha256:9d702556e5973fd18e67642b18bd5a2f901972ef7d5b134615e2f5fd77396bb9, trivial-gray-streams-20260818-257d73e/trivial-gray-streams-test.asd
+trivial-mimes, ghcr.io/ocicl/trivial-mimes@sha256:a92350000c29520f98e349019917e9e6d283e5ff218361bae791fc5af9d17dcf, trivial-mimes-20260218-8b1ea12/trivial-mimes.asd
+trivial-utf-8, ghcr.io/ocicl/trivial-utf-8@sha256:014e7fa0edd7f351c8b38c3247e0cdda438235bb8a086bb0f2bac08f78ef400d, trivial-utf-8-20240503-ba9b4ff/trivial-utf-8.asd
 uffi, ghcr.io/ocicl/cffi@sha256:ff62b9cedea80fe2c6ea0701757e2b301b6ee9aafa1ae720966ff2611e94f76b, cffi-20260821-787d3cd/uffi-compat/uffi.asd
 usocket, ghcr.io/ocicl/usocket@sha256:282856b819b22a4319ba30a15605ee934aa23292a471fd29ea4d3f2074b3f16d, usocket-0.8.8/usocket.asd
 usocket-server, ghcr.io/ocicl/usocket@sha256:282856b819b22a4319ba30a15605ee934aa23292a471fd29ea4d3f2074b3f16d, usocket-0.8.8/usocket-server.asd
 usocket-test, ghcr.io/ocicl/usocket@sha256:282856b819b22a4319ba30a15605ee934aa23292a471fd29ea4d3f2074b3f16d, usocket-0.8.8/usocket-test.asd
+vom, ghcr.io/ocicl/vom@sha256:f8c3898b00ba064be339b7e0e0407aa7a0e6f029017ba63dcd5ada7816a7b87c, vom-20240815-303c3f6/vom.asd
+woo, ghcr.io/ocicl/woo@sha256:d14f9876ea2105452eaabb52ddc902768147a3e576bf1912cee942a5d5c6b563, woo-20240906-7f5219c/woo.asd
+woo-test, ghcr.io/ocicl/woo@sha256:d14f9876ea2105452eaabb52ddc902768147a3e576bf1912cee942a5d5c6b563, woo-20240906-7f5219c/woo-test.asd
 xsubseq, ghcr.io/ocicl/xsubseq@sha256:7605d14f7cc7fd2f63190ad81fe7bd65daef105d6728ee6bb59baef49da2aa51, xsubseq-20240503-5ce430b/xsubseq.asd
 xsubseq-test, ghcr.io/ocicl/xsubseq@sha256:7605d14f7cc7fd2f63190ad81fe7bd65daef105d6728ee6bb59baef49da2aa51, xsubseq-20240503-5ce430b/xsubseq-test.asd
 yason, ghcr.io/ocicl/yason@sha256:d4857f9cbdd68a5d1332c7f8a4a2374b1ae0dc567d4b8f90795ff38fd490876b, yason-20250323-0c84b29/yason.asd

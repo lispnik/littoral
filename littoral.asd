@@ -147,3 +147,8 @@
   :description "The reading list application docs/tutorial.md builds."
   :depends-on (#:littoral)
   :components ((:module "docs/tutorial" :components ((:file "reading-list")))))
+
+(asdf:defsystem #:littoral/woo
+  :description "Serve Littoral on Woo, with server push from its event loops."
+  :depends-on (#:littoral #:clack-handler-woo #:woo #:lev #:cffi)
+  :components ((:module "src" :components ((:file "woo")))))

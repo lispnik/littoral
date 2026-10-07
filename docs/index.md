@@ -305,6 +305,37 @@ Requests in one session are serialised by its lock, and requests in different se
 
 A closed page frees its thread within about two keep-alive intervals (`*keepalive-seconds*`, 5 s by default).
 
+**Hunchentoot and Woo compared.** An optional system, `littoral/woo`, runs littoral on [Woo](https://github.com/fukamachi/woo), an event-loop server built on libev. Its point is server push: each open push page is served by two libev watchers on an event loop instead of a dedicated thread. `bench/compare.sh hunchentoot` and `bench/compare.sh woo` run the same measurements against each, on an Apple-silicon Mac (8 cores) with SBCL 2.6.8. Woo ran with 4 event-loop workers.
+
+| | Hunchentoot | Woo | Woo vs Hunchentoot |
+|---|---|---|---|
+| static files, keep-alive (`ab`, 64 connections) | 15,200 req/s | 44,600 req/s | 2.9× |
+| page render, keep-alive | 14,200 req/s | 22,800 req/s | 1.6× |
+| page render, a new connection per request | 14,300 req/s | 21,000 req/s | 1.5× |
+| counter clicks, 64 users from 4 clients | 12,500 /s | 17,900 /s | 1.4× |
+| store clicks, same setup | 9,000 /s | 13,800 /s | 1.5× |
+| p99 click latency, 64 users | 17.8 ms | 11.5 ms | 35% lower |
+| memory per session (counter / store) | 9.6 KB / 25 KB | 8.1 KB / 23 KB | about the same |
+| idle server memory | 91 MB | 91 MB | same |
+| 600 open push pages: threads | 623 | 7 | |
+| 600 open push pages: memory | 1,420 MB | 179 MB | 8× less |
+| 600 open push pages: updates delivered | 600 of 600 | 600 of 600 | |
+| most push pages tried | 600 (with 1,000 threads) | 6,000, at about 100 MB | |
+
+- **Ordinary pages:** Woo is 1.4–1.6× faster. The gap is bigger on static files, but on littoral pages littoral's own work (callbacks, snapshots, rendering) dominates.
+- **Hunchentoot and new connections:** it didn't slow down when every request opened a new connection, so creating threads isn't its bottleneck.
+- **Server push:** this is where the servers really differ. On Hunchentoot a push page costs a thread and about 2 MB of memory. On Woo it costs almost nothing, so memory and thread count stay nearly flat as pages are added.
+- **Caveats:** the load clients ran on the same machine and competed with the server for CPU, and repeated runs varied by around ±10%. The ratios are more reliable than the absolute numbers.
+
+To run on Woo, install the libev C library (`brew install libev`, or your system's package), then:
+
+```lisp
+(asdf:load-system :littoral/woo)
+(littoral:start :port 8080 :server :woo :workers 4)
+```
+
+CI runs the browser checks on both servers.
+
 **State that the back button sees.** Snapshots copy the slots of the objects `states` names, but share the slots' values. A list changed in place therefore changes in every snapshot. Either replace such values (`(setf (items self) (append …))`) or name the object as `(deep object)` in `states`. A deep entry copies the object's lists, vectors, strings and hash tables. Other instances are still shared, and cycles are kept.
 
 **Several processes.** Sessions live in the memory of the process that made them. To run several processes behind one site, give each one an instance id; it prefixes every session key:

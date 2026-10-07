@@ -14,7 +14,7 @@ jobs:
       - name: Install SBCL
         run: |
           sudo apt-get update
-          sudo apt-get install -y sbcl
+          sudo apt-get install -y sbcl libev-dev
 
       - name: Cache ocicl
         uses: actions/cache@v4
@@ -64,3 +64,15 @@ jobs:
           export BASE=http://127.0.0.1:8765 CHROME="$(command -v google-chrome || command -v chromium)"
           node tests/e2e/browser.mjs
           node tests/e2e/accessibility.mjs
+
+      - name: Browser tests on Woo
+        run: |
+          sbcl --non-interactive \
+            --eval '(asdf:initialize-source-registry (list :source-registry (list :directory (uiop:getcwd)) :inherit-configuration))' \
+            --eval '(asdf:load-system :littoral/examples)' \
+            --eval '(asdf:load-system :littoral/tracker)' --eval '(littoral-tracker:register-tracker)' \
+            --eval '(asdf:load-system :littoral/tutorial)' --eval '(reading-list:register)' \
+            --eval '(asdf:load-system :littoral/woo)' \
+            --eval '(littoral:start :port 8766 :server :woo)' --eval '(sleep 900)' > woo-server.log 2>&1 &
+          for i in $(seq 1 120); do curl -s -o /dev/null http://127.0.0.1:8766/ && break; sleep 1; done
+          BASE=http://127.0.0.1:8766 CHROME="$(command -v google-chrome || command -v chromium)" node tests/e2e/browser.mjs

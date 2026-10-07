@@ -36,13 +36,16 @@ bench:
 # littoral.js in headless Chrome against a fresh server on $(E2E_PORT).
 NODE ?= node
 E2E_PORT ?= 8765
+# make e2e SERVER=woo runs the same checks on Woo (needs libev).
+SERVER ?= hunchentoot
 e2e:
 	@if curl -s -o /dev/null http://127.0.0.1:$(E2E_PORT)/; then \
 	  echo "Port $(E2E_PORT) is busy; set E2E_PORT." >&2; exit 1; fi; \
 	$(SBCL) --non-interactive --eval '(asdf:load-system :littoral/examples)' \
 	  --eval '(asdf:load-system :littoral/tracker)' --eval '(littoral-tracker:register-tracker)' \
 	  --eval '(asdf:load-system :littoral/tutorial)' --eval '(reading-list:register)' \
-	  --eval '(littoral:start :port $(E2E_PORT))' --eval '(sleep 600)' >/dev/null 2>&1 & pid=$$!; \
+	  --eval '(when (eq :$(SERVER) :woo) (asdf:load-system :littoral/woo))' \
+	  --eval '(littoral:start :port $(E2E_PORT) :server :$(SERVER))' --eval '(sleep 600)' >/dev/null 2>&1 & pid=$$!; \
 	for i in $$(seq 1 60); do curl -s -o /dev/null http://127.0.0.1:$(E2E_PORT)/ && break; sleep 1; done; \
 	BASE=http://127.0.0.1:$(E2E_PORT) $(NODE) tests/e2e/browser.mjs; status=$$?; \
 	kill -9 $$pid; exit $$status

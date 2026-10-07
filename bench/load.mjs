@@ -73,6 +73,7 @@ async function retrying(f, attempts = 5) {
 
 async function streams(n, pid) {
   const controllers = []; let opened = 0, refused = 0;
+  const received = new Set();
   for (let i = 0; i < n; i += 25) {
     await Promise.all(Array.from({ length: Math.min(25, n - i) }, async () => {
       try {
@@ -81,11 +82,28 @@ async function streams(n, pid) {
         const controller = new AbortController(); controllers.push(controller);
         const r = await retrying(() => fetch(BASE + m[1].replaceAll("&amp;", "&"),
                                             { headers: { cookie: u.cookieHeader() }, signal: controller.signal }));
-        if (r.status === 200) { opened++; r.body.getReader().read().catch(() => {}); } else refused++;
+        if (r.status === 200) {
+          opened++;
+          const id = opened;
+          (async () => {
+            const reader = r.body.getReader(); const decoder = new TextDecoder();
+            try {
+              for (;;) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                if (decoder.decode(value).includes("event: update")) received.add(id);
+              }
+            } catch {}
+          })();
+        } else refused++;
       } catch { refused++; }
     }));
   }
   await sleep(500);
+  // Push to every open page and count how many hear it.
+  const publishedTo = Number(await (await fetch(BASE + "/_publish")).text());
+  await sleep(Math.max(1000, n * 2));
+  const delivered = received.size;
   const s = await stats();
   const t = performance.now(); let ok = true;
   try {
@@ -100,12 +118,17 @@ async function streams(n, pid) {
   }
   controllers.forEach((c) => c.abort());
   await sleep(Number(process.env.SETTLE_MS || 8000));
-  return { requested: n, opened, refused, serverStreams: s.streams, threads: s.threads,
+  return { requested: n, opened, refused, publishedTo, delivered, serverStreams: s.streams, threads: s.threads,
            heap: mb(s.heap), rss, otherRequest: ok ? `${probeMs.toFixed(0)} ms` : "timed out" };
 }
 
 const mode = process.argv[2] || "all";
 const out = {};
+// One click run, for several clients at once: CLICK_PATH, CLICK_LINK, USERS, SECONDS.
+if (mode === "click") {
+  out.click = await clicks(process.env.CLICK_PATH || "/counter", process.env.CLICK_LINK || "\\+\\+",
+                           Number(process.env.USERS || 16), Number(process.env.SECONDS || 10));
+}
 if (mode === "all" || mode === "clicks") {
   out.counter_8 = await clicks("/counter", "\\+\\+", 8, 10);
   out.counter_32 = await clicks("/counter", "\\+\\+", 32, 10);

@@ -679,6 +679,12 @@ A function of a pathname and a 1-based character position that opens the
 source there, for the halos' edit button.  `nil` uses the Emacs connected
 through Swank, when there is one.
 
+#### `*async-stream-opener*` — variable
+
+A function of (`socket` `stream` `writer`) that serves `stream` from an event
+loop, set by an optional system such as littoral/woo; `nil` when there is
+none and each stream gets a waiting thread.
+
 ### Sessions & applications
 
 #### `session` — class
@@ -876,14 +882,16 @@ A Lack application serving every registered littoral application.
 `prefix` is the path it is mounted under when the mounting middleware does
 not set :`script-name` (lack's mount middleware does not).
 
-#### `start` `&key (port 8080) (address "127.0.0.1") (server :hunchentoot) (prefix "") configuration-file (instance-id *instance-id*) (max-threads 100)` — function
+#### `start` `&key (port 8080) (address "127.0.0.1") (server :hunchentoot) (prefix "") configuration-file (instance-id *instance-id*) (max-threads 100) (workers 4)` — function
 
 Serve all registered applications with Clack on `port`, under `prefix`, and
 reap idle sessions in the background.  With `configuration-file`, first load
 the applications saved there; /config then saves its changes to it.
 `instance-id` prefixes session keys, for routing several processes.
 `max-threads` caps Hunchentoot's worker threads; every open page with server
-push holds one, so raise it when many pages subscribe.
+push holds one, so raise it when many pages subscribe.  With `server` :`woo`
+(load littoral/woo first) `workers` event loops serve everything, push included,
+without a thread per page.
 
 #### `stop` — function
 
