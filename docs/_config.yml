@@ -1,0 +1,7 @@
+# GitHub Pages (Jekyll) settings for https://lispnik.github.io/littoral/
+title: Littoral
+description: A Seaside-style component web framework for Common Lisp
+theme: jekyll-theme-cayman
+# index.md is generated from the README by `make docs`; the tutorial's
+# source file is served as is.
+include: [tutorial]

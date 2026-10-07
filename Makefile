@@ -21,6 +21,10 @@ load:
 	  $(NODE) bench/load.mjs; status=$$?; kill -9 $$pid; exit $$status
 
 docs:
+	@# The site's front page is the README, its links made relative to docs/.
+	@{ printf -- '---\ntitle: Littoral\n---\n\n'; \
+	  sed -e 's#](docs/#](#g' -e 's#](LICENSE)#](https://github.com/lispnik/littoral/blob/master/LICENSE)#g' \
+	      -e 's#](\(examples\|apps\|src\|tests\|bench\)/#](https://github.com/lispnik/littoral/tree/master/\1/#g' README.md; } > docs/index.md
 	$(SBCL) --non-interactive --eval '(asdf:load-system :littoral/docs)' \
 	  --eval '(let ((missing (littoral-api-docs:write-api-docs))) (when missing (format t "~&Undocumented: ~{~(~A~)~^, ~}~%" missing)))' \
 	  2>&1 | grep -v '^;' | grep -v '^$$'
