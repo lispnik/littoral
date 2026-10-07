@@ -106,3 +106,8 @@
     (let ((remote (make-env :get "/admin")))
       (setf (getf remote :remote-addr) "203.0.113.9")
       (is (= 403 (first (funcall (make-lack-app) remote)))))))
+
+(test admin-demo-leaves-littoral-classes-alone
+  ;; The demo's own TASK class must not replace LITTORAL:TASK.
+  (is (subtypep 'littoral:task 'littoral:component))
+  (is (not (eq 'littoral-admin-demo:task 'littoral:task))))

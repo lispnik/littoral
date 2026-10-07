@@ -5,6 +5,8 @@
 
 (defpackage #:littoral-admin-demo
   (:use #:cl #:littoral #:littoral.db)
+  ;; LITTORAL exports TASK (the component); this demo's TASK is a record.
+  (:shadow #:task)
   (:documentation "A generated admin over a small SQLite database.")
   (:export #:register #:project #:task))
 
