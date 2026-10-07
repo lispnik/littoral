@@ -106,6 +106,7 @@
                #:littoral/test
                #:littoral/db
                #:littoral/admin
+               #:littoral/admin-demo
                #:dbd-sqlite3
                #:fiveam
                #:flexi-streams
