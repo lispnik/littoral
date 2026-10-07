@@ -1,6 +1,6 @@
 /* littoral.css — defaults for Littoral pages and tools. */
 :root {
-  --lt-fg: #1d2330; --lt-bg: #ffffff; --lt-muted: #6b7280;
+  --lt-fg: #1d2330; --lt-bg: #ffffff; --lt-muted: #586071;
   --lt-accent: #0e7490; --lt-border: #d6dbe3; --lt-panel: #f4f6f9;
   --lt-error: #b42318;
 }

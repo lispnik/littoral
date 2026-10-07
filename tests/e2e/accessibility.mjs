@@ -54,7 +54,7 @@ const axeSource = await (await fetch(AXE)).text();
 let failures = 0;
 const results = [];
 
-async function audit(label) {
+async function auditAs(label) {
   await evaluate(axeSource);
   const found = await evaluate(`axe.run(document, { runOnly: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] })
     .then(r => r.violations.map(v => ({ id: v.id, impact: v.impact, help: v.help,
@@ -72,6 +72,10 @@ const pages = ["/examples", "/examples/counter", "/examples/multi-counter", "/ex
   "/examples/contacts", "/examples/widgets", "/tracker", "/config", "/tutorial/reading-list"];
 
 try {
+ // Both colour schemes: contrast differs between them.
+ for (const scheme of ["light", "dark"]) {
+  await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: scheme }] });
+  const audit = (label) => auditAs(`${label} (${scheme})`);
   for (const page of pages) { await go(page); await audit(page); }
   // States reached by acting.
   await go("/examples/contacts"); await clickLink("Add a contact");
@@ -85,6 +89,8 @@ try {
   await clickLink("Checkout"); await audit("store: cart review");
   await go("/tracker"); await clickLink("create an account"); await audit("tracker: registration");
   await go("/examples/counter"); await clickLink("Halos"); await audit("halos");
+  await clickLink("Halos off");
+ }
 } catch (e) { console.log("ERROR " + e.message); failures++; }
 finally {
   ws.close(); chrome.kill();
