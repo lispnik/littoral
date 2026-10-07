@@ -49,7 +49,19 @@
     Object.keys(data.fragments).forEach(function (id) {
       var old = document.getElementById(id);
       if (!old) return;
-      old.outerHTML = data.fragments[id];
+      if (old.hasAttribute("aria-live")) {
+        // Keep a live region's element, so screen readers announce the
+        // change instead of losing the region.
+        var holder = document.createElement("div");
+        holder.innerHTML = data.fragments[id];
+        var replacement = holder.firstElementChild;
+        if (replacement) {
+          old.innerHTML = replacement.innerHTML;
+          old.className = replacement.className;
+        }
+      } else {
+        old.outerHTML = data.fragments[id];
+      }
       // outerHTML drops focus; give it back, or honour autofocus.
       var fresh = document.getElementById(id);
       var target = (focused && fresh.querySelector("#" + CSS.escape(focused))) ||

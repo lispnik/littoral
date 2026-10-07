@@ -78,7 +78,7 @@
   (h2 () "Clock")
   (render-component (demo-clock self))
   (h2 () "Echo")
-  (text-input (:value (echo-text (demo-echo self))
+  (text-input (:label "Text to echo" :value (echo-text (demo-echo self))
                :callback (lambda (v) (setf (echo-text (demo-echo self)) v))
                :on-input (ajax-update (demo-preview self))))
   (render-component (demo-preview self))

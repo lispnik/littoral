@@ -32,7 +32,7 @@
    #:render-phase-error
    ;; Components
    #:component #:component-id #:render #:render-component #:children #:states
-   #:update-root #:style #:script #:initial-request
+   #:update-root #:style #:script #:initial-request #:updatable-wrapper
    #:update-url #:page-url #:add-to-path #:add-parameter #:url-path #:url-parameters
    #:request-extra-path
    #:call #:answer #:show #:home #:visible-children #:active-component
@@ -81,7 +81,7 @@
    #:reap-all-sessions #:start-reaper #:stop-reaper #:session-expired-notice
    #:*instance-id* #:*max-request-size* #:*new-sessions-per-minute* #:*trust-forwarded-for*
    #:*max-event-streams* #:*max-event-streams-per-session*
-   #:application-max-request-size #:application-local-only-p
+   #:application-max-request-size #:application-local-only-p #:application-language
    #:*configuration-file* #:save-configuration #:load-configuration
    #:configure-application #:application-settings
    #:register-application #:unregister-application #:find-application

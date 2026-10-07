@@ -92,6 +92,13 @@ Called on the root component when its session starts,
 with the request that started it.  A bookmarked `url` is read back here with
 `request-extra-path` and `request-parameter`.
 
+#### `updatable-wrapper` `component` — generic function
+
+The tag and extra attributes of the element an `updatable`
+component is written inside: "div" and none by default.  A row of a list
+returns "li"; a region whose updates should be announced adds
+:aria-live "polite".
+
 #### `update-url` `component url` — generic function
 
 Add to `url`, a `page-url`, whatever would let a bookmark of
@@ -817,6 +824,10 @@ Reads the max-request-size of an application.  Largest request body in bytes, or
 
 Reads the local-only-p of an application.  Answer only requests from this machine.
 
+#### `application-language` `object` — generic function
+
+Reads the language of an application.  The page's language, for the html lang attribute.
+
 #### `*configuration-file*` — variable
 
 Where `save-configuration` writes, and the /config application saves after
@@ -833,7 +844,7 @@ is none.
 Configure applications from `file`.  Applications whose classes are not
 loaded are skipped with a warning.  Returns the applications configured.
 
-#### `configure-application` `path &rest settings &key root-class title mode session-timeout max-continuations cookie-sessions stylesheets scripts credentials max-sessions expired-notice` — function
+#### `configure-application` `path &rest settings &key root-class title language mode session-timeout max-continuations cookie-sessions stylesheets scripts credentials max-sessions expired-notice` — function
 
 Change the settings given for the application at `path`, registering it
 when there is none.  Sessions, and settings not given, are kept.
@@ -842,7 +853,7 @@ when there is none.  Sessions, and settings not given, are kept.
 
 `app`'s configuration as a plist, as `save-configuration` writes it.
 
-#### `register-application` `path root-class &rest initargs &key title mode session-timeout max-continuations cookie-sessions stylesheets scripts credentials max-sessions error-handler expired-notice max-request-size local-only` — function
+#### `register-application` `path root-class &rest initargs &key title mode session-timeout max-continuations cookie-sessions stylesheets scripts credentials max-sessions error-handler expired-notice max-request-size local-only language` — function
 
 Serve `root-class`, a component class, at `path`.  Replaces any application
 already there.  Returns the `application`.

@@ -6,6 +6,8 @@
   ((path :initarg :path :accessor application-path)
    (root-class :initarg :root-class :accessor application-root-class)
    (title :initarg :title :initform nil :accessor application-title)
+   (language :initarg :language :initform "en" :accessor application-language
+             :documentation "The page's language, for the html lang attribute.")
    (mode :initarg :mode :initform :development :accessor application-mode
          :type (member :development :deployment)
          :documentation ":DEVELOPMENT adds the toolbar and halos.")
@@ -56,12 +58,12 @@ session expired.  NIL starts them over silently.")
                              &key title mode session-timeout max-continuations
                                cookie-sessions stylesheets scripts credentials
                                max-sessions error-handler expired-notice
-                               max-request-size local-only)
+                               max-request-size local-only language)
   "Serve ROOT-CLASS, a component class, at PATH.  Replaces any application
 already there.  Returns the APPLICATION."
   (declare (ignore title mode session-timeout max-continuations cookie-sessions
                    stylesheets scripts credentials max-sessions error-handler expired-notice
-                   max-request-size local-only))
+                   max-request-size local-only language))
   (let* ((path (normalize-path path))
          (app (apply #'make-instance 'application :path path :root-class root-class initargs)))
     (sb-thread:with-mutex (*applications-lock*)

@@ -172,8 +172,19 @@ decorations, inside a halo when halos are on.")
   (:method ((component component))
     (render-decorated component))
   (:method :around ((component updatable))
-    (emit-tag "div" (list :id (component-id component) :class "lt-updatable")
-              (lambda () (call-next-method)))))
+    (multiple-value-bind (tag attributes) (updatable-wrapper component)
+      (emit-tag tag (list* :id (component-id component)
+                           :class (cons "lt-updatable" (alexandria:ensure-list (getf attributes :class)))
+                           (alexandria:remove-from-plist attributes :class))
+                (lambda () (call-next-method))))))
+
+(defgeneric updatable-wrapper (component)
+  (:documentation "The tag and extra attributes of the element an UPDATABLE
+component is written inside: \"div\" and none by default.  A row of a list
+returns \"li\"; a region whose updates should be announced adds
+:aria-live \"polite\".")
+  (:method ((component component))
+    (values "div" '())))
 
 ;;; Visiting the tree
 

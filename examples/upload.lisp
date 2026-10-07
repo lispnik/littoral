@@ -16,6 +16,7 @@
 (defmethod render ((self upload-demo))
   (h1 () "Upload")
   (form (:multipart t)
+    (label (:for "file") "File to upload ")
     (file-input (:id "file" :callback (lambda (file) (setf (uploaded self) file))))
     (submit-button () "Upload"))
   (let ((file (uploaded self)))

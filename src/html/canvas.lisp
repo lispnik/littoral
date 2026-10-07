@@ -45,13 +45,28 @@
   (loop for (key value) on attributes by #'cddr
         when value do (emit-attribute key value stream)))
 
+(defvar *next-field-attributes* '()
+  "Attributes to add to the next form control written (input, select or
+textarea, hidden inputs aside), then forget.  How a description editor puts
+aria-invalid and aria-describedby on whatever input a field kind writes.")
+
+(defun take-field-attributes (name attributes)
+  "ATTRIBUTES, with *NEXT-FIELD-ATTRIBUTES* added when NAME is the form
+control they are waiting for."
+  (if (and *next-field-attributes*
+           (member name '("input" "select" "textarea") :test #'string-equal)
+           (not (equal (getf attributes :type) "hidden")))
+      (append attributes (shiftf *next-field-attributes* '()))
+      attributes))
+
 (defparameter *void-elements*
   '("area" "base" "br" "col" "embed" "hr" "img" "input" "link" "meta" "source" "track" "wbr"))
 
 (defun emit-tag (name attributes body &key (void (member name *void-elements* :test #'string-equal)))
   "Write element NAME with ATTRIBUTES around the output of the thunk BODY.
 Void elements such as input and br get no closing tag."
-  (let ((stream *canvas*))
+  (let ((stream *canvas*)
+        (attributes (take-field-attributes name attributes)))
     (write-char #\< stream)
     (write-string name stream)
     (emit-attributes attributes stream)

@@ -42,7 +42,7 @@
     (labels ((expand (label)
                (let ((href (cl-ppcre:register-groups-bind (h)
                                ((format nil "<a href=\"([^\"]*)\" class=\"lt-tree-toggle\" ~
-title=\"Expand\">▸</a> <a[^>]*>~A</a>" label)
+title=\"Expand\"[^>]*>▸</a> <a[^>]*>~A</a>" label)
                                 (browser-html b))
                              (unescape h))))
                  (is (not (null href)) "no expander for ~A" label)

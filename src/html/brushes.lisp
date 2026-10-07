@@ -22,8 +22,10 @@ request (to a string, in a test)."
   (register-callback kind function (render-callbacks (ensure-render-context))))
 
 (defun strip-attributes (attributes &rest keys)
+  "ATTRIBUTES without KEYS; a :LABEL becomes the element's aria-label."
   (loop for (key value) on attributes by #'cddr
-        unless (member key keys) append (list key value)))
+        unless (member key keys)
+          append (if (eq key :label) (list :aria-label value) (list key value))))
 
 ;;; Anchors and forms
 

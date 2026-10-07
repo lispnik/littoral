@@ -78,3 +78,6 @@ label { margin-right: 1em; }
 .lt-handle { color: var(--lt-muted); }
 .lt-sortable-item { flex: 1; }
 .lt-sortable-buttons a { text-decoration: none; padding: 0 .2rem; }
+.lt-visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+                      overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+:focus-visible { outline: 2px solid var(--lt-accent); outline-offset: 2px; }

@@ -77,7 +77,7 @@ Forms work the same way as links. A field's `:callback` receives what was typed,
 
 ```lisp
 (form ()
-  (text-input (:id "new-title" :value (new-title self) :placeholder "Add a title"
+  (text-input (:id "new-title" :value (new-title self) :placeholder "Add a title" :label "Title to add"
                :callback (lambda (v) (setf (new-title self) v))))
   (submit-button (:callback (lambda () (add-quickly self))) "Add"))
 ```
@@ -103,21 +103,27 @@ Each book on the list is drawn by a component of its own, a `book-row`:
    (owner :initarg :owner :reader row-list))
   (:documentation "One book on the list, with its controls."))
 
+(defmethod updatable-wrapper ((self book-row))
+  ;; The row is written inside an <li>, which AJAX replaces as a whole.
+  (values "li" (list :class (when (book-finished-p (row-book self)) "finished"))))
+
 (defmethod render ((self book-row))
   (let ((book (row-book self)))
-    (li (:class (when (book-finished-p book) "finished"))
-      ;; Step 8: ticking the box updates this row in place.
-      (checkbox (:value (book-finished-p book)
-                 :callback (lambda (finished) (setf (book-finished-p book) finished))
-                 :on-change (ajax :callback (lambda () (book-changed book)) :update self)))
-      (text " ")
-      (strong () (text (book-title book)))
-      (when (book-author book) (text (format nil " by ~A" (book-author book))))
-      (text " ")
-      (anchor (:callback (lambda () (edit-book (row-list self) book))) "edit")
-      (text " ")
-      (anchor (:callback (lambda () (remove-book (row-list self) book))) "remove"))))
+    ;; Step 8: ticking the box updates this row in place.
+    (checkbox (:value (book-finished-p book)
+               :label (format nil "Finished ~A" (book-title book))
+               :callback (lambda (finished) (setf (book-finished-p book) finished))
+               :on-change (ajax :callback (lambda () (book-changed book)) :update self)))
+    (text " ")
+    (strong () (text (book-title book)))
+    (when (book-author book) (text (format nil " by ~A" (book-author book))))
+    (text " ")
+    (anchor (:callback (lambda () (edit-book (row-list self) book))) "edit")
+    (text " ")
+    (anchor (:callback (lambda () (remove-book (row-list self) book))) "remove")))
 ```
+
+Because `book-row` is `updatable`, littoral writes it inside an element carrying its id, so that AJAX can replace it (step 8). That element is normally a `div`. Here `updatable-wrapper` makes it the row's `li`, so the list stays a proper list for screen readers. `:label` on the checkbox gives it an accessible name where there's no visible label.
 
 A parent draws a child with `render-component`. It must not call the child's `render` directly. The parent also lists its children in a `children` method, so that littoral can find them for backtracking, AJAX and the development tools. The list keeps one row per book:
 
@@ -212,7 +218,7 @@ Two parts of the page update without reloading it. The checkbox on each row upda
 The search box filters the list as you type:
 
 ```lisp
-(text-input (:id "query" :value (query self) :placeholder "Search"
+(text-input (:id "query" :value (query self) :placeholder "Search" :label "Search"
              :callback (lambda (v) (setf (query self) v))
              :on-input (ajax-update (shelf self))))
 ```

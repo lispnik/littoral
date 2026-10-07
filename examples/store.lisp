@@ -106,6 +106,7 @@
           (let ((dish (first line)))
             (tr ()
               (td () (number-input (:value (rest line) :min 0 :class "qty"
+                                    :label (format nil "How many ~A" (dish-name dish))
                                     :callback (lambda (n) (set-quantity cart dish n)))))
               (td () (text (dish-name dish)))
               (td (:class "number") (text (money (* (rest line) (dish-price dish)))))))))

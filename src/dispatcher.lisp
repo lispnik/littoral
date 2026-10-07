@@ -152,7 +152,7 @@ Binds the session to its cookie the first time it comes back."
 (defun simple-page (status title &optional (message ""))
   "A minimal HTML page with TITLE as its heading and the HTML MESSAGE below."
   (html-response
-   (format nil "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>~A</title>~
+   (format nil "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>~A</title>~
 <link rel=\"stylesheet\" href=\"~A\"></head><body><h1>~A</h1>~A</body></html>"
            (html-escape title) (static-url "littoral.css") (html-escape title) message)
    :status status))
@@ -201,9 +201,9 @@ add, then the session and page keys."
     (setf (root-title root) (or (application-title app) (application-path app)))
     (map-visible (lambda (c) (update-root c root)) (session-root session))
     (with-output-to-string (out)
-      (format out "<!DOCTYPE html>~%<html><head><meta charset=\"utf-8\">~
+      (format out "<!DOCTYPE html>~%<html lang=\"~A\"><head><meta charset=\"utf-8\">~
 <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">~
-<title>~A</title>~%" (html-escape (root-title root)))
+<title>~A</title>~%" (html-escape (application-language app)) (html-escape (root-title root)))
       (dolist (url (append (list (static-url "littoral.css"))
                            (application-stylesheets app)
                            (reverse (root-stylesheets root))))
@@ -347,7 +347,7 @@ render the page it names."
 so it should use plain links."
   (let ((*render-context* nil))
     (html-response
-     (format nil "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>~A</title>~
+     (format nil "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>~A</title>~
 <link rel=\"stylesheet\" href=\"~A\"></head><body>~A</body></html>"
              (html-escape title) (static-url "littoral.css")
              (with-canvas-to-string () (render component)))

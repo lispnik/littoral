@@ -82,7 +82,7 @@
             (box (cl-ppcre:register-groups-bind (n) ("type=\"checkbox\" name=\"(\\d+)\"" (browser-html b)) n)))
         (is (wait-for (lambda () (search "retry:" (sink-text sink)))))
         (let ((json (ajax-request b (first spec) (rest spec) :fields (list (cons box "on")))))
-          (is (search "class=\\\"finished\\\"" json)))
+          (is (search "lt-updatable finished" json)))
         (is (wait-for (lambda () (search "Recently finished by readers here" (sink-text sink)))))
         (close-event-streams)
         (is (wait-for (lambda () (not (sb-thread:thread-alive-p stream)))))))))

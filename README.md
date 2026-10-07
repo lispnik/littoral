@@ -46,6 +46,7 @@ Other targets:
 
 ```sh
 make e2e           # littoral.js in headless Chrome (needs Node 22+)
+make a11y          # WCAG checks (axe-core) over every example page
 make bench         # request and snapshot timings
 make docs          # regenerate docs/API.md from the docstrings
 make clean-check   # build a fresh clone against nothing but its ocicl.csv
@@ -252,6 +253,16 @@ To keep configuration across restarts, start with a file:
 Any applications saved in the file are configured first, and every change made in `/config` is written back to it. The file is plain Lisp, one plist per application, and is created with mode 600 because it can hold basic-auth credentials. Classes are stored by name, so an application whose system isn't loaded is skipped with a warning. Error handlers are functions and aren't saved. From code, use `save-configuration`, `load-configuration`, and `configure-application`; the last changes an application's settings without dropping its sessions.
 
 `(make-lack-app)` returns a plain Lack application you can mount into a larger Lack/Clack stack. Lack's `:mount` middleware strips the prefix without setting `:script-name`, so pass the prefix yourself: `(:mount "/apps" (make-lack-app :prefix "/apps"))`. A `:script-name` set by the server or proxy is honoured as well. Set `*debug-errors*` to enter the debugger on errors instead of rendering an error page.
+
+## Accessibility
+
+`make a11y` runs axe-core's WCAG 2 A and AA rules over every example page, and over the states reached by acting on them, in headless Chrome. CI runs it on every push. What littoral does for you:
+
+- Pages carry `lang`; set it per application with `:language`.
+- Editors generated from descriptions label every input. Errors are tied to their inputs with `aria-invalid` and `aria-describedby`, and form-level errors use `role="alert"`.
+- Widgets use honest semantics: tab and page links mark the current one with `aria-current`, tree toggles have names and `aria-expanded`, reports mark the sorted column with `aria-sort`, and the sortable list's buttons have names.
+- An `updatable` component can choose the element it's written in (`updatable-wrapper`), for example an `li` inside a list. With `:aria-live "polite"` there, AJAX and push updates are announced: `littoral.js` updates a live region's contents in place rather than replacing it.
+- Every field brush takes `:label`, which becomes `aria-label`, for inputs without a visible label.
 
 ## Security
 

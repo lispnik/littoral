@@ -36,6 +36,7 @@ names, or NIL."
   (list :path (application-path app)
         :root-class (class-designator (application-root-class app))
         :title (application-title app)
+        :language (application-language app)
         :mode (application-mode app)
         :session-timeout (application-session-timeout app)
         :max-continuations (application-max-continuations app)
@@ -47,12 +48,12 @@ names, or NIL."
         :expired-notice (class-designator (application-expired-notice app))))
 
 (defun configure-application (path &rest settings
-                              &key root-class title mode session-timeout max-continuations
+                              &key root-class title language mode session-timeout max-continuations
                                 cookie-sessions stylesheets scripts credentials max-sessions
                                 expired-notice)
   "Change the settings given for the application at PATH, registering it
 when there is none.  Sessions, and settings not given, are kept."
-  (declare (ignore root-class title mode session-timeout max-continuations cookie-sessions
+  (declare (ignore root-class title language mode session-timeout max-continuations cookie-sessions
                    stylesheets scripts credentials max-sessions expired-notice))
   (let ((app (find-application path)))
     (if (null app)
@@ -62,6 +63,7 @@ when there is none.  Sessions, and settings not given, are kept."
               do (ecase key
                    (:root-class (setf (application-root-class app) value))
                    (:title (setf (application-title app) value))
+                   (:language (setf (application-language app) value))
                    (:mode (setf (application-mode app) value))
                    (:session-timeout (setf (application-session-timeout app) value))
                    (:max-continuations (setf (application-max-continuations app) value))

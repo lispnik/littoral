@@ -54,20 +54,24 @@
    (owner :initarg :owner :reader row-list))
   (:documentation "One book on the list, with its controls."))
 
+(defmethod updatable-wrapper ((self book-row))
+  ;; The row is written inside an <li>, which AJAX replaces as a whole.
+  (values "li" (list :class (when (book-finished-p (row-book self)) "finished"))))
+
 (defmethod render ((self book-row))
   (let ((book (row-book self)))
-    (li (:class (when (book-finished-p book) "finished"))
-      ;; Step 8: ticking the box updates this row in place.
-      (checkbox (:value (book-finished-p book)
-                 :callback (lambda (finished) (setf (book-finished-p book) finished))
-                 :on-change (ajax :callback (lambda () (book-changed book)) :update self)))
-      (text " ")
-      (strong () (text (book-title book)))
-      (when (book-author book) (text (format nil " by ~A" (book-author book))))
-      (text " ")
-      (anchor (:callback (lambda () (edit-book (row-list self) book))) "edit")
-      (text " ")
-      (anchor (:callback (lambda () (remove-book (row-list self) book))) "remove"))))
+    ;; Step 8: ticking the box updates this row in place.
+    (checkbox (:value (book-finished-p book)
+               :label (format nil "Finished ~A" (book-title book))
+               :callback (lambda (finished) (setf (book-finished-p book) finished))
+               :on-change (ajax :callback (lambda () (book-changed book)) :update self)))
+    (text " ")
+    (strong () (text (book-title book)))
+    (when (book-author book) (text (format nil " by ~A" (book-author book))))
+    (text " ")
+    (anchor (:callback (lambda () (edit-book (row-list self) book))) "edit")
+    (text " ")
+    (anchor (:callback (lambda () (remove-book (row-list self) book))) "remove")))
 
 ;;; Step 5: call and answer (and step 6: descriptions)
 
@@ -193,12 +197,12 @@
   (h1 () "Reading list")
   (render-component (ticker self))
   (p (:class "search")
-    (text-input (:id "query" :value (query self) :placeholder "Search"
+    (text-input (:id "query" :value (query self) :placeholder "Search" :label "Search"
                  :callback (lambda (v) (setf (query self) v))
                  :on-input (ajax-update (shelf self)))))
   (render-component (shelf self))
   (form ()
-    (text-input (:id "new-title" :value (new-title self) :placeholder "Add a title"
+    (text-input (:id "new-title" :value (new-title self) :placeholder "Add a title" :label "Title to add"
                  :callback (lambda (v) (setf (new-title self) v))))
     (submit-button (:callback (lambda () (add-quickly self))) "Add"))
   (p () (anchor (:callback (lambda () (add-with-questions self))) "Add a book, step by step")))

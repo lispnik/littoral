@@ -35,6 +35,10 @@
   ((chat :initarg :chat :reader list-chat))
   (:documentation "The room's messages, re-rendered whenever anyone posts."))
 
+(defmethod updatable-wrapper ((self message-list))
+  ;; New messages are announced to screen readers.
+  (values "div" '(:aria-live "polite")))
+
 (defmethod subscriptions ((self message-list))
   (list *room-channel*))
 
@@ -71,6 +75,7 @@
            :on-submit (ajax :callback (lambda () (send-draft self))
                             :update (list self (chat-messages chat))))
       (text-input (:id "draft" :value (composer-draft self) :autofocus t :autocomplete "off"
+                   :label "Message"
                    :placeholder (format nil "Message as ~A" (chat-nick chat))
                    :callback (lambda (v) (setf (composer-draft self) v))))
       (submit-button () "Send"))))

@@ -36,7 +36,7 @@
       (dolist (item (items self))
         (let ((item item))
           (li ()
-            (checkbox (:value (item-done-p item)
+            (checkbox (:value (item-done-p item) :label (format nil "~A done" (item-title item))
                        :callback (lambda (v) (setf (item-done-p item) v))))
             " "
             (span (:class (when (item-done-p item) "done")) (text (item-title item)))
