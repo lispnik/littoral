@@ -490,7 +490,7 @@ the body is touched."
 PREFIX is the path it is mounted under when the mounting middleware does
 not set :SCRIPT-NAME (lack's mount middleware does not)."
   (let ((prefix (string-right-trim "/" prefix)))
-    (lambda (env) (handle-request env prefix))))
+    (lambda (env) (with-sane-printing () (handle-request env prefix)))))
 
 (defvar *handler* nil)
 
@@ -517,13 +517,15 @@ not set :SCRIPT-NAME (lack's mount middleware does not)."
   (setf *reaper* nil))
 
 (defun start (&key (port 8080) (address "127.0.0.1") (server :hunchentoot) (prefix "")
-                configuration-file (instance-id *instance-id*) (max-threads 100))
+                configuration-file (instance-id *instance-id*) (max-threads 100) (workers 4))
   "Serve all registered applications with Clack on PORT, under PREFIX, and
 reap idle sessions in the background.  With CONFIGURATION-FILE, first load
 the applications saved there; /config then saves its changes to it.
 INSTANCE-ID prefixes session keys, for routing several processes.
 MAX-THREADS caps Hunchentoot's worker threads; every open page with server
-push holds one, so raise it when many pages subscribe."
+push holds one, so raise it when many pages subscribe.  With SERVER :WOO
+(load littoral/woo first) WORKERS event loops serve everything, push included,
+without a thread per page."
   (when *handler* (stop))
   (setf *instance-id* instance-id)
   (when configuration-file
@@ -536,11 +538,17 @@ push holds one, so raise it when many pages subscribe."
         (warn "Littoral: serving ~{~A~^, ~} in development mode on ~A: halos let anyone ~
 who can reach them inspect and change component state."
               (mapcar #'application-path open) address))))
-  (setf *handler* (clack:clackup (make-lack-app :prefix prefix)
-                                 :server server :port port :address address
-                                 :max-thread-count max-threads
-                                 :max-accept-count (+ max-threads 20)
-                                 :use-default-middlewares nil :silent t :debug nil))
+  (when (and (eq server :woo) (null *async-stream-opener*))
+    (warn "Littoral: serving on Woo without littoral/woo loaded, so every open ~
+page with server push ties up a Woo worker.  Load littoral/woo."))
+  (setf *handler* (apply #'clack:clackup (make-lack-app :prefix prefix)
+                         :server server :port port :address address
+                         :use-default-middlewares nil :silent t :debug nil
+                         (case server
+                           (:hunchentoot (list :max-thread-count max-threads
+                                               :max-accept-count (+ max-threads 20)))
+                           (:woo (list :worker-num workers))
+                           (otherwise '()))))
   (format t "~&Littoral listening on http://~A:~D/~%" address port)
   *handler*)
 

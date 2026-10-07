@@ -16,7 +16,8 @@ A Seaside-style web framework for SBCL. See README.md for the user-facing tour.
   - AJAX requests reuse the page's continuation and re-snapshot it; they do not create a new `_k`.
   - Static files are served at `static-url`, which carries a content fingerprint (`?v=`). Only a URL with the matching fingerprint is cached as immutable, so browsers never run stale JS.
   - Chrome restores even `no-store` pages from its back/forward cache, so `littoral.js` reloads on `pageshow` when the page was persisted. Browser tests of back-button behaviour must allow for that reload.
-  - Shared, cross-session state (the wiki and the chat room) lives outside `states`, behind a mutex.
+  - Woo (optional, `littoral/woo`): its worker threads start with standard I/O syntax (`*print-readably*` true), so every entry point binds `with-sane-printing`. libev is not thread-safe: push on Woo marshals to the stream's event loop with `ev_async_send`; never call a Woo writer from another thread.
+- Shared, cross-session state (the wiki and the chat room) lives outside `states`, behind a mutex.
   - Server push: each open page's EventSource is a Clack streaming response (a function) running in its request thread. `publish` and `notify` only queue work and wake the stream; rendering happens in the stream thread under the session lock. Tests drive streams in-process (`tests/push.lisp`).
 - `call` is a `defun/cc`, so it suspends only when called lexically inside `define-flow` (or another `/cc` function).
 - `sed` on this machine is GNU sed.

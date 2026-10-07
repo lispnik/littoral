@@ -23,6 +23,22 @@ MAKE-LACK-APP plus the request's script-name.  No trailing slash.")
   "PATH, absolute within this littoral, as a URL the browser can follow."
   (concatenate 'string *base-path* path))
 
+(defmacro with-sane-printing (() &body body)
+  "Run BODY with the printer as littoral expects it.  Some servers start
+their threads with standard I/O syntax (Woo, through Bordeaux Threads 2),
+where *PRINT-READABLY* is true: strings would print as #A(...) and hex as
+#x1A, breaking ~S, object printing and even chunked encoding."
+  `(let ((*print-readably* nil)
+         (*print-pretty* nil)
+         (*print-circle* nil)
+         (*read-eval* nil))
+     ,@body))
+
+(defvar *async-stream-opener* nil
+  "A function of (SOCKET STREAM WRITER) that serves STREAM from an event
+loop, set by an optional system such as littoral/woo; NIL when there is
+none and each stream gets a waiting thread.")
+
 (defvar *debug-errors* nil
   "When true, errors inside a request enter the debugger instead of
 rendering an error page.")

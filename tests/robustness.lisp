@@ -120,3 +120,19 @@
         (is (search "_s=a1." (browser-url b)))
         (click b "++")
         (is (= 1 (count-shown b)))))))
+
+(test survives-standard-io-syntax
+  ;; Woo's worker threads start with standard I/O syntax, where
+  ;; *PRINT-READABLY* is true.  Pages, AJAX and the inspector must not care.
+  (with-standard-io-syntax
+    (let ((*package* (find-package :littoral/tests)))
+      (with-fresh-applications (("/ajax" 'littoral-examples:ajax-demo :mode :development))
+        (let ((b (make-instance 'browser)))
+          (visit b "/ajax")
+          (is (= 200 (browser-status b)))
+          (let* ((spec (element-spec b "retitle" "on-click"))
+                 (json (ajax-request b (first spec) (rest spec))))
+            (is (search "document.title = \\\"Counter at 0\\\"" json)))
+          (click b "Halos")
+          (click-nth b "inspect" 0)
+          (is (has-text-p b "Inspector")))))))

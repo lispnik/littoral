@@ -38,6 +38,9 @@
    (pending :initform '() :accessor stream-pending
             :documentation "Channels and component ids to re-render.")
    (open-p :initform t :accessor stream-open-p)
+   (waker :initform nil :accessor stream-waker
+          :documentation "On an event-loop server, a function (safe from any thread)
+that has the loop serve the stream; NIL when a thread waits on it instead.")
    (lock :initform (sb-thread:make-mutex :name "littoral event stream") :reader stream-lock)
    (waitqueue :initform (sb-thread:make-waitqueue) :reader stream-waitqueue))
   (:documentation "One open page's server-sent event connection and the work queued for it."))
@@ -57,7 +60,36 @@ is noticed, so this bounds how long a gone page keeps its server thread.")
   "Queue ITEM, a channel or component id, for STREAM and wake it."
   (sb-thread:with-mutex ((stream-lock stream))
     (push item (stream-pending stream))
-    (sb-thread:condition-broadcast (stream-waitqueue stream))))
+    (sb-thread:condition-broadcast (stream-waitqueue stream)))
+  (let ((waker (stream-waker stream)))
+    (when waker (funcall waker))))
+
+(defun register-event-stream (stream)
+  "Count STREAM among the open ones."
+  (sb-thread:with-mutex (*event-streams-lock*) (push stream *event-streams*)))
+
+(defun unregister-event-stream (stream)
+  (sb-thread:with-mutex (*event-streams-lock*)
+    (setf *event-streams* (remove stream *event-streams*))))
+
+(defun take-pending-now (stream)
+  "STREAM's queued work, without waiting."
+  (sb-thread:with-mutex ((stream-lock stream))
+    (shiftf (stream-pending stream) '())))
+
+(defun serve-stream (stream writer)
+  "Write an update for STREAM's queued work, if any is visible.  For an
+event loop to call when woken; signals if the connection has gone."
+  (let ((pending (take-pending-now stream)))
+    (when pending
+      (let ((json (pushed-fragments stream pending)))
+        (when json
+          (funcall writer (format nil "event: update~%data: ~A~%~%" json)))))))
+
+(defun keep-stream-alive (stream writer)
+  "Write a keepalive comment to STREAM's connection."
+  (declare (ignore stream))
+  (funcall writer (format nil ": keepalive~%~%")))
 
 (defun publish (channel)
   "Re-render, on every open page, the visible components subscribed to CHANNEL.
@@ -89,7 +121,9 @@ the work)."
   (dolist (stream (open-event-streams))
     (sb-thread:with-mutex ((stream-lock stream))
       (setf (stream-open-p stream) nil)
-      (sb-thread:condition-broadcast (stream-waitqueue stream)))))
+      (sb-thread:condition-broadcast (stream-waitqueue stream)))
+    (let ((waker (stream-waker stream)))
+      (when waker (funcall waker)))))
 
 (defun take-pending (stream timeout)
   "Wait up to TIMEOUT seconds for work; return it, or NIL."
@@ -131,7 +165,7 @@ the work)."
 
 (defun run-event-stream (stream writer)
   "Serve STREAM through WRITER until its page is gone or the browser leaves."
-  (sb-thread:with-mutex (*event-streams-lock*) (push stream *event-streams*))
+  (register-event-stream stream)
   (unwind-protect
        (handler-case
            (progn
@@ -146,9 +180,16 @@ the work)."
                               (funcall writer (format nil ": keepalive~%~%")))))))
          ;; The browser went away: writing to its socket fails.
          (error () nil))
-    (sb-thread:with-mutex (*event-streams-lock*)
-      (setf *event-streams* (remove stream *event-streams*)))
+    (unregister-event-stream stream)
     (ignore-errors (funcall writer nil :close t))))
+
+(defun async-socket (request)
+  "The request's socket when the server is event-driven, else NIL."
+  (let ((socket (getf (lack/request:request-env request) :clack.io))
+        (package (find-package :clack.socket)))
+    (and socket package
+         (funcall (find-symbol "SOCKET-ASYNC-P" package) socket)
+         socket)))
 
 (defun handle-events (session continuation)
   "The response to a page's EventSource: a stream that runs until the page
@@ -160,15 +201,21 @@ is gone.  503 when too many are open."
         (list 503 (list* :content-type "text/plain" :retry-after "30" *security-headers*)
               (list "Too many open event streams.")))))
   (let ((stream (make-instance 'event-stream :session session :continuation continuation
-                                             :base-path *base-path*)))
+                                             :base-path *base-path*))
+        (socket (and *async-stream-opener* (async-socket *request*)))
+        (head (list 200 (append (list :content-type "text/event-stream"
+                                      :cache-control "no-store"
+                                      ;; Tell nginx not to buffer the stream.
+                                      :x-accel-buffering "no")
+                                *security-headers*))))
     (lambda (responder)
-      (run-event-stream stream
-                        (funcall responder
-                                 (list 200 (append (list :content-type "text/event-stream"
-                                                         :cache-control "no-store"
-                                                         ;; Tell nginx not to buffer the stream.
-                                                         :x-accel-buffering "no")
-                                                   *security-headers*)))))))
+      ;; The server calls this later, outside the request's bindings.
+      (with-sane-printing ()
+       (let ((writer (funcall responder head)))
+        (if socket
+            ;; An event loop serves it: no thread waits on this stream.
+            (funcall *async-stream-opener* socket stream writer)
+            (run-event-stream stream writer)))))))
 
 (defun page-subscribes-p (root)
   "True when a component visible from ROOT has subscriptions."
