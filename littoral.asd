@@ -86,12 +86,24 @@
                              (:file "index")
                              (:file "register")))))
 
+(asdf:defsystem #:littoral/test
+  :description "A fake browser for testing Littoral applications in-process."
+  :author "Matthew Kennedy"
+  :license "MIT"
+  :depends-on (#:littoral #:flexi-streams #:cl-ppcre #:quri)
+  :serial t
+  :components ((:module "testing"
+                :serial t
+                :components ((:file "package")
+                             (:file "browser")))))
+
 (asdf:defsystem #:littoral/tests
   :description "FiveAM test suite for Littoral."
   :depends-on (#:littoral
                #:littoral/examples
                #:littoral/tracker
                #:littoral/tutorial
+               #:littoral/test
                #:fiveam
                #:flexi-streams
                #:lack
@@ -100,7 +112,6 @@
   :components ((:module "tests"
                 :serial t
                 :components ((:file "package")
-                             (:file "browser")
                              (:file "canvas")
                              (:file "request-cycle")
                              (:file "call-answer")
@@ -130,7 +141,7 @@
 
 (asdf:defsystem #:littoral/docs
   :description "Writes docs/API.md from the docstrings: make docs."
-  :depends-on (#:littoral #:sb-introspect)
+  :depends-on (#:littoral #:littoral/test #:sb-introspect)
   :components ((:module "tools" :components ((:file "api-docs")))))
 
 (asdf:defsystem #:littoral/tracker

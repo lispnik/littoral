@@ -121,13 +121,15 @@
     (with-open-file (out output :direction :output :if-exists :supersede :external-format :utf-8)
       (format out "# Littoral API reference~%~%Generated from the docstrings by `make docs`; ~
 do not edit by hand.~%")
-      (dolist (package '("littoral" "littoral.html"))
+      (dolist (entry '(("littoral" "src/package.lisp") ("littoral.html" "src/package.lisp")
+                       ("littoral.test" "testing/package.lisp")))
+        (destructuring-bind (package file) entry
         (format out "~%## Package `~A`~%~%~A~%" package
                 (or (documentation (find-package (string-upcase package)) t) ""))
-        (dolist (section (export-sections (merge-pathnames "src/package.lisp" root) package))
+        (dolist (section (export-sections (merge-pathnames file root) package))
           (format out "~%### ~A~%" (first section))
           (dolist (name (rest section))
             (let ((symbol (find-symbol name (string-upcase package))))
               (when (and symbol (write-entry symbol out))
-                (push symbol undocumented)))))))
+                (push symbol undocumented))))))))
     (nreverse undocumented)))

@@ -1,6 +1,12 @@
-;;;; browser.lisp — a fake browser driving the Lack app in-process
+;;;; browser.lisp — a fake browser that drives a Littoral application
+;;;;
+;;;; It calls the Lack application directly: no sockets, no real browser,
+;;;; and fast enough for hundreds of tests.  It keeps cookies, follows
+;;;; redirects, reads links, fields and buttons out of the HTML, and posts
+;;;; forms (multipart too), AJAX requests and event streams the way a
+;;;; browser with littoral.js would.
 
-(in-package #:littoral/tests)
+(in-package #:littoral.test)
 
 (defclass browser ()
   ((app :initarg :app :initform (make-lack-app) :reader browser-app)
@@ -291,3 +297,39 @@ filename=\"~A\"~C~CContent-Type: ~A~C~C~C~C"
   `(let ((littoral::*applications* (make-hash-table :test 'equal)))
      ,@(mapcar (lambda (r) `(register-application ,@r)) registrations)
      ,@body))
+
+;;; Server push
+
+(defclass sink ()
+  ((chunks :initform '() :accessor sink-chunks)
+   (lock :initform (sb-thread:make-mutex) :reader sink-lock))
+  (:documentation "Collects what an event stream writes."))
+
+(defun sink-text (sink)
+  "Everything written to SINK so far."
+  (sb-thread:with-mutex ((sink-lock sink))
+    (format nil "~{~A~}" (reverse (sink-chunks sink)))))
+
+(defun open-stream (browser sink)
+  "Open the current page's event stream in a thread, writing into SINK."
+  (let* ((url (cl-ppcre:register-groups-bind (u) ("data-lt-events=\"([^\"]*)\"" (browser-html browser))
+                (unescape u)))
+         (response (funcall (browser-app browser)
+                            (make-env :get url :cookies (browser-cookies browser)))))
+    (unless (functionp response)
+      (error "~A did not open an event stream (status ~A)." url (first response)))
+    (sb-thread:make-thread
+     (lambda ()
+       (funcall response
+                (lambda (head)
+                  (declare (ignore head))
+                  (lambda (chunk &key close)
+                    (declare (ignore close))
+                    (when chunk
+                      (sb-thread:with-mutex ((sink-lock sink)) (push chunk (sink-chunks sink)))))))))))
+
+(defun wait-for (predicate &optional (seconds 10))
+  "Poll PREDICATE for up to SECONDS; true when it came true."
+  (loop repeat (* seconds 20)
+        when (funcall predicate) return t
+        do (sleep 0.05)))

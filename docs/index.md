@@ -264,6 +264,29 @@ Any applications saved in the file are configured first, and every change made i
 
 `(make-lack-app)` returns a plain Lack application you can mount into a larger Lack/Clack stack. Lack's `:mount` middleware strips the prefix without setting `:script-name`, so pass the prefix yourself: `(:mount "/apps" (make-lack-app :prefix "/apps"))`. A `:script-name` set by the server or proxy is honoured as well. Set `*debug-errors*` to enter the debugger on errors instead of rendering an error page.
 
+## Testing your application
+
+`littoral/test` is the fake browser littoral's own test suite uses. It calls your application's Lack handler directly, with no sockets and no real browser, so tests are fast and need nothing installed. It keeps cookies, follows redirects, and reads links, fields and buttons out of the HTML. It posts forms (multipart too), AJAX requests and event streams the way a browser running `littoral.js` would. It works with any test framework; with FiveAM:
+
+```lisp
+(defpackage #:my-app/tests (:use #:cl #:fiveam #:littoral #:littoral.test))
+(in-package #:my-app/tests)
+
+(test adding-to-the-list
+  (with-fresh-applications (("/todo" 'my-app:todo-list :mode :deployment))
+    (let ((b (make-instance 'browser)))
+      (visit b "/todo")
+      (fill-in b "new-title" "Buy milk")      ; by the field's DOM id
+      (press b "Add")                         ; by the button's label
+      (is (has-text-p b "Buy milk"))
+      (let ((before (browser-url b)))
+        (click b "remove")                    ; by the link's text
+        (back-to b before)                    ; the back button
+        (is (has-text-p b "Buy milk"))))))
+```
+
+`with-fresh-applications` gives a test its own registry of applications. `ajax-request` and `ajax-specs` exercise AJAX; `open-stream`, `sink-text` and `wait-for` exercise server push. The API reference lists everything.
+
 ## Accessibility
 
 `make a11y` runs axe-core's WCAG 2 A and AA rules over every example page, and over the states reached by acting on them, in headless Chrome. CI runs it on every push. What littoral does for you:

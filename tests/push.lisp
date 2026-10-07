@@ -5,39 +5,6 @@
 (def-suite push :in littoral)
 (in-suite push)
 
-(defclass sink ()
-  ((chunks :initform '() :accessor sink-chunks)
-   (lock :initform (sb-thread:make-mutex) :reader sink-lock))
-  (:documentation "Collects what an event stream writes."))
-
-(defun sink-text (sink)
-  "Everything written to SINK so far."
-  (sb-thread:with-mutex ((sink-lock sink))
-    (format nil "~{~A~}" (reverse (sink-chunks sink)))))
-
-(defun open-stream (browser sink)
-  "Open the current page's event stream in a thread, writing into SINK."
-  (let* ((url (cl-ppcre:register-groups-bind (u) ("data-lt-events=\"([^\"]*)\"" (browser-html browser))
-                (unescape u)))
-         (response (funcall (browser-app browser)
-                            (make-env :get url :cookies (browser-cookies browser)))))
-    (is (functionp response))
-    (sb-thread:make-thread
-     (lambda ()
-       (funcall response
-                (lambda (head)
-                  (declare (ignore head))
-                  (lambda (chunk &key close)
-                    (declare (ignore close))
-                    (when chunk
-                      (sb-thread:with-mutex ((sink-lock sink)) (push chunk (sink-chunks sink)))))))))))
-
-(defun wait-for (predicate &optional (seconds 10))
-  "Poll PREDICATE for up to SECONDS; true when it came true."
-  (loop repeat (* seconds 20)
-        when (funcall predicate) return t
-        do (sleep 0.05)))
-
 (test chat-push
   (littoral-examples:clear-room)
   (with-fresh-applications (("/chat" 'littoral-examples:chat :mode :deployment))

@@ -1270,3 +1270,171 @@ Reads the content-type of an uploaded-file.  The `mime` type the browser gave.
 #### `file-contents` `object` — generic function
 
 Reads the contents of an uploaded-file.  The file's bytes, an (`unsigned-byte` 8) vector.
+
+## Package `littoral.test`
+
+Test Littoral applications in-process with a fake browser.
+
+### A browser and its state
+
+#### `browser` — class
+
+A fake browser driving the Lack app in-process.
+
+#### `browser-app` `object` — generic function
+
+Reads the app of a browser.
+
+#### `browser-url` `object` — generic function
+
+Reads the url of a browser.
+
+#### `browser-status` `object` — generic function
+
+Reads the status of a browser.
+
+#### `browser-html` `object` — generic function
+
+Reads the html of a browser.
+
+#### `browser-cookies` `object` — generic function
+
+Reads the cookies of a browser.
+
+#### `browser-fields` `object` — generic function
+
+Reads the fields of a browser.  Alist of field name → value typed into the current page.
+
+#### `browser-files` `object` — generic function
+
+Reads the files of a browser.  Alist of field name → (`filename` `content-type` `octets`).
+
+### Requests
+
+#### `visit` `browser url &key (method :get) body content-type` — function
+
+Request `url`, following redirects, and make the result the current page.
+
+#### `back-to` `browser url` — function
+
+Return to an earlier page, as the back button (with no cache) would.
+
+#### `raw-request` `browser method url &key body content-type` — function
+
+One request, no redirects followed.  Returns status, headers, body string.
+
+#### `make-env` `method url &key body cookies (content-type "application/x-www-form-urlencoded")` — function
+
+A Lack environment for a `method` request to `url`.
+
+#### `response-header` `headers name` — function
+
+The header `name` from a Lack response's `headers` plist.
+
+### Reading the page
+
+#### `page-text` `browser` — function
+
+The current page's text without markup.
+
+#### `has-text-p` `browser text` — function
+
+True when the current page's text contains `text`.
+
+#### `find-link` `browser text` — function
+
+The href of the first link whose text contains `text`.
+
+#### `find-links` `browser text` — function
+
+The hrefs of every link whose text is exactly `text`, in page order.
+
+#### `element-name` `browser id` — function
+
+The name of the field with `dom` id `id`.
+
+#### `form-action` `browser` — function
+
+The action `url` of the first form on the page.
+
+#### `attributes` `tag` — function
+
+The attributes in `tag`, the inside of an `html` start tag, as an alist.
+
+#### `attr` `attributes name` — function
+
+The value of attribute `name` in `attributes`.
+
+#### `unescape` `string` — function
+
+`string` with the `html` escapes littoral writes undone.
+
+#### `strip-tags` `html` — function
+
+`html` with its tags removed and escapes undone.
+
+### Acting on it
+
+#### `click` `browser text` — function
+
+Follow the link whose text contains `text`.
+
+#### `click-nth` `browser text n` — function
+
+Follow the Nth (from 0) link whose text is exactly `text`.
+
+#### `fill-in` `browser id value` — function
+
+Type `value` into the field with `dom` id `id`.
+
+#### `set-checkbox` `browser index checked` — function
+
+Check or uncheck the INDEXth checkbox on the page.
+
+#### `select-option` `browser id label` — function
+
+Choose the option labelled `label` in the select with `dom` id `id`.
+
+#### `attach-file` `browser id filename content-type contents` — function
+
+Choose a file for the file input with `dom` id `id`.  `contents` is a string.
+
+#### `press` `browser text` — function
+
+Submit the form with the button whose label contains `text`.
+
+#### `encode-fields` `fields` — function
+
+`fields`, an alist, as a URL-encoded form body.
+
+### AJAX and server push
+
+#### `ajax-request` `browser callback targets &key fields` — function
+
+Post an `ajax` request the way littoral.js does; returns the `json` text.
+
+#### `ajax-specs` `browser attribute` — function
+
+The (`callback` . `targets`) of each element with data-lt-ATTRIBUTE.
+
+#### `sink` — class
+
+Collects what an event stream writes.
+
+#### `sink-text` `sink` — function
+
+Everything written to `sink` so far.
+
+#### `open-stream` `browser sink` — function
+
+Open the current page's event stream in a thread, writing into `sink`.
+
+#### `wait-for` `predicate &optional (seconds 10)` — function
+
+Poll `predicate` for up to `seconds`; true when it came true.
+
+### Test fixtures
+
+#### `with-fresh-applications` `(&rest registrations) &body body` — macro
+
+Run `body` with only the given applications registered.

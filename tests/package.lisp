@@ -1,7 +1,7 @@
 ;;;; package.lisp
 
 (defpackage #:littoral/tests
-  (:use #:cl #:littoral #:littoral.html #:fiveam)
+  (:use #:cl #:littoral #:littoral.html #:littoral.test #:fiveam)
   (:export #:littoral)
   (:documentation "The FiveAM suite for Littoral."))
 
