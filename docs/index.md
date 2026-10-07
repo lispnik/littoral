@@ -206,7 +206,7 @@ Components can be re-rendered on open pages by the server, without polling (this
 
 ### Live redefinition
 
-In development mode, recompile a component's `render` method in Emacs (`C-c C-c`) and every open page showing that component redraws itself straight away, with its state intact. A watcher notices when methods of `render`, `style`, `script`, `update-root`, `children` or `render-decoration` are redefined. It then tells the pages showing an instance of that class to reload, and because each page's URL names its saved state, reloading keeps that state.
+In development mode, recompile a component's `render` method in Emacs (`C-c C-c`) and every open page showing that component redraws itself within a couple of seconds, with its state intact. A watcher notices when methods of `render`, `style`, `script`, `update-root`, `children` or `render-decoration` are redefined. Pages showing an instance of that class then reload, and because each page's URL names its saved state, reloading keeps that state. Pages with a push stream hear about it through the stream; the others poll a cheap endpoint, so live reloading holds no connection (and on Hunchentoot no thread) open.
 
 For changes the watcher can't see, such as a helper function or a stylesheet, call `(reload-pages)`. Set `*live-reload*` to `nil` to turn it off. Deployment-mode pages are never affected.
 

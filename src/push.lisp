@@ -226,9 +226,15 @@ is gone.  503 when too many are open."
 
 (defun page-listens-p (session)
   "True when SESSION's page should open an event stream: something on it
-subscribes, or live reloading wants it."
-  (or (page-subscribes-p (session-root session))
-      (and *live-reload* (development-p (session-application session)))))
+subscribes."
+  (page-subscribes-p (session-root session)))
+
+(defun page-polls-p (session)
+  "True when SESSION's page should poll for live reloads: it is in
+development mode and has no event stream to hear them through."
+  (and *live-reload*
+       (development-p (session-application session))
+       (not (page-listens-p session))))
 
 (defun page-subscribes-p (root)
   "True when a component visible from ROOT has subscriptions."

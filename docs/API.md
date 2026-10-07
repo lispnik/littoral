@@ -693,7 +693,8 @@ their components' rendering methods are redefined (see live.lisp).
 #### `reload-pages` `&optional (classes t)` — function
 
 Have the open pages of applications in development mode reload: all of
-them, or those showing an instance of one of `classes`.  Returns how many.
+them, or those showing an instance of one of `classes`.  Pages that poll see
+it on their next poll; returns how many pages with event streams were told.
 
 #### `start-live-watcher` `&key (interval 0.5)` — function
 

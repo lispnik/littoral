@@ -192,9 +192,26 @@
     });
   }
 
+  // Live redefinition on pages without an event stream: ask now and then
+  // whether code this page shows has changed.
+  function pollForReload() {
+    var url = document.body.getAttribute("data-lt-live");
+    if (!url) return;
+    var timer = setInterval(function () {
+      fetch(url, { credentials: "same-origin" })
+        .then(function (r) { return r.ok ? r.json() : { reload: false }; })
+        .then(function (answer) {
+          if (answer.reload) { clearInterval(timer); window.location.reload(); }
+        })
+        .catch(function () {});
+    }, 1500);
+    window.addEventListener("pagehide", function () { clearInterval(timer); });
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     scanPeriodicals();
     listen();
+    pollForReload();
   });
 
   // A page restored from the back/forward cache shows state the server may

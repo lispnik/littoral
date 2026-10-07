@@ -214,10 +214,12 @@ add, then the session and page keys."
                            (application-scripts app)
                            (reverse (root-scripts root))))
         (format out "<script src=\"~A\" defer></script>~%" (html-escape url)))
-      (format out "</head>~%<body data-lt-action=\"~A\"~@[ data-lt-events=\"~A\"~]>~%"
+      (format out "</head>~%<body data-lt-action=\"~A\"~@[ data-lt-events=\"~A\"~]~@[ data-lt-live=\"~A\"~]>~%"
               (html-escape action-url)
               (when (page-listens-p session)
-                (html-escape (concatenate 'string action-url "&_lt_events=1"))))
+                (html-escape (concatenate 'string action-url "&_lt_events=1")))
+              (when (page-polls-p session)
+                (html-escape (format nil "~A&_lt_live=~D" action-url *code-version*))))
       (write-string body-html out)
       (when (root-inline-scripts root)
         (format out "~%<script>~%~{~A~%~}</script>" (reverse (root-inline-scripts root))))
@@ -348,6 +350,11 @@ render the page it names."
            (handle-ajax session continuation))
           ((request-parameter "_lt_events")
            (handle-events session continuation))
+          ((request-parameter "_lt_live")
+           ;; A development page asking whether code it shows has changed.
+           (let ((version (or (ignore-errors (parse-integer (request-parameter "_lt_live"))) 0)))
+             (list 200 (list* :content-type "application/json" :cache-control "no-store" *security-headers*)
+                   (list (format nil "{\"reload\":~:[false~;true~]}" (live-check session version))))))
           (t
            (restore-snapshot (continuation-snapshot continuation))
            (or (run-actions session continuation)

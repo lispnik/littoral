@@ -1,10 +1,12 @@
 ;;;; live.lisp — redefine a render method, see every open page redrawn
 ;;;;
-;;;; In development mode every page keeps an event stream open.  A watcher
-;;;; thread notices when a method of RENDER (or STYLE, SCRIPT, UPDATE-ROOT,
-;;;; CHILDREN, RENDER-DECORATION) is added or replaced, as recompiling one
-;;;; in Emacs does, and tells the open pages showing an instance of the
-;;;; class it is specialised on to reload.  A page's URL names its state, so
+;;;; A watcher thread notices when a method of RENDER (or STYLE, SCRIPT,
+;;;; UPDATE-ROOT, CHILDREN, RENDER-DECORATION) is added or replaced, as
+;;;; recompiling one in Emacs does, and records which classes changed.  Open
+;;;; pages of applications in development mode showing an instance of one
+;;;; reload: those with an event stream are told through it; the others
+;;;; poll a cheap endpoint, so live reloading holds no connection (on
+;;;; Hunchentoot, no thread) open.  A page's URL names its state, so
 ;;;; reloading keeps the state and draws it with the new code.
 ;;;;
 ;;;; For other changes (a helper function, a stylesheet), call RELOAD-PAGES.
@@ -16,6 +18,35 @@
   "Generic functions whose methods, when redefined, redraw open pages.")
 
 (defvar *live-watcher* nil)
+
+(defvar *code-changes* '()
+  "Recent changes, newest first: (VERSION . CLASSES), CLASSES being T for all.")
+
+(defvar *code-changes-lock* (sb-thread:make-mutex :name "littoral code changes"))
+
+(defun note-code-change (classes)
+  "Record that rendering code for CLASSES (or T, everything) changed."
+  (sb-thread:with-mutex (*code-changes-lock*)
+    (push (cons (incf *code-version*) classes) *code-changes*)
+    (when (> (length *code-changes*) 100)
+      (setf *code-changes* (subseq *code-changes* 0 100)))))
+
+(defun classes-changed-since (version)
+  "The classes changed after VERSION: a list, T for all, or NIL for none."
+  (sb-thread:with-mutex (*code-changes-lock*)
+    (let ((classes '()))
+      (dolist (change *code-changes* classes)
+        (when (<= (car change) version) (return classes))
+        (if (eq (cdr change) t)
+            (return t)
+            (setf classes (union classes (cdr change))))))))
+
+(defun live-check (session version)
+  "Whether SESSION's page, drawn at code VERSION, should reload."
+  (let ((classes (classes-changed-since version)))
+    (and classes
+         (sb-thread:with-recursive-lock ((session-lock session))
+           (shows-class-p (session-root session) classes)))))
 
 (defun method-snapshot ()
   "The methods of the watched generic functions, as a list."
@@ -44,7 +75,9 @@ not a plain class (an EQL specialiser), meaning every page."
 
 (defun reload-pages (&optional (classes t))
   "Have the open pages of applications in development mode reload: all of
-them, or those showing an instance of one of CLASSES.  Returns how many."
+them, or those showing an instance of one of CLASSES.  Pages that poll see
+it on their next poll; returns how many pages with event streams were told."
+  (note-code-change classes)
   (let ((count 0))
     (dolist (stream (open-event-streams) count)
       (let ((session (stream-session stream)))
