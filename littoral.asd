@@ -104,6 +104,8 @@
                #:littoral/tracker
                #:littoral/tutorial
                #:littoral/test
+               #:littoral/db
+               #:dbd-sqlite3
                #:fiveam
                #:flexi-streams
                #:lack
@@ -128,7 +130,8 @@
                              (:file "widgets-more")
                              (:file "tracker")
                              (:file "tutorial")
-                             (:file "live"))))
+                             (:file "live")
+                             (:file "db"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
                                        (uiop:find-symbol* :littoral :littoral/tests))
@@ -165,3 +168,10 @@
   :description "Serve Littoral on Woo, with server push from its event loops."
   :depends-on (#:littoral #:clack-handler-woo #:woo #:lev #:cffi)
   :components ((:module "src" :components ((:file "woo")))))
+
+(asdf:defsystem #:littoral/db
+  :description "Keep Littoral's described objects in a SQL database (cl-dbi)."
+  :author "Matthew Kennedy"
+  :license "MIT"
+  :depends-on (#:littoral #:dbi)
+  :components ((:module "src" :components ((:file "db")))))

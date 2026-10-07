@@ -18,6 +18,7 @@ cl-base64, ghcr.io/ocicl/cl-base64@sha256:702412dbc1ed825e275fb23e22c29527eb786b
 cl-base64-tests, ghcr.io/ocicl/cl-base64@sha256:702412dbc1ed825e275fb23e22c29527eb786bf644e47c7621bf0dbb34e17c7e, cl-base64-20240503-80496b7/cl-base64-tests.asd
 cl-cont, ghcr.io/ocicl/cl-cont@sha256:a08944900637ab4e8a705f863f9d209eef8f2e39aa30ff2045d846b6f8020dc8, cl-cont-20261004-2cbe618/cl-cont.asd
 cl-cont-test, ghcr.io/ocicl/cl-cont@sha256:a08944900637ab4e8a705f863f9d209eef8f2e39aa30ff2045d846b6f8020dc8, cl-cont-20261004-2cbe618/cl-cont-test.asd
+cl-dbi, ghcr.io/ocicl/cl-dbi@sha256:831b6c4b26fcd003cd1ed4a2e42a5620128bd577ff077d4c6400a076e41bbff8, cl-dbi-20250928-be4df4f/cl-dbi.asd
 cl-fad, ghcr.io/ocicl/cl-fad@sha256:c0aaffc859e419e0a94cedb08f48c2484da404363fb0fe4ffd6e09a80aadafe1, cl-fad-0.7.6/cl-fad.asd
 cl-ppcre, ghcr.io/ocicl/cl-ppcre@sha256:bf073924cf4fd5957a4fd961a95d446ed0e53fa32a5002cbd2d52182874f45e5, cl-ppcre-20250606-a2ea581/cl-ppcre.asd
 cl-ppcre-unicode, ghcr.io/ocicl/cl-ppcre@sha256:bf073924cf4fd5957a4fd961a95d446ed0e53fa32a5002cbd2d52182874f45e5, cl-ppcre-20250606-a2ea581/cl-ppcre-unicode.asd
@@ -33,6 +34,12 @@ clack-handler-wookie, ghcr.io/ocicl/clack@sha256:9457bea28f1ee9c49a7626c2ee23c18
 clack-socket, ghcr.io/ocicl/clack@sha256:9457bea28f1ee9c49a7626c2ee23c181b5af3636b5e64a27a46ef8535818947f, clack-20241101-935be5b/clack-socket.asd
 clack-test, ghcr.io/ocicl/clack@sha256:9457bea28f1ee9c49a7626c2ee23c181b5af3636b5e64a27a46ef8535818947f, clack-20241101-935be5b/clack-test.asd
 closer-mop, ghcr.io/ocicl/closer-mop@sha256:39ec579e68118a8be57a7882812ff31094a031f88b77f11cf4434a92261f1126, closer-mop-20260329-04db182/closer-mop.asd
+dbd-mysql, ghcr.io/ocicl/cl-dbi@sha256:831b6c4b26fcd003cd1ed4a2e42a5620128bd577ff077d4c6400a076e41bbff8, cl-dbi-20250928-be4df4f/dbd-mysql.asd
+dbd-null, ghcr.io/ocicl/cl-dbi@sha256:831b6c4b26fcd003cd1ed4a2e42a5620128bd577ff077d4c6400a076e41bbff8, cl-dbi-20250928-be4df4f/dbd-null.asd
+dbd-postgres, ghcr.io/ocicl/cl-dbi@sha256:831b6c4b26fcd003cd1ed4a2e42a5620128bd577ff077d4c6400a076e41bbff8, cl-dbi-20250928-be4df4f/dbd-postgres.asd
+dbd-sqlite3, ghcr.io/ocicl/cl-dbi@sha256:831b6c4b26fcd003cd1ed4a2e42a5620128bd577ff077d4c6400a076e41bbff8, cl-dbi-20250928-be4df4f/dbd-sqlite3.asd
+dbi, ghcr.io/ocicl/cl-dbi@sha256:831b6c4b26fcd003cd1ed4a2e42a5620128bd577ff077d4c6400a076e41bbff8, cl-dbi-20250928-be4df4f/dbi.asd
+dbi-test, ghcr.io/ocicl/cl-dbi@sha256:831b6c4b26fcd003cd1ed4a2e42a5620128bd577ff077d4c6400a076e41bbff8, cl-dbi-20250928-be4df4f/dbi-test.asd
 fast-http, ghcr.io/ocicl/fast-http@sha256:1eb91157b8adb9c46c7b80cd0078819d49d6ec397c7a7a072c94dbfab3271964, fast-http-20260406-03d440d/fast-http.asd
 fast-http-test, ghcr.io/ocicl/fast-http@sha256:1eb91157b8adb9c46c7b80cd0078819d49d6ec397c7a7a072c94dbfab3271964, fast-http-20260406-03d440d/fast-http-test.asd
 fast-io, ghcr.io/ocicl/fast-io@sha256:7ba35a0eddf00b3c25656b3c5a93e95460f6cb8f807afbc04ef4f50076d95aff, fast-io-20240503-a4c5ad6/fast-io.asd
@@ -53,6 +60,7 @@ iolib.conf, ghcr.io/ocicl/iolib@sha256:0f523172cd40b937dc1ed3ecd8d3ac1b5cb41c772
 iolib.examples, ghcr.io/ocicl/iolib@sha256:0f523172cd40b937dc1ed3ecd8d3ac1b5cb41c772c60f7ccbc42b2fa9e315047, iolib-20260812-c939f25/iolib.examples.asd
 ironclad, ghcr.io/ocicl/ironclad@sha256:3117e5a26a3e94924074c3548c235a2b733609ed61a2731880ac9e31df55428b, ironclad-20240503-6da010f/ironclad.asd
 ironclad-text, ghcr.io/ocicl/ironclad@sha256:3117e5a26a3e94924074c3548c235a2b733609ed61a2731880ac9e31df55428b, ironclad-20240503-6da010f/ironclad-text.asd
+iterate, ghcr.io/ocicl/iterate@sha256:6950c55e3782d58cabbbb5753111a70d8cafab8348b7fd6f2143d9abeaab46fb, iterate-20250703-d27d7ff/iterate.asd
 lack, ghcr.io/ocicl/lack@sha256:cca30f5e88c2b0813f41a5bbcc44517edc7e95b9cd2aef0ae0df0044571e8673, lack-20260814-35d8b0a/lack.asd
 lack-app-directory, ghcr.io/ocicl/lack@sha256:cca30f5e88c2b0813f41a5bbcc44517edc7e95b9cd2aef0ae0df0044571e8673, lack-20260814-35d8b0a/lack-app-directory.asd
 lack-app-file, ghcr.io/ocicl/lack@sha256:cca30f5e88c2b0813f41a5bbcc44517edc7e95b9cd2aef0ae0df0044571e8673, lack-20260814-35d8b0a/lack-app-file.asd
@@ -86,6 +94,8 @@ rfc2388, ghcr.io/ocicl/rfc2388@sha256:4190f6eb36b3b2f53def6eff56b44e76edf4086ada
 smart-buffer, ghcr.io/ocicl/smart-buffer@sha256:b8d194f5881c415fd7f0099b88dfd9e2158405c2966de15c716b155a364bf0f7, smart-buffer-20240503-619759d/smart-buffer.asd
 smart-buffer-test, ghcr.io/ocicl/smart-buffer@sha256:b8d194f5881c415fd7f0099b88dfd9e2158405c2966de15c716b155a364bf0f7, smart-buffer-20240503-619759d/smart-buffer-test.asd
 split-sequence, ghcr.io/ocicl/split-sequence@sha256:3a37662eedd99c42995587b9d443c4631f25c4c523091bcca31a27b880585b8e, split-sequence-2.0.1/split-sequence.asd
+sqlite, ghcr.io/ocicl/sqlite@sha256:a7f80757e6ee13af06e2eeaeff1e079dba439d85ea5c7f68e262bccc40dcbd5c, cl-sqlite-0.2.1/sqlite.asd
+sqlite-tests, ghcr.io/ocicl/sqlite@sha256:a7f80757e6ee13af06e2eeaeff1e079dba439d85ea5c7f68e262bccc40dcbd5c, cl-sqlite-0.2.1/sqlite-tests.asd
 static-vectors, ghcr.io/ocicl/static-vectors@sha256:53e11e5689c3dbea6a3017760b55f052588003d774913539930ddc4330a69970, static-vectors-20240624-3d9d89b/static-vectors.asd
 swank, ghcr.io/ocicl/swank@sha256:07487b3404a149ac39619bd340f49cd8b953f76f6d8fa6198cfc1e91d8a3076b, slime-2.32/swank.asd
 swap-bytes, ghcr.io/ocicl/swap-bytes@sha256:06edc17deb0f27cdf6290689711ece670a8282dfd07b732a9adc541af1ce7ed6, swap-bytes-20240503-43ab141/swap-bytes.asd

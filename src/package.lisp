@@ -83,6 +83,7 @@
    #:*instance-id* #:*max-request-size* #:*new-sessions-per-minute* #:*trust-forwarded-for*
    #:*max-event-streams* #:*max-event-streams-per-session*
    #:application-max-request-size #:application-local-only-p #:application-language
+   #:application-around-actions
    #:*configuration-file* #:save-configuration #:load-configuration
    #:configure-application #:application-settings
    #:register-application #:unregister-application #:find-application

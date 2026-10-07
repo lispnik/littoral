@@ -852,6 +852,11 @@ Reads the local-only-p of an application.  Answer only requests from this machin
 
 Reads the language of an application.  The page's language, for the html lang attribute.
 
+#### `application-around-actions` `object` — generic function
+
+Reads the around-actions of an application.  A function called with a thunk that runs a request's
+callbacks, or `nil`.  littoral/db uses it to run them in a transaction.
+
 #### `*configuration-file*` — variable
 
 Where `save-configuration` writes, and the /config application saves after
@@ -877,7 +882,7 @@ when there is none.  Sessions, and settings not given, are kept.
 
 `app`'s configuration as a plist, as `save-configuration` writes it.
 
-#### `register-application` `path root-class &rest initargs &key title mode session-timeout max-continuations cookie-sessions stylesheets scripts credentials max-sessions error-handler expired-notice max-request-size local-only language` — function
+#### `register-application` `path root-class &rest initargs &key title mode session-timeout max-continuations cookie-sessions stylesheets scripts credentials max-sessions error-handler expired-notice max-request-size local-only language around-actions` — function
 
 Serve `root-class`, a component class, at `path`.  Replaces any application
 already there.  Returns the `application`.

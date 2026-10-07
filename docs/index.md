@@ -264,6 +264,27 @@ Any applications saved in the file are configured first, and every change made i
 
 `(make-lack-app)` returns a plain Lack application you can mount into a larger Lack/Clack stack. Lack's `:mount` middleware strips the prefix without setting `:script-name`, so pass the prefix yourself: `(:mount "/apps" (make-lack-app :prefix "/apps"))`. A `:script-name` set by the server or proxy is honoured as well. Set `*debug-errors*` to enter the debugger on errors instead of rendering an error page.
 
+## Keeping data in a database
+
+`littoral/db` stores described objects in SQL through cl-dbi. It's tested with SQLite and written for PostgreSQL too. A table is a description plus a name:
+
+```lisp
+(defclass contact (littoral.db:persistent)      ; adds id and version
+  ((name :initarg :name :initform nil) (email :initarg :email :initform nil)))
+(define-description contact ((name :required t) (email :type :email)))
+(littoral.db:define-table contact)
+
+(littoral.db:connect-database :sqlite3 :database-name "app.db")
+(littoral.db:create-table 'contact)
+(littoral.db:db-save (make-instance 'contact :name "Ada" :email "ada@example.org"))
+(littoral.db:db-select 'contact :where "name LIKE ?" :params '("A%") :order-by "name" :limit 20)
+```
+
+- **Where data lives:** the data lives in the database, and components hold only what the user is looking at. To edit, read a fresh copy (`db-find`), give it to `make-editor`, and `db-save` what the editor answers.
+- **Conflicting saves:** updates check the row's `version`, so saving an object someone else changed meanwhile signals `stale-object` rather than overwriting their change. Catch it and show the user the current version (`db-reload`).
+- **References:** a field of `:type :reference :to 'project` holds another stored object. It's chosen from that table in editors and kept as its id.
+- **Transactions:** `(register-application … :around-actions (littoral.db:transactional))` runs each request's callbacks, page or AJAX, in one transaction, rolled back if any of them signals.
+
 ## Testing your application
 
 `littoral/test` is the fake browser littoral's own test suite uses. It calls your application's Lack handler directly, with no sockets and no real browser, so tests are fast and need nothing installed. It keeps cookies, follows redirects, and reads links, fields and buttons out of the HTML. It posts forms (multipart too), AJAX requests and event streams the way a browser running `littoral.js` would. It works with any test framework; with FiveAM:

@@ -72,10 +72,21 @@ writing fails."
   (serving (entry watcher)
     (littoral::keep-stream-alive (entry-stream entry) (entry-writer entry))))
 
+(defun utf-8-writer (writer)
+  "WRITER, with strings encoded to UTF-8 before Woo sees them.  Woo's
+streaming writer sends each character of a string as one byte (its
+WRITE-SOCKET-STRING writes CHAR-CODE), while announcing the UTF-8 length,
+so a non-ASCII character such as an ellipsis would derail the stream."
+  (lambda (body &rest options)
+    (apply writer
+           (if (stringp body) (sb-ext:string-to-octets body :external-format :utf-8) body)
+           options)))
+
 (defun open-stream (socket stream writer)
   "Serve STREAM from the event loop running this call.  Woo calls the
 response function on that loop's thread, so *EVLOOP* is the right loop."
-  (let* ((loop woo.ev:*evloop*)
+  (let* ((writer (utf-8-writer writer))
+         (loop woo.ev:*evloop*)
          (async (cffi:foreign-alloc '(:struct lev:ev-async)))
          (timer (cffi:foreign-alloc '(:struct lev:ev-timer)))
          (interval (coerce littoral::*keepalive-seconds* 'double-float))

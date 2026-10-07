@@ -284,8 +284,10 @@ page, and answer the components to update as JSON."
          (callbacks (continuation-callbacks continuation))
          (*ajax-result* nil)
          (*ajax-scripts* '()))
-    (process-callbacks (lack/request:request-parameters *request*) callbacks)
-    (prepare-tasks root)
+    (call-around-actions session
+                         (lambda ()
+                           (process-callbacks (lack/request:request-parameters *request*) callbacks)
+                           (prepare-tasks root)))
     (setf (continuation-snapshot continuation) (take-snapshot root))
     (let ((*render-context* (make-instance 'render-context
                                            :callbacks callbacks
@@ -301,14 +303,23 @@ page, and answer the components to update as JSON."
                                       :value *ajax-result*
                                       :scripts (reverse *ajax-scripts*))))))))
 
+(defun call-around-actions (session thunk)
+  "Call THUNK through SESSION's application's AROUND-ACTIONS, if it has any."
+  (let ((around (application-around-actions (session-application session))))
+    (if around (funcall around thunk) (funcall thunk))))
+
 (defun run-actions (session continuation)
   "Run the callbacks the request names on CONTINUATION's page.  When any
 ran, snapshot the result as a new page, note the timings for the toolbar
 and return a redirect to it; otherwise NIL."
   (let ((start (get-internal-real-time)))
-    (when (process-callbacks (lack/request:request-parameters *request*)
-                             (continuation-callbacks continuation))
-      (prepare-tasks (session-root session))
+    (when (call-around-actions
+           session
+           (lambda ()
+             (when (process-callbacks (lack/request:request-parameters *request*)
+                                      (continuation-callbacks continuation))
+               (prepare-tasks (session-root session))
+               t)))
       (let* ((acted (get-internal-real-time))
              (page (new-continuation session))
              (done (get-internal-real-time)))
