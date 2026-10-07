@@ -517,11 +517,13 @@ not set :SCRIPT-NAME (lack's mount middleware does not)."
   (setf *reaper* nil))
 
 (defun start (&key (port 8080) (address "127.0.0.1") (server :hunchentoot) (prefix "")
-                configuration-file (instance-id *instance-id*))
+                configuration-file (instance-id *instance-id*) (max-threads 100))
   "Serve all registered applications with Clack on PORT, under PREFIX, and
 reap idle sessions in the background.  With CONFIGURATION-FILE, first load
 the applications saved there; /config then saves its changes to it.
-INSTANCE-ID prefixes session keys, for routing several processes."
+INSTANCE-ID prefixes session keys, for routing several processes.
+MAX-THREADS caps Hunchentoot's worker threads; every open page with server
+push holds one, so raise it when many pages subscribe."
   (when *handler* (stop))
   (setf *instance-id* instance-id)
   (when configuration-file
@@ -536,6 +538,8 @@ who can reach them inspect and change component state."
               (mapcar #'application-path open) address))))
   (setf *handler* (clack:clackup (make-lack-app :prefix prefix)
                                  :server server :port port :address address
+                                 :max-thread-count max-threads
+                                 :max-accept-count (+ max-threads 20)
                                  :use-default-middlewares nil :silent t :debug nil))
   (format t "~&Littoral listening on http://~A:~D/~%" address port)
   *handler*)

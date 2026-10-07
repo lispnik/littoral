@@ -280,16 +280,26 @@ Any applications saved in the file are configured first, and every change made i
 
 ## Deployment and scale
 
-**Performance.** `make bench` measures the request cycle in-process. On an Apple-silicon Mac with SBCL 2.6.8:
+**Performance.** `make load` measures over real HTTP, using Hunchentoot on an Apple-silicon Mac with SBCL 2.6.8:
 
-| Operation | Time |
+| Measurement | Result |
 |---|---|
-| a click on the counter (action and render) | ~60 µs |
-| a click in the sushi store | ~180 µs |
-| a snapshot of 100 objects | ~10 µs |
-| 16 threads, separate sessions | ~58,000 clicks/s |
+| clicks (action, redirect, page), 32 users | ~8,400 /s on the counter, ~7,800 /s in the store; p99 ~13 ms |
+| rendering a session's page (`ab`, 32 connections) | ~10,900 requests/s |
+| static files (`ab`) | ~15,000 requests/s |
+| memory per session, back-button pages included | ~10 KB (counter), ~25 KB (store) |
+| open push streams | 600 at once with `:max-threads 1000`; ~1.5 MB each |
+
+`make bench` measures the same cycle in-process, without the network: about 60 µs per click on the counter.
 
 Requests in one session are serialised by its lock, and requests in different sessions run in parallel. The test suite runs concurrent sessions, many requests against one page, and concurrent AJAX.
+
+**Threads.** Hunchentoot gives every connection its own thread, and `start` allows 100 by default. Both idle keep-alive connections and open pages that use server push occupy a thread, and a push page holds its thread, about 1.5 MB of memory, for as long as it stays open. So capacity is counted in connections, not requests:
+
+- If many pages subscribe to channels, raise `:max-threads`.
+- Put nginx in front: it holds idle browser connections cheaply and sends littoral fewer of its own.
+
+A closed page frees its thread within about two keep-alive intervals (`*keepalive-seconds*`, 5 s by default).
 
 **State that the back button sees.** Snapshots copy the slots of the objects `states` names, but share the slots' values. A list changed in place therefore changes in every snapshot. Either replace such values (`(setf (items self) (append …))`) or name the object as `(deep object)` in `states`. A deep entry copies the object's lists, vectors, strings and hash tables. Other instances are still shared, and cycles are kept.
 

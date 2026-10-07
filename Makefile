@@ -1,7 +1,7 @@
 SBCL ?= sbcl
 PORT ?= 8080
 
-.PHONY: test e2e a11y bench docs clean-check run tracker lint clean
+.PHONY: test e2e a11y bench load docs clean-check run tracker lint clean
 
 test:
 	$(SBCL) --non-interactive --eval '(asdf:test-system :littoral)'
@@ -9,6 +9,16 @@ test:
 # A fresh clone, built against nothing but its own ocicl.csv.
 clean-check:
 	tools/clean-check.sh
+
+# Real-HTTP load test: clicks, memory per session, push streams.
+LOAD_PORT ?= 8095
+load:
+	@$(SBCL) --non-interactive --load bench/load-server.lisp \
+	  --eval '(littoral-load:start-load-server :port $(LOAD_PORT) :max-threads 1000)' \
+	  --eval '(sleep 1200)' >/dev/null 2>&1 & pid=$$!; \
+	for i in $$(seq 1 90); do curl -s -o /dev/null http://127.0.0.1:$(LOAD_PORT)/_stats && break; sleep 1; done; \
+	SERVER_PID=$$(pgrep -f start-load-server | head -1) STREAMS=100,300 BASE=http://127.0.0.1:$(LOAD_PORT) \
+	  $(NODE) bench/load.mjs; status=$$?; kill -9 $$pid; exit $$status
 
 docs:
 	$(SBCL) --non-interactive --eval '(asdf:load-system :littoral/docs)' \

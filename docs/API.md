@@ -876,12 +876,14 @@ A Lack application serving every registered littoral application.
 `prefix` is the path it is mounted under when the mounting middleware does
 not set :`script-name` (lack's mount middleware does not).
 
-#### `start` `&key (port 8080) (address "127.0.0.1") (server :hunchentoot) (prefix "") configuration-file (instance-id *instance-id*)` — function
+#### `start` `&key (port 8080) (address "127.0.0.1") (server :hunchentoot) (prefix "") configuration-file (instance-id *instance-id*) (max-threads 100)` — function
 
 Serve all registered applications with Clack on `port`, under `prefix`, and
 reap idle sessions in the background.  With `configuration-file`, first load
 the applications saved there; /config then saves its changes to it.
 `instance-id` prefixes session keys, for routing several processes.
+`max-threads` caps Hunchentoot's worker threads; every open page with server
+push holds one, so raise it when many pages subscribe.
 
 #### `stop` — function
 

@@ -45,8 +45,9 @@
 (defvar *event-streams* '())
 (defvar *event-streams-lock* (sb-thread:make-mutex :name "littoral event streams"))
 
-(defparameter *keepalive-seconds* 15
-  "How often an idle stream sends a comment, which also notices closed connections.")
+(defparameter *keepalive-seconds* 5
+  "How often an idle stream sends a comment.  Writing is how a closed page
+is noticed, so this bounds how long a gone page keeps its server thread.")
 
 (defun open-event-streams ()
   "The event streams open now."
