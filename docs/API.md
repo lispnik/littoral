@@ -701,7 +701,7 @@ Watch for redefined rendering methods every `interval` seconds.
 
 #### `stop-live-watcher` — function
 
-*Undocumented.*
+Stop watching for redefined rendering methods.
 
 ### Sessions & applications
 

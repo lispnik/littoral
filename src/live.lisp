@@ -72,6 +72,7 @@ them, or those showing an instance of one of CLASSES.  Returns how many."
          :name "littoral live reload")))
 
 (defun stop-live-watcher ()
+  "Stop watching for redefined rendering methods."
   (when (and *live-watcher* (sb-thread:thread-alive-p *live-watcher*))
     (sb-thread:terminate-thread *live-watcher*))
   (setf *live-watcher* nil))
