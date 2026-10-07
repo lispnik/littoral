@@ -39,6 +39,10 @@ where *PRINT-READABLY* is true: strings would print as #A(...) and hex as
 loop, set by an optional system such as littoral/woo; NIL when there is
 none and each stream gets a waiting thread.")
 
+(defvar *live-reload* t
+  "When true, open pages of applications in development mode reload after
+their components' rendering methods are redefined (see live.lisp).")
+
 (defvar *debug-errors* nil
   "When true, errors inside a request enter the debugger instead of
 rendering an error page.")

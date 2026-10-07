@@ -48,6 +48,7 @@
                              (:file "ajax")
                              (:file "dispatcher")
                              (:file "push")
+                             (:file "live")
                              (:module "tools"
                               :serial t
                               :components ((:file "halos")
@@ -115,7 +116,8 @@
                              (:file "descriptions")
                              (:file "widgets-more")
                              (:file "tracker")
-                             (:file "tutorial"))))
+                             (:file "tutorial")
+                             (:file "live"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
                                        (uiop:find-symbol* :littoral :littoral/tests))

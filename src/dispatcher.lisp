@@ -216,7 +216,7 @@ add, then the session and page keys."
         (format out "<script src=\"~A\" defer></script>~%" (html-escape url)))
       (format out "</head>~%<body data-lt-action=\"~A\"~@[ data-lt-events=\"~A\"~]>~%"
               (html-escape action-url)
-              (when (page-subscribes-p (session-root session))
+              (when (page-listens-p session)
                 (html-escape (concatenate 'string action-url "&_lt_events=1"))))
       (write-string body-html out)
       (when (root-inline-scripts root)
@@ -532,6 +532,7 @@ without a thread per page."
     (setf *configuration-file* configuration-file)
     (load-configuration configuration-file))
   (start-reaper)
+  (start-live-watcher)
   (unless (member address '("127.0.0.1" "localhost" "::1") :test #'equal)
     (let ((open (remove-if-not #'development-p (list-applications))))
       (when open
@@ -555,6 +556,7 @@ page with server push ties up a Woo worker.  Load littoral/woo."))
 (defun stop ()
   "Stop serving, close open event streams and stop reaping sessions."
   (stop-reaper)
+  (stop-live-watcher)
   (close-event-streams)
   (when *handler*
     (clack:stop *handler*)

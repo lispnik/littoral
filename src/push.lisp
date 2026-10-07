@@ -77,14 +77,20 @@ is noticed, so this bounds how long a gone page keeps its server thread.")
   (sb-thread:with-mutex ((stream-lock stream))
     (shiftf (stream-pending stream) '())))
 
+(defun write-pending (stream writer pending)
+  "Write what PENDING asks of STREAM: a reload, or updated components."
+  (cond ((member :reload pending)
+         (funcall writer (format nil "event: reload~%data: ~%~%")))
+        (pending
+         (let ((json (pushed-fragments stream pending)))
+           (when json
+             (funcall writer (format nil "event: update~%data: ~A~%~%" json)))))
+        (t nil)))
+
 (defun serve-stream (stream writer)
   "Write an update for STREAM's queued work, if any is visible.  For an
 event loop to call when woken; signals if the connection has gone."
-  (let ((pending (take-pending-now stream)))
-    (when pending
-      (let ((json (pushed-fragments stream pending)))
-        (when json
-          (funcall writer (format nil "event: update~%data: ~A~%~%" json)))))))
+  (write-pending stream writer (take-pending-now stream)))
 
 (defun keep-stream-alive (stream writer)
   "Write a keepalive comment to STREAM's connection."
@@ -174,9 +180,7 @@ the work)."
                    do (let ((pending (take-pending stream *keepalive-seconds*)))
                         (when (stream-live-p stream)
                           (if pending
-                              (let ((json (pushed-fragments stream pending)))
-                                (when json
-                                  (funcall writer (format nil "event: update~%data: ~A~%~%" json))))
+                              (write-pending stream writer pending)
                               (funcall writer (format nil ": keepalive~%~%")))))))
          ;; The browser went away: writing to its socket fails.
          (error () nil))
@@ -216,6 +220,12 @@ is gone.  503 when too many are open."
             ;; An event loop serves it: no thread waits on this stream.
             (funcall *async-stream-opener* socket stream writer)
             (run-event-stream stream writer)))))))
+
+(defun page-listens-p (session)
+  "True when SESSION's page should open an event stream: something on it
+subscribes, or live reloading wants it."
+  (or (page-subscribes-p (session-root session))
+      (and *live-reload* (development-p (session-application session)))))
 
 (defun page-subscribes-p (root)
   "True when a component visible from ROOT has subscriptions."

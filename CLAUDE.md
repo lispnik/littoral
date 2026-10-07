@@ -8,7 +8,7 @@ A Seaside-style web framework for SBCL. See README.md for the user-facing tour.
 - Threads do not inherit dynamic bindings: tests that spawn threads must rebind `littoral::*applications*` (see `run-threads` in `tests/robustness.lisp`).
 - Tests drive the Lack app in-process through the fake browser in `tests/browser.lisp` (`visit`, `click`, `fill-in`, `press`, `back-to`, `ajax-request`); add tests in that style, not over sockets.
 - Packages: `littoral.html` holds the HTML tags and brushes, and `littoral` uses it. Keep generic tag names out of `littoral`'s exports.
-- Load order is serial (see `littoral.asd`): util → context → callbacks → html/{canvas,tags,brushes} → component → decoration → dialogs → backtracking → task → widgets → session → application → configuration → ajax → dispatcher → push → tools/{halos,config}.
+- Load order is serial (see `littoral.asd`): util → context → callbacks → html/{canvas,tags,brushes} → component → decoration → dialogs → backtracking → task → widgets → session → application → configuration → ajax → dispatcher → push → live → tools/{halos,config}.
 - Invariants:
   - `decorations` lists are replaced, never mutated, because snapshots store them by value.
   - Rendering must not change state (`*rendering*` makes `show`/`answer`/`home` signal). Tasks are started by `prepare-tasks` after the callbacks run, never during render. Derived data, such as a report's rows, is computed on demand rather than stored at render time.

@@ -685,6 +685,24 @@ A function of (`socket` `stream` `writer`) that serves `stream` from an event
 loop, set by an optional system such as littoral/woo; `nil` when there is
 none and each stream gets a waiting thread.
 
+#### `*live-reload*` — variable
+
+When true, open pages of applications in development mode reload after
+their components' rendering methods are redefined (see live.lisp).
+
+#### `reload-pages` `&optional (classes t)` — function
+
+Have the open pages of applications in development mode reload: all of
+them, or those showing an instance of one of `classes`.  Returns how many.
+
+#### `start-live-watcher` `&key (interval 0.5)` — function
+
+Watch for redefined rendering methods every `interval` seconds.
+
+#### `stop-live-watcher` — function
+
+*Undocumented.*
+
 ### Sessions & applications
 
 #### `session` — class

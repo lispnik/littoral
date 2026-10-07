@@ -83,6 +83,11 @@
     source.addEventListener("update", function (event) {
       apply(JSON.parse(event.data));
     });
+    // Live redefinition: the server's code changed; draw this page again.
+    source.addEventListener("reload", function () {
+      source.close();
+      window.location.reload();
+    });
     window.addEventListener("pagehide", function () { source.close(); });
   }
 

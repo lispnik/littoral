@@ -204,6 +204,12 @@ Components can be re-rendered on open pages by the server, without polling (this
 
 `(notify component session)` re-renders one component for one session. Use it from a background job, and capture `*session*` in the callback that starts the job. Wrap changes made from another thread in `(with-session (session) …)` so they hold the session's lock. A page opens its event stream only if something on it subscribes. Each open page holds one connection, which with Hunchentoot means one thread. The chat and progress examples use this.
 
+### Live redefinition
+
+In development mode, recompile a component's `render` method in Emacs (`C-c C-c`) and every open page showing that component redraws itself straight away, with its state intact. A watcher notices when methods of `render`, `style`, `script`, `update-root`, `children` or `render-decoration` are redefined. It then tells the pages showing an instance of that class to reload, and because each page's URL names its saved state, reloading keeps that state.
+
+For changes the watcher can't see, such as a helper function or a stylesheet, call `(reload-pages)`. Set `*live-reload*` to `nil` to turn it off. Deployment-mode pages are never affected.
+
 ### Development tools
 
 Applications in `:development` mode, the default, end each page with a toolbar:

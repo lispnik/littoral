@@ -70,6 +70,7 @@
    #:ajax #:ajax-update #:periodical #:execute-script
    #:channel #:make-channel #:subscriptions #:publish #:notify #:close-event-streams
    #:with-session #:*source-editor* #:*async-stream-opener*
+   #:*live-reload* #:reload-pages #:start-live-watcher #:stop-live-watcher
    ;; Sessions & applications
    #:session #:session-key #:session-root #:session-properties #:session-property
    #:expire-session #:list-sessions
