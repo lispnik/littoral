@@ -1,10 +1,17 @@
 SBCL ?= sbcl
 PORT ?= 8080
 
-.PHONY: new test e2e a11y bench load docs clean-check run tracker lint clean
+.PHONY: new test test-postgres e2e a11y bench load docs clean-check run tracker lint clean
 
 test:
 	$(SBCL) --non-interactive --eval '(asdf:test-system :littoral)'
+
+# The database suites against PostgreSQL:
+#   make test-postgres [LITTORAL_TEST_DATABASE=postgres://user:password@host:5432/db]
+LITTORAL_TEST_DATABASE ?= postgres://postgres:postgres@127.0.0.1:5432/littoral_test
+test-postgres:
+	LITTORAL_TEST_DATABASE=$(LITTORAL_TEST_DATABASE) $(SBCL) --non-interactive \
+	  --eval '(asdf:load-system :littoral/tests)' --eval '(littoral/tests::run-database-suites)'
 
 # A new application: make new NAME=bookshop [DIR=~/src/bookshop]
 new:

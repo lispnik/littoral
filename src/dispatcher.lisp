@@ -53,18 +53,31 @@ so browsers may cache it for good yet never run a stale copy."
     :x-frame-options "SAMEORIGIN")
   "Headers added to every page, redirect and AJAX response.")
 
+(defun pending-cookie-headers ()
+  "The Set-Cookie headers queued in the current session by SET-COOKIE, as a
+plist, taking them from the queue."
+  (when *session*
+    (let ((cookies (session-property :pending-cookies *session*)))
+      (when cookies
+        (setf (session-property :pending-cookies *session*) nil)
+        (loop for cookie in (reverse cookies) append (list :set-cookie cookie))))))
+
 (defun html-response (html &key (status 200) headers)
   "A Lack response carrying HTML, uncached, with the security headers."
   (list status
+        ;; Set-Cookie must not come first: Clack's Hunchentoot handler adds
+        ;; it to the end of a header list that is empty until then.
         (append (list :content-type "text/html; charset=utf-8"
                       :cache-control "no-store")
                 headers
+                (pending-cookie-headers)
                 *security-headers*)
         (list html)))
 
 (defun redirect-response (url &key headers)
   "A Lack 302 response to URL."
-  (list 302 (append (list :location url :cache-control "no-store") headers *security-headers*)
+  (list 302 (append (list :location url :cache-control "no-store") headers
+                    (pending-cookie-headers) *security-headers*)
         (list "")))
 
 (defvar *max-request-size* (* 10 1024 1024)
@@ -131,6 +144,23 @@ were not told to trust."
   "A Set-Cookie value for NAME=VALUE scoped to APP, Secure over HTTPS."
   (format nil "~A=~A; Path=~A; HttpOnly; SameSite=Lax~:[~;; Secure~]"
           name value (application-base-url app) (secure-request-p)))
+
+(defun set-cookie (name value &key max-age path (http-only t) (same-site "Lax")
+                                (session *session*))
+  "Have the browser keep the cookie NAME=VALUE, sent with this application's
+requests (or PATH's).  MAX-AGE in seconds keeps it that long, 0 deletes it,
+NIL keeps it until the browser closes.  Secure over HTTPS.  The cookie goes
+out with SESSION's next HTTP response: this one, or the next page load when
+called while answering a WebSocket message."
+  (unless (cl-ppcre:scan "^[A-Za-z0-9_.-]+$" name)
+    (error "~S is not a usable cookie name." name))
+  (unless (cl-ppcre:scan "^[A-Za-z0-9_.~+/=-]*$" value)
+    (error "Cookie values are limited to letters, digits and _.~~+/=-: ~S" value))
+  (push (format nil "~A=~A; Path=~A~@[; Max-Age=~D~]~:[~;; HttpOnly~]~@[; SameSite=~A~]~:[~;; Secure~]"
+                name value (or path (application-base-url (session-application session)))
+                max-age http-only same-site (and *request* (secure-request-p)))
+        (session-property :pending-cookies session))
+  value)
 
 (defun browser-matches-p (session)
   "True when this request may use SESSION: it carries the session's browser
@@ -293,9 +323,12 @@ session that has gone; the application's EXPIRED-NOTICE is shown first."
 (defun handle-ajax (session continuation)
   "Run an AJAX request's callbacks on CONTINUATION, without making a new
 page, and answer the components to update as JSON."
-  (list 200 (list* :content-type "application/json; charset=utf-8" :cache-control "no-store"
-                   *security-headers*)
-        (list (ajax-json session continuation (current-parameters)))))
+  ;; The callbacks run first: cookies they set go out with this response.
+  (let ((body (ajax-json session continuation (current-parameters))))
+    (list 200 (append (list :content-type "application/json; charset=utf-8" :cache-control "no-store")
+                      (pending-cookie-headers)
+                      *security-headers*)
+          (list body))))
 
 (defun ajax-json (session continuation parameters)
   "Run the callbacks PARAMETERS name on CONTINUATION, without making a new

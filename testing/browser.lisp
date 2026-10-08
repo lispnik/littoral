@@ -60,6 +60,19 @@ alist of lower-case names to values)."
   "The header NAME from a Lack response's HEADERS plist."
   (getf headers name))
 
+(defun store-cookies (browser headers)
+  "Keep every cookie the response HEADERS set, replacing those of the same
+name; Max-Age=0 deletes one."
+  (loop for (key value) on headers by #'cddr
+        when (eq key :set-cookie)
+          do (let* ((pair (subseq value 0 (position #\; value)))
+                    (eq (position #\= pair))
+                    (name (subseq pair 0 eq)))
+               (setf (browser-cookies browser)
+                     (remove name (browser-cookies browser) :key #'car :test #'string=))
+               (unless (cl-ppcre:scan "(?i);\\s*Max-Age=0(?:;|$)" value)
+                 (push (cons name (subseq pair (1+ eq))) (browser-cookies browser))))))
+
 (defun local-url (url)
   "URL without its scheme and host, when it has them: the fake browser has
 only the one server, so http://localhost/a?b is /a?b."
@@ -73,11 +86,7 @@ only the one server, so http://localhost/a?b is /a?b."
       (funcall (browser-app browser)
                (apply #'make-env method url :body body :cookies (browser-cookies browser) :extra-headers (browser-headers browser)
                       (when content-type (list :content-type content-type))))
-    (let ((cookie (response-header headers :set-cookie)))
-      (when cookie
-        (let* ((pair (subseq cookie 0 (position #\; cookie)))
-               (eq (position #\= pair)))
-          (push (cons (subseq pair 0 eq) (subseq pair (1+ eq))) (browser-cookies browser)))))
+    (store-cookies browser headers)
     (values status headers (apply #'concatenate 'string body-parts))))
 
 (defun visit (browser url &key (method :get) body content-type)

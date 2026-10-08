@@ -8,6 +8,15 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: littoral_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 12
     steps:
       - uses: actions/checkout@v4
 
@@ -51,6 +60,15 @@ jobs:
           sbcl --non-interactive \
             --eval '(asdf:initialize-source-registry (list :source-registry (list :directory (uiop:getcwd)) :inherit-configuration))' \
             --eval '(asdf:test-system :littoral)'
+
+      - name: Database tests on PostgreSQL
+        env:
+          LITTORAL_TEST_DATABASE: postgres://postgres:postgres@127.0.0.1:5432/littoral_test
+        run: |
+          sbcl --non-interactive \
+            --eval '(asdf:initialize-source-registry (list :source-registry (list :directory (uiop:getcwd)) :inherit-configuration))' \
+            --eval '(asdf:load-system :littoral/tests)' \
+            --eval '(littoral/tests::run-database-suites)'
 
       - name: A generated project
         run: |

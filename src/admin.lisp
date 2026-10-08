@@ -130,7 +130,8 @@ classes, that point at CLASS."
         (query (string-trim " " (list-query list)))
         (class (list-class list)))
     (when (and (string/= query "") (text-fields class))
-      (push (format nil "(~{~A LIKE ?~^ OR ~})"
+      ;; LOWER on both sides: PostgreSQL's LIKE minds case, SQLite's doesn't.
+      (push (format nil "(~{LOWER(~A) LIKE LOWER(?)~^ OR ~})"
                     (mapcar (lambda (f) (substitute #\_ #\- (string-downcase (symbol-name (field-name f)))))
                             (text-fields class)))
             clauses)

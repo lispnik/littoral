@@ -34,9 +34,9 @@
 (littoral.db:define-table job :name "jobs")
 
 (defmacro with-test-database (() &body body)
-  "Run BODY against a fresh in-memory SQLite database with both tables."
+  "Run BODY against the test database, with both tables made afresh."
   `(progn
-     (littoral.db:connect-database :sqlite3 :database-name ":memory:")
+     (connect-test-database)
      (littoral.db:drop-table 'job)
      (littoral.db:drop-table 'project)
      (littoral.db:create-table 'project)

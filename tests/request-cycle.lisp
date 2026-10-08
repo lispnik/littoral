@@ -377,3 +377,41 @@
       (let* ((spec (element-spec b "ajax-leave" "on-click"))
              (json (ajax-request b (first spec) (rest spec))))
         (is (search "\"redirect\":\"https://example.org/ajax\"" json))))))
+
+;;; Cookies set by callbacks
+
+(defclass cookie-jar-page (component) ())
+
+(defmethod render ((self cookie-jar-page))
+  (p () (text (format nil "flavour=~A" (or (request-cookie "flavour") "none"))))
+  (anchor (:callback (lambda () (set-cookie "flavour" "oat" :max-age 3600)
+                             (set-cookie "shape" "round")))
+    "Bake")
+  (anchor (:callback (lambda () (set-cookie "flavour" "" :max-age 0))) "Eat")
+  (button (:on-click (ajax :callback (lambda () (set-cookie "flavour" "ginger")) :update self)) "Ajax bake"))
+
+(test callbacks-set-cookies
+  (with-fresh-applications (("/jar" 'cookie-jar-page :mode :deployment))
+    (let ((b (make-instance 'browser)))
+      (visit b "/jar")
+      (is (has-text-p b "flavour=none"))
+      (multiple-value-bind (status headers)
+          (raw-request b :get (find-link b "Bake"))
+        (is (= 302 status))
+        (let ((cookies (loop for (k v) on headers by #'cddr when (eq k :set-cookie) collect v)))
+          (is (find-if (lambda (c) (search "flavour=oat; Path=/jar; Max-Age=3600; HttpOnly; SameSite=Lax" c)) cookies))
+          (is (find-if (lambda (c) (and (search "shape=round" c) (not (search "Max-Age" c)))) cookies))
+          ;; Set-Cookie never comes first (Clack's Hunchentoot handler needs that).
+          (is (not (eq :set-cookie (first headers))))))
+      ;; The browser kept it, and sends it.
+      (visit b "/jar")
+      (is (has-text-p b "flavour=oat"))
+      ;; Deleting.
+      (click b "Eat")
+      (is (null (assoc "flavour" (browser-cookies b) :test #'string=)))
+      ;; From an AJAX callback.
+      (destructuring-bind (callback . targets) (first (ajax-specs b "on-click"))
+        (ajax-request b callback targets))
+      (is (equal "ginger" (cdr (assoc "flavour" (browser-cookies b) :test #'string=))))))
+  (signals error (set-cookie "bad name" "x" :session (make-instance 'littoral::session)))
+  (signals error (set-cookie "ok" "semi;colon" :session (make-instance 'littoral::session))))

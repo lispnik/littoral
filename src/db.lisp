@@ -19,7 +19,9 @@
 ;;;; runs each request's callbacks in one transaction, rolled back if one
 ;;;; of them signals.
 ;;;;
-;;;; Built on cl-dbi; tested with SQLite, written for PostgreSQL too.
+;;;; Built on cl-dbi; tested with SQLite and PostgreSQL.  Integers are BIGINT
+;;;; (SQLite's integers are 64-bit anyway).  Names are unquoted: avoid
+;;;; reserved words such as USER and ORDER for tables and columns.
 
 (defpackage #:littoral.db
   (:use #:cl #:littoral #:littoral.html)
@@ -28,7 +30,7 @@
            #:persistent #:object-id #:object-version
            #:define-table #:find-table #:table-name #:table-class #:create-table #:drop-table
            #:db-find #:db-select #:db-count #:db-insert #:db-update #:db-save #:db-delete
-           #:db-reload #:with-transaction #:transactional #:using-database
+           #:db-reload #:db-query #:db-execute #:with-transaction #:transactional #:using-database
            #:stale-object #:stale-object-object
            #:reference-field #:reference-class #:object-label #:sql-type #:to-sql #:from-sql))
 
@@ -117,7 +119,7 @@ table NAME (default: the class name), with DESCRIPTION's fields as columns."
 (defgeneric sql-type (field)
   (:documentation "The column type that holds FIELD's values.")
   (:method ((field field)) "TEXT")
-  (:method ((field integer-field)) "INTEGER")
+  (:method ((field integer-field)) "BIGINT")
   (:method ((field boolean-field)) "INTEGER"))
 
 (defgeneric to-sql (field value)
@@ -161,7 +163,7 @@ table NAME (default: the class name), with DESCRIPTION's fields as columns."
 (defmethod from-sql ((field reference-field) value)
   (and value (not (eq value :null)) (db-find (reference-class field) value)))
 
-(defmethod sql-type ((field reference-field)) "INTEGER")
+(defmethod sql-type ((field reference-field)) "BIGINT")
 
 (defun object-label (object)
   "How OBJECT is named in choices and links: its first string field."
@@ -185,13 +187,22 @@ table NAME (default: the class name), with DESCRIPTION's fields as columns."
     (dbi:execute (dbi:prepare connection sql) parameters)
     (dbi:row-count connection)))
 
+(defun db-query (sql &rest parameters)
+  "Run SQL, with ? for each of PARAMETERS; the rows, as plists keyed by
+column name (\"login\" → :|login|), NULL as NIL."
+  (mapcar (lambda (row) (substitute nil :null row)) (execute sql parameters)))
+
+(defun db-execute (sql &rest parameters)
+  "Run SQL, with ? for each of PARAMETERS; how many rows it changed."
+  (execute-count sql parameters))
+
 (defun create-table (class)
   "Create CLASS's table unless it exists."
   (let ((table (find-table class)))
     (execute-count
      (format nil "CREATE TABLE IF NOT EXISTS ~A (id ~A, version INTEGER NOT NULL DEFAULT 0~{, ~A~})"
              (table-name table)
-             (if (eq (driver) :postgres) "SERIAL PRIMARY KEY" "INTEGER PRIMARY KEY AUTOINCREMENT")
+             (if (eq (driver) :postgres) "BIGSERIAL PRIMARY KEY" "INTEGER PRIMARY KEY AUTOINCREMENT")
              (mapcar (lambda (f) (format nil "~A ~A" (column-name f) (sql-type f))) (table-fields table))))
     class))
 
@@ -286,7 +297,8 @@ OBJECT was read."
 
 ;;; Transactions
 
-(defvar *in-transaction* nil)
+(defvar *in-transaction* nil
+  "The database spec whose transaction is open in this thread, or NIL.")
 
 (defmacro with-transaction (() &body body)
   "Run BODY in a transaction: committed if it returns, rolled back if it
@@ -294,10 +306,10 @@ signals.  Inside another, just BODY."
   `(call-with-transaction (lambda () ,@body)))
 
 (defun call-with-transaction (thunk)
-  "Call THUNK in a transaction unless one is already open."
-  (if *in-transaction*
+  "Call THUNK in a transaction unless one is already open on this database."
+  (if (equal *in-transaction* *database*)
       (funcall thunk)
-      (let ((*in-transaction* t))
+      (let ((*in-transaction* *database*))
         (dbi:with-transaction (database-connection)
           (funcall thunk)))))
 

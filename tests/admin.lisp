@@ -5,12 +5,12 @@
 (def-suite admin :in littoral)
 (in-suite admin)
 
-(defparameter *admin-database* '(:sqlite3 :database-name ":memory:"))
+(defun admin-database () (test-database-spec))
 
 (defmacro with-admin ((b) &body body)
   "Serve an admin of projects and jobs, seeded, and give it a browser B."
   `(with-fresh-applications ()
-     (apply #'littoral.db:connect-database *admin-database*)
+     (connect-test-database)
      (littoral.db:drop-table 'job)
      (littoral.db:drop-table 'project)
      (littoral.db:create-table 'project)
@@ -20,7 +20,7 @@
        (littoral.db:db-save (make-instance 'job :title "Write docs" :state :todo :project littoral))
        (littoral.db:db-save (make-instance 'job :title "Fix tabs" :state :doing :project littoral :done nil))
        (littoral.db:db-save (make-instance 'job :title "Port halos" :state :done :project seaside :done t)))
-     (littoral.admin:register-admin "/admin" '(project job) :database *admin-database* :title "Test admin")
+     (littoral.admin:register-admin "/admin" '(project job) :database (admin-database) :title "Test admin")
      (let ((,b (make-instance 'browser)))
        (visit ,b "/admin")
        ,@body)))

@@ -118,6 +118,7 @@
                #:littoral/generator
                #:dexador
                #:dbd-sqlite3
+               #:dbd-postgres
                #:fiveam
                #:flexi-streams
                #:lack

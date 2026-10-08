@@ -38,7 +38,7 @@
 (defmacro with-auth ((b) &body body)
   "A members app over a fresh users table, with ada (admin) and bob."
   `(with-fresh-applications (("/m" 'members-app :mode :deployment))
-     (littoral.db:connect-database :sqlite3 :database-name ":memory:")
+     (connect-test-database)
      (littoral.db:drop-table 'littoral.auth:user)
      (littoral.auth:create-auth-tables)
      (littoral.auth:add-user "ada" "ada@example.org" "correct horse battery" :roles '(:admin))

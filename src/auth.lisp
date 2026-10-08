@@ -62,8 +62,11 @@
                   :test (lambda (a b) (string= a (string-trim " " b))))))
 
 (defun create-auth-tables ()
-  "Create the users table unless it exists."
-  (create-table 'user))
+  "Create the users table unless it exists, with names and emails unique
+whatever their case."
+  (create-table 'user)
+  (db-execute "CREATE UNIQUE INDEX IF NOT EXISTS users_name ON users (LOWER(name))")
+  (db-execute "CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users (LOWER(email))"))
 
 (defun octets (string)
   (sb-ext:string-to-octets string :external-format :utf-8))
