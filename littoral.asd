@@ -110,6 +110,7 @@
                #:littoral/admin-demo
                #:littoral/auth
                #:littoral/oauth
+               #:littoral/parenscript-demo
                #:dbd-sqlite3
                #:fiveam
                #:flexi-streams
@@ -139,7 +140,8 @@
                              (:file "db")
                              (:file "admin")
                              (:file "auth")
-                             (:file "modal"))))
+                             (:file "modal")
+                             (:file "parenscript"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
                                        (uiop:find-symbol* :littoral :littoral/tests))
@@ -209,3 +211,15 @@
   :license "MIT"
   :depends-on (#:littoral/auth #:dexador #:com.inuoe.jzon #:cl-base64)
   :components ((:module "src" :components ((:file "oauth")))))
+
+(asdf:defsystem #:littoral/parenscript
+  :description "Write Littoral components' browser behaviour in Parenscript."
+  :author "Matthew Kennedy"
+  :license "MIT"
+  :depends-on (#:littoral #:parenscript)
+  :components ((:module "src" :components ((:file "parenscript")))))
+
+(asdf:defsystem #:littoral/parenscript-demo
+  :description "A component whose browser behaviour is written in Parenscript."
+  :depends-on (#:littoral/parenscript)
+  :components ((:module "examples" :components ((:file "parenscript-demo")))))

@@ -222,6 +222,29 @@ In development mode, recompile a component's `render` method in Emacs (`C-c C-c`
 
 For changes the watcher can't see, such as a helper function or a stylesheet, call `(reload-pages)`. Set `*live-reload*` to `nil` to turn it off. Deployment-mode pages are never affected.
 
+### Browser code in Lisp (Parenscript)
+
+`littoral/parenscript` lets a component's browser behaviour be written in [Parenscript](https://parenscript.common-lisp.dev/), next to its `render` method:
+
+```lisp
+(defpackage #:my-app
+  (:use #:cl #:littoral #:littoral.html #:parenscript #:littoral.parenscript)
+  (:shadowing-import-from #:littoral #:call)          ; Parenscript exports these too
+  (:shadowing-import-from #:littoral.html #:label))
+
+(button (:on-click (in-browser (ps (chain this class-list (toggle "on")))))
+  "Toggle")                                          ; runs in the browser only
+
+(let ((shout (client-callback (lambda (text) (string-upcase text)) :update self)))
+  (button (:on-click (in-browser (ps (chain littoral (call (lisp shout) "hi")
+                                            (then (lambda (answer) (alert answer)))))))
+    "Ask the server"))
+```
+
+- **Browser-only handlers:** `in-browser` gives `:on-click`, `:on-change`, `:on-input` or `:on-submit` JavaScript to run in the browser, with `this` the element and `event` the event.
+- **Calling Lisp from the browser:** `client-callback` registers a Lisp function that browser code calls with `littoral.call(spec, value)`. That returns a promise of the function's result and re-renders the components given as `:update`.
+- **Page-level script:** `define-script` gives a component page-level JavaScript.
+
 ### Development tools
 
 Applications in `:development` mode, the default, end each page with a toolbar:

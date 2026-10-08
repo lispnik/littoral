@@ -257,6 +257,17 @@ try {
   await evaluate(`document.getElementById("toast-button").click()`); await sleep(600);
   check("a toast appears", (await evaluate(`document.querySelector(".lt-toasts")?.innerText || ""`)).includes("Hello from the server."));
 
+  // Parenscript: a browser-only handler, and a call to a Lisp function.
+  await go("/examples/parenscript");
+  await evaluate("window.__ps = 1");
+  await evaluate(`document.getElementById("toggle").click()`);
+  check("browser-only handler ran", await evaluate(`document.getElementById("toggle").textContent`) === "On");
+  await evaluate(`document.getElementById("shout").click()`); await sleep(700);
+  check("littoral.call returns the Lisp answer",
+        await evaluate(`document.getElementById("answer").textContent`) === "HELLO FROM THE BROWSER");
+  check("and updates the component", (await evaluate("document.body.innerText")).includes("Asked 1 time."));
+  check("without a reload", await evaluate("window.__ps") === 1);
+
   // The generated admin: list, open a task, follow its project.
   await go("/examples/admin");
   check("admin lists projects", (await evaluate("document.body.innerText")).includes("Littoral"));

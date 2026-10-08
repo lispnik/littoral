@@ -195,6 +195,35 @@
   delegate("input", "data-lt-on-input");
   delegate("submit", "data-lt-on-submit");
 
+  // Browser-only handlers, written in Parenscript (littoral/parenscript).
+  function clientDelegate(type, attr) {
+    document.addEventListener(type, function (event) {
+      var el = event.target.closest ? event.target.closest("[" + attr + "]") : null;
+      if (el) new Function("event", el.getAttribute(attr)).call(el, event);
+    });
+  }
+  clientDelegate("click", "data-lt-on-click-js");
+  clientDelegate("change", "data-lt-on-change-js");
+  clientDelegate("input", "data-lt-on-input-js");
+  clientDelegate("submit", "data-lt-on-submit-js");
+
+  // Call a Lisp function registered with client-callback; a promise of its answer.
+  window.littoral = {
+    call: function (spec, value) {
+      var parts = split(spec), params = new URLSearchParams();
+      if (value !== undefined) params.append("_lt_value", value == null ? "" : String(value));
+      params.append("_lt_ajax", "1");
+      params.append("_lt_update", parts.targets);
+      params.append(parts.callback, "1");
+      return fetch(actionUrl(), {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: params.toString(), credentials: "same-origin"
+      }).then(function (r) { return r.json(); })
+        .then(function (data) { apply(data); return data.value; });
+    }
+  };
+
   // Sortable lists: drag an item over its siblings; on release, post the
   // new order (old positions, comma-separated) through the list's callback.
   var dragged = null;
