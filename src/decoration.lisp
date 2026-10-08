@@ -153,6 +153,11 @@ answers NIL; TITLE names the dialog for screen readers."
 blocking call inside a flow, like CALL."
   (let/cc k (show-modal other :on-answer k :title title)))
 
+;; DEFUN/CC drops docstrings.
+(setf (documentation 'call-modal 'function)
+      "Show OTHER in a dialog over the page and return what it answers; a
+blocking call inside a flow, like CALL.  TITLE names the dialog.")
+
 ;;; Toasts
 
 (defun toast (message &key (kind :info) (session *session*))

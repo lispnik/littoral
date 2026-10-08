@@ -281,7 +281,8 @@ answers `nil`; `title` names the dialog for screen readers.
 
 #### `call-modal` `&rest args` — function
 
-*Undocumented.*
+Show `other` in a dialog over the page and return what it answers; a
+blocking call inside a flow, like `call`.  `title` names the dialog.
 
 #### `modal-decoration` — class
 
