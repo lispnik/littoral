@@ -72,7 +72,7 @@ const pages = ["/examples", "/examples/counter", "/examples/multi-counter", "/ex
   "/examples/login", "/examples/ajax", "/examples/todo", "/examples/upload", "/examples/topics",
   "/examples/report", "/examples/store", "/examples/wiki", "/examples/chat", "/examples/progress",
   "/examples/contacts", "/examples/widgets", "/tracker", "/config", "/tutorial/reading-list",
-  "/examples/admin", "/examples/dialogs", "/examples/parenscript", "/examples/members", "/examples/demo-idp"];
+  "/examples/admin", "/examples/dialogs", "/examples/parenscript", "/examples/members", "/examples/demo-idp", "/examples/accounts"];
 
 try {
  // Both colour schemes: contrast differs between them.

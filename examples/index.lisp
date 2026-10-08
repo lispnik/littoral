@@ -20,7 +20,8 @@
      ("chat" "Chat" "Many sessions in one room, updated by server push.")
      ("contacts" "Contacts" "An address book generated from one description, in English, French or German.")
      ("admin" "Admin" "An admin generated from descriptions, over projects and tasks in SQLite.")
-     ("members" "Members" "Signing in, roles, password reset and OAuth, with a pretend identity provider."))
+     ("members" "Members" "Signing in, roles and permissions, kept sign-ins, password reset and OAuth.")
+     ("accounts" "Accounts" "The same, signing in against an existing table with bcrypt hashes."))
     ("Browser features"
      ("ajax" "AJAX" "Updating components in place, a live preview and a clock.")
      ("upload" "Upload" "Receiving files.")

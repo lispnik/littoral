@@ -33,6 +33,8 @@
            #:create-auth-tables #:drop-auth-tables #:add-user #:find-user #:find-user-by-email #:find-user-by-id
            #:set-password #:check-password #:authenticate
            #:current-user #:log-in #:log-out #:signed-in-p #:has-role-p #:require-role
+           #:user-sessions #:revoke-session #:log-out-everywhere
+           #:*remember-days* #:*sign-in-idle-hours* #:*auth-session-check-seconds* #:*offer-remember-me*
            #:grant-role #:revoke-role #:grant-permission #:revoke-permission
            #:role-permissions #:user-permissions #:has-permission-p #:require-permission
            #:restricted #:required-role #:required-permission #:permitted-p
@@ -274,9 +276,28 @@ AROUND (another such function, such as USING-DATABASE's) if given."
 
 (define-table auth-token :name "auth_tokens")
 
+(defclass auth-session (persistent)
+  ((token-hash :initarg :token-hash :initform nil)
+   (user-id :initarg :user-id :initform nil :reader auth-session-user-id)
+   (created :initarg :created :initform nil :reader auth-session-created)
+   (last-seen :initarg :last-seen :initform nil :accessor auth-session-last-seen)
+   (expires :initarg :expires :initform nil :accessor auth-session-expires)
+   (remember :initarg :remember :initform nil :reader auth-session-remember-p)
+   (user-agent :initarg :user-agent :initform nil :reader auth-session-user-agent)
+   (address :initarg :address :initform nil :reader auth-session-address))
+  (:documentation "A sign-in, kept in the database so it outlives the process
+and is seen by every process: the browser holds its token in a cookie."))
+
+(define-description auth-session
+  ((token-hash) (user-id) (created :type :integer) (last-seen :type :integer)
+   (expires :type :integer) (remember :type :boolean) (user-agent) (address)))
+
+(define-table auth-session :name "auth_sessions")
+
 (defun drop-auth-tables (&key (users t))
   "Drop the tables CREATE-AUTH-TABLES makes, for tests: everything is lost."
-  (dolist (table (append (when users '("users")) '("auth_tokens" "user_roles" "role_permissions")))
+  (dolist (table (append (when users '("users"))
+                         '("auth_tokens" "auth_sessions" "user_roles" "role_permissions")))
     (db-execute (format nil "DROP TABLE IF EXISTS ~A" table)))
   (forget-cached-roles))
 
@@ -290,6 +311,9 @@ users come from an application's own table, and the tokens table."
     (db-execute "CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users (LOWER(email))"))
   (create-table 'auth-token)
   (db-execute "CREATE UNIQUE INDEX IF NOT EXISTS auth_tokens_hash ON auth_tokens (token_hash)")
+  (create-table 'auth-session)
+  (db-execute "CREATE UNIQUE INDEX IF NOT EXISTS auth_sessions_hash ON auth_sessions (token_hash)")
+  (db-execute "CREATE INDEX IF NOT EXISTS auth_sessions_user ON auth_sessions (user_id)")
   (db-execute "CREATE TABLE IF NOT EXISTS user_roles (user_id TEXT NOT NULL, role TEXT NOT NULL)")
   (db-execute "CREATE UNIQUE INDEX IF NOT EXISTS user_roles_key ON user_roles (user_id, role)")
   (db-execute "CREATE TABLE IF NOT EXISTS role_permissions (role TEXT NOT NULL, permission TEXT NOT NULL)")
@@ -439,26 +463,157 @@ client's address is locked out; otherwise NIL and, as a second value, why."
                    (t (note-attempt name nil)
                       (values nil (translate "Unknown user or wrong password."))))))))
 
+;;; Sign-ins kept in the database
+;;;
+;;; Signing in makes an auth_sessions row and gives the browser its token in
+;;; a cookie.  A new Littoral session of an AUTH-ROOT application (after a
+;;; restart, or on another process) finds the row through the cookie and
+;;; signs its user in again.  "Keep me signed in" makes the cookie last
+;;; *REMEMBER-DAYS*; otherwise it lasts until the browser closes, and the row
+;;; until *SIGN-IN-IDLE-HOURS* pass unused.  Deleting a row (REVOKE-SESSION,
+;;; LOG-OUT-EVERYWHERE) signs that browser out within
+;;; *AUTH-SESSION-CHECK-SECONDS*.
+
+(defvar *remember-days* 30 "How long \"Keep me signed in\" lasts, renewed by use.")
+(defvar *sign-in-idle-hours* 12 "How long an unremembered sign-in lasts unused.")
+(defvar *auth-session-check-seconds* 60
+  "How often a signed-in session checks that its sign-in still stands.")
+(defvar *offer-remember-me* t "Whether the sign-in form offers \"Keep me signed in\".")
+
+(defun sign-in-cookie-name (&optional (app *application*))
+  (format nil "_lta~A" (substitute #\_ #\/ (application-path app))))
+
+(defun sign-in-lifetime (remember)
+  (if remember (* *remember-days* 86400) (* *sign-in-idle-hours* 3600)))
+
+(defun open-auth-session (user remember)
+  "Record USER's sign-in, give the browser its token, and note it in the session."
+  (let* ((token (littoral::random-key 32))
+         (now (get-universal-time))
+         (headers (and *request* (lack/request:request-headers *request*)))
+         (row (db-insert (make-instance 'auth-session
+                                        :token-hash (token-hash token)
+                                        :user-id (princ-to-string (user-id user))
+                                        :created now :last-seen now
+                                        :expires (+ now (sign-in-lifetime remember))
+                                        :remember remember
+                                        :user-agent (let ((agent (and headers (gethash "user-agent" headers))))
+                                                      (and agent (subseq agent 0 (min 200 (length agent)))))
+                                        :address (and *request* (littoral::client-address))))))
+    ;; Forget expired sign-ins while here.
+    (db-execute "DELETE FROM auth_sessions WHERE expires < ?" now)
+    (set-cookie (sign-in-cookie-name) token :max-age (and remember (sign-in-lifetime t)))
+    (setf (session-property :auth-session) (object-id row)
+          (session-property :auth-checked) now)
+    row))
+
+(defun close-auth-session ()
+  "Forget this session's sign-in row and the browser's cookie."
+  (let ((id (session-property :auth-session)))
+    (when id
+      (db-execute "DELETE FROM auth_sessions WHERE id = ?" id))
+    (when (and *session* *application*)
+      (set-cookie (sign-in-cookie-name) "" :max-age 0))
+    (setf (session-property :auth-session) nil)))
+
+(defun restore-sign-in ()
+  "At the start of a session: when the browser's sign-in cookie names a
+standing sign-in of an active user, sign that user in, and renew it."
+  (let* ((token (request-cookie (sign-in-cookie-name)))
+         (now (get-universal-time))
+         (row (and token (plusp (length token))
+                   (first (db-select 'auth-session :where "token_hash = ? AND expires > ?"
+                                                   :params (list (token-hash token) now)))))
+         (user (and row (find-user-by-id (auth-session-user-id row)))))
+    (cond ((and user (user-active-p user))
+           (let ((remember (auth-session-remember-p row)))
+             (db-execute "UPDATE auth_sessions SET last_seen = ?, expires = ? WHERE id = ?"
+                         now (+ now (sign-in-lifetime remember)) (object-id row))
+             (when remember
+               (set-cookie (sign-in-cookie-name) token :max-age (sign-in-lifetime t))))
+           (setf (session-property :user-id) (user-id user)
+                 (session-property :auth-session) (object-id row)
+                 (session-property :auth-checked) now)
+           user)
+          (token
+           ;; A spent or unknown token: drop the cookie.
+           (when row (db-execute "DELETE FROM auth_sessions WHERE id = ?" (object-id row)))
+           (set-cookie (sign-in-cookie-name) "" :max-age 0)
+           nil))))
+
+(defun sign-in-stands-p ()
+  "False when this session's sign-in row has been revoked or has expired;
+looked at no more often than *AUTH-SESSION-CHECK-SECONDS*."
+  (let ((id (session-property :auth-session))
+        (now (get-universal-time)))
+    (or (null id)
+        (< now (+ (or (session-property :auth-checked) 0) *auth-session-check-seconds*))
+        (let ((row (db-find 'auth-session id)))
+          (cond ((and row (> (auth-session-expires row) now))
+                 (unless (auth-session-remember-p row)
+                   (db-execute "UPDATE auth_sessions SET last_seen = ?, expires = ? WHERE id = ?"
+                               now (+ now (sign-in-lifetime nil)) id))
+                 (setf (session-property :auth-checked) now)
+                 t)
+                (t (setf (session-property :user-id) nil
+                         (session-property :auth-session) nil)
+                   nil))))))
+
+(defun user-sessions (user)
+  "USER's standing sign-ins, newest first, as plists of :ID :CREATED
+:LAST-SEEN :REMEMBER :USER-AGENT :ADDRESS and :CURRENT (this session's)."
+  (let ((current (and *session* (session-property :auth-session))))
+    (mapcar (lambda (row)
+              (list :id (object-id row) :created (auth-session-created row)
+                    :last-seen (auth-session-last-seen row) :remember (auth-session-remember-p row)
+                    :user-agent (auth-session-user-agent row) :address (auth-session-address row)
+                    :current (eql (object-id row) current)))
+            (db-select 'auth-session :where "user_id = ? AND expires > ?"
+                                     :params (list (princ-to-string (user-id user)) (get-universal-time))
+                                     :order-by "created DESC"))))
+
+(defun revoke-session (id &optional (user (current-user)))
+  "End USER's sign-in ID wherever it is; that browser is signed out within
+*AUTH-SESSION-CHECK-SECONDS*, this one at once."
+  (when user
+    (db-execute "DELETE FROM auth_sessions WHERE id = ? AND user_id = ?" id (princ-to-string (user-id user)))
+    (when (and *session* (eql id (session-property :auth-session)))
+      (log-out))))
+
+(defun log-out-everywhere (&optional (user (current-user)))
+  "End all of USER's sign-ins, this one too."
+  (when user
+    (db-execute "DELETE FROM auth_sessions WHERE user_id = ?" (princ-to-string (user-id user)))
+    (when (and *session* (equal (session-property :user-id) (user-id user)))
+      (log-out))))
+
 ;;; The session's user
 
 (defun current-user ()
   "The user signed in to this session, or NIL."
   (let ((id (session-property :user-id)))
-    (and id (let ((user (find-user-by-id id)))
-              (and user (user-active-p user) user)))))
+    (and id (sign-in-stands-p)
+         (let ((user (find-user-by-id id)))
+           (and user (user-active-p user) user)))))
 
 (defun signed-in-p ()
   (and (current-user) t))
 
-(defun log-in (user)
-  "Sign USER in to this session.  The session gets a new key, so a link to
-it that someone else had beforehand no longer reaches it."
+(defun log-in (user &key remember)
+  "Sign USER in to this session, recording the sign-in in the database so
+it survives restarts; with REMEMBER, for *REMEMBER-DAYS* rather than until
+the browser closes.  The session gets a new key, so a link to it that
+someone else had beforehand no longer reaches it."
+  (when (session-property :auth-session) (close-auth-session))
   (setf (session-property :user-id) (user-id user))
+  (when (and *session* *application*)
+    (open-auth-session user remember))
   (when *session* (rotate-session-key *session*))
   user)
 
 (defun log-out ()
-  "Sign the session's user out, and give the session a new key."
+  "Sign the session's user out, end its sign-in, and give the session a new key."
+  (close-auth-session)
   (setf (session-property :user-id) nil)
   (when *session* (rotate-session-key *session*)))
 
@@ -529,6 +684,7 @@ buttons, from littoral/oauth).")
 (defclass sign-in (component)
   ((name :initform "" :accessor sign-in-name)
    (password :initform "" :accessor sign-in-password)
+   (remember :initform nil :accessor sign-in-remember)
    (message :initform nil :accessor sign-in-message))
   (:documentation "Asks for a name and password; signs the user in and answers them."))
 
@@ -536,7 +692,7 @@ buttons, from littoral/oauth).")
   (multiple-value-bind (user problem) (authenticate (string-trim " " (sign-in-name self)) (sign-in-password self))
     (setf (sign-in-password self) "")
     (if user
-        (progn (log-in user) (answer self user))
+        (progn (log-in user :remember (sign-in-remember self)) (answer self user))
         (setf (sign-in-message self) problem))))
 
 (defmethod render ((self sign-in))
@@ -553,6 +709,11 @@ buttons, from littoral/oauth).")
         (label (:for "sign-in-password") (translate "Password"))
         (password-input (:id "sign-in-password" :autocomplete "current-password" :required t
                          :callback (lambda (v) (setf (sign-in-password self) v)))))
+      (when *offer-remember-me*
+        (div (:class "lt-field lt-remember")
+          (checkbox (:id "sign-in-remember" :value (sign-in-remember self)
+                     :callback (lambda (on) (setf (sign-in-remember self) on))))
+          (label (:for "sign-in-remember") (translate "Keep me signed in"))))
       (div (:class "lt-buttons")
         (submit-button (:callback (lambda () (try-sign-in self))) (translate "Sign in"))
         (cancel-button (:callback (lambda () (answer self nil))) (translate "Cancel"))))
@@ -720,6 +881,8 @@ session starts at that path.")
 password reset links and, with littoral/oauth, sign-in callbacks."))
 
 (defmethod initial-request :around ((root auth-root) request)
+  ;; A sign-in kept from before (a restart, another process) comes back.
+  (restore-sign-in)
   (let* ((path (request-extra-path))
          (handler (gethash (first path) *auth-paths*)))
     (if handler

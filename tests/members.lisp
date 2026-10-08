@@ -5,11 +5,16 @@
 (def-suite members :in littoral)
 (in-suite members)
 
+(defvar *members-test-file* nil "The database file of the members test running.")
+
+(defun members-test-file () *members-test-file*)
+
 (defmacro with-members ((b) &body body)
   "The members example over a fresh database, and a browser on it."
   (let ((file (gensym "FILE")))
-    `(let ((,file (merge-pathnames (format nil "littoral-members-test-~36R.sqlite3" (random (expt 36 8)))
-                                   (uiop:temporary-directory))))
+    `(let* ((,file (merge-pathnames (format nil "littoral-members-test-~36R.sqlite3" (random (expt 36 8)))
+                                    (uiop:temporary-directory)))
+            (*members-test-file* ,file))
        (unwind-protect
             (with-fresh-applications ()
               (littoral-members-demo:register :file ,file)
@@ -117,3 +122,58 @@
       (visit b "/examples")
       (is (find-link b "Members"))
       (setf littoral.oauth::*providers* '()))))
+
+(test members-editors-and-permissions
+  (with-members (b)
+    (members-sign-in b "bob" "another passphrase")
+    (let ((page (browser-url b)))
+      (click b "Edit a post")
+      (is (= 403 (browser-status b)))
+      (back-to b page))
+    (click b "Sign out")
+    (members-sign-in b "ada" "correct horse battery")
+    (click b "Edit a post")
+    (is (has-text-p b "You may edit posts."))
+    (click b "Make editor")
+    (is (has-text-p b "bob is now an editor."))
+    (click b "Sign out")
+    (members-sign-in b "bob" "another passphrase")
+    (click b "Edit a post")
+    (is (has-text-p b "You may edit posts."))))
+
+(test members-sessions-list
+  (with-members (b)
+    (members-sign-in b "bob" "another passphrase")
+    (is (has-text-p b "(this browser)"))
+    (let ((phone (make-instance 'browser)))
+      (visit phone "/examples/members")
+      (members-sign-in phone "bob" "another passphrase")
+      ;; The phone sees the first browser's sign-in, and ends it.
+      (is (search "End" (page-text phone)))
+      (click phone "End")
+      (is (has-text-p phone "That sign-in has ended."))
+      (let ((littoral.auth:*auth-session-check-seconds* 0))
+        (visit b (browser-url b))
+        (is (has-text-p b "Not signed in")))
+      ;; Sign out everywhere ends the phone's own too.
+      (click phone "Sign out everywhere")
+      (is (has-text-p phone "Not signed in")))))
+
+(test accounts-from-an-existing-table
+  (with-members (b)
+    (visit b "/examples/accounts")
+    (is (has-text-p b "Accounts (an existing table)"))
+    (members-sign-in b "dora" "dora's password")
+    (is (has-text-p b "Signed in as dora (admin)"))
+    (is (has-text-p b "eve@example.org"))
+    (click b "Sign out")
+    (members-sign-in b "eve" "correct horse battery")
+    (is (has-text-p b "Signed in as eve"))
+    ;; Her Werkzeug hash is now Littoral's.
+    (is (alexandria:starts-with-subseq
+         "PBKDF2$"
+         (funcall (littoral.db:using-database :sqlite3 :database-name
+                                              (namestring (members-test-file)))
+                  (lambda ()
+                    (getf (first (littoral.db:db-query "SELECT pw_hash FROM accounts WHERE login = 'eve'"))
+                          :|pw_hash|)))))))

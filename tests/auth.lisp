@@ -82,7 +82,10 @@
     (is (not (has-text-p b "Admin console")))
     (click b "admin action")
     (is (= 403 (browser-status b)))
+    ;; A new session in the same browser: the sign-in is kept, in the database.
     (visit b "/m")
+    (is (has-text-p b "Signed in as bob"))
+    (click b "Sign out")
     (sign-in-as b "ada" "correct horse battery")
     (is (has-text-p b "Admin console"))
     (click b "Sign out")
@@ -372,3 +375,92 @@ and that URL."
     (littoral.auth:create-auth-tables)
     (is (equal '(:editor :reviewer) (littoral.auth:user-roles (littoral.auth:find-user "bob"))))))
 
+
+;;; Sign-ins kept in the database
+
+(defun restart-applications ()
+  "As if the process restarted: every Littoral session is gone."
+  (dolist (app (list-applications))
+    (clrhash (littoral::application-sessions app))))
+
+(defun sign-in-cookie (b)
+  (cdr (assoc "_lta_m" (browser-cookies b) :test #'string=)))
+
+(test sign-ins-survive-a-restart
+  (with-auth (b)
+    (sign-in-as b "bob" "another passphrase")
+    (is (has-text-p b "Signed in as bob"))
+    (is (sign-in-cookie b))
+    (restart-applications)
+    (visit b "/m")
+    (is (has-text-p b "Signed in as bob"))
+    ;; Another browser, without the cookie, is not signed in.
+    (let ((other (make-instance 'browser)))
+      (visit other "/m")
+      (is (has-text-p other "Not signed in")))
+    ;; Signing out ends it: row and cookie.
+    (click b "Sign out")
+    (is (null (sign-in-cookie b)))
+    (is (zerop (littoral.db:db-count 'littoral.auth::auth-session)))
+    (restart-applications)
+    (visit b "/m")
+    (is (has-text-p b "Not signed in"))))
+
+(defun browser-fields-with-button (b text)
+  "The fields PRESS would post for the button labelled TEXT."
+  (let ((name (cl-ppcre:register-groups-bind (n)
+                  ((format nil "<button type=\"submit\" name=\"(\\d+)\" value=\"1\">~A</button>" text)
+                   (browser-html b))
+                n)))
+    (append (browser-fields b) (list (cons name "1")))))
+
+(test keep-me-signed-in-sets-a-lasting-cookie
+  (with-auth (b)
+    (click b "Sign in")
+    (fill-in b "sign-in-name" "ada")
+    (fill-in b "sign-in-password" "correct horse battery")
+    (set-checkbox b 0 t)
+    (multiple-value-bind (status headers)
+        (raw-request b :post (form-action b) :body (encode-fields (browser-fields-with-button b "Sign in")))
+      (is (= 302 status))
+      (let ((cookie (find-if (lambda (c) (search "_lta_m=" c))
+                             (loop for (k v) on headers by #'cddr when (eq k :set-cookie) collect v))))
+        (is (search (format nil "Max-Age=~D" (* 30 86400)) cookie))))
+    (let ((row (first (littoral.db:db-select 'littoral.auth::auth-session))))
+      (is (littoral.auth::auth-session-remember-p row))
+      (is (> (littoral.auth::auth-session-expires row) (+ (get-universal-time) (* 29 86400)))))))
+
+(test revoked-sign-ins-end-elsewhere
+  (with-auth (b)
+    (sign-in-as b "bob" "another passphrase")
+    (let ((phone (make-instance 'browser)))
+      (visit phone "/m")
+      (sign-in-as phone "bob" "another passphrase")
+      (let ((bob (littoral.auth:find-user "bob")))
+        (is (= 2 (length (littoral.auth:user-sessions bob))))
+        ;; The phone signs out everywhere.
+        (let ((*session* (littoral::find-session
+                          (find-application "/m")
+                          (cl-ppcre:register-groups-bind (k) ("_s=([^&]+)" (browser-url phone)) k)))
+              (*application* (find-application "/m"))
+              (*request* (lack/request:make-request (make-env :get "/m"))))
+          (littoral.auth:log-out-everywhere bob))
+        (is (null (littoral.auth:user-sessions bob))))
+      ;; The first browser notices at its next check.
+      (let ((littoral.auth:*auth-session-check-seconds* 0))
+        (visit b (browser-url b))
+        (is (has-text-p b "Not signed in"))))))
+
+(test expired-and-forged-tokens-sign-no-one-in
+  (with-auth (b)
+    (sign-in-as b "bob" "another passphrase")
+    (littoral.db:db-execute "UPDATE auth_sessions SET expires = ?" (- (get-universal-time) 10))
+    (restart-applications)
+    (visit b "/m")
+    (is (has-text-p b "Not signed in"))
+    ;; The spent cookie is dropped.
+    (is (null (sign-in-cookie b)))
+    (push (cons "_lta_m" "forged-token") (browser-cookies b))
+    (restart-applications)
+    (visit b "/m")
+    (is (has-text-p b "Not signed in"))))

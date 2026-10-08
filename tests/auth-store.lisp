@@ -10,16 +10,18 @@
 and roles in a table of their own."
   (dolist (table '("account_roles" "accounts"))
     (littoral.db:db-execute (format nil "DROP TABLE IF EXISTS ~A" table)))
-  (littoral.db:db-execute "CREATE TABLE accounts (account_id INTEGER PRIMARY KEY, login TEXT,
-                           email_address TEXT, pw_hash TEXT, enabled INTEGER)")
+  (littoral.db:db-execute (format nil "CREATE TABLE accounts (account_id ~A, login TEXT,
+                           email_address TEXT, pw_hash TEXT, enabled INTEGER)"
+                                  (if (postgres-test-p) "SERIAL PRIMARY KEY" "INTEGER PRIMARY KEY")))
   (littoral.db:db-execute "CREATE TABLE account_roles (account_id INTEGER, role TEXT)")
-  (loop for (id login email hash enabled) in
-        `((1 "ada" "ada@example.org" ,(littoral.auth:bcrypt-hash "ada's long secret" :cost 4) 1)
-          (2 "bob" "bob@example.org"
-             "pbkdf2:sha256:1000$seasalt1234$7550ac791a251d65e7ddd282ac996a427107369b72fe00b683aa5462d0864ffe" 1)
-          (3 "carol" "carol@example.org" ,(littoral.auth:bcrypt-hash "carol's secret" :cost 4) 0))
-        do (littoral.db:db-execute "INSERT INTO accounts (account_id, login, email_address, pw_hash, enabled)
-                                    VALUES (?, ?, ?, ?, ?)" id login email hash enabled))
+  ;; The database numbers them: ada is 1.
+  (loop for (login email hash enabled) in
+        `(("ada" "ada@example.org" ,(littoral.auth:bcrypt-hash "ada's long secret" :cost 4) 1)
+          ("bob" "bob@example.org"
+           "pbkdf2:sha256:1000$seasalt1234$7550ac791a251d65e7ddd282ac996a427107369b72fe00b683aa5462d0864ffe" 1)
+          ("carol" "carol@example.org" ,(littoral.auth:bcrypt-hash "carol's secret" :cost 4) 0))
+        do (littoral.db:db-execute "INSERT INTO accounts (login, email_address, pw_hash, enabled)
+                                    VALUES (?, ?, ?, ?)" login email hash enabled))
   (littoral.db:db-execute "INSERT INTO account_roles (account_id, role) VALUES (1, 'admin')"))
 
 (defun account-store (&rest options)

@@ -785,6 +785,18 @@ its open event streams and sockets.  Signing in and out call this, so a
 session key someone else learned beforehand is no use afterwards.  Sessions
 kept in a cookie keep their key: another site cannot plant that cookie.
 
+#### `set-cookie` `name value &key max-age path (http-only t) (same-site "Lax") (session *session*)` — function
+
+Have the browser keep the cookie `name`=`value`, sent with this application's
+requests (or `path`'s).  `max-age` in seconds keeps it that long, 0 deletes it,
+`nil` keeps it until the browser closes.  Secure over `https`.  The cookie goes
+out with `session`'s next `http` response: this one, or the next page load when
+called while answering a WebSocket message.
+
+#### `request-cookie` `name` — function
+
+The value of the request's cookie `name`, or `nil`.
+
 #### `application` — class
 
 A root component class served at a path, with its settings and live sessions.

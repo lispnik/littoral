@@ -31,6 +31,7 @@
   ("~A is not one of the choices." "~A ne fait pas partie des choix.")
   ("~A must be a date, like 2026-10-06." "~A doit être une date, comme 2026-10-06.")
   ;; Signing in
+  ("Keep me signed in" "Rester connecté")
   ("Sign in" "Se connecter") ("Name" "Nom") ("Email" "E-mail") ("Back" "Retour")
   ("Forgot your password?" "Mot de passe oublié ?")
   ("Sign in with ~A" "Se connecter avec ~A")
@@ -90,6 +91,7 @@ Le lien ne sert qu'une fois, pendant une heure.  Si ce n'était pas vous, ignore
   ("~A is not one of the choices." "~A ist keine der Möglichkeiten.")
   ("~A must be a date, like 2026-10-06." "~A muss ein Datum sein, etwa 2026-10-06.")
   ;; Signing in
+  ("Keep me signed in" "Angemeldet bleiben")
   ("Sign in" "Anmelden") ("Name" "Name") ("Email" "E-Mail") ("Back" "Zurück")
   ("Forgot your password?" "Passwort vergessen?")
   ("Sign in with ~A" "Mit ~A anmelden")
@@ -149,6 +151,7 @@ Der Link funktioniert einmal, eine Stunde lang.  Falls Sie das nicht waren, igno
   ("~A is not one of the choices." "~A no es una de las opciones.")
   ("~A must be a date, like 2026-10-06." "~A debe ser una fecha, como 2026-10-06.")
   ;; Signing in
+  ("Keep me signed in" "Mantener la sesión iniciada")
   ("Sign in" "Iniciar sesión") ("Name" "Nombre") ("Email" "Correo") ("Back" "Volver")
   ("Forgot your password?" "¿Ha olvidado su contraseña?")
   ("Sign in with ~A" "Iniciar sesión con ~A")

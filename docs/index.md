@@ -397,7 +397,14 @@ Each request's changes run in one transaction. `:database` gives the admin its o
 
 ## Users and signing in
 
-`littoral/auth` adds users, signing in, roles and password reset, stored through `littoral/db`. The members example (`/examples/members`, system `littoral/members-demo`) shows all of it: a members' area, an admins' area, reset mail delivered to a mailbox on the page, and OAuth sign-in against DemoID, a pretend identity provider served alongside it.
+`littoral/auth` adds users, signing in, roles, permissions and password reset, all kept in the database through `littoral/db` (SQLite or PostgreSQL). The members example (`/examples/members`, system `littoral/members-demo`) shows all of it:
+- a members' area and an admins' area
+- editors with a permission
+- sign-ins that survive restarts, with a list of your sessions
+- reset mail delivered to a mailbox on the page
+- OAuth sign-in against DemoID, a pretend identity provider served alongside it
+
+`/examples/accounts` is the same page signing in against an existing table.
 
 ```lisp
 (littoral.auth:create-auth-tables)
@@ -408,15 +415,63 @@ Each request's changes run in one transaction. `:database` gives the admin its o
 (defmethod littoral.auth:required-role ((self reports)) :admin)
 ```
 
-- **Restricted components.** A `restricted` component shows a sign-in prompt in its place until someone is signed in, or a refusal if they lack its role. In callbacks, `(require-role :admin)` refuses with a 403. `current-user`, `log-in`, `log-out` and `has-role-p` cover the rest.
-- **Passwords and lockout.** Passwords are stored as PBKDF2 hashes.
+- **Restricted components.** A `restricted` component shows a sign-in prompt in its place until someone is signed in, or a refusal if they lack its role or permission. In callbacks, `(require-role :admin)` and `(require-permission :edit-posts)` refuse with a 403. `current-user`, `log-in`, `log-out`, `has-role-p` and `has-permission-p` cover the rest.
+- **Passwords and lockout.** New passwords are stored as PBKDF2-SHA256 hashes with `*pbkdf2-iterations*` (210,000) iterations.
   - After `*lockout-failures*` wrong passwords within `*failure-window-seconds*`, a name is locked for `*lockout-seconds*`.
   - One client address may fail `*failures-per-address*` times across all names, which stops one address trying a common password against many accounts. This and the reset-mail cap apply only to public addresses. A loopback or private address is usually a proxy shared by every visitor, and limiting it would let one person lock everyone out. Behind a proxy, set `*trust-forwarded-for*` so the limits see real clients.
   - An unknown name takes as long to refuse as a wrong password, so timing doesn't reveal which names exist.
+- **Sign-ins are kept in the database** (`auth_sessions`). The browser holds a token in an HttpOnly cookie. A new session of an `auth-root` application finds the sign-in through the cookie and restores it, so sign-ins survive a restart and are shared by several processes behind a load balancer.
+  - "Keep me signed in" on the sign-in form makes the sign-in last `*remember-days*` (30), renewed by use. Without it, the sign-in lasts until the browser closes, or `*sign-in-idle-hours*` (12) unused.
+  - `user-sessions` lists a user's sign-ins, `revoke-session` ends one, and `log-out-everywhere` ends them all. An ended sign-in signs that browser out within `*auth-session-check-seconds*` (60).
+  - Callbacks can set cookies of their own with `(set-cookie name value :max-age seconds)`. Read them with `request-cookie`.
 - **Signing in gives the session a new key**, as does signing out, and closes the session's open streams and sockets. A session URL someone had beforehand, perhaps from a link they sent, is then useless.
 - **Password reset.** "Forgot your password?" emails a single-use link that expires after an hour. The answer is the same whether or not the address has an account. Each account gets at most one mail a minute, and each client address `*reset-mails-per-address*` in the window. `*send-mail*` is where you plug in your mailer; by default it prints the mail.
 - **`*public-url*`.** Set `littoral.auth:*public-url*` to the site's address (`"https://example.org"`): it is where reset links and OAuth redirects point. In deployment mode it is required, because the Host header is the client's to choose, and a reset link built from a forged one would send its token to someone else's site. In development the request's host is used.
 - **OAuth / OpenID Connect.** Load `littoral/oauth` and call `define-oauth-provider` with a provider's URLs and your client id and secret. The sign-in form then offers "Sign in with …". The flow is the authorisation code flow with PKCE, and its state is tied to the browser. Users are found by email, or created; an email the provider marks `"email_verified": false` is refused. Register `/<app>/oauth/<provider>` as the redirect address with the provider.
+
+### Your own users table
+
+Users come from `*user-store*`. By default that's Littoral's `users` table. To sign in against a table you already have, describe its columns:
+
+```lisp
+(defparameter *accounts*
+  (littoral.auth:make-sql-user-store
+   :table "accounts" :id "account_id" :name "login" :email "email_address"
+   :password "pw_hash" :active "enabled"                ; :active is optional
+   :roles-query "SELECT r.name FROM roles r JOIN account_roles ar ON ar.role_id = r.id
+                 WHERE ar.account_id = ?"               ; or :roles-column "roles"
+   :writable t))                                        ; password changes write pw_hash
+
+(littoral.auth:create-auth-tables :users nil)           ; only Littoral's own tables
+(register-application "/app" 'app :around-request (littoral.auth:using-user-store *accounts*))
+```
+
+- **Hash formats.** `verify-password` accepts hashes made elsewhere: bcrypt (`$2a$`, `$2b$` and `$2y$`, as Rails, Laravel, PHP and Node write them), Django's `pbkdf2_sha256$…` and Werkzeug/Flask's `pbkdf2:sha256:…`, as well as Littoral's own. Anything else: pass `:verify`, a function of the password and the stored hash.
+- **Upgrades.** On a writable store, signing in re-hashes a correct password kept in another format, or with fewer iterations, as Littoral's PBKDF2 (`*rehash-on-sign-in*`).
+- **Other stores.** Without `:writable` the table is only read. Without `:create`, OAuth signs in only users the table already has.
+- **Reset links** work for any store: their tokens live in Littoral's `auth_tokens` table, not on the user's row.
+- **Your own classes.** For something other than a SQL table, define methods on the store generic functions (`store-find-user`, `store-find-user-by-id`, …). Any class can be a user once it has methods on `user-id`, `user-name`, `user-email`, `user-active-p`, `user-password-hash` and `user-roles`.
+
+### Roles and permissions
+
+Roles and permissions are kept in two tables, keyed by name, so they work with any store:
+
+```lisp
+(littoral.auth:grant-role user :editor)
+(littoral.auth:grant-permission :editor :edit-posts)
+(littoral.auth:has-permission-p :edit-posts)       ; for the current user
+(littoral.auth:require-permission :edit-posts)     ; in a callback: 403 otherwise
+(defmethod littoral.auth:required-permission ((self post-editor)) :edit-posts)
+```
+
+- A user's roles are their store's own (from a SQL store's column or query) plus those granted here.
+- Their permissions are those of all their roles.
+- `revoke-role`, `revoke-permission`, `role-permissions` and `user-permissions` round it out.
+- `create-auth-tables` moves roles that earlier versions kept in a comma-separated column into the new tables.
+
+### PostgreSQL
+
+`littoral/db` and `littoral/auth` are tested on SQLite and on PostgreSQL. Connect with `(connect-database :postgres :database-name "app" :host "localhost" :username "app" :password "…")`; the driver is pure Lisp. `make test-postgres LITTORAL_TEST_DATABASE=postgres://user:password@host:5432/db` runs the database tests against one, as CI does.
 
 ## Testing your application
 
