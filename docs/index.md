@@ -42,7 +42,7 @@ git clone https://github.com/lispnik/littoral.git
 cd littoral
 ocicl install      # fetches everything in ocicl.csv into ./ocicl
 make test          # FiveAM suite, in-process, no sockets
-make run           # examples on http://127.0.0.1:8080/
+make run           # examples on http://127.0.0.1:8080/examples
 make tracker       # the issue tracker on http://127.0.0.1:8080/tracker
 ```
 
@@ -397,7 +397,7 @@ Each request's changes run in one transaction. `:database` gives the admin its o
 
 ## Users and signing in
 
-`littoral/auth` adds users, signing in, roles and password reset, stored through `littoral/db`:
+`littoral/auth` adds users, signing in, roles and password reset, stored through `littoral/db`. The members example (`/examples/members`, system `littoral/members-demo`) shows all of it: a members' area, an admins' area, reset mail delivered to a mailbox on the page, and OAuth sign-in against DemoID, a pretend identity provider served alongside it.
 
 ```lisp
 (littoral.auth:create-auth-tables)

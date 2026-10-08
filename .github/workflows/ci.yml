@@ -69,6 +69,7 @@ jobs:
             --eval '(asdf:load-system :littoral/tracker)' --eval '(littoral-tracker:register-tracker)' \
             --eval '(asdf:load-system :littoral/tutorial)' --eval '(reading-list:register)' \
             --eval '(asdf:load-system :littoral/admin-demo)' --eval '(littoral-admin-demo:register)' \
+            --eval '(asdf:load-system :littoral/members-demo)' --eval '(littoral-members-demo:register)' \
             --eval '(asdf:load-system :littoral/parenscript-demo)' --eval '(littoral-parenscript-demo:register)' \
             --eval '(asdf:load-system :littoral/websocket)' \
             --eval '(littoral:start :port 8765)' --eval '(sleep 900)' > server.log 2>&1 &
@@ -85,6 +86,7 @@ jobs:
             --eval '(asdf:load-system :littoral/tracker)' --eval '(littoral-tracker:register-tracker)' \
             --eval '(asdf:load-system :littoral/tutorial)' --eval '(reading-list:register)' \
             --eval '(asdf:load-system :littoral/admin-demo)' --eval '(littoral-admin-demo:register)' \
+            --eval '(asdf:load-system :littoral/members-demo)' --eval '(littoral-members-demo:register)' \
             --eval '(asdf:load-system :littoral/parenscript-demo)' --eval '(littoral-parenscript-demo:register)' \
             --eval '(asdf:load-system :littoral/websocket)' \
             --eval '(asdf:load-system :littoral/woo)' \

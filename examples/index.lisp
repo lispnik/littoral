@@ -18,11 +18,20 @@
      ("store" "Sushi Store" "Catalog, cart and a checkout task with validation, a date picker and isolation.")
      ("wiki" "Wiki" "Shared pages, links, editing, history and search.")
      ("chat" "Chat" "Many sessions in one room, updated by server push.")
-     ("contacts" "Contacts" "An address book generated from one description: table, editor, validation, viewer."))
+     ("contacts" "Contacts" "An address book generated from one description, in English, French or German.")
+     ("admin" "Admin" "An admin generated from descriptions, over projects and tasks in SQLite.")
+     ("members" "Members" "Signing in, roles, password reset and OAuth, with a pretend identity provider."))
     ("Browser features"
      ("ajax" "AJAX" "Updating components in place, a live preview and a clock.")
      ("upload" "Upload" "Receiving files.")
-     ("progress" "Progress" "A background job updating the page through server push."))))
+     ("progress" "Progress" "A background job updating the page through server push.")
+     ("parenscript" "Parenscript" "Browser code written in Lisp."))))
+
+(defun example-registered-p (path)
+  "True when an application is registered at exactly PATH: the admin,
+members and Parenscript examples come in systems of their own."
+  (let ((app (find-application path)))
+    (and app (string= (application-path app) path))))
 
 (defclass example-index (component) ()
   (:documentation "A guide to the examples."))
@@ -35,6 +44,7 @@
         do (h2 () (text heading))
            (dl (:class "example-index")
              (loop for (path title blurb) in examples
+                   when (example-registered-p (format nil "/examples/~A" path))
                    do (dt () (anchor (:href (url-for (format nil "/examples/~A" path))) (text title)))
                       (dd () (text blurb))))))
 

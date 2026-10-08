@@ -146,6 +146,16 @@ try {
   const text = await evaluate("document.body.innerText");
   check("upload received", text.includes("littoral-e2e-profile-upload.txt") && text.includes("hello from chrome"), text.slice(0, 200));
 
+  // Members: sign in through DemoID, the whole OAuth flow in a real browser.
+  await go("/examples/members");
+  await clickLink("Sign in");
+  await evaluate(`[...document.querySelectorAll("button")].find(b => b.textContent.includes("Sign in with DemoID")).click()`);
+  await waitLoad();
+  check("demoid asks", (await evaluate("location.pathname")) === "/examples/demo-idp");
+  await evaluate(`[...document.querySelectorAll("button")].find(b => b.textContent.includes("carol@example.org")).click()`);
+  await waitLoad();
+  check("signed in through demoid", (await evaluate("document.body.innerText")).includes("Signed in as carol"));
+
   // Chat: join, then send with a real Enter keypress; AJAX, no reload, focus kept.
   await go("/examples/chat");
   await clickLink("Join the room");

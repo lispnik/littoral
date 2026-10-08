@@ -110,6 +110,7 @@
                #:littoral/db
                #:littoral/admin
                #:littoral/admin-demo
+               #:littoral/members-demo
                #:littoral/auth
                #:littoral/oauth
                #:littoral/parenscript-demo
@@ -149,7 +150,8 @@
                              (:file "parenscript")
                              (:file "websocket")
                              (:file "i18n")
-                             (:file "generator"))))
+                             (:file "generator")
+                             (:file "members"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
                                        (uiop:find-symbol* :littoral :littoral/tests))
@@ -205,6 +207,11 @@
   :description "A generated admin over projects and tasks in SQLite."
   :depends-on (#:littoral/admin #:dbd-sqlite3)
   :components ((:module "examples" :components ((:file "admin-demo")))))
+
+(asdf:defsystem #:littoral/members-demo
+  :description "Signing in, roles, password reset and OAuth, with a pretend identity provider."
+  :depends-on (#:littoral/auth #:littoral/oauth #:dbd-sqlite3)
+  :components ((:module "examples" :components ((:file "members-demo")))))
 
 (asdf:defsystem #:littoral/auth
   :description "Users, signing in, roles and password reset for Littoral."

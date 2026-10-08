@@ -60,8 +60,15 @@ alist of lower-case names to values)."
   "The header NAME from a Lack response's HEADERS plist."
   (getf headers name))
 
+(defun local-url (url)
+  "URL without its scheme and host, when it has them: the fake browser has
+only the one server, so http://localhost/a?b is /a?b."
+  (let ((match (nth-value 1 (cl-ppcre:scan-to-strings "^https?://[^/]+(/.*)?$" url))))
+    (if match (or (aref match 0) "/") url)))
+
 (defun raw-request (browser method url &key body content-type)
   "One request, no redirects followed.  Returns status, headers, body string."
+  (setf url (local-url url))
   (destructuring-bind (status headers body-parts)
       (funcall (browser-app browser)
                (apply #'make-env method url :body body :cookies (browser-cookies browser) :extra-headers (browser-headers browser)
