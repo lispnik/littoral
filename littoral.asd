@@ -107,6 +107,8 @@
                #:littoral/db
                #:littoral/admin
                #:littoral/admin-demo
+               #:littoral/auth
+               #:littoral/oauth
                #:dbd-sqlite3
                #:fiveam
                #:flexi-streams
@@ -134,7 +136,8 @@
                              (:file "tutorial")
                              (:file "live")
                              (:file "db")
-                             (:file "admin"))))
+                             (:file "admin")
+                             (:file "auth"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
                                        (uiop:find-symbol* :littoral :littoral/tests))
@@ -190,3 +193,17 @@
   :description "A generated admin over projects and tasks in SQLite."
   :depends-on (#:littoral/admin #:dbd-sqlite3)
   :components ((:module "examples" :components ((:file "admin-demo")))))
+
+(asdf:defsystem #:littoral/auth
+  :description "Users, signing in, roles and password reset for Littoral."
+  :author "Matthew Kennedy"
+  :license "MIT"
+  :depends-on (#:littoral #:littoral/db)
+  :components ((:module "src" :components ((:file "auth")))))
+
+(asdf:defsystem #:littoral/oauth
+  :description "Sign in to Littoral applications with OAuth 2 / OpenID Connect providers."
+  :author "Matthew Kennedy"
+  :license "MIT"
+  :depends-on (#:littoral/auth #:dexador #:com.inuoe.jzon #:cl-base64)
+  :components ((:module "src" :components ((:file "oauth")))))

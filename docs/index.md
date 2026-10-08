@@ -304,6 +304,24 @@ For each class it gives:
 
 Each request's changes run in one transaction. `:database` gives the admin its own database (through the new `:around-request` hook). Without credentials it only answers requests from the machine it runs on. To try it, load `littoral/admin-demo`, call `(littoral-admin-demo:register)`, and open `/examples/admin`.
 
+## Users and signing in
+
+`littoral/auth` adds users, signing in, roles and password reset, stored through `littoral/db`:
+
+```lisp
+(littoral.auth:create-auth-tables)
+(littoral.auth:add-user "ada" "ada@example.org" "a long passphrase" :roles '(:admin))
+
+(defclass app (littoral.auth:auth-root component) …)        ; answers /reset links
+(defclass reports (littoral.auth:restricted component) …)   ; signed-in users only
+(defmethod littoral.auth:required-role ((self reports)) :admin)
+```
+
+- **Restricted components.** A `restricted` component shows a sign-in prompt in its place until someone is signed in, or a refusal if they lack its role. In callbacks, `(require-role :admin)` refuses with a 403. `current-user`, `log-in`, `log-out` and `has-role-p` cover the rest.
+- **Passwords and lockout.** Passwords are stored as PBKDF2 hashes. After `*lockout-failures*` wrong passwords, a name is locked for `*lockout-seconds*`.
+- **Password reset.** "Forgot your password?" emails a single-use link that expires after an hour. The answer is the same whether or not the address has an account. `*send-mail*` is where you plug in your mailer; by default it prints the mail.
+- **OAuth / OpenID Connect.** Load `littoral/oauth` and call `define-oauth-provider` with a provider's URLs and your client id and secret. The sign-in form then offers "Sign in with …". The flow is the authorisation code flow with PKCE, and its state is tied to the browser. Users are found by email, or created. Register `/<app>/oauth/<provider>` as the redirect address with the provider.
+
 ## Testing your application
 
 `littoral/test` is the fake browser littoral's own test suite uses. It calls your application's Lack handler directly, with no sockets and no real browser, so tests are fast and need nothing installed. It keeps cookies, follows redirects, and reads links, fields and buttons out of the HTML. It posts forms (multipart too), AJAX requests and event streams the way a browser running `littoral.js` would. It works with any test framework; with FiveAM:

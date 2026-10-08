@@ -510,6 +510,10 @@ A calendar date, held as (`year` `month` `day`).
 
 `field`'s choices now.
 
+#### `field-hidden-p` `object` — generic function
+
+Reads the hidden of a field.  Stored and validated, but never shown: not in editors, viewers or reports.
+
 #### `parse-field` `field string` — generic function
 
 The value `string`, as typed, stands for; `nil` for blank.

@@ -35,7 +35,9 @@
    (validator :initarg :validate :initform nil :reader field-validator
               :documentation "Function of the parsed value: NIL, or what is wrong.")
    (read-only :initarg :read-only :initform nil :reader field-read-only-p)
-   (in-report :initarg :in-report :initform t :reader field-in-report-p))
+   (in-report :initarg :in-report :initform t :reader field-in-report-p)
+   (hidden :initarg :hidden :initform nil :reader field-hidden-p
+           :documentation "Stored and validated, but never shown: not in editors, viewers or reports."))
   (:documentation "One described property of an object.  Subclasses say how
 its values are entered, parsed, shown and checked."))
 
@@ -394,7 +396,7 @@ under its own lock."
 (FIELD-NAME . PROBLEM)."
   (let ((values '()) (problems '()))
     (dolist (field (description-fields (editor-description editor)))
-      (unless (field-read-only-p field)
+      (unless (or (field-read-only-p field) (field-hidden-p field))
         (handler-case
             (let* ((value (parse-field field (gethash (field-name field) (editor-texts editor))))
                    (problem (check-field field value)))
@@ -443,7 +445,7 @@ keep the problems to show."
       (let ((general (cdr (assoc nil problems))))
         (when general (p (:class "lt-validation-error" :role "alert") (text general))))
       (form ()
-        (dolist (field (description-fields (editor-description self)))
+        (dolist (field (remove-if #'field-hidden-p (description-fields (editor-description self))))
           (let* ((name (field-name field))
                  (id (string-downcase (symbol-name name)))
                  (problem (cdr (assoc name problems))))
@@ -478,7 +480,7 @@ keep the problems to show."
 (defmethod render ((self description-viewer))
   (table (:class "lt-table lt-viewer")
     (dolist (field (description-fields (viewer-description self)))
-      (unless (typep field 'password-field)
+      (unless (or (typep field 'password-field) (field-hidden-p field))
         (tr () (th () (text (field-label field)))
           (td () (render-field-value field (field-value field (viewer-object self))))))))
   (p () (anchor (:callback (lambda () (answer self))) "Close")))
@@ -489,7 +491,8 @@ field shown in reports."
   (let ((description (find-description description)))
     (loop for field in (if names
                            (mapcar (lambda (n) (find-field description n)) names)
-                           (remove-if-not #'field-in-report-p (description-fields description)))
+                           (remove-if-not (lambda (f) (and (field-in-report-p f) (not (field-hidden-p f))))
+                                          (description-fields description)))
           unless (typep field 'password-field)
             collect (let ((field field))
                       (column (field-label field)
