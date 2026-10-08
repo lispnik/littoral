@@ -12,11 +12,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const chrome = spawn(CHROME, ["--headless=new", "--remote-debugging-port=9333",
   "--user-data-dir=" + PROFILE, "--no-first-run", "about:blank"], { stdio: "ignore" });
 let ws, id = 0; const pending = new Map(); const events = [];
-for (let i = 0; i < 50; i++) {
+// Chrome can take a while to start on a busy CI machine.
+for (let i = 0; i < 300 && !ws; i++) {
   try { const r = await fetch("http://127.0.0.1:9333/json/list"); const t = (await r.json()).find((x) => x.type === "page");
         if (t) { ws = new WebSocket(t.webSocketDebuggerUrl); break; } } catch {}
   await sleep(200);
 }
+if (!ws) { console.log("ERROR Chrome did not start within 60 seconds"); chrome.kill(); process.exit(1); }
 await new Promise((r) => ws.addEventListener("open", r));
 ws.addEventListener("message", (m) => { const d = JSON.parse(m.data);
   if (d.id && pending.has(d.id)) { pending.get(d.id)(d); pending.delete(d.id); } else events.push(d); });
