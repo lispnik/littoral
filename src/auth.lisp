@@ -109,9 +109,11 @@
 (defvar *failure-window-seconds* 900
   "How long a failed attempt counts against a name or an address.")
 (defvar *failures-per-address* 30
-  "Failed sign-ins from one client address, within *FAILURE-WINDOW-SECONDS*,
-before it may try no more names for *LOCKOUT-SECONDS*.  Stops one address
-guessing a common password across many names.")
+  "Failed sign-ins from one public client address, within
+*FAILURE-WINDOW-SECONDS*, before it may try no more names for
+*LOCKOUT-SECONDS*.  Stops one address guessing a common password across
+many names.  Loopback and private addresses, usually a proxy's, are not
+limited: behind a proxy, set *TRUST-FORWARDED-FOR* so the limit sees clients.")
 
 ;;; Recent events by key, such as failed sign-ins by name
 
@@ -152,15 +154,28 @@ within *LOCKOUT-SECONDS*."
     (and (>= (length times) limit)
          (> (first times) (- (get-universal-time) *lockout-seconds*)))))
 
+(defun limited-address ()
+  "The request's client address when limits per address should apply to it:
+a public one.  A loopback or private address is almost always a proxy that
+every visitor shares (set *TRUST-FORWARDED-FOR* to see past it), and
+limiting it would let one person lock everyone out."
+  (let ((address (and *request* (littoral::client-address))))
+    (and address
+         (not (cl-ppcre:scan "^(?:127\\.|10\\.|192\\.168\\.|172\\.(?:1[6-9]|2[0-9]|3[01])\\.|169\\.254\\.|::1$|::ffff:127\\.|f[cd][0-9a-f]{2}:|fe80:|localhost$)"
+                             (string-downcase address)))
+         address)))
+
 (defun locked-p (name)
   (or (locked-out-p :name (string-downcase name) *lockout-failures*)
-      (and *request* (locked-out-p :address (littoral::client-address) *failures-per-address*))))
+      (let ((address (limited-address)))
+        (and address (locked-out-p :address address *failures-per-address*)))))
 
 (defun note-attempt (name succeeded)
   (let ((name (string-downcase name)))
     (cond (succeeded (forget-events :name name))
           (t (note-event :name name)
-             (when *request* (note-event :address (littoral::client-address)))))))
+             (let ((address (limited-address)))
+               (when address (note-event :address address)))))))
 
 (defvar *dummy-hash* nil
   "A hash checked against when the name is unknown, so that answering takes
@@ -334,14 +349,15 @@ and OAuth redirects can't trust the request's Host header."))
   "True unless USER was sent a link in the last minute or this client has
 asked for too many: the form must not become a way to flood an inbox."
   (and (null (recent-events :reset-mail (object-id user) 60))
-       (or (null *request*)
-           (< (length (recent-events :reset-address (littoral::client-address)))
-              *reset-mails-per-address*))))
+       (let ((address (limited-address)))
+         (or (null address)
+             (< (length (recent-events :reset-address address)) *reset-mails-per-address*)))))
 
 (defun send-reset-link (user)
   "Email USER a link that lets them choose a new password."
   (note-event :reset-mail (object-id user))
-  (when *request* (note-event :reset-address (littoral::client-address)))
+  (let ((address (limited-address)))
+    (when address (note-event :reset-address address)))
   (let ((token (littoral::random-key 32)))
     (setf (user-reset-hash user) (token-hash token)
           (user-reset-expires user) (+ (get-universal-time) *reset-link-seconds*))

@@ -157,12 +157,15 @@ from another site, 503 beyond the stream limits."
          (stream (make-instance 'littoral::event-stream :session session :continuation continuation
                                                         :base-path base-path)))
     (labels ((send (string)
-               (sb-thread:with-mutex (lock)
+               (sb-thread:with-recursive-lock (lock)
                  (when (eq (wsd:ready-state socket) :open)
                    (wsd:send socket string))))
              (writer () (event-writer #'send)))
       (setf (littoral::stream-waker stream) (lambda () (queue-push stream (writer)))
-            (littoral::stream-closer stream) (lambda () (wsd:close-connection socket)))
+            ;; Closing writes a frame too, so it takes the send lock.
+            (littoral::stream-closer stream) (lambda ()
+                                               (sb-thread:with-recursive-lock (lock)
+                                                 (wsd:close-connection socket))))
       (wsd:on :open socket (lambda () (littoral::register-event-stream stream)))
       (wsd:on :message socket
               (lambda (message)
@@ -172,8 +175,8 @@ from another site, 503 beyond the stream limits."
                       ;; Its session's key changed while answering: the reply
                       ;; has told the page to move; now close.
                       (unless (littoral::stream-open-p stream)
-                        (wsd:close-connection socket)))
-                  (error () (ignore-errors (wsd:close-connection socket))))))
+                        (funcall (littoral::stream-closer stream))))
+                  (error () (ignore-errors (funcall (littoral::stream-closer stream)))))))
       (wsd:on :close socket
               (lambda (&key code reason)
                 (declare (ignore code reason))

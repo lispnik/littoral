@@ -17,6 +17,12 @@
   (span (:class "ws-count") (text (ws-count self)))
   (button (:id "ws-plus" :on-click (ajax :callback (lambda () (incf (ws-count self))) :update self)) "+"))
 
+(defun close-client (client)
+  "Close a test client.  websocket-driver's client destroys its reader
+thread on close, which fails when the server's close frame has already
+ended that thread; that race is the client library's, not the server's."
+  (ignore-errors (wsd:close-connection client)))
+
 (defun free-port ()
   (let ((socket (usocket:socket-listen "127.0.0.1" 0)))
     (prog1 (usocket:get-local-port socket) (usocket:socket-close socket))))
@@ -57,7 +63,7 @@
                ;; A push, on the same socket.
                (publish *ws-channel*)
                (is (wait-for (lambda () (received "\"type\":\"update\""))))
-               (wsd:close-connection client))))
+               (close-client client))))
       (stop)
       (unregister-application "/ws-test"))))
 
@@ -101,7 +107,7 @@
           (is (not (eq (wsd:ready-state evil) :open))))
         (let ((own (ws-connect port url jar (format nil "http://127.0.0.1:~D" port))))
           (is (wait-for (lambda () (eq (wsd:ready-state own) :open))))
-          (wsd:close-connection own))))))
+          (close-client own))))))
 
 (test a-new-session-key-closes-the-socket
   (with-ws-server (port)
@@ -135,5 +141,5 @@
              (let ((second-socket (ws-connect port url jar)))
                (sleep 0.3)
                (is (not (eq (wsd:ready-state second-socket) :open))))
-             (wsd:close-connection first-socket))
+             (close-client first-socket))
         (setf *max-event-streams-per-session* limit)))))

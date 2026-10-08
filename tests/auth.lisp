@@ -264,7 +264,10 @@ and that URL."
   (let ((littoral.auth:*lockout-failures* 3) (littoral.auth:*failures-per-address* 4)
         (littoral.auth:*lockout-seconds* 60))
     (with-auth (b)
-      (let ((*request* (lack/request:make-request (make-env :get "/m"))))
+      (let ((*request* (lack/request:make-request
+                        (let ((env (make-env :get "/m")))
+                          (setf (getf env :remote-addr) "203.0.113.5")
+                          env))))
         ;; Old failures don't count.
         (let ((littoral.auth:*failure-window-seconds* 900))
           (dotimes (i 2) (littoral.auth:authenticate "ada" "wrong")))
@@ -305,3 +308,17 @@ and that URL."
              (is (has-text-p b "didn't work"))
              (is (not (has-text-p b "Signed in as bob")))))
       (setf littoral.oauth::*providers* '()))))
+
+(test proxies-are-not-locked-out
+  ;; Behind an untrusted proxy every visitor shares its private address:
+  ;; one person's failures there must not lock everyone out.
+  (let ((littoral.auth:*failures-per-address* 2) (littoral.auth:*lockout-failures* 100))
+    (with-auth (b)
+      (dolist (address '("127.0.0.1" "10.0.0.7" "192.168.1.20" "172.20.0.3" "::1"))
+        (let ((*request* (lack/request:make-request
+                          (let ((env (make-env :get "/m")))
+                            (setf (getf env :remote-addr) address)
+                            env))))
+          (dolist (name '("carol" "dave" "erin"))
+            (littoral.auth:authenticate name "guess"))
+          (is (littoral.auth:authenticate "bob" "another passphrase") "~A was locked out" address))))))
