@@ -111,6 +111,8 @@
                #:littoral/auth
                #:littoral/oauth
                #:littoral/parenscript-demo
+               #:littoral/websocket
+               #:dexador
                #:dbd-sqlite3
                #:fiveam
                #:flexi-streams
@@ -141,7 +143,8 @@
                              (:file "admin")
                              (:file "auth")
                              (:file "modal")
-                             (:file "parenscript"))))
+                             (:file "parenscript")
+                             (:file "websocket"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
                                        (uiop:find-symbol* :littoral :littoral/tests))
@@ -223,3 +226,10 @@
   :description "A component whose browser behaviour is written in Parenscript."
   :depends-on (#:littoral/parenscript)
   :components ((:module "examples" :components ((:file "parenscript-demo")))))
+
+(asdf:defsystem #:littoral/websocket
+  :description "Carry Littoral's AJAX and server push over WebSockets."
+  :author "Matthew Kennedy"
+  :license "MIT"
+  :depends-on (#:littoral #:websocket-driver #:com.inuoe.jzon)
+  :components ((:module "src" :components ((:file "websocket")))))

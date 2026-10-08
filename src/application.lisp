@@ -31,6 +31,9 @@
 string for the error page, or NIL for the standard one.")
    (max-request-size :initarg :max-request-size :initform nil :accessor application-max-request-size
                      :documentation "Largest request body in bytes, or NIL for *MAX-REQUEST-SIZE*.")
+   (websockets-p :initarg :websockets :initform nil :accessor application-websockets-p
+                 :documentation "Carry AJAX and server push over one WebSocket per page
+(with littoral/websocket loaded), on pages that have push.")
    (around-request :initarg :around-request :initform nil :accessor application-around-request
                    :documentation "A function called with a thunk that handles a whole
 request, rendering included, or NIL.  littoral/db uses it to choose the
@@ -65,12 +68,14 @@ session expired.  NIL starts them over silently.")
                              &key title mode session-timeout max-continuations
                                cookie-sessions stylesheets scripts credentials
                                max-sessions error-handler expired-notice
-                               max-request-size local-only language around-actions around-request)
+                               max-request-size local-only language around-actions around-request
+                               websockets)
   "Serve ROOT-CLASS, a component class, at PATH.  Replaces any application
 already there.  Returns the APPLICATION."
   (declare (ignore title mode session-timeout max-continuations cookie-sessions
                    stylesheets scripts credentials max-sessions error-handler expired-notice
-                   max-request-size local-only language around-actions around-request))
+                   max-request-size local-only language around-actions around-request
+                   websockets))
   (let* ((path (normalize-path path))
          (app (apply #'make-instance 'application :path path :root-class root-class initargs)))
     (sb-thread:with-mutex (*applications-lock*)

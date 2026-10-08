@@ -220,6 +220,17 @@ Components can be re-rendered on open pages by the server, without polling (this
 
 `(notify component session)` re-renders one component for one session. Use it from a background job, and capture `*session*` in the callback that starts the job. Wrap changes made from another thread in `(with-session (session) …)` so they hold the session's lock. A page opens its event stream only if something on it subscribes. Each open page holds one connection, which with Hunchentoot means one thread. The chat and progress examples use this.
 
+#### Over a WebSocket
+
+Load `littoral/websocket` and register the application with `:websockets t`. Pages that listen for pushes then open one WebSocket instead of an event stream, and their AJAX requests travel over it too, saving a request per click:
+
+```lisp
+(asdf:load-system :littoral/websocket)
+(register-application "/chat" 'chat :websockets t)
+```
+
+Nothing else changes: callbacks, `publish` and `notify` behave as before. Rendering for pushes happens on a small pool of worker threads, never in the thread that called `publish`. If the socket can't open (a proxy that refuses the upgrade, say), the page falls back to server-sent events and plain requests. On Woo, where `littoral/woo` already serves push from the event loops, pages keep server-sent events. The chat example uses this.
+
 ### Live redefinition
 
 In development mode, recompile a component's `render` method in Emacs (`C-c C-c`) and every open page showing that component redraws itself within a couple of seconds, with its state intact. A watcher notices when methods of `render`, `style`, `script`, `update-root`, `children` or `render-decoration` are redefined. Pages showing an instance of that class then reload, and because each page's URL names its saved state, reloading keeps that state. Pages with a push stream hear about it through the stream; the others poll a cheap endpoint, so live reloading holds no connection (and on Hunchentoot no thread) open.

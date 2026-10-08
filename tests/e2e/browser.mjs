@@ -152,6 +152,12 @@ try {
   await evaluate(`document.querySelector("input[type=text]").value = "e2e"`);
   await evaluate(`document.querySelector("button[type=submit]").click()`); await waitLoad();
   await evaluate("window.__chat = 1");
+  // On Hunchentoot the chat talks over a WebSocket; Woo serves push from its
+  // event loops and keeps server-sent events.
+  if (process.env.LITTORAL_SERVER !== "woo") {
+    await sleep(500);
+    check("chat uses a websocket", await evaluate("window.littoral.transport()") === "websocket");
+  }
   await evaluate(`document.getElementById("draft").focus()`);
   await send("Input.insertText", { text: "hello room" });
   await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r" });

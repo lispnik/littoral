@@ -908,6 +908,11 @@ Reads the around-request of an application.  A function called with a thunk that
 request, rendering included, or `nil`.  littoral/db uses it to choose the
 application's database.
 
+#### `application-websockets-p` `object` — generic function
+
+Reads the websockets-p of an application.  Carry `ajax` and server push over one WebSocket per page
+(with littoral/websocket loaded), on pages that have push.
+
 #### `*configuration-file*` — variable
 
 Where `save-configuration` writes, and the /config application saves after
@@ -933,7 +938,7 @@ when there is none.  Sessions, and settings not given, are kept.
 
 `app`'s configuration as a plist, as `save-configuration` writes it.
 
-#### `register-application` `path root-class &rest initargs &key title mode session-timeout max-continuations cookie-sessions stylesheets scripts credentials max-sessions error-handler expired-notice max-request-size local-only language around-actions around-request` — function
+#### `register-application` `path root-class &rest initargs &key title mode session-timeout max-continuations cookie-sessions stylesheets scripts credentials max-sessions error-handler expired-notice max-request-size local-only language around-actions around-request websockets` — function
 
 Serve `root-class`, a component class, at `path`.  Replaces any application
 already there.  Returns the `application`.

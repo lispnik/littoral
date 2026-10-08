@@ -21,20 +21,35 @@
     }
   }
 
-  function post(callback, targets, params, el, attr) {
-    params.append("_lt_ajax", "1");
-    params.append("_lt_update", targets);
-    if (callback) params.append(callback, "1");
+  // The page's WebSocket, when it has one open (littoral/websocket).
+  var socket = null, nextId = 1, waiting = {};
+
+  // Send an AJAX request over the socket if it is open, else by fetch.
+  function send(params) {
+    if (socket && socket.readyState === 1) {
+      return new Promise(function (resolve) {
+        var id = nextId++, object = {};
+        params.forEach(function (v, k) { object[k] = v; });
+        waiting[id] = resolve;
+        socket.send(JSON.stringify({ id: id, params: object }));
+      });
+    }
     return fetch(actionUrl(), {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: params.toString(),
       credentials: "same-origin"
-    })
-      .then(function (r) {
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        return r.json();
-      })
+    }).then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    });
+  }
+
+  function post(callback, targets, params, el, attr) {
+    params.append("_lt_ajax", "1");
+    params.append("_lt_update", targets);
+    if (callback) params.append(callback, "1");
+    return send(params)
       .then(function (data) {
         apply(data);
         var complete = el && attr && el.getAttribute(attr + "-complete");
@@ -132,7 +147,40 @@
   }
 
   // Server push: pages showing subscribed components listen for updates.
+  function listenOnSocket(url, fallback) {
+    var opened = false;
+    var ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + url);
+    ws.onopen = function () { opened = true; socket = ws; };
+    ws.onmessage = function (event) {
+      var message = JSON.parse(event.data);
+      if (message.type === "reply") {
+        var resolve = waiting[message.id]; delete waiting[message.id];
+        if (resolve) resolve(message.data);
+      } else if (message.type === "update") {
+        apply(message.data);
+      } else if (message.type === "toast") {
+        showToasts(message.data);
+      } else if (message.type === "reload") {
+        ws.close(); window.location.reload();
+      }
+    };
+    ws.onclose = function () {
+      socket = null;
+      if (!opened) fallback();          // never connected: use server-sent events
+    };
+    window.addEventListener("pagehide", function () { ws.close(); });
+  }
+
   function listen() {
+    var wsUrl = document.body.getAttribute("data-lt-ws");
+    if (wsUrl && window.WebSocket) {
+      listenOnSocket(wsUrl, listenForEvents);
+      return;
+    }
+    listenForEvents();
+  }
+
+  function listenForEvents() {
     var url = document.body.getAttribute("data-lt-events");
     if (!url || !window.EventSource) return;
     var source = new EventSource(url);
@@ -215,13 +263,10 @@
       params.append("_lt_ajax", "1");
       params.append("_lt_update", parts.targets);
       params.append(parts.callback, "1");
-      return fetch(actionUrl(), {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: params.toString(), credentials: "same-origin"
-      }).then(function (r) { return r.json(); })
-        .then(function (data) { apply(data); return data.value; });
-    }
+      return send(params).then(function (data) { apply(data); return data.value; });
+    },
+    // How AJAX requests travel just now: "websocket" or "fetch".
+    transport: function () { return socket && socket.readyState === 1 ? "websocket" : "fetch"; }
   };
 
   // Sortable lists: drag an item over its siblings; on release, post the

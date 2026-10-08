@@ -214,10 +214,16 @@ add, then the session and page keys."
                            (application-scripts app)
                            (reverse (root-scripts root))))
         (format out "<script src=\"~A\" defer></script>~%" (html-escape url)))
-      (format out "</head>~%<body data-lt-action=\"~A\"~@[ data-lt-events=\"~A\"~]~@[ data-lt-live=\"~A\"~]>~%"
+      (format out "</head>~%<body data-lt-action=\"~A\"~@[ data-lt-events=\"~A\"~]~@[ data-lt-ws=\"~A\"~]~@[ data-lt-live=\"~A\"~]>~%"
               (html-escape action-url)
               (when (page-listens-p session)
                 (html-escape (concatenate 'string action-url "&_lt_events=1")))
+              ;; One WebSocket for AJAX and push, where the page has push and
+              ;; the server gives each connection a thread anyway; the events
+              ;; URL above stays as the fallback.
+              (when (and (page-listens-p session) *websocket-handler*
+                         (application-websockets-p app) (not (async-socket *request*)))
+                (html-escape (concatenate 'string action-url "&_lt_ws=1")))
               (when (page-polls-p session)
                 (html-escape (format nil "~A&_lt_live=~D" action-url *code-version*))))
       (write-string body-html out)
@@ -283,14 +289,23 @@ session that has gone; the application's EXPIRED-NOTICE is shown first."
 (defun handle-ajax (session continuation)
   "Run an AJAX request's callbacks on CONTINUATION, without making a new
 page, and answer the components to update as JSON."
-  (let* ((root (session-root session))
+  (list 200 (list* :content-type "application/json; charset=utf-8" :cache-control "no-store"
+                   *security-headers*)
+        (list (ajax-json session continuation (current-parameters)))))
+
+(defun ajax-json (session continuation parameters)
+  "Run the callbacks PARAMETERS name on CONTINUATION, without making a new
+page; the JSON answer naming the components to update.  Used for AJAX
+posts and WebSocket messages alike."
+  (let* ((*request-parameters* parameters)
+         (root (session-root session))
          (callbacks (continuation-callbacks continuation))
          (*ajax-result* nil)
          (*ajax-scripts* '())
          (*redirect* nil))
     (call-around-actions session
                          (lambda ()
-                           (process-callbacks (lack/request:request-parameters *request*) callbacks)
+                           (process-callbacks parameters callbacks)
                            (prepare-tasks root)))
     (setf (continuation-snapshot continuation) (take-snapshot root))
     (let ((*render-context* (make-instance 'render-context
@@ -299,15 +314,13 @@ page, and answer the components to update as JSON."
                                            :halos-p (and (development-p)
                                                          (session-halos-p session))
                                            :ajax-p t)))
-      (list 200 (list* :content-type "application/json; charset=utf-8" :cache-control "no-store"
-                       *security-headers*)
-            (list (let ((*rendering* t))
-                    (render-fragments (cl-ppcre:split "\\s+" (or (request-parameter "_lt_update") ""))
-                                      root
-                                      :value *ajax-result*
-                                      :scripts (reverse *ajax-scripts*)
-                                      :redirect *redirect*
-                                      :toasts (take-toasts session))))))))
+      (let ((*rendering* t))
+        (render-fragments (cl-ppcre:split "\\s+" (or (request-parameter "_lt_update") ""))
+                          root
+                          :value *ajax-result*
+                          :scripts (reverse *ajax-scripts*)
+                          :redirect *redirect*
+                          :toasts (take-toasts session))))))
 
 (defun call-around-request (app thunk)
   "Call THUNK through APP's AROUND-REQUEST, if it has one."
@@ -328,7 +341,7 @@ and return a redirect to it; otherwise NIL."
     (when (call-around-actions
            session
            (lambda ()
-             (when (process-callbacks (lack/request:request-parameters *request*)
+             (when (process-callbacks (current-parameters)
                                       (continuation-callbacks continuation))
                (prepare-tasks (session-root session))
                t)))
@@ -355,6 +368,8 @@ render the page it names."
            (handle-ajax session continuation))
           ((request-parameter "_lt_events")
            (handle-events session continuation))
+          ((and (request-parameter "_lt_ws") *websocket-handler*)
+           (funcall *websocket-handler* session continuation))
           ((request-parameter "_lt_live")
            ;; A development page asking whether code it shows has changed.
            (let ((version (or (ignore-errors (parse-integer (request-parameter "_lt_live"))) 0)))

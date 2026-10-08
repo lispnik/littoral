@@ -16,7 +16,7 @@
   (register-application "/examples/report" 'element-table :title "Report")
   (register-application "/examples/store" 'store :title "Sushi Store")
   (register-application "/examples/wiki" 'wiki :title "Wiki")
-  (register-application "/examples/chat" 'chat :title "Chat")
+  (register-application "/examples/chat" 'chat :title "Chat" :websockets t)
   (register-application "/examples/progress" 'progress-demo :title "Progress")
   (register-application "/examples/contacts" 'contacts-app :title "Contacts")
   (register-application "/examples/widgets" 'widget-demo :title "Widgets")

@@ -62,20 +62,30 @@ to URL (another site, say) instead of the next page."
 (setf (documentation 'forbidden-message 'function)
       "The explanation a FORBIDDEN condition shows the user.")
 
+(defvar *websocket-handler* nil
+  "A function of (SESSION CONTINUATION) answering a page's WebSocket
+request, set by littoral/websocket; NIL when WebSockets are not loaded.")
+
 (defvar *debug-errors* nil
   "When true, errors inside a request enter the debugger instead of
 rendering an error page.")
 
+(defvar *request-parameters* nil
+  "When non-NIL, the parameters of the request being handled, overriding
+the HTTP request's: how a WebSocket message is handled like a POST.")
+
+(defun current-parameters (&optional (request *request*))
+  "The parameters of the request being handled, as an alist."
+  (or *request-parameters*
+      (and request (lack/request:request-parameters request))))
+
 (defun request-parameter (name &optional (request *request*))
   "The value of the query or body parameter NAME in REQUEST, or NIL."
-  (when request
-    (rest (assoc name (lack/request:request-parameters request) :test #'string=))))
+  (rest (assoc name (current-parameters request) :test #'string=)))
 
 (defun request-parameter-p (name &optional (request *request*))
   "True when REQUEST has the parameter NAME, even with no value (?flag)."
-  (and request
-       (assoc name (lack/request:request-parameters request) :test #'string=)
-       t))
+  (and (assoc name (current-parameters request) :test #'string=) t))
 
 (defun request-path (&optional (request *request*))
   "The path of REQUEST below the mount point."

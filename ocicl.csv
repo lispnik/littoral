@@ -55,10 +55,15 @@ documentation-utils, ghcr.io/ocicl/documentation-utils@sha256:b2a1b3f3bcd1a738af
 dref, ghcr.io/ocicl/mgl-pax-bootstrap@sha256:1c15644701ad5b8e441b2724c265c995437052beb52322c447816c3cc17c564a, mgl-pax-20260313-f7f9414/dref/dref.asd
 dref-test, ghcr.io/ocicl/mgl-pax-bootstrap@sha256:1c15644701ad5b8e441b2724c265c995437052beb52322c447816c3cc17c564a, mgl-pax-20260313-f7f9414/dref/dref-test.asd
 dref-test-package-inferred, ghcr.io/ocicl/mgl-pax-bootstrap@sha256:1c15644701ad5b8e441b2724c265c995437052beb52322c447816c3cc17c564a, mgl-pax-20260313-f7f9414/dref/test/data/dref-test-package-inferred.asd
+event-emitter, ghcr.io/ocicl/event-emitter@sha256:dc8a9abdd0ec681dcb611dddfe0b2e037dc60ac3cab6bbffbc438e803f0217bd, event-emitter-20240607-d8bd3d9/event-emitter.asd
+event-emitter-benchmark, ghcr.io/ocicl/event-emitter@sha256:dc8a9abdd0ec681dcb611dddfe0b2e037dc60ac3cab6bbffbc438e803f0217bd, event-emitter-20240607-d8bd3d9/event-emitter-benchmark.asd
+event-emitter-test, ghcr.io/ocicl/event-emitter@sha256:dc8a9abdd0ec681dcb611dddfe0b2e037dc60ac3cab6bbffbc438e803f0217bd, event-emitter-20240607-d8bd3d9/event-emitter-test.asd
 fast-http, ghcr.io/ocicl/fast-http@sha256:1eb91157b8adb9c46c7b80cd0078819d49d6ec397c7a7a072c94dbfab3271964, fast-http-20260406-03d440d/fast-http.asd
 fast-http-test, ghcr.io/ocicl/fast-http@sha256:1eb91157b8adb9c46c7b80cd0078819d49d6ec397c7a7a072c94dbfab3271964, fast-http-20260406-03d440d/fast-http-test.asd
 fast-io, ghcr.io/ocicl/fast-io@sha256:7ba35a0eddf00b3c25656b3c5a93e95460f6cb8f807afbc04ef4f50076d95aff, fast-io-20240503-a4c5ad6/fast-io.asd
 fast-io-test, ghcr.io/ocicl/fast-io@sha256:7ba35a0eddf00b3c25656b3c5a93e95460f6cb8f807afbc04ef4f50076d95aff, fast-io-20240503-a4c5ad6/fast-io-test.asd
+fast-websocket, ghcr.io/ocicl/fast-websocket@sha256:046c8152322c407ba5362900a957733ed7531a0c00dab7c323dfcfacdd347a0c, fast-websocket-20240513-66ea866/fast-websocket.asd
+fast-websocket-test, ghcr.io/ocicl/fast-websocket@sha256:046c8152322c407ba5362900a957733ed7531a0c00dab7c323dfcfacdd347a0c, fast-websocket-20240513-66ea866/fast-websocket-test.asd
 fiveam, ghcr.io/ocicl/fiveam@sha256:e283043dc8d31e8df2b214465cf5a06ea07bdbea10e600a40e17aaf9518226ac, fiveam-20240928-e43d6c8/fiveam.asd
 flexi-streams, ghcr.io/ocicl/flexi-streams@sha256:95005b06a8a95c82780c75ead53810bcb273d07fcf5fe76b527f1856df9923f2, flexi-streams-20240503-4951d57/flexi-streams.asd
 flexi-streams-test, ghcr.io/ocicl/flexi-streams@sha256:95005b06a8a95c82780c75ead53810bcb273d07fcf5fe76b527f1856df9923f2, flexi-streams-20240503-4951d57/flexi-streams-test.asd
@@ -117,6 +122,7 @@ proc-parse-test, ghcr.io/ocicl/proc-parse@sha256:0880f9acb35eb9efbe1f77a981e36e8
 quri, ghcr.io/ocicl/quri@sha256:e2559f91600e4895e115b42dde88fcaac3677f051335d73431888dcf7af99f95, quri-0.7.0/quri.asd
 quri-test, ghcr.io/ocicl/quri@sha256:e2559f91600e4895e115b42dde88fcaac3677f051335d73431888dcf7af99f95, quri-0.7.0/quri-test.asd
 rfc2388, ghcr.io/ocicl/rfc2388@sha256:4190f6eb36b3b2f53def6eff56b44e76edf4086ada2feb6d88bb671a40fc9f70, rfc2388-20240503-591bcf7/rfc2388.asd
+sha1, ghcr.io/ocicl/sha1@sha256:d332af205bf3b5db2bdf8ea6df9f5127627343ce19bc313d00cfa2d80a5fb404, sha1-20240503-be8b1b1/sha1.asd
 smart-buffer, ghcr.io/ocicl/smart-buffer@sha256:b8d194f5881c415fd7f0099b88dfd9e2158405c2966de15c716b155a364bf0f7, smart-buffer-20240503-619759d/smart-buffer.asd
 smart-buffer-test, ghcr.io/ocicl/smart-buffer@sha256:b8d194f5881c415fd7f0099b88dfd9e2158405c2966de15c716b155a364bf0f7, smart-buffer-20240503-619759d/smart-buffer-test.asd
 split-sequence, ghcr.io/ocicl/split-sequence@sha256:3a37662eedd99c42995587b9d443c4631f25c4c523091bcca31a27b880585b8e, split-sequence-2.0.1/split-sequence.asd
@@ -143,6 +149,10 @@ usocket, ghcr.io/ocicl/usocket@sha256:282856b819b22a4319ba30a15605ee934aa23292a4
 usocket-server, ghcr.io/ocicl/usocket@sha256:282856b819b22a4319ba30a15605ee934aa23292a471fd29ea4d3f2074b3f16d, usocket-0.8.8/usocket-server.asd
 usocket-test, ghcr.io/ocicl/usocket@sha256:282856b819b22a4319ba30a15605ee934aa23292a471fd29ea4d3f2074b3f16d, usocket-0.8.8/usocket-test.asd
 vom, ghcr.io/ocicl/vom@sha256:f8c3898b00ba064be339b7e0e0407aa7a0e6f029017ba63dcd5ada7816a7b87c, vom-20240815-303c3f6/vom.asd
+websocket-driver, ghcr.io/ocicl/websocket-driver@sha256:3d71c3b4cbe14bd1eb79df7bb2150ee0cba7a1aa6d46d8021be12ae8839ae0d2, websocket-driver-20251122-749b617/websocket-driver.asd
+websocket-driver-base, ghcr.io/ocicl/websocket-driver@sha256:3d71c3b4cbe14bd1eb79df7bb2150ee0cba7a1aa6d46d8021be12ae8839ae0d2, websocket-driver-20251122-749b617/websocket-driver-base.asd
+websocket-driver-client, ghcr.io/ocicl/websocket-driver@sha256:3d71c3b4cbe14bd1eb79df7bb2150ee0cba7a1aa6d46d8021be12ae8839ae0d2, websocket-driver-20251122-749b617/websocket-driver-client.asd
+websocket-driver-server, ghcr.io/ocicl/websocket-driver@sha256:3d71c3b4cbe14bd1eb79df7bb2150ee0cba7a1aa6d46d8021be12ae8839ae0d2, websocket-driver-20251122-749b617/websocket-driver-server.asd
 winhttp, ghcr.io/ocicl/winhttp@sha256:f4955086d194e6ae1665894da2149dac0ad850d95369f85fdda4d95cd06f3641, winhttp-20240503-8611ba5/winhttp.asd
 woo, ghcr.io/ocicl/woo@sha256:d14f9876ea2105452eaabb52ddc902768147a3e576bf1912cee942a5d5c6b563, woo-20240906-7f5219c/woo.asd
 woo-test, ghcr.io/ocicl/woo@sha256:d14f9876ea2105452eaabb52ddc902768147a3e576bf1912cee942a5d5c6b563, woo-20240906-7f5219c/woo-test.asd

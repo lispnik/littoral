@@ -46,10 +46,11 @@ e2e:
 	  --eval '(asdf:load-system :littoral/tutorial)' --eval '(reading-list:register)' \
 	  --eval '(asdf:load-system :littoral/admin-demo)' --eval '(littoral-admin-demo:register)' \
 	  --eval '(asdf:load-system :littoral/parenscript-demo)' --eval '(littoral-parenscript-demo:register)' \
+	  --eval '(asdf:load-system :littoral/websocket)' \
 	  --eval '(when (eq :$(SERVER) :woo) (asdf:load-system :littoral/woo))' \
 	  --eval '(littoral:start :port $(E2E_PORT) :server :$(SERVER))' --eval '(sleep 600)' >/dev/null 2>&1 & pid=$$!; \
 	for i in $$(seq 1 60); do curl -s -o /dev/null http://127.0.0.1:$(E2E_PORT)/ && break; sleep 1; done; \
-	BASE=http://127.0.0.1:$(E2E_PORT) $(NODE) tests/e2e/browser.mjs; status=$$?; \
+	LITTORAL_SERVER=$(SERVER) BASE=http://127.0.0.1:$(E2E_PORT) $(NODE) tests/e2e/browser.mjs; status=$$?; \
 	kill -9 $$pid; exit $$status
 
 # WCAG 2 A/AA checks (axe-core) over every example page, in headless Chrome.
@@ -61,6 +62,7 @@ a11y:
 	  --eval '(asdf:load-system :littoral/tutorial)' --eval '(reading-list:register)' \
 	  --eval '(asdf:load-system :littoral/admin-demo)' --eval '(littoral-admin-demo:register)' \
 	  --eval '(asdf:load-system :littoral/parenscript-demo)' --eval '(littoral-parenscript-demo:register)' \
+	  --eval '(asdf:load-system :littoral/websocket)' \
 	  --eval '(littoral:start :port $(E2E_PORT))' --eval '(sleep 600)' >/dev/null 2>&1 & pid=$$!; \
 	for i in $$(seq 1 60); do curl -s -o /dev/null http://127.0.0.1:$(E2E_PORT)/ && break; sleep 1; done; \
 	BASE=http://127.0.0.1:$(E2E_PORT) $(NODE) tests/e2e/accessibility.mjs; status=$$?; \
