@@ -95,6 +95,33 @@ try {
   await go("/examples/counter"); await clickLink("Halos"); await audit("halos");
   await clickLink("Halos off");
  }
+
+ // Phone width: nothing may stick out past the screen's right edge, except
+ // inside something that scrolls sideways (a wide table, code).
+ await send("Emulation.setDeviceMetricsOverride", { width: 360, height: 740, deviceScaleFactor: 2, mobile: true });
+ const overflow = () => evaluate(`(() => {
+   const w = document.documentElement.clientWidth, out = [];
+   const scrolls = (el) => { for (let p = el.parentElement; p; p = p.parentElement) {
+     const o = getComputedStyle(p).overflowX; if (o === "auto" || o === "scroll" || o === "hidden") return true; } return false; };
+   for (const el of document.body.querySelectorAll("*")) {
+     const r = el.getBoundingClientRect();
+     if (r.width && r.right > w + 1 && !scrolls(el))
+       out.push(el.tagName.toLowerCase() + (el.id ? "#" + el.id : "") + (el.className && typeof el.className === "string" ? "." + el.className.trim().split(/\s+/).join(".") : "") + " to " + Math.round(r.right) + "px");
+   }
+   if (document.documentElement.scrollWidth > w + 1) out.unshift("page " + document.documentElement.scrollWidth + "px wide");
+   return out.slice(0, 4);
+ })()`);
+ const phoneCheck = async (label) => {
+   const found = await overflow();
+   if (found.length) { failures++; console.log(`FAIL ${label} at 360px: ${found.join(", ")}`); }
+   else console.log(`PASS ${label} at 360px`);
+ };
+ for (const page of pages) { await go(page); await phoneCheck(page); }
+ await go("/examples/contacts"); await clickLink("Add a contact"); await phoneCheck("contacts editor");
+ await go("/examples/widgets");
+ for (const tab of ["Tree", "Autocomplete", "Sortable"]) { await clickLink(tab); await phoneCheck("widgets: " + tab); }
+ await go("/examples/counter"); await clickLink("Halos"); await phoneCheck("halos");
+ await clickLink("Halos off");
 } catch (e) { console.log("ERROR " + e.message); failures++; }
 finally {
   ws.close(); chrome.kill();

@@ -331,7 +331,7 @@ through UPDATE-ISSUE, under the store's lock."))
   (render-component (app-issues self)))
 
 (defmethod style ((self tracker))
-  ".tracker-header { display: flex; justify-content: space-between; align-items: baseline;
+  ".tracker-header { display: flex; flex-wrap: wrap; gap: .4rem 1rem; justify-content: space-between; align-items: baseline;
                    border-bottom: 1px solid var(--lt-border); padding-bottom: .4rem; margin-bottom: .8rem; }
 .tracker-name { font-size: 1.2rem; }
 .tracker-filters { margin-bottom: .6rem; }

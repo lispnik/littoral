@@ -239,7 +239,7 @@ so you can bookmark [[Littoral]] or [[Sandbox]].~%~%- Click *Edit* to change a p
                    (text " ")))))))
 
 (defmethod style ((self wiki))
-  ".wiki-header { display: flex; justify-content: space-between; align-items: center;
+  ".wiki-header { display: flex; flex-wrap: wrap; gap: .4rem 1rem; justify-content: space-between; align-items: center;
                 border-bottom: 1px solid var(--lt-border); padding-bottom: .4rem; }
 .wiki-home { font-weight: 700; font-size: 1.2rem; text-decoration: none; }
 .wiki-link.missing { color: var(--lt-error); text-decoration: underline dotted; }

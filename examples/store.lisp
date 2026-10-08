@@ -263,9 +263,9 @@
             (text (format-date (order-date order)))))))))
 
 (defmethod style ((self store))
-  ".store-header { display: flex; justify-content: space-between; align-items: baseline; }
-.store-body { display: grid; grid-template-columns: 1fr 16rem; gap: 1.5rem; align-items: start; }
-@media (max-width: 40rem) { .store-body { grid-template-columns: 1fr; } }
+  ".store-header { display: flex; flex-wrap: wrap; gap: .4rem 1rem; justify-content: space-between; align-items: baseline; }
+.store-body { display: grid; grid-template-columns: minmax(0, 1fr) 16rem; gap: 1.5rem; align-items: start; }
+@media (max-width: 40rem) { .store-body { grid-template-columns: minmax(0, 1fr); } }
 .cart { border: 1px solid var(--lt-border); border-radius: 6px; padding: .2rem 1rem 1rem;
         background: var(--lt-panel); }
 .cart ul { padding-left: 1rem; } .cart a { text-decoration: none; }

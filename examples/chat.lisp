@@ -115,11 +115,11 @@
 (defmethod style ((self chat))
   ".chat-messages { height: 22rem; overflow-y: auto; border: 1px solid var(--lt-border);
                   border-radius: 6px; padding: .5rem; display: flex; flex-direction: column; gap: .3rem; }
-.chat-message { display: flex; gap: .5rem; align-items: baseline; }
+.chat-message { display: flex; flex-wrap: wrap; gap: 0 .5rem; align-items: baseline; }
 .chat-message.mine .chat-nick { color: var(--lt-accent); }
 .chat-time { color: var(--lt-muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
 .chat-composer { display: flex; gap: .5rem; margin-top: .5rem; }
-.chat-composer input { flex: 1; }
+.chat-composer input { flex: 1; min-width: 0; }
 .chat-who { font-size: .85rem; color: var(--lt-muted); }")
 
 (defmethod script ((self chat))

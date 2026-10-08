@@ -12,29 +12,33 @@
   }
 }
 body { font-family: system-ui, sans-serif; color: var(--lt-fg); background: var(--lt-bg);
-       margin: 0 auto; padding: 1rem 1rem 4rem; max-width: 60rem; line-height: 1.45; }
+       margin: 0 auto; padding: 1rem 1rem 4rem; max-width: 60rem; line-height: 1.45;
+       overflow-wrap: break-word; }
+/* Nothing wider than a phone's screen: wide tables and code scroll in place. */
+img, video, input, select, textarea { max-width: 100%; }
+pre { overflow-x: auto; }
 a { color: var(--lt-accent); }
 input, select, textarea, button { font: inherit; }
 label { margin-right: 1em; }
-.lt-table { border-collapse: collapse; margin: .5rem 0; }
+.lt-table { border-collapse: collapse; margin: .5rem 0; display: block; max-width: 100%; overflow-x: auto; }
 .lt-table th, .lt-table td { border-bottom: 1px solid var(--lt-border); padding: .3rem .6rem;
                              text-align: left; vertical-align: top; }
-.lt-buttons { margin-top: .6rem; display: flex; gap: .4rem; }
+.lt-buttons { margin-top: .6rem; display: flex; flex-wrap: wrap; gap: .4rem; }
 .lt-dialog { padding: 1rem; border: 1px solid var(--lt-border); border-radius: 6px;
              background: var(--lt-panel); margin: .5rem 0; }
 .lt-message { font-weight: 600; }
 .lt-validation-error, .lt-error { color: var(--lt-error); font-weight: 600; }
-.lt-toolbar { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 1rem;
+.lt-toolbar { position: fixed; left: 0; right: 0; bottom: 0; display: flex; flex-wrap: wrap; gap: .2rem 1rem;
               padding: .4rem 1rem; font-size: .85rem; background: var(--lt-panel);
               border-top: 1px solid var(--lt-border); }
 .lt-toolbar-time { margin-left: auto; color: var(--lt-muted); }
 .lt-halo { border: 1px dashed var(--lt-accent); margin: .3rem 0; }
-.lt-halo-bar { display: flex; gap: .6rem; font-size: .75rem; padding: .1rem .4rem;
+.lt-halo-bar { display: flex; flex-wrap: wrap; gap: .1rem .6rem; font-size: .75rem; padding: .1rem .4rem;
                background: var(--lt-panel); border-bottom: 1px dashed var(--lt-accent); }
 .lt-halo-class { font-weight: 600; }
 .lt-halo-body { padding: .3rem; }
 .lt-source { white-space: pre-wrap; font-size: .8rem; overflow-x: auto; }
-.lt-batch { display: flex; gap: .5rem; margin: .5rem 0; align-items: baseline; }
+.lt-batch { display: flex; flex-wrap: wrap; gap: .5rem; margin: .5rem 0; align-items: baseline; }
 .lt-batch .lt-disabled { color: var(--lt-muted); }
 .lt-report th a { text-decoration: none; }
 .lt-report td.number, .lt-report th.number { text-align: right; font-variant-numeric: tabular-nums; }
@@ -50,15 +54,15 @@ label { margin-right: 1em; }
 .lt-field-invalid input, .lt-field-invalid textarea, .lt-field-invalid select { outline: 1px solid var(--lt-error); }
 .lt-help { font-size: .8rem; color: var(--lt-muted); }
 .lt-viewer th { width: 10rem; }
-.lt-tabs { display: flex; gap: .2rem; list-style: none; padding: 0; margin: 0;
+.lt-tabs { display: flex; flex-wrap: wrap; gap: .2rem; list-style: none; padding: 0; margin: 0;
            border-bottom: 1px solid var(--lt-border); }
 .lt-tabs li a, .lt-tabs li span { display: block; padding: .35rem .8rem; text-decoration: none;
                                   border: 1px solid transparent; border-bottom: none; border-radius: 6px 6px 0 0; }
 .lt-tabs li.lt-active span { border-color: var(--lt-border); background: var(--lt-bg); margin-bottom: -1px;
                              font-weight: 600; }
 .lt-tab-body { padding: .8rem 0; }
-.lt-navigation { display: grid; grid-template-columns: 12rem 1fr; gap: 1.5rem; }
-@media (max-width: 40rem) { .lt-navigation { grid-template-columns: 1fr; } }
+.lt-navigation { display: grid; grid-template-columns: 12rem minmax(0, 1fr); gap: 1.5rem; }
+@media (max-width: 40rem) { .lt-navigation { grid-template-columns: minmax(0, 1fr); } }
 .lt-menu { list-style: none; padding: 0; margin: 0; }
 .lt-menu li a, .lt-menu li span { display: block; padding: .3rem .6rem; text-decoration: none; border-radius: 4px; }
 .lt-menu li.lt-active span { background: var(--lt-panel); font-weight: 600; }
