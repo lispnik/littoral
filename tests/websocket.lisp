@@ -67,3 +67,73 @@
       (visit b "/plain")
       (is (search "data-lt-events=" (browser-html b)))
       (is (not (search "data-lt-ws=" (browser-html b)))))))
+
+;;; Security review
+
+(defun ws-page (port jar)
+  "Fetch the test page; its WebSocket URL and its click spec."
+  (let ((html (fetch-page (format nil "http://127.0.0.1:~D/ws-test" port) jar)))
+    (values (cl-ppcre:register-groups-bind (u) ("data-lt-ws=\"([^\"]*)\"" html) (unescape u))
+            (cl-ppcre:register-groups-bind (s) ("data-lt-on-click=\"([^\"]*)\"" html) (unescape s)))))
+
+(defmacro with-ws-server ((port) &body body)
+  `(let ((,port (free-port)))
+     (register-application "/ws-test" 'ws-counter :mode :deployment :websockets t)
+     (start :port ,port)
+     (wait-for (lambda () (ignore-errors (usocket:socket-close (usocket:socket-connect "127.0.0.1" ,port)) t)))
+     (unwind-protect (progn ,@body)
+       (stop)
+       (unregister-application "/ws-test"))))
+
+(defun ws-connect (port url jar &optional origin)
+  (let ((client (wsd:make-client (format nil "ws://127.0.0.1:~D~A" port url)
+                                 :additional-headers `(("Cookie" . ,(cookie-header jar))
+                                                       ,@(when origin `(("Origin" . ,origin)))))))
+    (ignore-errors (wsd:start-connection client))
+    client))
+
+(test sockets-from-other-sites-are-refused
+  (with-ws-server (port)
+    (let ((jar (cl-cookie:make-cookie-jar)))
+      (let ((url (ws-page port jar)))
+        (let ((evil (ws-connect port url jar "http://evil.example")))
+          (sleep 0.3)
+          (is (not (eq (wsd:ready-state evil) :open))))
+        (let ((own (ws-connect port url jar (format nil "http://127.0.0.1:~D" port))))
+          (is (wait-for (lambda () (eq (wsd:ready-state own) :open))))
+          (wsd:close-connection own))))))
+
+(test a-new-session-key-closes-the-socket
+  (with-ws-server (port)
+    (let* ((jar (cl-cookie:make-cookie-jar))
+           (url (ws-page port jar))
+           (client (ws-connect port url jar))
+           (messages '()))
+      (wsd:on :message client (lambda (m) (push m messages)))
+      (is (wait-for (lambda () (eq (wsd:ready-state client) :open))))
+      ;; Garbage is ignored; the socket stays open.
+      (wsd:send client "not json")
+      (wsd:send client "{\"id\": \"x\", \"params\": []}")
+      (sleep 0.3)
+      (is (eq (wsd:ready-state client) :open))
+      (is (null messages))
+      ;; Signing in (or out) elsewhere gives the session a new key.
+      (rotate-session-key (first (list-sessions (find-application "/ws-test"))))
+      (is (wait-for (lambda () (member (wsd:ready-state client) '(:closing :closed))) 5)))))
+
+(test sockets-count-against-the-stream-limit
+  (with-ws-server (port)
+    (let* ((jar (cl-cookie:make-cookie-jar))
+           (url (ws-page port jar))
+           (limit *max-event-streams-per-session*)
+           (first-socket (ws-connect port url jar)))
+      ;; Server threads see the global value, not a binding here.
+      (setf *max-event-streams-per-session* 1)
+      (unwind-protect
+           (progn
+             (is (wait-for (lambda () (eq (wsd:ready-state first-socket) :open))))
+             (let ((second-socket (ws-connect port url jar)))
+               (sleep 0.3)
+               (is (not (eq (wsd:ready-state second-socket) :open))))
+             (wsd:close-connection first-socket))
+        (setf *max-event-streams-per-session* limit)))))

@@ -44,7 +44,8 @@
      (littoral.auth:add-user "ada" "ada@example.org" "correct horse battery" :roles '(:admin))
      (littoral.auth:add-user "bob" "bob@example.org" "another passphrase")
      (clrhash littoral.auth::*failures*)
-     (let ((,b (make-instance 'browser)))
+     (let ((littoral.auth:*public-url* "http://localhost")
+           (,b (make-instance 'browser)))
        (visit ,b "/m")
        ,@body)))
 
@@ -192,4 +193,115 @@ and that URL."
              (visit b (format nil "/m/oauth/fakeid?code=the-code&state=~A" state))
              (is (has-text-p b "Signed in as carol"))
              (is (littoral.auth:find-user-by-email "carol@example.org"))))
+      (setf littoral.oauth::*providers* '()))))
+
+;;; Security review: fixation, reset poisoning, limits, OAuth email
+
+(test signing-in-gives-the-session-a-new-key
+  (with-auth (b)
+    (let* ((before (browser-url b))
+           (old-key (cl-ppcre:register-groups-bind (k) ("_s=([^&]+)" before) k)))
+      (sign-in-as b "bob" "another passphrase")
+      (is (has-text-p b "Signed in as bob"))
+      (is (not (search old-key (browser-url b))))
+      ;; Whoever had the old URL (say, from a link they sent) reaches a fresh
+      ;; session, not bob's.
+      (let ((attacker (make-instance 'browser)))
+        (visit attacker before)
+        (is (has-text-p attacker "Not signed in")))
+      ;; Signing out changes it again.
+      (let ((signed-in (browser-url b)))
+        (click b "Sign out")
+        (is (not (search (cl-ppcre:register-groups-bind (k) ("_s=([^&]+)" signed-in) k)
+                         (browser-url b))))))))
+
+(test signing-in-over-ajax-moves-the-page
+  (with-auth (b)
+    (let ((session (first (list-sessions (find-application "/m")))))
+      (let ((*session* session) (littoral::*application* (find-application "/m")))
+        (let ((old (session-key session)))
+          (littoral.auth:log-in (littoral.auth:find-user "bob"))
+          (is (string/= old (session-key session)))
+          (is (eq session (littoral::find-session (find-application "/m") (session-key session))))
+          (is (null (littoral::find-session (find-application "/m") old))))))))
+
+(test reset-links-use-the-public-url
+  (let ((littoral.auth:*send-mail* (lambda (to subject body) (declare (ignore to subject body)))))
+    (with-auth (b)
+      (setf littoral.auth:*last-mail* nil)
+      ;; A forged Host header doesn't reach the link.
+      (setf (browser-headers b) '(("host" . "evil.example") ("x-forwarded-host" . "evil.example")))
+      (let ((littoral.auth:*public-url* "https://app.example.org/"))
+        (click b "Sign in")
+        (click b "Forgot your password?")
+        (fill-in b "reset-email" "bob@example.org")
+        (press b "Send me a link")
+        (let ((body (third littoral.auth:*last-mail*)))
+          (is (search "https://app.example.org/m/reset?token=" body))
+          (is (not (search "evil" body)))))
+      ;; Without a public URL, deployment refuses rather than trust the header.
+      (let ((littoral.auth:*public-url* nil))
+        (signals error (let ((littoral::*application* (find-application "/m")))
+                         (littoral.auth:request-base-url (lack/request:make-request (make-env :get "/m")))))))))
+
+(test reset-mails-are-rate-limited
+  (let ((sent 0)
+        (littoral.auth:*send-mail* (lambda (to subject body) (declare (ignore to subject body)))))
+    (with-auth (b)
+      (dotimes (i 3)
+        (setf littoral.auth:*last-mail* nil)
+        (visit b "/m")
+        (click b "Sign in")
+        (click b "Forgot your password?")
+        (fill-in b "reset-email" "bob@example.org")
+        (press b "Send me a link")
+        ;; The same answer every time.
+        (is (has-text-p b "a link to choose a new password is on its way"))
+        (when littoral.auth:*last-mail* (incf sent)))
+      (is (= 1 sent)))))
+
+(test failures-decay-and-addresses-are-limited
+  (let ((littoral.auth:*lockout-failures* 3) (littoral.auth:*failures-per-address* 4)
+        (littoral.auth:*lockout-seconds* 60))
+    (with-auth (b)
+      (let ((*request* (lack/request:make-request (make-env :get "/m"))))
+        ;; Old failures don't count.
+        (let ((littoral.auth:*failure-window-seconds* 900))
+          (dotimes (i 2) (littoral.auth:authenticate "ada" "wrong")))
+        (setf (gethash (cons :name "ada") littoral.auth::*events*)
+              (mapcar (lambda (time) (- time 1000)) (gethash (cons :name "ada") littoral.auth::*events*)))
+        (littoral.auth:authenticate "ada" "wrong")
+        (is (littoral.auth:authenticate "ada" "correct horse battery"))
+        ;; One address trying many names is stopped, even for names it hasn't tried.
+        (dolist (name '("carol" "dave" "erin" "frank"))
+          (littoral.auth:authenticate name "password1"))
+        (multiple-value-bind (user why) (littoral.auth:authenticate "bob" "another passphrase")
+          (is (null user))
+          (is (search "Too many" why)))))))
+
+(test unknown-names-take-as-long-as-wrong-passwords
+  (with-auth (b)
+    (flet ((time-of (name)
+             (let ((start (get-internal-real-time)))
+               (dotimes (i 3) (littoral.auth:authenticate name "wrong password"))
+               (- (get-internal-real-time) start))))
+      (clrhash littoral.auth::*failures*)
+      (let ((known (time-of "bob")) (unknown (time-of "nobody-at-all")))
+        (clrhash littoral.auth::*failures*)
+        (is (> unknown (* known 1/3)))))))
+
+(test oauth-refuses-unverified-email
+  (let ((littoral.oauth:*http-post* #'fake-provider-post)
+        (littoral.oauth:*http-get* (lambda (url token)
+                                     (declare (ignore url token))
+                                     "{\"email\": \"bob@example.org\", \"email_verified\": false}")))
+    (littoral.oauth:define-oauth-provider :fakeid :label "FakeID"
+      :authorize-url "https://idp.example/authorize" :token-url "https://idp.example/token"
+      :userinfo-url "https://idp.example/userinfo" :client-id "client" :client-secret "secret")
+    (unwind-protect
+         (with-auth (b)
+           (let ((state (start-oauth b)))
+             (visit b (format nil "/m/oauth/fakeid?code=the-code&state=~A" state))
+             (is (has-text-p b "didn't work"))
+             (is (not (has-text-p b "Signed in as bob")))))
       (setf littoral.oauth::*providers* '()))))

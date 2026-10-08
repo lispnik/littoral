@@ -778,6 +778,13 @@ Forget `session` at once.
 
 `app`'s sessions, most recently used first.
 
+#### `rotate-session-key` `&optional (session *session*)` — function
+
+Give `session` a new key, so URLs naming the old one stop working, and end
+its open event streams and sockets.  Signing in and out call this, so a
+session key someone else learned beforehand is no use afterwards.  Sessions
+kept in a cookie keep their key: another site cannot plant that cookie.
+
 #### `application` — class
 
 A root component class served at a path, with its settings and live sessions.

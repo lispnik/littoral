@@ -306,11 +306,16 @@ posts and WebSocket messages alike."
          (callbacks (continuation-callbacks continuation))
          (*ajax-result* nil)
          (*ajax-scripts* '())
-         (*redirect* nil))
+         (*redirect* nil)
+         (key (session-key session)))
     (call-around-actions session
                          (lambda ()
                            (process-callbacks parameters callbacks)
                            (prepare-tasks root)))
+    ;; The session has a new key (its user signed in or out): this page's
+    ;; URLs name the old one, so move to a new page.
+    (unless (or *redirect* (string= key (session-key session)))
+      (setf *redirect* (page-url session (new-continuation session))))
     (setf (continuation-snapshot continuation) (take-snapshot root))
     (let ((*render-context* (make-instance 'render-context
                                            :callbacks callbacks

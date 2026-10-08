@@ -25,7 +25,8 @@
            #:sign-in #:sign-out-link #:password-reset-request #:password-reset
            #:auth-root #:define-auth-path #:request-base-url
            #:*send-mail* #:*last-mail* #:*lockout-failures* #:*lockout-seconds*
-           #:*reset-link-seconds* #:*sign-in-extras*))
+           #:*failure-window-seconds* #:*failures-per-address* #:*reset-mails-per-address*
+           #:*public-url* #:*reset-link-seconds* #:*sign-in-extras*))
 
 (in-package #:littoral.auth)
 
@@ -101,33 +102,83 @@
 
 ;;; Signing in, with lockout
 
-(defvar *lockout-failures* 5 "Failed attempts on one name before it is locked.")
-(defvar *lockout-seconds* 60 "How long a name stays locked.")
+(defvar *lockout-failures* 5
+  "Failed attempts on one name, within *FAILURE-WINDOW-SECONDS*, before it is locked.")
+(defvar *lockout-seconds* 60
+  "How long a name stays locked after its latest failure.")
+(defvar *failure-window-seconds* 900
+  "How long a failed attempt counts against a name or an address.")
+(defvar *failures-per-address* 30
+  "Failed sign-ins from one client address, within *FAILURE-WINDOW-SECONDS*,
+before it may try no more names for *LOCKOUT-SECONDS*.  Stops one address
+guessing a common password across many names.")
 
-(defvar *failures* (make-hash-table :test 'equalp) "Name → (FAILURES . LOCKED-UNTIL).")
-(defvar *failures-lock* (sb-thread:make-mutex :name "littoral sign-in failures"))
+;;; Recent events by key, such as failed sign-ins by name
+
+(defvar *events* (make-hash-table :test 'equal)
+  "(KIND . KEY) → times of recent events, newest first.")
+(defvar *failures* *events* "The table of recent failures and mails (for tests to clear).")
+(defvar *events-lock* (sb-thread:make-mutex :name "littoral auth events"))
+
+(defun recent-events (kind key &optional (seconds *failure-window-seconds*))
+  "Times of KIND events for KEY in the last SECONDS, newest first."
+  (let ((since (- (get-universal-time) seconds)))
+    (sb-thread:with-mutex (*events-lock*)
+      (remove-if (lambda (time) (< time since)) (gethash (cons kind key) *events*)))))
+
+(defun note-event (kind key)
+  "Record a KIND event for KEY now, forgetting events too old to matter."
+  (let* ((now (get-universal-time))
+         (since (- now (max *failure-window-seconds* 3600))))
+    (sb-thread:with-mutex (*events-lock*)
+      (let ((k (cons kind key)))
+        (setf (gethash k *events*)
+              (cons now (remove-if (lambda (time) (< time since)) (gethash k *events*)))))
+      ;; Now and then, drop keys with nothing recent, so names tried once
+      ;; don't pile up.
+      (when (zerop (random 64))
+        (loop for k being the hash-keys of *events* using (hash-value times)
+              unless (and times (>= (first times) since))
+                do (remhash k *events*))))))
+
+(defun forget-events (kind key)
+  (sb-thread:with-mutex (*events-lock*)
+    (remhash (cons kind key) *events*)))
+
+(defun locked-out-p (kind key limit)
+  "True when KEY has LIMIT or more KIND failures in the window, the latest
+within *LOCKOUT-SECONDS*."
+  (let ((times (recent-events kind key)))
+    (and (>= (length times) limit)
+         (> (first times) (- (get-universal-time) *lockout-seconds*)))))
 
 (defun locked-p (name)
-  (sb-thread:with-mutex (*failures-lock*)
-    (let ((entry (gethash name *failures*)))
-      (and entry (cdr entry) (< (get-universal-time) (cdr entry))))))
+  (or (locked-out-p :name (string-downcase name) *lockout-failures*)
+      (and *request* (locked-out-p :address (littoral::client-address) *failures-per-address*))))
 
 (defun note-attempt (name succeeded)
-  (sb-thread:with-mutex (*failures-lock*)
-    (if succeeded
-        (remhash name *failures*)
-        (let ((entry (or (gethash name *failures*) (setf (gethash name *failures*) (cons 0 nil)))))
-          (when (>= (incf (car entry)) *lockout-failures*)
-            (setf (car entry) 0
-                  (cdr entry) (+ (get-universal-time) *lockout-seconds*)))))))
+  (let ((name (string-downcase name)))
+    (cond (succeeded (forget-events :name name))
+          (t (note-event :name name)
+             (when *request* (note-event :address (littoral::client-address)))))))
+
+(defvar *dummy-hash* nil
+  "A hash checked against when the name is unknown, so that answering takes
+as long as for a wrong password and doesn't tell which names exist.")
 
 (defun authenticate (name password)
-  "The active user NAME if PASSWORD is theirs and the name is not locked;
-otherwise NIL and, as a second value, why."
+  "The active user NAME if PASSWORD is theirs and neither the name nor the
+client's address is locked out; otherwise NIL and, as a second value, why."
   (cond ((locked-p name)
          (values nil (translate "Too many failed attempts; try again in a minute.")))
-        (t (let ((user (find-user name)))
-             (if (and user (user-active-p user) (check-password user password))
+        (t (let* ((user (find-user name))
+                  (good (if user
+                            (check-password user password)
+                            (progn (ironclad:pbkdf2-check-password
+                                    (octets (or password ""))
+                                    (or *dummy-hash* (setf *dummy-hash* (hash-password "dummy password"))))
+                                   nil))))
+             (if (and good (user-active-p user))
                  (progn (note-attempt name t) user)
                  (progn (note-attempt name nil)
                         (values nil (translate "Unknown user or wrong password."))))))))
@@ -144,13 +195,16 @@ otherwise NIL and, as a second value, why."
   (and (current-user) t))
 
 (defun log-in (user)
-  "Sign USER in to this session."
+  "Sign USER in to this session.  The session gets a new key, so a link to
+it that someone else had beforehand no longer reaches it."
   (setf (session-property :user-id) (object-id user))
+  (when *session* (rotate-session-key *session*))
   user)
 
 (defun log-out ()
-  "Sign the session's user out."
-  (setf (session-property :user-id) nil))
+  "Sign the session's user out, and give the session a new key."
+  (setf (session-property :user-id) nil)
+  (when *session* (rotate-session-key *session*)))
 
 (defun has-role-p (role &optional (user (current-user)))
   "True when USER has ROLE (a keyword); with ROLE NIL, when there is a user."
@@ -254,15 +308,40 @@ plug in your mailer.")
 (defun token-hash (token)
   (ironclad:byte-array-to-hex-string (ironclad:digest-sequence :sha256 (octets token))))
 
+(defvar *public-url* nil
+  "This site's address as its users reach it, such as \"https://example.org\",
+for links in mail and OAuth redirects.  Required in deployment mode: the
+request's Host header is the client's to choose, and a reset link built
+from a forged one would send its token to someone else's site.")
+
 (defun request-base-url (&optional (request *request*))
-  "This server's address as the browser sees it, such as https://example.org."
-  (let ((headers (lack/request:request-headers request)))
-    (format nil "~A://~A"
-            (if (littoral::secure-request-p request) "https" "http")
-            (or (gethash "x-forwarded-host" headers) (gethash "host" headers) "localhost"))))
+  "This site's address, such as https://example.org: *PUBLIC-URL*, or in
+development mode the request's own host."
+  (cond (*public-url* (string-right-trim "/" *public-url*))
+        ((and *application* (not (littoral::development-p)))
+         (error "Set LITTORAL.AUTH:*PUBLIC-URL* to this site's address: links in mail ~
+and OAuth redirects can't trust the request's Host header."))
+        (t (let ((headers (lack/request:request-headers request)))
+             (format nil "~A://~A"
+                     (if (littoral::secure-request-p request) "https" "http")
+                     (or (and *trust-forwarded-for* (gethash "x-forwarded-host" headers))
+                         (gethash "host" headers) "localhost"))))))
+
+(defvar *reset-mails-per-address* 5
+  "Reset mails one client address may have sent, within *FAILURE-WINDOW-SECONDS*.")
+
+(defun may-send-reset-p (user)
+  "True unless USER was sent a link in the last minute or this client has
+asked for too many: the form must not become a way to flood an inbox."
+  (and (null (recent-events :reset-mail (object-id user) 60))
+       (or (null *request*)
+           (< (length (recent-events :reset-address (littoral::client-address)))
+              *reset-mails-per-address*))))
 
 (defun send-reset-link (user)
   "Email USER a link that lets them choose a new password."
+  (note-event :reset-mail (object-id user))
+  (when *request* (note-event :reset-address (littoral::client-address)))
   (let ((token (littoral::random-key 32)))
     (setf (user-reset-hash user) (token-hash token)
           (user-reset-expires user) (+ (get-universal-time) *reset-link-seconds*))
@@ -305,7 +384,7 @@ The link works once, for an hour.  If it wasn't you, ignore this mail."
           (div (:class "lt-buttons")
             (submit-button (:callback (lambda ()
                                         (let ((user (find-user-by-email (string-trim " " (reset-email self)))))
-                                          (when (and user (user-active-p user))
+                                          (when (and user (user-active-p user) (may-send-reset-p user))
                                             (send-reset-link user)))
                                         (setf (reset-sent-p self) t)))
               (translate "Send me a link"))

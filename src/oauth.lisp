@@ -121,6 +121,13 @@ has not expired; it can be used once."
           for value = (and (hash-table-p object) (gethash key object))
           when (and value (not (eq value 'null))) return value)))
 
+(defun unverified-p (json)
+  "True when the user details JSON say \"email_verified\": false."
+  (let ((object (com.inuoe.jzon:parse json)))
+    (and (hash-table-p object)
+         (multiple-value-bind (value present) (gethash "email_verified" object)
+           (and present (or (null value) (equal value "false")))))))
+
 (defun finish-sign-in (provider code verifier)
   "Exchange CODE for a token, fetch the user's details, and sign them in."
   (let* ((token (json-field (funcall *http-post* (provider-token-url provider)
@@ -132,7 +139,9 @@ has not expired; it can be used once."
                                            (cons "code_verifier" verifier)))
                             "access_token"))
          (info (and token (funcall *http-get* (provider-userinfo-url provider) token)))
-         (email (and info (json-field info "email")))
+         ;; An address the provider says it hasn't verified could be anyone's,
+         ;; and would sign in as that address's existing user.
+         (email (and info (not (unverified-p info)) (json-field info "email")))
          (name (and info (json-field info "preferred_username" "login" "name"))))
     (when email
       (let ((user (or (find-user-by-email email)

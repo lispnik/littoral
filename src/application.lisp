@@ -164,3 +164,17 @@ already there.  Returns the APPLICATION."
   "APP's LANGUAGE and its other LANGUAGES."
   (remove-duplicates (cons (application-language app) (application-languages app))
                      :test #'string-equal :from-end t))
+
+(defun rotate-session-key (&optional (session *session*))
+  "Give SESSION a new key, so URLs naming the old one stop working, and end
+its open event streams and sockets.  Signing in and out call this, so a
+session key someone else learned beforehand is no use afterwards.  Sessions
+kept in a cookie keep their key: another site cannot plant that cookie."
+  (let ((app (session-application session)))
+    (unless (application-cookie-sessions-p app)
+      (sb-thread:with-mutex ((application-lock app))
+        (remhash (session-key session) (application-sessions app))
+        (setf (slot-value session 'key) (new-session-key))
+        (setf (gethash (session-key session) (application-sessions app)) session))
+      (close-session-streams session))
+    session))

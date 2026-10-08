@@ -75,7 +75,7 @@
    #:*live-reload* #:reload-pages #:start-live-watcher #:stop-live-watcher
    ;; Sessions & applications
    #:session #:session-key #:session-root #:session-properties #:session-property
-   #:expire-session #:list-sessions
+   #:expire-session #:list-sessions #:rotate-session-key
    #:application #:application-path #:application-root-class #:application-title
    #:application-mode #:application-session-timeout #:application-max-continuations
    #:application-cookie-sessions-p #:application-sessions

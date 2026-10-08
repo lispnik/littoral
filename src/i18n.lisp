@@ -89,8 +89,19 @@ session's, else the application's."
 language's plural rule numbers them."
   `(add-translations ,language ',entries))
 
+(defun check-translation (entry)
+  "Signal an error unless ENTRY is a list of strings safe to use as FORMAT
+control strings: ~/ would call a function named in the text."
+  (unless (and (consp entry) (every #'stringp entry) (rest entry))
+    (error "A translation is a list of a source string and its forms: ~S" entry))
+  (dolist (string (rest entry))
+    ;; Past any ~~ (a literal tilde), ~/ with optional parameters and modifiers.
+    (when (cl-ppcre:scan "~(?:[0-9,#vV+-]|'.)*[:@]*/" (cl-ppcre:regex-replace-all "~~" string ""))
+      (error "Translations may not call functions with ~~/…/: ~S" string))))
+
 (defun add-translations (language entries)
   "Add ENTRIES, a list as DEFINE-TRANSLATIONS takes, to LANGUAGE's catalogue."
+  (mapc #'check-translation entries)
   (sb-thread:with-mutex (*translations-lock*)
     (let ((table (or (gethash language *translations*)
                      (setf (gethash language *translations*) (make-hash-table :test 'equal)))))
@@ -206,16 +217,23 @@ formatted with COUNT and then ARGUMENTS."
 
 ;;; Choosing a language from the browser's
 
+(defun parse-quality (text)
+  "The q-value TEXT (\"0.8\") as a number from 0 to 1; 0 when malformed."
+  (cl-ppcre:register-groups-bind (whole fraction) ("^([01])(?:\\.(\\d{0,3}))?$" text)
+    (return-from parse-quality
+      (min 1 (+ (parse-integer whole)
+                (if (plusp (length fraction))
+                    (/ (parse-integer fraction) (expt 10 (length fraction)))
+                    0)))))
+  0)
+
 (defun parse-accept-language (header)
   "The language codes HEADER (an Accept-Language value) names, best first."
   (let ((choices
-          (loop for part in (cl-ppcre:split "\\s*,\\s*" (or header ""))
+          (loop for part in (subseq-list (cl-ppcre:split "\\s*,\\s*" (or header "")) 20)
                 for (code . parameters) = (cl-ppcre:split "\\s*;\\s*" part)
                 for q = (let ((p (find-if (lambda (s) (alexandria:starts-with-subseq "q=" s)) parameters)))
-                          (if p (or (ignore-errors (let ((*read-eval* nil))
-                                                     (float (read-from-string (subseq p 2)))))
-                                    0.0)
-                              1.0))
+                          (if p (parse-quality (subseq p 2)) 1.0))
                 when (and (plusp (length code)) (string/= code "*") (plusp q))
                   collect (cons code q))))
     (mapcar #'car (stable-sort choices #'> :key #'cdr))))
@@ -232,3 +250,7 @@ when none matches."
 (defun translate-label (label)
   "LABEL translated when it is a non-empty string; anything else as it is."
   (if (and (stringp label) (plusp (length label))) (translate label) label))
+
+(defun subseq-list (list n)
+  "The first N elements of LIST at most."
+  (if (> (length list) n) (subseq list 0 n) list))

@@ -41,6 +41,9 @@
    (waker :initform nil :accessor stream-waker
           :documentation "On an event-loop server, a function (safe from any thread)
 that has the loop serve the stream; NIL when a thread waits on it instead.")
+   (closer :initform nil :accessor stream-closer
+           :documentation "A function closing the connection at once, or NIL when
+marking the stream closed is enough (it ends at its next wake or keepalive).")
    (lock :initform (sb-thread:make-mutex :name "littoral event stream") :reader stream-lock)
    (waitqueue :initform (sb-thread:make-waitqueue) :reader stream-waitqueue))
   (:documentation "One open page's server-sent event connection and the work queued for it."))
@@ -135,14 +138,29 @@ the work)."
     (when (eq (stream-session stream) session)
       (wake stream (component-id component)))))
 
+(defvar *current-stream* nil
+  "The stream whose message is being answered, if any; it closes itself
+after replying.")
+
+(defun close-stream (stream)
+  "End STREAM: mark it closed and wake or close whatever serves it."
+  (sb-thread:with-mutex ((stream-lock stream))
+    (setf (stream-open-p stream) nil)
+    (sb-thread:condition-broadcast (stream-waitqueue stream)))
+  (let ((closer (stream-closer stream))
+        (waker (stream-waker stream)))
+    (cond ((and closer (not (eq stream *current-stream*))) (ignore-errors (funcall closer)))
+          (waker (funcall waker)))))
+
 (defun close-event-streams ()
   "End every open stream; browsers reconnect when their page is current."
+  (mapc #'close-stream (open-event-streams)))
+
+(defun close-session-streams (session)
+  "End SESSION's open streams and sockets."
   (dolist (stream (open-event-streams))
-    (sb-thread:with-mutex ((stream-lock stream))
-      (setf (stream-open-p stream) nil)
-      (sb-thread:condition-broadcast (stream-waitqueue stream)))
-    (let ((waker (stream-waker stream)))
-      (when waker (funcall waker)))))
+    (when (eq (stream-session stream) session)
+      (close-stream stream))))
 
 (defun take-pending (stream timeout)
   "Wait up to TIMEOUT seconds for work; return it, or NIL."
@@ -211,15 +229,19 @@ the work)."
          (funcall (find-symbol "SOCKET-ASYNC-P" package) socket)
          socket)))
 
-(defun handle-events (session continuation)
-  "The response to a page's EventSource: a stream that runs until the page
-is gone.  503 when too many are open."
+(defun too-many-streams-response (session)
+  "A 503 response when no more streams may open, for SESSION or at all; else NIL."
   (let ((open (open-event-streams)))
     (when (or (>= (length open) *max-event-streams*)
               (>= (count session open :key #'stream-session) *max-event-streams-per-session*))
-      (return-from handle-events
-        (list 503 (list* :content-type "text/plain" :retry-after "30" *security-headers*)
-              (list "Too many open event streams.")))))
+      (list 503 (list* :content-type "text/plain" :retry-after "30" *security-headers*)
+            (list "Too many open event streams.")))))
+
+(defun handle-events (session continuation)
+  "The response to a page's EventSource: a stream that runs until the page
+is gone.  503 when too many are open."
+  (let ((refusal (too-many-streams-response session)))
+    (when refusal (return-from handle-events refusal)))
   (let ((stream (make-instance 'event-stream :session session :continuation continuation
                                              :base-path *base-path*))
         (socket (and *async-stream-opener* (async-socket *request*)))

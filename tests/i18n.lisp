@@ -182,3 +182,22 @@
       (click b "Ajouter un contact")
       (press b "Ajouter")
       (is (has-text-p b "Nom est obligatoire.")))))
+
+;;; Security review
+
+(test translations-cannot-call-functions
+  (signals error (add-translations "fr" '(("Hi" "~/cl-user::evil/"))))
+  (signals error (add-translations "fr" '(("Hi" "~:@/evil/"))))
+  (signals error (add-translations "fr" '(("Hi" 42))))
+  ;; A literal tilde before a slash is fine.
+  (add-translations "fr" '(("~~/home" "~~/maison") ("http://x" "http://y")))
+  (let ((*language* "fr")) (is (string= "~~/maison" (translate "~~/home")))))
+
+(test accept-language-interns-nothing
+  (let ((name (format nil "ZZ~36R" (random (expt 36 10)))))
+    (littoral::parse-accept-language (format nil "en;q=~A, fr;q=0.5" name))
+    (is (null (find-symbol name)))
+    (is (null (find-symbol name :littoral))))
+  (is (equal '("fr" "de") (littoral::parse-accept-language "de;q=0.3, fr;q=1.0, it;q=junk")))
+  (is (= 20 (length (littoral::parse-accept-language
+                     (format nil "~{l~D~^, ~}" (alexandria:iota 100)))))))

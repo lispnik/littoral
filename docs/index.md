@@ -243,6 +243,8 @@ Load `littoral/websocket` and register the application with `:websockets t`. Pag
 
 Nothing else changes: callbacks, `publish` and `notify` behave as before. Rendering for pushes happens on a small pool of worker threads, never in the thread that called `publish`. If the socket can't open (a proxy that refuses the upgrade, say), the page falls back to server-sent events and plain requests. On Woo, where `littoral/woo` already serves push from the event loops, pages keep server-sent events. The chat example uses this.
 
+A socket opens only from a page of the same site: its `Origin` must match the host, or be in `littoral.websocket:*allowed-origins*`. Sockets count against the event-stream limits. Messages are capped at `*max-message-size*` (1 MB), malformed messages are ignored, and in deployment mode a failing request answers "The request failed." rather than the error.
+
 ### Live redefinition
 
 In development mode, recompile a component's `render` method in Emacs (`C-c C-c`) and every open page showing that component redraws itself within a couple of seconds, with its state intact. A watcher notices when methods of `render`, `style`, `script`, `update-root`, `children` or `render-decoration` are redefined. Pages showing an instance of that class then reload, and because each page's URL names its saved state, reloading keeps that state. Pages with a push stream hear about it through the stream; the others poll a cheap endpoint, so live reloading holds no connection (and on Hunchentoot no thread) open.
@@ -407,9 +409,14 @@ Each request's changes run in one transaction. `:database` gives the admin its o
 ```
 
 - **Restricted components.** A `restricted` component shows a sign-in prompt in its place until someone is signed in, or a refusal if they lack its role. In callbacks, `(require-role :admin)` refuses with a 403. `current-user`, `log-in`, `log-out` and `has-role-p` cover the rest.
-- **Passwords and lockout.** Passwords are stored as PBKDF2 hashes. After `*lockout-failures*` wrong passwords, a name is locked for `*lockout-seconds*`.
-- **Password reset.** "Forgot your password?" emails a single-use link that expires after an hour. The answer is the same whether or not the address has an account. `*send-mail*` is where you plug in your mailer; by default it prints the mail.
-- **OAuth / OpenID Connect.** Load `littoral/oauth` and call `define-oauth-provider` with a provider's URLs and your client id and secret. The sign-in form then offers "Sign in with …". The flow is the authorisation code flow with PKCE, and its state is tied to the browser. Users are found by email, or created. Register `/<app>/oauth/<provider>` as the redirect address with the provider.
+- **Passwords and lockout.** Passwords are stored as PBKDF2 hashes.
+  - After `*lockout-failures*` wrong passwords within `*failure-window-seconds*`, a name is locked for `*lockout-seconds*`.
+  - One client address may fail `*failures-per-address*` times across all names, which stops one address trying a common password against many accounts.
+  - An unknown name takes as long to refuse as a wrong password, so timing doesn't reveal which names exist.
+- **Signing in gives the session a new key**, as does signing out, and closes the session's open streams and sockets. A session URL someone had beforehand, perhaps from a link they sent, is then useless.
+- **Password reset.** "Forgot your password?" emails a single-use link that expires after an hour. The answer is the same whether or not the address has an account. Each account gets at most one mail a minute, and each client address `*reset-mails-per-address*` in the window. `*send-mail*` is where you plug in your mailer; by default it prints the mail.
+- **`*public-url*`.** Set `littoral.auth:*public-url*` to the site's address (`"https://example.org"`): it is where reset links and OAuth redirects point. In deployment mode it is required, because the Host header is the client's to choose, and a reset link built from a forged one would send its token to someone else's site. In development the request's host is used.
+- **OAuth / OpenID Connect.** Load `littoral/oauth` and call `define-oauth-provider` with a provider's URLs and your client id and secret. The sign-in form then offers "Sign in with …". The flow is the authorisation code flow with PKCE, and its state is tied to the browser. Users are found by email, or created; an email the provider marks `"email_verified": false` is refused. Register `/<app>/oauth/<provider>` as the redirect address with the provider.
 
 ## Testing your application
 
@@ -456,6 +463,8 @@ Each request's changes run in one transaction. `:database` gives the admin its o
   - Behind a proxy, set `*trust-forwarded-for*` so the client address comes from `X-Forwarded-For`.
 - **`/config`.** Without credentials, it only answers requests from the machine it runs on. A request forwarded by a proxy doesn't count as local unless you trust the proxy. Give it credentials with `(configure-admin :user … :password …)`, which are checked in constant time.
 - **Development mode.** Halos can inspect and change component state, so `start` warns when an application in development mode is served on a public address. Deploy with `:mode :deployment`.
+- **New pieces.** Sign-in, reset links and WebSockets have protections of their own, described in their sections.
+- **Translations** are FORMAT control strings, so catalogues may not contain the `~/…/` directive, which would call a function named in the text. `define-translations` and `load-translations` refuse it.
 - **Escaping.** Text and attribute values are escaped; `raw` is the one way around that. `:href` is written as given, so don't pass it a URL you haven't checked (it could be `javascript:`). An upload's `file-name` comes from the browser; don't use it as a path.
 
 ## Deployment and scale
