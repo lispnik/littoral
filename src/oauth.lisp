@@ -144,10 +144,14 @@ has not expired; it can be used once."
          (email (and info (not (unverified-p info)) (json-field info "email")))
          (name (and info (json-field info "preferred_username" "login" "name"))))
     (when email
+      ;; An existing user by email, or a new one where the store makes users;
+      ;; a store that doesn't (an application's own table, say) signs in
+      ;; only the users it has.
       (let ((user (or (find-user-by-email email)
-                      (add-user (available-name (or name (subseq email 0 (position #\@ email))))
-                                email nil))))
-        (when (user-active-p user)
+                      (store-create-user *user-store*
+                                         :name (available-name (or name (subseq email 0 (position #\@ email))))
+                                         :email email))))
+        (when (and user (user-active-p user))
           (log-in user))))))
 
 (defun available-name (wanted)

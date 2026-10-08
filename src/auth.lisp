@@ -10,16 +10,28 @@
 ;;;;
 ;;;; A RESTRICTED component shows a sign-in prompt, or a refusal, in its
 ;;;; place until the current user may see it.  Callbacks check with
-;;;; REQUIRE-ROLE, which refuses with a 403.  Passwords are kept as PBKDF2
-;;;; hashes; signing in locks a name for a while after repeated failures.
-;;;; Password reset sends a single-use, expiring link through *SEND-MAIL*.
+;;;; REQUIRE-ROLE, which refuses with a 403.  Signing in locks a name for a
+;;;; while after repeated failures.  Password reset sends a single-use,
+;;;; expiring link through *SEND-MAIL*.
+;;;;
+;;;; Users come from *USER-STORE*: by default the users table here, or an
+;;;; application's own table through SQL-USER-STORE (auth-store.lisp), or any
+;;;; class with methods for the STORE- generic functions.  A user is any
+;;;; object with methods for USER-ID, USER-NAME, USER-EMAIL, USER-ACTIVE-P,
+;;;; USER-PASSWORD-HASH and USER-ROLES.  Passwords: passwords.lisp.
 
 (defpackage #:littoral.auth
   (:use #:cl #:littoral #:littoral.html #:littoral.db)
   (:documentation "Users, signing in, roles and password reset for Littoral.")
-  (:export #:user #:user-name #:user-email #:user-roles #:user-active-p
-           #:create-auth-tables #:add-user #:find-user #:find-user-by-email #:set-password
-           #:check-password #:authenticate
+  (:export #:user #:user-id #:user-name #:user-email #:user-roles #:user-active-p #:user-password-hash
+           #:user-store #:users-table-store #:*user-store* #:using-user-store
+           #:store-find-user #:store-find-user-by-email #:store-find-user-by-id
+           #:store-set-password-hash #:store-create-user #:store-writable-p #:store-verify-password
+           #:sql-user-store #:make-sql-user-store #:sql-user
+           #:hash-password #:verify-password #:password-needs-rehash-p #:bcrypt-hash
+           #:*pbkdf2-iterations* #:*rehash-on-sign-in*
+           #:create-auth-tables #:add-user #:find-user #:find-user-by-email #:find-user-by-id
+           #:set-password #:check-password #:authenticate
            #:current-user #:log-in #:log-out #:signed-in-p #:has-role-p #:require-role
            #:restricted #:required-role #:permitted-p
            #:sign-in #:sign-out-link #:password-reset-request #:password-reset
@@ -30,7 +42,68 @@
 
 (in-package #:littoral.auth)
 
-;;; Users
+;;; What a user is: generic functions, so an application's own class can be one
+
+(defgeneric user-id (user)
+  (:documentation "USER's key in its store, kept in the session while they are signed in.")
+  (:method ((user persistent)) (object-id user)))
+
+(defgeneric user-name (user)
+  (:documentation "The name USER signs in with."))
+
+(defgeneric user-email (user)
+  (:documentation "USER's email address, or NIL.")
+  (:method (user) (declare (ignore user)) nil))
+
+(defgeneric user-active-p (user)
+  (:documentation "True when USER may sign in.")
+  (:method (user) (declare (ignore user)) t))
+
+(defgeneric user-password-hash (user)
+  (:documentation "USER's stored password hash, or NIL when they have none.")
+  (:method (user) (declare (ignore user)) nil))
+
+(defgeneric user-roles (user)
+  (:documentation "USER's roles, as keywords.")
+  (:method (user) (declare (ignore user)) '()))
+
+;;; Where users come from
+
+(defclass user-store () ()
+  (:documentation "Where users are found.  Specialise the STORE- generic functions."))
+
+(defgeneric store-find-user (store name)
+  (:documentation "The user STORE knows by NAME, or NIL."))
+
+(defgeneric store-find-user-by-email (store email)
+  (:documentation "The user STORE knows by EMAIL, or NIL.")
+  (:method ((store user-store) email) (declare (ignore email)) nil))
+
+(defgeneric store-find-user-by-id (store id)
+  (:documentation "The user whose USER-ID is ID, or its printed form; NIL if none."))
+
+(defgeneric store-writable-p (store)
+  (:documentation "True when STORE-SET-PASSWORD-HASH works.")
+  (:method ((store user-store)) nil))
+
+(defgeneric store-set-password-hash (store user hash)
+  (:documentation "Keep HASH as USER's password hash.")
+  (:method ((store user-store) user hash)
+    (declare (ignore user hash))
+    (error "This user store can't change passwords.")))
+
+(defgeneric store-create-user (store &key name email password-hash roles)
+  (:documentation "A new user in STORE, or NIL when STORE doesn't create users
+(OAuth then signs in only users it already has).")
+  (:method ((store user-store) &key name email password-hash roles)
+    (declare (ignore name email password-hash roles))
+    nil))
+
+(defgeneric store-verify-password (store password hash)
+  (:documentation "True when PASSWORD matches HASH as STORE keeps them.")
+  (:method ((store user-store) password hash) (verify-password password hash)))
+
+;;; The built-in users table
 
 (defclass user (persistent)
   ((name :initarg :name :initform nil :accessor user-name)
@@ -38,10 +111,8 @@
    (roles :initarg :roles :initform "" :accessor user-roles-text
           :documentation "Roles as stored: comma-separated names.")
    (active :initarg :active :initform t :accessor user-active-p)
-   (password-hash :initarg :password-hash :initform nil :accessor user-password-hash)
-   (reset-hash :initform nil :accessor user-reset-hash)
-   (reset-expires :initform nil :accessor user-reset-expires))
-  (:documentation "Someone who can sign in."))
+   (password-hash :initarg :password-hash :initform nil :accessor user-password-hash))
+  (:documentation "Someone who can sign in, in the built-in users table."))
 
 (define-description user
   ((name :required t :max-length 40 :pattern "[A-Za-z0-9_.-]+"
@@ -49,59 +120,107 @@
    (email :type :email :required t)
    (roles :help "Comma-separated, such as admin,editor.")
    (active :type :boolean)
-   (password-hash :type :password :read-only t :label "Password")
-   (reset-hash :hidden t)
-   (reset-expires :type :integer :hidden t)))
+   (password-hash :type :password :read-only t :label "Password")))
 
 (define-table user :name "users")
 
-(defun user-roles (user)
-  "USER's roles, as keywords."
+(defmethod user-roles ((user user))
   (mapcar (lambda (name) (intern (string-upcase (string-trim " " name)) :keyword))
           (remove "" (cl-ppcre:split "," (or (user-roles-text user) ""))
                   :test (lambda (a b) (string= a (string-trim " " b))))))
 
-(defun create-auth-tables ()
-  "Create the users table unless it exists, with names and emails unique
-whatever their case."
-  (create-table 'user)
-  (db-execute "CREATE UNIQUE INDEX IF NOT EXISTS users_name ON users (LOWER(name))")
-  (db-execute "CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users (LOWER(email))"))
+(defclass users-table-store (user-store) ()
+  (:documentation "The built-in users table, through littoral/db."))
 
-(defun octets (string)
-  (sb-ext:string-to-octets string :external-format :utf-8))
+(defmethod store-find-user ((store users-table-store) name)
+  (first (db-select 'user :where "LOWER(name) = LOWER(?)" :params (list name))))
 
-(defun hash-password (password)
-  "A PBKDF2 hash of PASSWORD, salted, as one string."
-  (ironclad:pbkdf2-hash-password-to-combined-string (octets password)))
+(defmethod store-find-user-by-email ((store users-table-store) email)
+  (first (db-select 'user :where "LOWER(email) = LOWER(?)" :params (list email))))
+
+(defmethod store-find-user-by-id ((store users-table-store) id)
+  (let ((id (if (stringp id) (parse-integer id :junk-allowed t) id)))
+    (and (integerp id) (db-find 'user id))))
+
+(defmethod store-writable-p ((store users-table-store)) t)
+
+(defmethod store-set-password-hash ((store users-table-store) (user user) hash)
+  (setf (user-password-hash user) hash)
+  (db-save user))
+
+(defmethod store-create-user ((store users-table-store) &key name email password-hash roles)
+  (db-insert (make-instance 'user :name name :email email :password-hash password-hash
+                                  :roles (format nil "~{~(~A~)~^,~}" roles))))
+
+(defvar *user-store* (make-instance 'users-table-store)
+  "Where users come from.  Bind it per application with USING-USER-STORE.")
+
+(defun using-user-store (store &optional around)
+  "An :AROUND-REQUEST function binding *USER-STORE* to STORE, then calling
+AROUND (another such function, such as USING-DATABASE's) if given."
+  (lambda (thunk)
+    (let ((*user-store* store))
+      (if around (funcall around thunk) (funcall thunk)))))
+
+;;; Tables Littoral keeps whatever the store: reset tokens
+
+(defclass auth-token (persistent)
+  ((token-hash :initarg :token-hash :initform nil)
+   (user-id :initarg :user-id :initform nil)
+   (purpose :initarg :purpose :initform nil)
+   (expires :initarg :expires :initform nil))
+  (:documentation "A single-use token, such as a password reset link's, kept as its hash."))
+
+(define-description auth-token
+  ((token-hash) (user-id) (purpose) (expires :type :integer)))
+
+(define-table auth-token :name "auth_tokens")
+
+(defun create-auth-tables (&key (users t))
+  "Create the tables signing in needs unless they exist: the users table
+(names and emails unique whatever their case) unless USERS is NIL, as when
+users come from an application's own table, and the tokens table."
+  (when users
+    (create-table 'user)
+    (db-execute "CREATE UNIQUE INDEX IF NOT EXISTS users_name ON users (LOWER(name))")
+    (db-execute "CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users (LOWER(email))"))
+  (create-table 'auth-token)
+  (db-execute "CREATE UNIQUE INDEX IF NOT EXISTS auth_tokens_hash ON auth_tokens (token_hash)"))
+
+;;; Users, whatever the store
+
+(defun find-user (name)
+  "The user called NAME (case aside, in the built-in store), or NIL."
+  (and name (store-find-user *user-store* name)))
+
+(defun find-user-by-email (email)
+  "The user whose email is EMAIL, or NIL."
+  (and email (store-find-user-by-email *user-store* email)))
+
+(defun find-user-by-id (id)
+  "The user whose USER-ID is ID, or NIL."
+  (and id (store-find-user-by-id *user-store* id)))
 
 (defun check-password (user password)
   "True when PASSWORD is USER's."
-  (and user password (user-password-hash user)
-       (ignore-errors (ironclad:pbkdf2-check-password (octets password) (user-password-hash user)))))
+  (let ((hash (and user (user-password-hash user))))
+    (and hash password (store-verify-password *user-store* password hash) t)))
 
 (defun set-password (user password)
-  "Give USER the new PASSWORD (and forget any reset link)."
-  (setf (user-password-hash user) (hash-password password)
-        (user-reset-hash user) nil
-        (user-reset-expires user) nil)
-  (db-save user))
-
-(defun find-user (name)
-  "The user called NAME, ignoring case, or NIL."
-  (first (db-select 'user :where "LOWER(name) = LOWER(?)" :params (list name))))
-
-(defun find-user-by-email (email)
-  "The user whose email is EMAIL, ignoring case, or NIL."
-  (first (db-select 'user :where "LOWER(email) = LOWER(?)" :params (list email))))
+  "Give USER the new PASSWORD, and void their outstanding reset links."
+  (store-set-password-hash *user-store* user (hash-password password))
+  (db-execute "DELETE FROM auth_tokens WHERE user_id = ? AND purpose = ?"
+              (princ-to-string (user-id user)) "reset")
+  user)
 
 (defun add-user (name email password &key roles)
-  "Store a new user; ROLES are keywords.  Signals when NAME is taken."
+  "Store a new user; ROLES are keywords.  Signals when NAME is taken or the
+store doesn't create users."
   (when (find-user name)
     (error "The name ~A is taken." name))
-  (db-insert (make-instance 'user :name name :email email
-                                  :roles (format nil "~{~(~A~)~^,~}" roles)
-                                  :password-hash (and password (hash-password password)))))
+  (or (store-create-user *user-store* :name name :email email :roles roles
+                                      :password-hash (and password (hash-password password)))
+      (error "This user store doesn't create users.")))
 
 ;;; Signing in, with lockout
 
@@ -184,29 +303,39 @@ limiting it would let one person lock everyone out."
   "A hash checked against when the name is unknown, so that answering takes
 as long as for a wrong password and doesn't tell which names exist.")
 
+(defvar *rehash-on-sign-in* t
+  "When true, signing in re-hashes a password kept in another format (bcrypt,
+Django's) or with fewer than *PBKDF2-ITERATIONS*, where the store can write.")
+
+(defun dummy-check (password)
+  (let ((dummy *dummy-hash*))
+    (unless (and dummy (not (password-needs-rehash-p dummy)))
+      (setf dummy (setf *dummy-hash* (hash-password "dummy password"))))
+    (verify-password (or password "") dummy)
+    nil))
+
 (defun authenticate (name password)
   "The active user NAME if PASSWORD is theirs and neither the name nor the
 client's address is locked out; otherwise NIL and, as a second value, why."
   (cond ((locked-p name)
          (values nil (translate "Too many failed attempts; try again in a minute.")))
         (t (let* ((user (find-user name))
-                  (good (if user
-                            (check-password user password)
-                            (progn (ironclad:pbkdf2-check-password
-                                    (octets (or password ""))
-                                    (or *dummy-hash* (setf *dummy-hash* (hash-password "dummy password"))))
-                                   nil))))
-             (if (and good (user-active-p user))
-                 (progn (note-attempt name t) user)
-                 (progn (note-attempt name nil)
-                        (values nil (translate "Unknown user or wrong password."))))))))
+                  (good (if user (check-password user password) (dummy-check password))))
+             (cond ((and good (user-active-p user))
+                    (note-attempt name t)
+                    (when (and *rehash-on-sign-in* (store-writable-p *user-store*)
+                               (password-needs-rehash-p (user-password-hash user)))
+                      (store-set-password-hash *user-store* user (hash-password password)))
+                    user)
+                   (t (note-attempt name nil)
+                      (values nil (translate "Unknown user or wrong password."))))))))
 
 ;;; The session's user
 
 (defun current-user ()
   "The user signed in to this session, or NIL."
   (let ((id (session-property :user-id)))
-    (and id (let ((user (db-find 'user id)))
+    (and id (let ((user (find-user-by-id id)))
               (and user (user-active-p user) user)))))
 
 (defun signed-in-p ()
@@ -215,7 +344,7 @@ client's address is locked out; otherwise NIL and, as a second value, why."
 (defun log-in (user)
   "Sign USER in to this session.  The session gets a new key, so a link to
 it that someone else had beforehand no longer reaches it."
-  (setf (session-property :user-id) (object-id user))
+  (setf (session-property :user-id) (user-id user))
   (when *session* (rotate-session-key *session*))
   user)
 
@@ -351,20 +480,22 @@ and OAuth redirects can't trust the request's Host header."))
 (defun may-send-reset-p (user)
   "True unless USER was sent a link in the last minute or this client has
 asked for too many: the form must not become a way to flood an inbox."
-  (and (null (recent-events :reset-mail (object-id user) 60))
+  (and (null (recent-events :reset-mail (user-id user) 60))
        (let ((address (limited-address)))
          (or (null address)
              (< (length (recent-events :reset-address address)) *reset-mails-per-address*)))))
 
 (defun send-reset-link (user)
   "Email USER a link that lets them choose a new password."
-  (note-event :reset-mail (object-id user))
+  (note-event :reset-mail (user-id user))
   (let ((address (limited-address)))
     (when address (note-event :reset-address address)))
-  (let ((token (littoral::random-key 32)))
-    (setf (user-reset-hash user) (token-hash token)
-          (user-reset-expires user) (+ (get-universal-time) *reset-link-seconds*))
-    (db-save user)
+  (let ((token (littoral::random-key 32))
+        (id (princ-to-string (user-id user))))
+    ;; One live link per user: a new one voids the last.
+    (db-execute "DELETE FROM auth_tokens WHERE user_id = ? AND purpose = ?" id "reset")
+    (db-insert (make-instance 'auth-token :token-hash (token-hash token) :user-id id :purpose "reset"
+                                          :expires (+ (get-universal-time) *reset-link-seconds*)))
     (let ((mail (list (user-email user) (translate "Choose a new password")
                       (translate "Someone asked to reset the password for ~A.~%~%~
 To choose a new one, open:~%~A~A/reset?token=~A~%~%~
@@ -377,9 +508,10 @@ The link works once, for an hour.  If it wasn't you, ignore this mail."
 (defun user-for-reset-token (token)
   "The user whose unexpired reset link carries TOKEN, or NIL."
   (and token
-       (let ((user (first (db-select 'user :where "reset_hash = ?" :params (list (token-hash token))))))
-         (and user (user-reset-expires user) (< (get-universal-time) (user-reset-expires user))
-              user))))
+       (let ((row (first (db-select 'auth-token :where "token_hash = ? AND purpose = ?"
+                                                :params (list (token-hash token) "reset")))))
+         (and row (> (slot-value row 'expires) (get-universal-time))
+              (find-user-by-id (slot-value row 'user-id))))))
 
 (defclass password-reset-request (component)
   ((email :initform "" :accessor reset-email)
@@ -437,7 +569,7 @@ The link works once, for an hour.  If it wasn't you, ignore this mail."
                                  (setf (reset-message self) (translate "Passwords need at least 8 characters.")))
                                 ((string/= (reset-password self) (reset-again self))
                                  (setf (reset-message self) (translate "The passwords differ.")))
-                                (t (let ((user (db-find 'user (reset-user-id self))))
+                                (t (let ((user (find-user-by-id (reset-user-id self))))
                                      (set-password user (reset-password self))
                                      (log-in user)
                                      (answer self user))))))
@@ -471,6 +603,6 @@ password reset links and, with littoral/oauth, sign-in callbacks."))
 (define-auth-path "reset" (root rest request)
   (let ((user (user-for-reset-token (request-parameter "token" request))))
     (if user
-        (show root (make-instance 'password-reset :user-id (object-id user)))
+        (show root (make-instance 'password-reset :user-id (user-id user)))
         (show root (make-instance 'message-dialog
                                   :message (translate "That link has expired or been used. Ask for a new one."))))))

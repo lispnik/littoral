@@ -13,6 +13,9 @@
 ;; limit has a test of its own.
 (setf littoral:*new-sessions-per-minute* nil)
 
+;; Hashing at full strength takes a good part of a second; tests make many.
+(setf littoral.auth:*pbkdf2-iterations* 1000)
+
 ;;; The database the database tests use: in-memory SQLite, or the PostgreSQL
 ;;; that LITTORAL_TEST_DATABASE names (postgres://user:password@host:port/db).
 
@@ -39,7 +42,7 @@
 (defun postgres-test-p ()
   (eq (first (test-database-spec)) :postgres))
 
-(defparameter *database-suites* '(db auth admin)
+(defparameter *database-suites* '(db auth auth-store admin)
   "The suites that use the test database, run again against PostgreSQL.")
 
 (defun run-database-suites ()

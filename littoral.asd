@@ -152,7 +152,9 @@
                              (:file "websocket")
                              (:file "i18n")
                              (:file "generator")
-                             (:file "members"))))
+                             (:file "members")
+                             (:file "passwords")
+                             (:file "auth-store"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
                                        (uiop:find-symbol* :littoral :littoral/tests))
@@ -219,7 +221,8 @@
   :author "Matthew Kennedy"
   :license "MIT"
   :depends-on (#:littoral #:littoral/db)
-  :components ((:module "src" :components ((:file "auth")))))
+  :components ((:module "src" :serial t
+                :components ((:file "auth") (:file "passwords") (:file "auth-store")))))
 
 (asdf:defsystem #:littoral/oauth
   :description "Sign in to Littoral applications with OAuth 2 / OpenID Connect providers."
