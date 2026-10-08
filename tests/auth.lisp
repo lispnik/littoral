@@ -39,7 +39,7 @@
   "A members app over a fresh users table, with ada (admin) and bob."
   `(with-fresh-applications (("/m" 'members-app :mode :deployment))
      (connect-test-database)
-     (littoral.db:drop-table 'littoral.auth:user)
+     (littoral.auth:drop-auth-tables)
      (littoral.auth:create-auth-tables)
      (littoral.auth:add-user "ada" "ada@example.org" "correct horse battery" :roles '(:admin))
      (littoral.auth:add-user "bob" "bob@example.org" "another passphrase")
@@ -322,3 +322,53 @@ and that URL."
           (dolist (name '("carol" "dave" "erin"))
             (littoral.auth:authenticate name "guess"))
           (is (littoral.auth:authenticate "bob" "another passphrase") "~A was locked out" address))))))
+
+;;; Roles and permissions tables
+
+(defclass editors-desk (littoral.auth:restricted component) ())
+(defmethod littoral.auth:required-permission ((self editors-desk)) :edit-posts)
+(defmethod render ((self editors-desk)) (p () "The editor's desk"))
+
+(test roles-and-permissions
+  (with-auth (b)
+    (let ((bob (littoral.auth:find-user "bob")) (ada (littoral.auth:find-user "ada")))
+      (is (equal '(:admin) (littoral.auth:user-roles ada)))
+      (is (null (littoral.auth:user-roles bob)))
+      (littoral.auth:grant-role bob :editor)
+      (littoral.auth:grant-role bob :editor)            ; twice is once
+      (is (equal '(:editor) (littoral.auth:user-roles bob)))
+      (littoral.auth:grant-permission :editor :edit-posts)
+      (littoral.auth:grant-permission :admin :edit-posts)
+      (littoral.auth:grant-permission :admin :delete-posts)
+      (is (equal '(:edit-posts) (littoral.auth:user-permissions bob)))
+      (is (equal '(:delete-posts :edit-posts) (sort (littoral.auth:user-permissions ada) #'string<)))
+      (is (littoral.auth:has-permission-p :edit-posts bob))
+      (is (not (littoral.auth:has-permission-p :delete-posts bob)))
+      (littoral.auth:revoke-role bob :editor)
+      (is (not (littoral.auth:has-permission-p :edit-posts bob)))
+      (littoral.auth:revoke-permission :admin :delete-posts)
+      (is (equal '(:edit-posts) (littoral.auth:user-permissions ada))))))
+
+(test permissions-guard-components-and-callbacks
+  (with-auth (b)
+    (littoral.auth:grant-permission :editor :edit-posts)
+    (let ((desk (make-instance 'editors-desk)))
+      (sign-in-as b "bob" "another passphrase")
+      (let ((*session* (first (list-sessions (find-application "/m"))))
+            (*application* (find-application "/m")))
+        (is (not (littoral.auth:permitted-p desk)))
+        (signals littoral::forbidden (littoral.auth:require-permission :edit-posts))
+        (littoral.auth:grant-role (littoral.auth:current-user) :editor)
+        (is (littoral.auth:permitted-p desk))
+        (finishes (littoral.auth:require-permission :edit-posts))))))
+
+(test roles-move-from-the-old-column
+  (with-auth (b)
+    (littoral.db:db-execute "UPDATE users SET roles = ? WHERE name = ?" "editor, Reviewer" "bob")
+    (littoral.auth:create-auth-tables)
+    (is (equal '(:editor :reviewer) (littoral.auth:user-roles (littoral.auth:find-user "bob"))))
+    (is (equal "" (getf (first (littoral.db:db-query "SELECT roles FROM users WHERE name = 'bob'")) :|roles|)))
+    ;; Running it again changes nothing.
+    (littoral.auth:create-auth-tables)
+    (is (equal '(:editor :reviewer) (littoral.auth:user-roles (littoral.auth:find-user "bob"))))))
+

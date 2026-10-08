@@ -30,10 +30,12 @@
            #:sql-user-store #:make-sql-user-store #:sql-user
            #:hash-password #:verify-password #:password-needs-rehash-p #:bcrypt-hash
            #:*pbkdf2-iterations* #:*rehash-on-sign-in*
-           #:create-auth-tables #:add-user #:find-user #:find-user-by-email #:find-user-by-id
+           #:create-auth-tables #:drop-auth-tables #:add-user #:find-user #:find-user-by-email #:find-user-by-id
            #:set-password #:check-password #:authenticate
            #:current-user #:log-in #:log-out #:signed-in-p #:has-role-p #:require-role
-           #:restricted #:required-role #:permitted-p
+           #:grant-role #:revoke-role #:grant-permission #:revoke-permission
+           #:role-permissions #:user-permissions #:has-permission-p #:require-permission
+           #:restricted #:required-role #:required-permission #:permitted-p
            #:sign-in #:sign-out-link #:password-reset-request #:password-reset
            #:auth-root #:define-auth-path #:request-base-url
            #:*send-mail* #:*last-mail* #:*lockout-failures* #:*lockout-seconds*
@@ -109,7 +111,8 @@
   ((name :initarg :name :initform nil :accessor user-name)
    (email :initarg :email :initform nil :accessor user-email)
    (roles :initarg :roles :initform "" :accessor user-roles-text
-          :documentation "Roles as stored: comma-separated names.")
+          :documentation "Roles as earlier versions kept them, comma-separated;
+CREATE-AUTH-TABLES moves them to the user_roles table.")
    (active :initarg :active :initform t :accessor user-active-p)
    (password-hash :initarg :password-hash :initform nil :accessor user-password-hash))
   (:documentation "Someone who can sign in, in the built-in users table."))
@@ -118,16 +121,14 @@
   ((name :required t :max-length 40 :pattern "[A-Za-z0-9_.-]+"
          :pattern-message "Names are letters, digits, dots, dashes and underscores.")
    (email :type :email :required t)
-   (roles :help "Comma-separated, such as admin,editor.")
+   (roles :hidden t)
    (active :type :boolean)
    (password-hash :type :password :read-only t :label "Password")))
 
 (define-table user :name "users")
 
 (defmethod user-roles ((user user))
-  (mapcar (lambda (name) (intern (string-upcase (string-trim " " name)) :keyword))
-          (remove "" (cl-ppcre:split "," (or (user-roles-text user) ""))
-                  :test (lambda (a b) (string= a (string-trim " " b))))))
+  (granted-roles user))
 
 (defclass users-table-store (user-store) ()
   (:documentation "The built-in users table, through littoral/db."))
@@ -149,8 +150,9 @@
   (db-save user))
 
 (defmethod store-create-user ((store users-table-store) &key name email password-hash roles)
-  (db-insert (make-instance 'user :name name :email email :password-hash password-hash
-                                  :roles (format nil "~{~(~A~)~^,~}" roles))))
+  (let ((user (db-insert (make-instance 'user :name name :email email :password-hash password-hash))))
+    (dolist (role roles) (grant-role user role))
+    user))
 
 (defvar *user-store* (make-instance 'users-table-store)
   "Where users come from.  Bind it per application with USING-USER-STORE.")
@@ -161,6 +163,102 @@ AROUND (another such function, such as USING-DATABASE's) if given."
   (lambda (thunk)
     (let ((*user-store* store))
       (if around (funcall around thunk) (funcall thunk)))))
+
+;;; Roles and permissions, by name, whatever the store
+;;;
+;;;   user_roles (user_id, role)              roles granted here, to any store's users
+;;;   role_permissions (role, permission)     what each role may do
+;;;
+;;; A user's roles are their store's (a SQL-USER-STORE's column or query)
+;;; and those granted here; the built-in users table keeps all of its own
+;;; here.  Lookups are cached for *ROLES-CACHE-SECONDS*, as restricted
+;;; components ask several times a page; granting clears the cache.
+
+(defvar *roles-cache-seconds* 2)
+(defvar *roles-cache* (make-hash-table :test 'equal) "KEY → (EXPIRES . VALUE).")
+(defvar *roles-cache-lock* (sb-thread:make-mutex :name "littoral roles cache"))
+
+(defun cached (key thunk)
+  (let ((now (get-universal-time)))
+    (let ((entry (sb-thread:with-mutex (*roles-cache-lock*) (gethash key *roles-cache*))))
+      (if (and entry (> (car entry) now))
+          (cdr entry)
+          (let ((value (funcall thunk)))
+            (sb-thread:with-mutex (*roles-cache-lock*)
+              (when (> (hash-table-count *roles-cache*) 10000) (clrhash *roles-cache*))
+              (setf (gethash key *roles-cache*) (cons (+ now *roles-cache-seconds*) value)))
+            value)))))
+
+(defun forget-cached-roles ()
+  (sb-thread:with-mutex (*roles-cache-lock*) (clrhash *roles-cache*)))
+
+(defun role-name (role)
+  "ROLE (a keyword or string) as stored: lower case."
+  (string-downcase (string role)))
+
+(defun name-keyword (name)
+  (intern (string-upcase (string-trim " " name)) :keyword))
+
+(defun granted-roles (user)
+  "The roles granted to USER in the user_roles table."
+  (let ((id (princ-to-string (user-id user))))
+    (cached (list :roles id)
+            (lambda ()
+              (mapcar (lambda (row) (name-keyword (getf row :|role|)))
+                      (db-query "SELECT role FROM user_roles WHERE user_id = ? ORDER BY role" id))))))
+
+(defun grant-role (user role)
+  "Give USER the ROLE (a keyword), whatever their store."
+  (let ((id (princ-to-string (user-id user))))
+    (unless (member (name-keyword (role-name role)) (granted-roles user))
+      (db-execute "INSERT INTO user_roles (user_id, role) VALUES (?, ?)" id (role-name role)))
+    (forget-cached-roles)
+    user))
+
+(defun revoke-role (user role)
+  "Take ROLE from USER (only a role granted here: a store's own roles stay)."
+  (db-execute "DELETE FROM user_roles WHERE user_id = ? AND role = ?"
+              (princ-to-string (user-id user)) (role-name role))
+  (forget-cached-roles)
+  user)
+
+(defun grant-permission (role permission)
+  "Let users with ROLE do PERMISSION (both keywords)."
+  (unless (member (name-keyword (role-name permission)) (role-permissions role))
+    (db-execute "INSERT INTO role_permissions (role, permission) VALUES (?, ?)"
+                (role-name role) (role-name permission)))
+  (forget-cached-roles)
+  permission)
+
+(defun revoke-permission (role permission)
+  (db-execute "DELETE FROM role_permissions WHERE role = ? AND permission = ?"
+              (role-name role) (role-name permission))
+  (forget-cached-roles)
+  permission)
+
+(defun role-permissions (role)
+  "What users with ROLE may do, as keywords."
+  (cached (list :role-permissions (role-name role))
+          (lambda ()
+            (mapcar (lambda (row) (name-keyword (getf row :|permission|)))
+                    (db-query "SELECT permission FROM role_permissions WHERE role = ? ORDER BY permission"
+                              (role-name role))))))
+
+(defun user-permissions (user)
+  "What USER may do through all their roles, as keywords."
+  (remove-duplicates (mapcan (lambda (role) (copy-list (role-permissions role))) (user-roles user))))
+
+(defun migrate-role-column ()
+  "Move roles kept the old way, comma-separated in users.roles, to user_roles."
+  (dolist (row (db-query "SELECT id, roles FROM users WHERE roles IS NOT NULL AND roles <> ''"))
+    (let ((id (princ-to-string (getf row :|id|))))
+      (dolist (name (cl-ppcre:split "\\s*,\\s*" (string-trim " " (getf row :|roles|))))
+        (when (plusp (length name))
+          (unless (db-query "SELECT 1 AS present FROM user_roles WHERE user_id = ? AND role = ?"
+                            id (role-name name))
+            (db-execute "INSERT INTO user_roles (user_id, role) VALUES (?, ?)" id (role-name name)))))
+      (db-execute "UPDATE users SET roles = '' WHERE id = ?" (getf row :|id|))))
+  (forget-cached-roles))
 
 ;;; Tables Littoral keeps whatever the store: reset tokens
 
@@ -176,6 +274,12 @@ AROUND (another such function, such as USING-DATABASE's) if given."
 
 (define-table auth-token :name "auth_tokens")
 
+(defun drop-auth-tables (&key (users t))
+  "Drop the tables CREATE-AUTH-TABLES makes, for tests: everything is lost."
+  (dolist (table (append (when users '("users")) '("auth_tokens" "user_roles" "role_permissions")))
+    (db-execute (format nil "DROP TABLE IF EXISTS ~A" table)))
+  (forget-cached-roles))
+
 (defun create-auth-tables (&key (users t))
   "Create the tables signing in needs unless they exist: the users table
 (names and emails unique whatever their case) unless USERS is NIL, as when
@@ -185,7 +289,12 @@ users come from an application's own table, and the tokens table."
     (db-execute "CREATE UNIQUE INDEX IF NOT EXISTS users_name ON users (LOWER(name))")
     (db-execute "CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users (LOWER(email))"))
   (create-table 'auth-token)
-  (db-execute "CREATE UNIQUE INDEX IF NOT EXISTS auth_tokens_hash ON auth_tokens (token_hash)"))
+  (db-execute "CREATE UNIQUE INDEX IF NOT EXISTS auth_tokens_hash ON auth_tokens (token_hash)")
+  (db-execute "CREATE TABLE IF NOT EXISTS user_roles (user_id TEXT NOT NULL, role TEXT NOT NULL)")
+  (db-execute "CREATE UNIQUE INDEX IF NOT EXISTS user_roles_key ON user_roles (user_id, role)")
+  (db-execute "CREATE TABLE IF NOT EXISTS role_permissions (role TEXT NOT NULL, permission TEXT NOT NULL)")
+  (db-execute "CREATE UNIQUE INDEX IF NOT EXISTS role_permissions_key ON role_permissions (role, permission)")
+  (when users (migrate-role-column)))
 
 ;;; Users, whatever the store
 
@@ -357,6 +466,17 @@ it that someone else had beforehand no longer reaches it."
   "True when USER has ROLE (a keyword); with ROLE NIL, when there is a user."
   (and user (or (null role) (member role (user-roles user)))))
 
+(defun has-permission-p (permission &optional (user (current-user)))
+  "True when USER may do PERMISSION (a keyword) through one of their roles."
+  (and user (member permission (user-permissions user)) t))
+
+(defun require-permission (permission)
+  "Refuse the request (403) unless the current user may do PERMISSION."
+  (unless (has-permission-p permission)
+    (error 'forbidden :message (if (signed-in-p)
+                                   "You don't have permission to do that."
+                                   "Please sign in first."))))
+
 (defun require-role (role)
   "Refuse the request (403) unless the current user has ROLE; with ROLE
 NIL, unless someone is signed in."
@@ -375,9 +495,15 @@ REQUIRED-ROLE; the default lets anyone signed in see it."))
   (:documentation "The role needed to see COMPONENT, or NIL for any signed-in user.")
   (:method ((component restricted)) nil))
 
+(defgeneric required-permission (component)
+  (:documentation "The permission needed to see COMPONENT, or NIL for none beyond its role.")
+  (:method ((component restricted)) nil))
+
 (defun permitted-p (component)
-  "True when the current user may see COMPONENT."
-  (has-role-p (required-role component)))
+  "True when the current user may see COMPONENT: has its role, and its permission."
+  (and (has-role-p (required-role component))
+       (let ((permission (required-permission component)))
+         (or (null permission) (has-permission-p permission)))))
 
 (defmethod render-component :around ((component restricted))
   ;; Showing what it called (the sign-in form, say) is always allowed.

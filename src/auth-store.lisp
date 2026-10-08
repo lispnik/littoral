@@ -139,6 +139,9 @@ function of (PASSWORD HASH), replaces the built-in hash formats."
   (intern (string-upcase (string-trim " " (princ-to-string name))) :keyword))
 
 (defmethod user-roles ((user sql-user))
+  (union (store-roles user) (granted-roles user)))
+
+(defun store-roles (user)
   (let ((store (sql-user-store user)))
     (cond ((store-roles-query store)
            (loop for row in (db-query (store-roles-query store) (user-id user))

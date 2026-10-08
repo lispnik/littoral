@@ -177,14 +177,21 @@ table NAME (default: the class name), with DESCRIPTION's fields as columns."
 
 ;;; Statements
 
+(defun sql-parameters (parameters)
+  "PARAMETERS as the driver takes them: cl-postgres sends NIL as false, so
+NIL becomes :NULL there; SQLite's driver binds NIL as NULL already."
+  (if (eq (driver) :postgres)
+      (substitute :null nil parameters)
+      parameters))
+
 (defun execute (sql &optional parameters)
   "Run SQL with PARAMETERS; the rows it returns, as plists."
-  (dbi:fetch-all (dbi:execute (dbi:prepare (database-connection) sql) parameters)))
+  (dbi:fetch-all (dbi:execute (dbi:prepare (database-connection) sql) (sql-parameters parameters))))
 
 (defun execute-count (sql &optional parameters)
   "Run SQL with PARAMETERS; how many rows it changed."
   (let ((connection (database-connection)))
-    (dbi:execute (dbi:prepare connection sql) parameters)
+    (dbi:execute (dbi:prepare connection sql) (sql-parameters parameters))
     (dbi:row-count connection)))
 
 (defun db-query (sql &rest parameters)

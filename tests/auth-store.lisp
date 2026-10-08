@@ -37,7 +37,7 @@ and roles in a table of their own."
   `(progn
      (connect-test-database)
      (make-accounts)
-     (littoral.db:drop-table 'littoral.auth::auth-token)
+     (littoral.auth:drop-auth-tables :users nil)
      (littoral.auth:create-auth-tables :users nil)
      (clrhash littoral.auth::*failures*)
      (with-fresh-applications (("/m" 'members-app :mode :deployment
@@ -126,3 +126,12 @@ and roles in a table of their own."
   (signals error (littoral.auth:make-sql-user-store :table "accounts; DROP TABLE x"))
   (signals error (littoral.auth:make-sql-user-store :table "accounts" :name "login--"))
   (signals error (littoral.auth:store-set-password-hash (account-store) nil "hash")))
+
+(test granted-roles-add-to-a-stores-own
+  (let ((store (account-store)))
+    (with-accounts (b store)
+      (let ((bob (littoral.auth:find-user "bob")))
+        (is (null (littoral.auth:user-roles bob)))
+        (littoral.auth:grant-role bob :editor)
+        (is (equal '(:editor) (littoral.auth:user-roles bob)))
+        (is (equal '(:admin) (littoral.auth:user-roles (littoral.auth:find-user "ada"))))))))
