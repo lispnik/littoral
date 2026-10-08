@@ -59,6 +59,9 @@ to URL (another site, say) instead of the next page."
   (:report (lambda (condition stream) (write-string (forbidden-message condition) stream)))
   (:documentation "Signal it to refuse a request: the user sees a 403 page."))
 
+(setf (documentation 'forbidden-message 'function)
+      "The explanation a FORBIDDEN condition shows the user.")
+
 (defvar *debug-errors* nil
   "When true, errors inside a request enter the debugger instead of
 rendering an error page.")

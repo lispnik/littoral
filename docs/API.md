@@ -48,7 +48,7 @@ Signal it to refuse a request: the user sees a 403 page.
 
 #### `forbidden-message` `condition` — generic function
 
-*Undocumented.*
+The explanation a `forbidden` condition shows the user.
 
 #### `render-phase-error` — condition
 
