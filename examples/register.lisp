@@ -19,6 +19,7 @@
   (register-application "/examples/chat" 'chat :title "Chat")
   (register-application "/examples/progress" 'progress-demo :title "Progress")
   (register-application "/examples/contacts" 'contacts-app :title "Contacts")
-  (register-application "/examples/widgets" 'widget-demo :title "Widgets"))
+  (register-application "/examples/widgets" 'widget-demo :title "Widgets")
+  (register-application "/examples/dialogs" 'dialogs-demo :title "Dialogs"))
 
 (register-examples)

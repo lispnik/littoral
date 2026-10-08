@@ -242,7 +242,8 @@ add, then the session and page keys."
                    (let ((*rendering* t))
                      (render-component (session-root session)))
                    (when (development-p app)
-                     (render-toolbar session start)))))
+                     (render-toolbar session start))
+                   (render-toasts (take-toasts session)))))
       (html-response (render-document session body action-url)))))
 
 ;;; The cycle
@@ -305,7 +306,8 @@ page, and answer the components to update as JSON."
                                       root
                                       :value *ajax-result*
                                       :scripts (reverse *ajax-scripts*)
-                                      :redirect *redirect*)))))))
+                                      :redirect *redirect*
+                                      :toasts (take-toasts session))))))))
 
 (defun call-around-request (app thunk)
   "Call THUNK through APP's AROUND-REQUEST, if it has one."

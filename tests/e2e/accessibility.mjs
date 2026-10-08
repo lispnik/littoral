@@ -70,7 +70,7 @@ const pages = ["/examples", "/examples/counter", "/examples/multi-counter", "/ex
   "/examples/login", "/examples/ajax", "/examples/todo", "/examples/upload", "/examples/topics",
   "/examples/report", "/examples/store", "/examples/wiki", "/examples/chat", "/examples/progress",
   "/examples/contacts", "/examples/widgets", "/tracker", "/config", "/tutorial/reading-list",
-  "/examples/admin"];
+  "/examples/admin", "/examples/dialogs"];
 
 try {
  // Both colour schemes: contrast differs between them.
@@ -89,6 +89,7 @@ try {
   await evaluate(`document.querySelector("a.add").click()`); await waitLoad();
   await clickLink("Checkout"); await audit("store: cart review");
   await go("/tracker"); await clickLink("create an account"); await audit("tracker: registration");
+  await go("/examples/dialogs"); await clickLink("Open a dialog"); await audit("dialog open");
   await go("/examples/counter"); await clickLink("Halos"); await audit("halos");
   await clickLink("Halos off");
  }

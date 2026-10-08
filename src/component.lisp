@@ -188,13 +188,18 @@ returns \"li\"; a region whose updates should be announced adds
 
 ;;; Visiting the tree
 
+(defgeneric decoration-children (decoration)
+  (:documentation "Components DECORATION shows besides what it wraps (a
+modal dialog, say)."))
+
 (defun visible-children (component)
   "The components COMPONENT shows now: its delegate when it has called
-another, otherwise its CHILDREN."
+another, otherwise its CHILDREN; and any its decorations show."
   (let ((delegation (find-if (lambda (d) (typep d 'delegation)) (decorations component))))
-    (if delegation
-        (list (delegation-delegate delegation))
-        (children component))))
+    (append (if delegation
+                (list (delegation-delegate delegation))
+                (children component))
+            (mapcan (lambda (d) (copy-list (decoration-children d))) (decorations component)))))
 
 (defun map-visible (function component)
   "Call FUNCTION on COMPONENT and everything visible below it, parents first."

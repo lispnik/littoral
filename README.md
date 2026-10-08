@@ -146,6 +146,22 @@ Littoral follows Seaside's request cycle. A request that names callbacks goes th
 
 A request that names no callbacks renders the page. Pages are snapshots of the visible components' decorations, plus the slots of every object named by their `states` methods. Because of this, both going back and acting on an old page work the way they do in Seaside.
 
+### Dialogs over the page, and toasts
+
+`call` and `show` put a component *in place of* another. `show-modal` puts one *over the whole page* instead:
+
+```lisp
+(show-modal (make-instance 'confirm-dialog :message "Delete it?")
+            :title "Delete" :on-answer (lambda (yes) (when yes (delete-it))))
+```
+
+- **The page behind** stays in view but is made `inert`, so it can't be clicked or tabbed into.
+- **Keyboard:** focus moves into the dialog and Tab stays there. Esc or the × closes it, answering `nil`; with `:closable nil`, the dialog must be answered.
+- **In flows:** `call-modal` is the version that seems to wait.
+- **The back button** works through dialogs, as it does through `call`.
+
+`(toast "Saved." :kind :success)` shows a short message at the corner of the page, announced politely to screen readers. It appears on the next page or AJAX response, or straight away on pages with a push stream. A background job can call `(toast … :session session)`.
+
 ### Tasks and continuations
 
 Common Lisp has no first-class continuations. `define-flow` therefore rewrites the flow body in continuation-passing style with [cl-cont](https://github.com/ocicl/cl-cont), and each `call` suspends the flow until the called component answers. The rewrite has some limits:

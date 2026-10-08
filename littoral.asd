@@ -83,6 +83,7 @@
                              (:file "progress")
                              (:file "contacts")
                              (:file "widgets")
+                             (:file "dialogs")
                              (:file "index")
                              (:file "register")))))
 
@@ -137,7 +138,8 @@
                              (:file "live")
                              (:file "db")
                              (:file "admin")
-                             (:file "auth"))))
+                             (:file "auth")
+                             (:file "modal"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
                                        (uiop:find-symbol* :littoral :littoral/tests))

@@ -44,8 +44,63 @@
   }
 
   // Swap in the components a response or a pushed event carries.
+  // Toasts: brief messages at the corner of the page.
+  function toastContainer() {
+    var box = document.querySelector(".lt-toasts");
+    if (!box) {
+      box = document.createElement("div");
+      box.className = "lt-toasts"; box.setAttribute("aria-live", "polite"); box.setAttribute("role", "status");
+      document.body.appendChild(box);
+    }
+    return box;
+  }
+  function dismissLater(toast) {
+    setTimeout(function () { toast.classList.add("lt-toast-leaving"); }, 5000);
+    setTimeout(function () { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 5600);
+  }
+  function showToasts(toasts) {
+    var box = toastContainer();
+    (toasts || []).forEach(function (t) {
+      var el = document.createElement("div");
+      el.className = "lt-toast lt-toast-" + t.kind;
+      el.textContent = t.text;
+      box.appendChild(el);
+      dismissLater(el);
+    });
+  }
+
+  // Modal dialogs: focus goes in, Tab stays in, Esc closes a closable one.
+  function focusables(dialog) {
+    return Array.prototype.filter.call(
+      dialog.querySelectorAll("a[href], button, input, select, textarea, [tabindex]:not([tabindex='-1'])"),
+      function (el) { return !el.disabled && el.type !== "hidden"; });
+  }
+  function setupModal() {
+    var dialog = document.querySelector("dialog.lt-modal");
+    if (!dialog) return;
+    var items = focusables(dialog);
+    var first = items.filter(function (el) { return !el.classList.contains("lt-modal-close"); })[0] || items[0];
+    if (first && !dialog.contains(document.activeElement)) first.focus();
+  }
+  document.addEventListener("keydown", function (event) {
+    var dialog = document.querySelector("dialog.lt-modal");
+    if (!dialog) return;
+    if (event.key === "Escape" && dialog.getAttribute("data-lt-modal") === "closable") {
+      var close = dialog.querySelector(".lt-modal-close");
+      if (close) { event.preventDefault(); close.click(); }
+    } else if (event.key === "Tab") {
+      var items = focusables(dialog);
+      if (!items.length) return;
+      var first = items[0], last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      else if (!dialog.contains(document.activeElement)) { event.preventDefault(); first.focus(); }
+    }
+  });
+
   function apply(data) {
     if (data.redirect) { window.location.href = data.redirect; return; }
+    showToasts(data.toasts);
     var focused = document.activeElement && document.activeElement.id;
     Object.keys(data.fragments).forEach(function (id) {
       var old = document.getElementById(id);
@@ -83,6 +138,9 @@
     var source = new EventSource(url);
     source.addEventListener("update", function (event) {
       apply(JSON.parse(event.data));
+    });
+    source.addEventListener("toast", function (event) {
+      showToasts(JSON.parse(event.data));
     });
     // Live redefinition: the server's code changed; draw this page again.
     source.addEventListener("reload", function () {
@@ -213,6 +271,8 @@
     scanPeriodicals();
     listen();
     pollForReload();
+    setupModal();
+    Array.prototype.forEach.call(document.querySelectorAll(".lt-toast"), dismissLater);
   });
 
   // A page restored from the back/forward cache shows state the server may

@@ -42,7 +42,8 @@
    #:decoration #:add-decoration #:remove-decoration #:decorations
    #:delegation #:answer-handler #:message-decoration #:form-decoration
    #:validation-decoration #:validate-with
-   #:render-inner #:render-decoration #:decoration-kind #:updatable
+   #:render-inner #:render-decoration #:decoration-kind #:decoration-children #:updatable
+   #:show-modal #:call-modal #:modal-decoration #:toast
    ;; Dialogs
    #:message-dialog #:confirm-dialog #:input-dialog #:choice-dialog #:login-dialog
    #:inform #:confirm #:request-input #:choose-from

@@ -12,7 +12,8 @@
      ("guess" "Guess the Number" "A task: a multi-page flow as straight-line code.")
      ("topics" "Topics" "Bookmarkable URLs with update-url and initial-request.")
      ("report" "Report" "A sortable, paged table.")
-     ("widgets" "Widgets" "Tabs, navigation, a tree, autocomplete and a sortable list."))
+     ("widgets" "Widgets" "Tabs, navigation, a tree, autocomplete and a sortable list.")
+     ("dialogs" "Dialogs" "Dialogs over the page, and toasts."))
     ("Applications"
      ("store" "Sushi Store" "Catalog, cart and a checkout task with validation, a date picker and isolation.")
      ("wiki" "Wiki" "Shared pages, links, editing, history and search.")

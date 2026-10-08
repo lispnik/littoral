@@ -103,6 +103,85 @@ Validation decorations on SELF may refuse the answer."
   (setf (decorations self)
         (remove-if (lambda (d) (typep d 'delegation)) (decorations self))))
 
+;;; Modal dialogs
+
+(defmethod decoration-children ((decoration decoration)) '())
+
+(defclass modal-decoration (decoration)
+  ((dialog :initarg :dialog :reader modal-dialog)
+   (closable :initarg :closable :initform t :reader modal-closable-p)
+   (title :initarg :title :initform nil :reader modal-title))
+  (:documentation "Shows a component over the page, which stays visible
+behind it but cannot be used until the dialog answers."))
+
+(defmethod decoration-kind ((decoration modal-decoration)) :global)
+
+(defmethod decoration-children ((decoration modal-decoration))
+  (list (modal-dialog decoration)))
+
+(defmethod render-decoration ((decoration modal-decoration) component)
+  (declare (ignore component))
+  ;; The page behind, inert: no clicks, no focus, hidden from screen readers.
+  (emit-tag "div" (list :class "lt-behind-modal" :inert t :aria-hidden "true")
+            (lambda () (render-inner)))
+  (emit-tag "dialog" (list :class "lt-modal" :open t :aria-modal "true"
+                           :aria-label (modal-title decoration)
+                           :data-lt-modal (if (modal-closable-p decoration) "closable" "fixed"))
+            (lambda ()
+              (when (modal-closable-p decoration)
+                (anchor (:class "lt-modal-close" :aria-label "Close"
+                         :callback (lambda () (answer (modal-dialog decoration) nil)))
+                  "×"))
+              (render-component (modal-dialog decoration)))))
+
+(defun show-modal (other &key on-answer (closable t) title)
+  "Show OTHER in a dialog over the whole page until it answers, then call
+ON-ANSWER with the answer.  CLOSABLE adds a close button (and Esc), which
+answers NIL; TITLE names the dialog for screen readers."
+  (let* ((root (session-root *session*))
+         (modal (make-instance 'modal-decoration :dialog other :closable closable :title title)))
+    (signal-if-rendering 'show-modal)
+    (add-decoration root modal)
+    (add-decoration other (make-instance 'answer-handler :function on-answer
+                                                         :caller root :delegation modal))
+    other))
+
+(declaim (ftype function call-modal))
+
+(defun/cc call-modal (other &optional title)
+  "Show OTHER in a dialog over the page and return what it answers; a
+blocking call inside a flow, like CALL."
+  (let/cc k (show-modal other :on-answer k :title title)))
+
+;;; Toasts
+
+(defun toast (message &key (kind :info) (session *session*))
+  "Show MESSAGE briefly at the corner of SESSION's page: on its next page or
+AJAX response, or at once on pages with a push stream.  KIND is :INFO,
+:SUCCESS or :ERROR."
+  (push (cons kind message) (session-property :toasts session))
+  (wake-streams-for-toasts session))
+
+(defun take-toasts (&optional (session *session*))
+  "SESSION's waiting toasts, oldest first, now taken."
+  (prog1 (reverse (session-property :toasts session))
+    (setf (session-property :toasts session) '())))
+
+(defun render-toasts (toasts)
+  "Write TOASTS where littoral.js shows them."
+  (emit-tag "div" (list :class "lt-toasts" :aria-live "polite" :role "status")
+            (lambda ()
+              (dolist (toast toasts)
+                (emit-tag "div" (list :class (list "lt-toast" (format nil "lt-toast-~(~A~)" (car toast))))
+                          (lambda () (text (cdr toast))))))))
+
+(defun toasts-json (toasts)
+  (format nil "[~{~A~^,~}]"
+          (mapcar (lambda (toast)
+                    (format nil "{\"kind\":~A,\"text\":~A}"
+                            (json-string (string-downcase (car toast))) (json-string (cdr toast))))
+                  toasts)))
+
 ;;; Message, form and validation decorations
 
 (defclass message-decoration (decoration)

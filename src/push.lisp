@@ -77,8 +77,21 @@ is noticed, so this bounds how long a gone page keeps its server thread.")
   (sb-thread:with-mutex ((stream-lock stream))
     (shiftf (stream-pending stream) '())))
 
+(defun wake-streams-for-toasts (session)
+  "Have SESSION's open pages show its waiting toasts now."
+  (dolist (stream (open-event-streams))
+    (when (eq (stream-session stream) session)
+      (wake stream :toasts))))
+
 (defun write-pending (stream writer pending)
-  "Write what PENDING asks of STREAM: a reload, or updated components."
+  "Write what PENDING asks of STREAM: a reload, toasts, or updated components."
+  (when (member :toasts pending)
+    (let ((toasts (let ((*session* (stream-session stream)))
+                    (sb-thread:with-recursive-lock ((session-lock *session*))
+                      (take-toasts)))))
+      (when toasts
+        (funcall writer (format nil "event: toast~%data: ~A~%~%" (toasts-json toasts)))))
+    (setf pending (remove :toasts pending)))
   (cond ((member :reload pending)
          (funcall writer (format nil "event: reload~%data: ~%~%")))
         (pending

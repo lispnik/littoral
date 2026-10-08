@@ -242,6 +242,19 @@ try {
   check("without a reload", await watcher.evaluate("window.__tracker") === 1);
   await watcher.close();
 
+  // A dialog over the page: focus moves in, Esc closes it; toasts appear.
+  await go("/examples/dialogs");
+  await clickLink("Open a dialog");
+  check("dialog opens over the page",
+        await evaluate(`!!document.querySelector("dialog.lt-modal") && !!document.querySelector(".lt-behind-modal[inert]")`));
+  check("focus moves into the dialog", await evaluate(`document.querySelector("dialog.lt-modal").contains(document.activeElement)`));
+  await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+  await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+  await waitLoad(); await sleep(300);
+  check("Esc closes the dialog", await evaluate(`!document.querySelector("dialog.lt-modal")`));
+  await evaluate(`document.getElementById("toast-button").click()`); await sleep(600);
+  check("a toast appears", (await evaluate(`document.querySelector(".lt-toasts")?.innerText || ""`)).includes("Hello from the server."));
+
   // The generated admin: list, open a task, follow its project.
   await go("/examples/admin");
   check("admin lists projects", (await evaluate("document.body.innerText")).includes("Littoral"));

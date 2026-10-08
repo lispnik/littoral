@@ -174,7 +174,7 @@ Dismiss whatever `self` has called, without answering.
 #### `visible-children` `component` — function
 
 The components `component` shows now: its delegate when it has called
-another, otherwise its `children`.
+another, otherwise its `children`; and any its decorations show.
 
 #### `active-component` `component` — function
 
@@ -263,10 +263,36 @@ the rest of the chain.
 visible while another component is shown in their owner's place; :`local`
 ones sit inside it.
 
+#### `decoration-children` `decoration` — generic function
+
+Components `decoration` shows besides what it wraps (a
+modal dialog, say).
+
 #### `updatable` — class
 
 Mixin for components `ajax` can re-render: each is written
 inside an element carrying its `component-id`.
+
+#### `show-modal` `other &key on-answer (closable t) title` — function
+
+Show `other` in a dialog over the whole page until it answers, then call
+`on-answer` with the answer.  `closable` adds a close button (and Esc), which
+answers `nil`; `title` names the dialog for screen readers.
+
+#### `call-modal` `&rest args` — function
+
+*Undocumented.*
+
+#### `modal-decoration` — class
+
+Shows a component over the page, which stays visible
+behind it but cannot be used until the dialog answers.
+
+#### `toast` `message &key (kind :info) (session *session*)` — function
+
+Show `message` briefly at the corner of `session`'s page: on its next page or
+`ajax` response, or at once on pages with a push stream.  `kind` is :`info`,
+:`success` or :`error`.
 
 ### Dialogs
 
