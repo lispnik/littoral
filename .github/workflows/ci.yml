@@ -52,6 +52,15 @@ jobs:
             --eval '(asdf:initialize-source-registry (list :source-registry (list :directory (uiop:getcwd)) :inherit-configuration))' \
             --eval '(asdf:test-system :littoral)'
 
+      - name: A generated project
+        run: |
+          sbcl --non-interactive \
+            --eval '(asdf:initialize-source-registry (list :source-registry (list :directory (uiop:getcwd)) :inherit-configuration))' \
+            --eval '(asdf:load-system :littoral/generator)' \
+            --eval '(littoral.generator:make-project "ci-app" :directory "/tmp/ci-app/" :author "CI")'
+          make -C /tmp/ci-app test 2>&1 | tee /tmp/ci-app.log | grep -v '^;'
+          grep -q "Fail: 0" /tmp/ci-app.log
+
       - name: Browser and accessibility tests
         run: |
           sbcl --non-interactive \

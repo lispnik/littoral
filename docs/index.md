@@ -46,6 +46,18 @@ make run           # examples on http://127.0.0.1:8080/
 make tracker       # the issue tracker on http://127.0.0.1:8080/tracker
 ```
 
+### A new application
+
+```sh
+make new NAME=bookshop DIR=~/src/bookshop
+cd ~/src/bookshop
+make test          # its own FiveAM tests, through the fake browser
+make run           # http://127.0.0.1:8080/, in development mode
+make build         # bin/bookshop, a standalone executable
+```
+
+The project has a root component (a counter, a confirmation dialog and a form), tests that click through it, a Makefile that finds this checkout, a README and a license. From a REPL: `(asdf:load-system :littoral/generator)`, then `(littoral.generator:make-project "bookshop" :directory "~/src/bookshop/" :author "…" :license "MIT" :port 8080)`.
+
 Other targets:
 
 ```sh
@@ -313,6 +325,33 @@ To keep configuration across restarts, start with a file:
 Any applications saved in the file are configured first, and every change made in `/config` is written back to it. The file is plain Lisp, one plist per application, and is created with mode 600 because it can hold basic-auth credentials. Classes are stored by name, so an application whose system isn't loaded is skipped with a warning. Error handlers are functions and aren't saved. From code, use `save-configuration`, `load-configuration`, and `configure-application`; the last changes an application's settings without dropping its sessions.
 
 `(make-lack-app)` returns a plain Lack application you can mount into a larger Lack/Clack stack. Lack's `:mount` middleware strips the prefix without setting `:script-name`, so pass the prefix yourself: `(:mount "/apps" (make-lack-app :prefix "/apps"))`. A `:script-name` set by the server or proxy is honoured as well. Set `*debug-errors*` to enter the debugger on errors instead of rendering an error page.
+
+## Translations
+
+Write strings in English and pass them through `translate`. A language's catalogue gives the translations, and a string it lacks shows as written:
+
+```lisp
+(define-translations "fr"
+  ("Add a contact" "Ajouter un contact")
+  ("Remove ~A?" "Supprimer ~A ?")
+  ("~D contact" "~D contact" "~D contacts"))        ; one form per plural form
+
+(defmethod render ((self contacts-app))
+  (h1 () (translate "Contacts"))                    ; written as text, like a literal
+  (p () (translate-plural (length (contacts self)) "~D contact" "~D contacts"))
+  (anchor (:callback …) (translate "Add a contact")))
+
+(register-application "/contacts" 'contacts-app :languages '("fr" "de"))
+```
+
+Each session has a language. When a session starts, it takes the first of the application's `:language` (by default "en") and `:languages` that the browser's Accept-Language asks for. `set-language` changes it from a callback, and the `language-chooser` component links to each language, named in its own words. The page's `lang` attribute follows the session's language.
+
+- **Plural forms** follow each language's rule: French counts 0 as singular. `define-language` adds a language with its own rule, separators, month names and date format.
+- **Numbers and dates**: `(localized-number 1234.5)` gives "1,234.50" in English and "1.234,50" in German. `(localized-date 2026 10 7)` gives "7 octobre 2026" in French.
+- **Littoral's own strings** come translated into French, German and Spanish. That covers dialogs, paging, validation messages, signing in and the admin. Description field labels, help text, choice labels and report column titles go through `translate` too, so a catalogue entry for "Name" translates the label everywhere.
+- **For translators**: `(missing-translations "fr")` lists the strings shown in French so far that the catalogue lacks. `(load-translations "fr" #p"fr.lisp")` reads entries from a file without evaluating anything.
+
+The contacts example is translated into French and German.
 
 ## Keeping data in a database
 

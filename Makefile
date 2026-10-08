@@ -1,10 +1,16 @@
 SBCL ?= sbcl
 PORT ?= 8080
 
-.PHONY: test e2e a11y bench load docs clean-check run tracker lint clean
+.PHONY: new test e2e a11y bench load docs clean-check run tracker lint clean
 
 test:
 	$(SBCL) --non-interactive --eval '(asdf:test-system :littoral)'
+
+# A new application: make new NAME=bookshop [DIR=~/src/bookshop]
+new:
+	@test -n "$(NAME)" || { echo "Usage: make new NAME=my-app [DIR=path]"; exit 2; }
+	@$(SBCL) --noinform --non-interactive --eval '(asdf:load-system :littoral/generator)' \
+	  --eval '(littoral.generator:make-project "$(NAME)" $(if $(DIR),:directory "$(abspath $(DIR))/"))' 2>&1 | grep -v '^;\|^WARNING'
 
 # A fresh clone, built against nothing but its own ocicl.csv.
 clean-check:

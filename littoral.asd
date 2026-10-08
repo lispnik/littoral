@@ -28,6 +28,8 @@
                 :components ((:file "package")
                              (:file "util")
                              (:file "context")
+                             (:file "i18n")
+                             (:file "translations")
                              (:file "callbacks")
                              (:module "html"
                               :serial t
@@ -112,6 +114,7 @@
                #:littoral/oauth
                #:littoral/parenscript-demo
                #:littoral/websocket
+               #:littoral/generator
                #:dexador
                #:dbd-sqlite3
                #:fiveam
@@ -144,7 +147,9 @@
                              (:file "auth")
                              (:file "modal")
                              (:file "parenscript")
-                             (:file "websocket"))))
+                             (:file "websocket")
+                             (:file "i18n")
+                             (:file "generator"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
                                        (uiop:find-symbol* :littoral :littoral/tests))
@@ -233,3 +238,10 @@
   :license "MIT"
   :depends-on (#:littoral #:websocket-driver #:com.inuoe.jzon)
   :components ((:module "src" :components ((:file "websocket")))))
+
+(asdf:defsystem #:littoral/generator
+  :description "Generate the skeleton of a new Littoral application."
+  :author "Matthew Kennedy"
+  :license "MIT"
+  :depends-on (#:alexandria #:cl-ppcre)
+  :components ((:module "src" :components ((:file "generator")))))

@@ -95,3 +95,6 @@ dialog.lt-modal { position: fixed; top: 12vh; margin: 0 auto; max-width: min(36r
 .lt-toast-success { border-left-color: #2e7d32; }
 .lt-toast-error { border-left-color: var(--lt-error); }
 .lt-toast-leaving { opacity: 0; }
+
+/* Language chooser */
+.lt-languages ul { display: flex; flex-wrap: wrap; gap: .8rem; list-style: none; padding: 0; margin: 0; }

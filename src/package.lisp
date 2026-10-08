@@ -91,5 +91,10 @@
    #:register-application #:unregister-application #:find-application
    #:list-applications
    #:make-lack-app #:start #:stop #:*debug-errors* #:url-for #:*base-path*
-   #:configure-admin)
+   #:configure-admin
+   ;; Languages
+   #:translate #:translate-plural #:define-translations #:add-translations #:load-translations
+   #:define-language #:current-language #:set-language #:*language* #:*source-language*
+   #:missing-translations #:translated-languages #:language-display-name
+   #:translate-label #:localized-number #:localized-date #:application-languages #:language-chooser)
   (:documentation "Littoral: a Seaside-style component web framework for Common Lisp."))

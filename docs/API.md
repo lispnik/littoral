@@ -570,7 +570,7 @@ Signalled by `parse-field` when input is not a value of the field's kind.
 
 #### `field-problem` `format-control &rest arguments` — function
 
-Signal a `field-error` with the formatted message.
+Signal a `field-error` with the message `format-control`, translated, formats.
 
 #### `validate` `object &optional (description object)` — function
 
@@ -929,7 +929,7 @@ is none.
 Configure applications from `file`.  Applications whose classes are not
 loaded are skipped with a warning.  Returns the applications configured.
 
-#### `configure-application` `path &rest settings &key root-class title language mode session-timeout max-continuations cookie-sessions stylesheets scripts credentials max-sessions expired-notice` — function
+#### `configure-application` `path &rest settings &key root-class title language languages mode session-timeout max-continuations cookie-sessions stylesheets scripts credentials max-sessions expired-notice` — function
 
 Change the settings given for the application at `path`, registering it
 when there is none.  Sessions, and settings not given, are kept.
@@ -938,7 +938,7 @@ when there is none.  Sessions, and settings not given, are kept.
 
 `app`'s configuration as a plist, as `save-configuration` writes it.
 
-#### `register-application` `path root-class &rest initargs &key title mode session-timeout max-continuations cookie-sessions stylesheets scripts credentials max-sessions error-handler expired-notice max-request-size local-only language around-actions around-request websockets` — function
+#### `register-application` `path root-class &rest initargs &key title mode session-timeout max-continuations cookie-sessions stylesheets scripts credentials max-sessions error-handler expired-notice max-request-size local-only language around-actions around-request websockets languages` — function
 
 Serve `root-class`, a component class, at `path`.  Replaces any application
 already there.  Returns the `application`.
@@ -995,6 +995,94 @@ Prepended to every `url` littoral writes: the mount prefix given to
 Serve the configuration application at `path`.  With `user` and `password` it
 is behind `http` basic auth; without, it answers only requests from this
 machine.
+
+### Languages
+
+#### `translate` `source &rest arguments` — function
+
+`source` in the current language; with `arguments`, used as a `format` control
+string for them.
+
+#### `translate-plural` `count singular plural &rest arguments` — function
+
+The current language's form of `singular` (`plural` in English) for `count`,
+formatted with `count` and then `arguments`.
+
+#### `define-translations` `language &body entries` — macro
+
+Add `entries`, unevaluated, to `language`'s catalogue.  Each is (`source` `form`
+...): one form for plain text, or one per plural form, in the order the
+language's plural rule numbers them.
+
+#### `add-translations` `language entries` — function
+
+Add `entries`, a list as `define-translations` takes, to `language`'s catalogue.
+
+#### `load-translations` `language pathname` — function
+
+Add the entries read from the file `pathname`, each a list (`source` `form` ...),
+to `language`'s catalogue.  Nothing in the file is evaluated.
+
+#### `define-language` `code &key name plural decimal group months date` — function
+
+Describe the language `code` (such as "fr" or "pt-BR"): its `name` in
+itself, its `plural` rule (a function of a count returning the index of the
+plural form to use), its `decimal` and `group` separators, its `months`' names and
+its `date` function of (`year` `month` `day` `months`) returning a string.  Unsupplied
+details are English's.
+
+#### `current-language` — function
+
+The language this request is answered in: *LANGUAGE*, else the
+session's, else the application's.
+
+#### `set-language` `code &optional (session *session*)` — function
+
+From now on, show `session` in the language `code`.
+
+#### `*language*` — variable
+
+When bound to a language code, the language to use regardless of the session.
+
+#### `*source-language*` — variable
+
+The language source strings are written in; it needs no catalogue.
+
+#### `missing-translations` `language` — function
+
+The source strings shown in `language` so far that its catalogue lacks;
+for translators.
+
+#### `translated-languages` — function
+
+The languages that have a catalogue, with the source language.
+
+#### `language-display-name` `code` — function
+
+What the language `code` calls itself.
+
+#### `translate-label` `label` — function
+
+`label` translated when it is a non-empty string; anything else as it is.
+
+#### `localized-number` `number &key (decimals (if (integerp number) 0 2))` — function
+
+`number` as the current language writes it, with `decimals` places.
+
+#### `localized-date` `year month day` — function
+
+The date as the current language writes it in full, such as
+"October 7, 2026" or "7 octobre 2026".
+
+#### `application-languages` `object` — generic function
+
+Reads the languages of an application.  Languages offered besides `language`: a new session takes the
+first of these and `language` that the browser's Accept-Language asks for.
+
+#### `language-chooser` — class
+
+Links to show the session in each language offered,
+each named in its own language; the current one is not a link.
 
 ## Package `littoral.html`
 
@@ -1362,6 +1450,11 @@ Reads the html of a browser.
 
 Reads the cookies of a browser.
 
+#### `browser-headers` `object` — generic function
+
+Reads the headers of a browser.  Alist of header name → value sent with every request,
+such as ("accept-language" . "fr").
+
 #### `browser-fields` `object` — generic function
 
 Reads the fields of a browser.  Alist of field name → value typed into the current page.
@@ -1384,9 +1477,10 @@ Return to an earlier page, as the back button (with no cache) would.
 
 One request, no redirects followed.  Returns status, headers, body string.
 
-#### `make-env` `method url &key body cookies (content-type "application/x-www-form-urlencoded")` — function
+#### `make-env` `method url &key body cookies extra-headers (content-type "application/x-www-form-urlencoded")` — function
 
-A Lack environment for a `method` request to `url`.
+A Lack environment for a `method` request to `url`, with `extra-headers` (an
+alist of lower-case names to values).
 
 #### `response-header` `headers name` — function
 

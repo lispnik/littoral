@@ -14,6 +14,9 @@
    (status :initform nil :accessor browser-status)
    (html :initform "" :accessor browser-html)
    (cookies :initform '() :accessor browser-cookies)
+   (headers :initarg :headers :initform '() :accessor browser-headers
+            :documentation "Alist of header name → value sent with every request,
+such as (\"accept-language\" . \"fr\").")
    (fields :initform '() :accessor browser-fields
            :documentation "Alist of field name → value typed into the current page.")
    (files :initform '() :accessor browser-files
@@ -25,13 +28,16 @@
   (let ((q (position #\? url)))
     (if q (values (subseq url 0 q) (subseq url (1+ q))) (values url nil))))
 
-(defun make-env (method url &key body cookies (content-type "application/x-www-form-urlencoded"))
-  "A Lack environment for a METHOD request to URL."
+(defun make-env (method url &key body cookies extra-headers (content-type "application/x-www-form-urlencoded"))
+  "A Lack environment for a METHOD request to URL, with EXTRA-HEADERS (an
+alist of lower-case names to values)."
   (multiple-value-bind (path query) (split-url url)
     (let ((headers (make-hash-table :test 'equal))
           (octets (if (stringp body)
                       (flexi-streams:string-to-octets body :external-format :utf-8)
                       body)))
+      (loop for (name . value) in extra-headers
+            do (setf (gethash (string-downcase name) headers) value))
       (when cookies
         (setf (gethash "cookie" headers)
               (format nil "~{~A~^; ~}" (mapcar (lambda (c) (format nil "~A=~A" (first c) (rest c))) cookies))))
@@ -58,7 +64,7 @@
   "One request, no redirects followed.  Returns status, headers, body string."
   (destructuring-bind (status headers body-parts)
       (funcall (browser-app browser)
-               (apply #'make-env method url :body body :cookies (browser-cookies browser)
+               (apply #'make-env method url :body body :cookies (browser-cookies browser) :extra-headers (browser-headers browser)
                       (when content-type (list :content-type content-type))))
     (let ((cookie (response-header headers :set-cookie)))
       (when cookie
@@ -315,7 +321,7 @@ filename=\"~A\"~C~CContent-Type: ~A~C~C~C~C"
   (let* ((url (cl-ppcre:register-groups-bind (u) ("data-lt-events=\"([^\"]*)\"" (browser-html browser))
                 (unescape u)))
          (response (funcall (browser-app browser)
-                            (make-env :get url :cookies (browser-cookies browser)))))
+                            (make-env :get url :cookies (browser-cookies browser) :extra-headers (browser-headers browser)))))
     (unless (functionp response)
       (error "~A did not open an event stream (status ~A)." url (first response)))
     (sb-thread:make-thread

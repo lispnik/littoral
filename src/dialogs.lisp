@@ -18,7 +18,7 @@
   (div (:class "lt-dialog")
     (render-dialog-message self)
     (form ()
-      (submit-button (:callback (lambda () (answer self t))) "OK"))))
+      (submit-button (:callback (lambda () (answer self t))) (translate "OK")))))
 
 (defclass confirm-dialog (dialog) ()
   (:documentation "Asks a yes/no question; answers T or NIL."))
@@ -27,8 +27,8 @@
   (div (:class "lt-dialog")
     (render-dialog-message self)
     (form ()
-      (submit-button (:callback (lambda () (answer self t))) "Yes")
-      (submit-button (:callback (lambda () (answer self nil))) "No"))))
+      (submit-button (:callback (lambda () (answer self t))) (translate "Yes"))
+      (submit-button (:callback (lambda () (answer self nil))) (translate "No")))))
 
 (defclass input-dialog (dialog)
   ((value :initarg :value :initform "" :accessor dialog-value))
@@ -38,10 +38,10 @@
   (div (:class "lt-dialog")
     (render-dialog-message self)
     (form ()
-      (text-input (:value (dialog-value self) :label (or (dialog-message self) "Answer")
+      (text-input (:value (dialog-value self) :label (or (dialog-message self) (translate "Answer"))
                    :callback (lambda (v) (setf (dialog-value self) v))
                    :autofocus t))
-      (submit-button (:callback (lambda () (answer self (dialog-value self)))) "OK"))))
+      (submit-button (:callback (lambda () (answer self (dialog-value self)))) (translate "OK")))))
 
 (defclass choice-dialog (dialog)
   ((items :initarg :items :initform '() :reader dialog-items)
@@ -53,12 +53,12 @@
   (div (:class "lt-dialog")
     (render-dialog-message self)
     (form ()
-      (select-list (:items (dialog-items self) :label (or (dialog-message self) "Choice")
+      (select-list (:items (dialog-items self) :label (or (dialog-message self) (translate "Choice"))
                     :labels (dialog-labels self)
                     :selected (dialog-selected self)
                     :callback (lambda (item) (setf (dialog-selected self) item))))
-      (submit-button (:callback (lambda () (answer self (dialog-selected self)))) "OK")
-      (cancel-button (:callback (lambda () (answer self nil))) "Cancel"))))
+      (submit-button (:callback (lambda () (answer self (dialog-selected self)))) (translate "OK"))
+      (cancel-button (:callback (lambda () (answer self nil))) (translate "Cancel")))))
 
 (defclass login-dialog (dialog)
   ((username :initform "" :accessor dialog-username)
@@ -70,17 +70,17 @@ cons, or NIL on Cancel."))
   (div (:class "lt-dialog lt-login")
     (render-dialog-message self)
     (form ()
-      (label () "Username "
+      (label () (translate "Username") " "
         (text-input (:id "username" :value (dialog-username self)
                      :callback (lambda (v) (setf (dialog-username self) v)))))
-      (label () "Password "
+      (label () (translate "Password") " "
         (password-input (:id "password"
                          :callback (lambda (v) (setf (dialog-password self) v)))))
       (submit-button (:callback (lambda ()
                                   (answer self (cons (dialog-username self)
                                                      (dialog-password self)))))
-        "Log in")
-      (cancel-button (:callback (lambda () (answer self nil))) "Cancel"))))
+        (translate "Log in"))
+      (cancel-button (:callback (lambda () (answer self nil))) (translate "Cancel")))))
 
 ;;; Seaside's inform:, confirm:, request: and chooseFrom:
 
@@ -108,11 +108,11 @@ cons, or NIL on Cancel."))
 
 (defclass session-expired-notice (dialog) ()
   (:default-initargs
-   :message "Your session expired, so you are starting again from the beginning.")
+   :message (translate "Your session expired, so you are starting again from the beginning."))
   (:documentation "A ready-made EXPIRED-NOTICE for REGISTER-APPLICATION."))
 
 (defmethod render ((self session-expired-notice))
   (div (:class "lt-dialog lt-expired")
     (render-dialog-message self)
     (form ()
-      (submit-button (:callback (lambda () (answer self t))) "Continue"))))
+      (submit-button (:callback (lambda () (answer self t))) (translate "Continue")))))

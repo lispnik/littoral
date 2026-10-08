@@ -6,7 +6,7 @@
   (:export
    ;; A browser and its state
    #:browser #:browser-app #:browser-url #:browser-status #:browser-html
-   #:browser-cookies #:browser-fields #:browser-files
+   #:browser-cookies #:browser-headers #:browser-fields #:browser-files
    ;; Requests
    #:visit #:back-to #:raw-request #:make-env #:response-header
    ;; Reading the page

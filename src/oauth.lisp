@@ -156,7 +156,7 @@ has not expired; it can be used once."
     (unless (and provider code verifier
                  (ignore-errors (finish-sign-in provider code verifier)))
       (show root (make-instance 'message-dialog
-                                :message "Signing in with that provider didn't work. Please try again.")))))
+                                :message (translate "Signing in with that provider didn't work. Please try again."))))))
 
 ;;; Buttons on the sign-in form
 
@@ -168,5 +168,5 @@ has not expired; it can be used once."
               (let ((provider provider))
                 (form ()
                   (submit-button (:callback (lambda () (start-sign-in provider)))
-                    (text (format nil "Sign in with ~A" (provider-label provider))))))))))
+                    (text (translate "Sign in with ~A" (provider-label provider))))))))))
       *sign-in-extras*)

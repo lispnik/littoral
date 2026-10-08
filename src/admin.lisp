@@ -72,8 +72,8 @@ classes, that point at CLASS."
          (admin (page-admin self))
          (object (db-find class (page-object-id self))))
     (if (null object)
-        (progn (p () "This record no longer exists.")
-               (p () (anchor (:callback (lambda () (answer self))) "Back")))
+        (progn (p () (translate "This record no longer exists."))
+               (p () (anchor (:callback (lambda () (answer self))) (translate "Back"))))
         (progn
           (h2 () (text (format nil "~A #~D" (class-label class) (object-id object))))
           (table (:class "lt-table lt-viewer")
@@ -86,7 +86,7 @@ classes, that point at CLASS."
               "Edit")
             (anchor (:class "action" :callback (lambda () (delete-object admin self object)))
               "Delete")
-            (anchor (:callback (lambda () (answer self))) "Back to the list"))
+            (anchor (:callback (lambda () (answer self))) (translate "Back to the list")))
           ;; Those that refer to this one.
           (loop for (other . field) in (referring-fields class)
                 for related = (db-select other :where (format nil "~A = ?"
@@ -194,8 +194,8 @@ classes, that point at CLASS."
               (select-list (:items (cons :any (if (typep field 'boolean-field) '(t nil) (field-choices field)))
                             :selected current
                             :labels (lambda (v)
-                                      (cond ((eq v :any) "Any")
-                                            ((typep field 'boolean-field) (if v "Yes" "No"))
+                                      (cond ((eq v :any) (translate "Any"))
+                                            ((typep field 'boolean-field) (if v (translate "Yes") (translate "No")))
                                             (t (format-field field v))))
                             :callback (lambda (v) (set-filter self name v))
                             :on-change (ajax-update self)))))))
@@ -241,7 +241,7 @@ page shown in its place."))
          (class (admin-selected admin)))
     (h1 () (text (class-label class t)))
     (p () (anchor (:callback (lambda () (create-object admin class)))
-            (text (format nil "New ~A" (string-downcase (class-label class))))))
+            (text (translate "New ~A" (string-downcase (class-label class))))))
     (render-component (class-list-for admin class))))
 
 (defun show-page (admin page &rest show-arguments)
@@ -256,17 +256,17 @@ page shown in its place."))
 (defun save-edited (admin class edited)
   "Save EDITED; on someone else's change, say so and show theirs."
   (handler-case (progn (db-save edited)
-                       (setf (admin-message admin) (format nil "Saved ~A #~D." (class-label class) (object-id edited)))
+                       (setf (admin-message admin) (translate "Saved ~A #~D." (class-label class) (object-id edited)))
                        (open-object admin class (object-id edited)))
     (stale-object ()
-      (setf (admin-message admin) "Someone else changed this record meanwhile; here it is as they left it.")
+      (setf (admin-message admin) (translate "Someone else changed this record meanwhile; here it is as they left it."))
       (open-object admin class (object-id edited)))))
 
 (defun edit-object (admin class id)
   "Edit the object of CLASS numbered ID, then save it."
   (let ((object (db-find class id)))
     (when object
-      (show-page admin (make-editor object :title (format nil "Edit ~A #~D" (class-label class) id))
+      (show-page admin (make-editor object :title (translate "Edit ~A #~D" (class-label class) id))
             :on-answer (lambda (edited)
                          (if edited
                              (save-edited admin class edited)
@@ -274,26 +274,26 @@ page shown in its place."))
 
 (defun create-object (admin class)
   "Ask for a new object of CLASS, then store it."
-  (show-page admin (make-editor (make-instance class) :title (format nil "New ~A" (string-downcase (class-label class)))
+  (show-page admin (make-editor (make-instance class) :title (translate "New ~A" (string-downcase (class-label class)))
                                                   :save-label "Create")
         :on-answer (lambda (object)
                      (when object
                        (db-insert object)
                        (setf (admin-message admin)
-                             (format nil "Created ~A #~D." (class-label class) (object-id object)))
+                             (translate "Created ~A #~D." (class-label class) (object-id object)))
                        (open-object admin class (object-id object))))))
 
 (defun delete-object (admin page object)
   "Ask, then delete OBJECT."
   (show page (make-instance 'confirm-dialog
-                            :message (format nil "Delete ~A #~D, ~A?" (class-label (page-class page))
+                            :message (translate "Delete ~A #~D, ~A?" (class-label (page-class page))
                                              (object-id object) (object-title object)))
         :on-answer (lambda (yes)
                      (when yes
                        (handler-case
                            (progn (db-delete object)
                                   (setf (admin-message admin)
-                                        (format nil "Deleted ~A #~D." (class-label (page-class page))
+                                        (translate "Deleted ~A #~D." (class-label (page-class page))
                                                 (page-object-id page))))
                          (stale-object ()
                            (setf (admin-message admin)
@@ -306,7 +306,7 @@ page shown in its place."))
   (when (admin-message self)
     (p (:class "lt-message notice" :role "status") (text (admin-message self))))
   (div (:class "admin-body")
-    (nav (:class "admin-menu" :aria-label "Tables")
+    (nav (:class "admin-menu" :aria-label (translate "Tables"))
       (ul ()
         (dolist (class (admin-classes))
           (let ((class class))

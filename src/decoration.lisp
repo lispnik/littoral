@@ -129,7 +129,7 @@ behind it but cannot be used until the dialog answers."))
                            :data-lt-modal (if (modal-closable-p decoration) "closable" "fixed"))
             (lambda ()
               (when (modal-closable-p decoration)
-                (anchor (:class "lt-modal-close" :aria-label "Close"
+                (anchor (:class "lt-modal-close" :aria-label (translate "Close")
                          :callback (lambda () (answer (modal-dialog decoration) nil)))
                   "×"))
               (render-component (modal-dialog decoration)))))

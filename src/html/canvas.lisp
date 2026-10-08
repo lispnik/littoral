@@ -82,10 +82,16 @@ Void elements such as input and br get no closing tag."
   (or (null form) (and (consp form) (keywordp (car form)))))
 
 (defun body-thunk (body)
-  "A LAMBDA form for BODY with literal strings turned into TEXT calls."
+  "A LAMBDA form for BODY with literal strings, and TRANSLATE and
+TRANSLATE-PLURAL forms, turned into TEXT calls."
   (when body
     `(lambda ()
-       ,@(mapcar (lambda (form) (if (stringp form) `(text ,form) form)) body))))
+       ,@(mapcar (lambda (form)
+                   (if (or (stringp form)
+                           (and (consp form) (member (car form) '(translate translate-plural))))
+                       `(text ,form)
+                       form))
+                 body))))
 
 (defun split-tag-arguments (arguments)
   "Separate a tag macro's (ATTRIBUTES . BODY) when ATTRIBUTES may be omitted."

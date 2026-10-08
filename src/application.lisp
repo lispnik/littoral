@@ -31,6 +31,9 @@
 string for the error page, or NIL for the standard one.")
    (max-request-size :initarg :max-request-size :initform nil :accessor application-max-request-size
                      :documentation "Largest request body in bytes, or NIL for *MAX-REQUEST-SIZE*.")
+   (languages :initarg :languages :initform '() :accessor application-languages
+              :documentation "Languages offered besides LANGUAGE: a new session takes the
+first of these and LANGUAGE that the browser's Accept-Language asks for.")
    (websockets-p :initarg :websockets :initform nil :accessor application-websockets-p
                  :documentation "Carry AJAX and server push over one WebSocket per page
 (with littoral/websocket loaded), on pages that have push.")
@@ -69,13 +72,13 @@ session expired.  NIL starts them over silently.")
                                cookie-sessions stylesheets scripts credentials
                                max-sessions error-handler expired-notice
                                max-request-size local-only language around-actions around-request
-                               websockets)
+                               websockets languages)
   "Serve ROOT-CLASS, a component class, at PATH.  Replaces any application
 already there.  Returns the APPLICATION."
   (declare (ignore title mode session-timeout max-continuations cookie-sessions
                    stylesheets scripts credentials max-sessions error-handler expired-notice
                    max-request-size local-only language around-actions around-request
-                   websockets))
+                   websockets languages))
   (let* ((path (normalize-path path))
          (app (apply #'make-instance 'application :path path :root-class root-class initargs)))
     (sb-thread:with-mutex (*applications-lock*)
@@ -156,3 +159,8 @@ already there.  Returns the APPLICATION."
 (defun session-cookie-name (app)
   "The cookie that carries APP's session key when it uses cookie sessions."
   (format nil "_s~A" (substitute #\_ #\/ (application-path app))))
+
+(defun application-offered-languages (app)
+  "APP's LANGUAGE and its other LANGUAGES."
+  (remove-duplicates (cons (application-language app) (application-languages app))
+                     :test #'string-equal :from-end t))

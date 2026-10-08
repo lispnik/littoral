@@ -203,7 +203,7 @@ add, then the session and page keys."
     (with-output-to-string (out)
       (format out "<!DOCTYPE html>~%<html lang=\"~A\"><head><meta charset=\"utf-8\">~
 <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">~
-<title>~A</title>~%" (html-escape (application-language app)) (html-escape (root-title root)))
+<title>~A</title>~%" (html-escape (current-language)) (html-escape (root-title root)))
       (dolist (url (append (list (static-url "littoral.css"))
                            (application-stylesheets app)
                            (reverse (root-stylesheets root))))
@@ -272,6 +272,10 @@ session that has gone; the application's EXPIRED-NOTICE is shown first."
     (when browser
       (setf (session-browser-key session) browser
             (session-browser-bound-p session) t))
+    (when (application-languages app)
+      (let ((chosen (negotiate-language (gethash "accept-language" (lack/request:request-headers *request*))
+                                        (application-offered-languages app))))
+        (when chosen (set-language chosen session))))
     (sb-thread:with-recursive-lock ((session-lock session))
       (let ((root (session-root session)))
         (initial-request root *request*)

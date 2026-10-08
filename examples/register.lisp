@@ -18,7 +18,7 @@
   (register-application "/examples/wiki" 'wiki :title "Wiki")
   (register-application "/examples/chat" 'chat :title "Chat" :websockets t)
   (register-application "/examples/progress" 'progress-demo :title "Progress")
-  (register-application "/examples/contacts" 'contacts-app :title "Contacts")
+  (register-application "/examples/contacts" 'contacts-app :title "Contacts" :languages '("fr" "de"))
   (register-application "/examples/widgets" 'widget-demo :title "Widgets")
   (register-application "/examples/dialogs" 'dialogs-demo :title "Dialogs"))
 
