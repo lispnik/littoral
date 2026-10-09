@@ -3,7 +3,7 @@
 (in-package #:littoral-examples)
 
 (defparameter *sample-attack*
-  "<img src=\"x\" onerror=\"document.title = 'hacked'\">
+  "<img src=\"x\" alt=\"\" onerror=\"document.title = 'hacked'\">
 <button data-lt-on-click-js=\"document.title = 'hacked'\">An injected button</button>
 <script>document.title = 'hacked'</script>")
 
