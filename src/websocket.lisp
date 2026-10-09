@@ -108,21 +108,25 @@ are ignored."
               (littoral::*base-path* (littoral::stream-base-path stream))
               (littoral::*current-stream* stream))
           (littoral::with-sane-printing ()
-            (let ((json (handler-case
+            (let ((json (block answered
+                          (handler-bind
+                              ((error (lambda (e)
+                                        (return-from answered
+                                          ;; Only development pages hear what went wrong:
+                                          ;; the debugger page, made before unwinding.
+                                          (if (littoral::development-p application)
+                                              (format nil "{\"error\":~A,\"debugger\":~A}"
+                                                      (littoral::json-string (princ-to-string e))
+                                                      (littoral::json-string
+                                                       (or (ignore-errors (littoral::debugger-html e)) "")))
+                                              "{\"error\":\"The request failed.\"}")))))
                             (littoral::call-around-request
                              application
                              (lambda ()
                                (sb-thread:with-recursive-lock ((littoral::session-lock session))
                                  (setf (littoral::session-last-access session) (littoral::now-seconds))
                                  (littoral::ajax-json session (littoral::stream-continuation stream)
-                                                      parameters))))
-                          (error (e)
-                            ;; Only development pages hear what went wrong.
-                            (format nil "{\"error\":~A}"
-                                    (littoral::json-string
-                                     (if (littoral::development-p application)
-                                         (princ-to-string e)
-                                         "The request failed.")))))))
+                                                      parameters))))))))
               (funcall send (format nil "{\"type\":\"reply\",\"id\":~D,\"data\":~A}" id json)))))))))
 
 (defun same-origin-p (request)

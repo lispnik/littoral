@@ -298,6 +298,15 @@ When Emacs is connected through SLIME/Swank, the code view also has an **edit** 
 
 The toolbar reports the last action's callback time, snapshot time and size, and the render time. **Profile** adds a table of every component's inclusive render time, indented by nesting. The session browser shows each session's age, idle time, pages kept, the objects in its newest snapshot, and the snapshot entries held across all its pages.
 
+**The debugger.** When a callback or a render signals an error in a development-mode application, the page becomes a debugger:
+- the condition and its message
+- the frames that led to it, the application's own first and open, each with its arguments and local variables, and the file and line where the function is defined. The framework's and SBCL's frames are greyed and folded. Locals need code compiled with `(debug 2)` or more, as SLIME does by default.
+- the restarts that were on offer
+- the request's parameters
+- **Retry**, which sends the same request again: fix the code, recompile it (`C-c C-c`), and retry. **Back to the page** and **New session** leave.
+
+An AJAX or WebSocket request that fails shows the same page in place of the one you were on. Deployment mode shows a plain error page with no detail. Set `*debug-errors*` to `t` to have errors land in the Lisp debugger instead, restarts and all.
+
 `/config` lists the registered applications. From there you can add, remove and configure them and browse their sessions. The configurable settings are title, root class, mode, session timeout, pages kept, session limit, cookie sessions, the expiry notice, stylesheets, scripts and basic-auth credentials. Use `(configure-admin :user "u" :password "p")` to put it behind HTTP basic auth.
 
 ### Configuration

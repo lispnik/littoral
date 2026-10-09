@@ -260,3 +260,73 @@
           (is (alexandria:starts-with-subseq
                "(defmethod render ((self counter))"
                (subseq (alexandria:read-file-into-string file) (1- position)))))))))
+
+;;; The debugger page
+
+(defvar *broken* t "Whether BROKEN-PAGE's callback divides by zero.")
+
+(defclass broken-page (component)
+  ((count :initform 0 :accessor broken-count)))
+
+(defvar *last-denominator* nil)
+
+(defun risky-division (numerator)
+  (declare (optimize (debug 2)))          ; so its locals are recorded
+  (let ((denominator (if *broken* 0 1)))
+    ;; Not a tail call, so this function's frame stays in the backtrace.
+    (prog1 (/ numerator denominator)
+      (setf *last-denominator* denominator))))
+
+(defmethod render ((self broken-page))
+  (p () (text (format nil "count=~D" (broken-count self))))
+  (anchor (:callback (lambda () (incf (broken-count self) (risky-division 42)))) "Divide")
+  (button (:on-click (ajax :callback (lambda () (risky-division 7)) :update self)) "Ajax divide"))
+
+(test errors-in-development-show-the-debugger
+  (let ((*broken* t))
+    (with-fresh-applications (("/broken" 'broken-page :mode :development))
+      (let ((b (make-instance 'browser)))
+        (visit b "/broken")
+        (click b "Divide")
+        (is (= 500 (browser-status b)))
+        (is (has-text-p b "division-by-zero"))
+        (is (has-text-p b "RISKY-DIVISION"))               ; the frame that failed
+        (is (search "denominator" (browser-html b)))        ; its local variables
+        (is (search "tests/tools.lisp" (browser-html b)))   ; and where it's defined
+        (is (has-text-p b "Restarts on offer"))
+        (is (search "Back to the page" (browser-html b)))
+        ;; Fix it, then Retry sends the same request.
+        (setf *broken* nil)
+        (let ((action (cl-ppcre:register-groups-bind (a) ("<form method=\"post\" action=\"([^\"]*)\" class=\"lt-debugger-retry\"" (browser-html b))
+                        (unescape a))))
+          (if action
+              (visit b action)
+              ;; A GET retry: the link.
+              (click b "Retry")))
+        (is (has-text-p b "count=42"))))))
+
+(test ajax-errors-in-development-are-marked
+  (let ((*broken* t))
+    (with-fresh-applications (("/broken" 'broken-page :mode :development))
+      (let ((b (make-instance 'browser)))
+        (visit b "/broken")
+        (destructuring-bind (callback . targets) (first (ajax-specs b "on-click"))
+          (let ((action (cl-ppcre:register-groups-bind (url) ("data-lt-action=\"([^\"]*)\"" (browser-html b))
+                          (unescape url))))
+            (multiple-value-bind (status headers body)
+                (raw-request b :post action
+                             :body (encode-fields (list (cons "_lt_ajax" "1") (cons "_lt_update" targets)
+                                                        (cons callback "1"))))
+              (is (= 500 status))
+              (is (equal "1" (getf headers :x-littoral-debugger)))
+              (is (search "division-by-zero" body)))))))))
+
+(test errors-in-deployment-tell-nothing
+  (let ((*broken* t))
+    (with-fresh-applications (("/broken" 'broken-page :mode :deployment))
+      (let ((b (make-instance 'browser)))
+        (visit b "/broken")
+        (click b "Divide")
+        (is (= 500 (browser-status b)))
+        (is (not (search "RISKY-DIVISION" (browser-html b))))
+        (is (not (search "denominator" (browser-html b))))))))

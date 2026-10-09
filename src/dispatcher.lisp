@@ -473,10 +473,8 @@ the handler falls back to the standard page."
                                                                 (html-escape (forbidden-message condition)))))
                                       (custom-error-page app condition)
                                    (if (development-p app)
-                                      (simple-page 500 "Internal Server Error"
-                                                   (format nil "<p class=\"lt-error\">~A</p><pre>~A</pre>"
-                                                           (html-escape condition)
-                                                           (html-escape (backtrace-string))))
+                                      ;; While the stack is still there.
+                                      (debugger-response condition)
                                       (simple-page 500 "Internal Server Error")))))))
           (funcall thunk)))))
 

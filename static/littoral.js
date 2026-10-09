@@ -40,9 +40,17 @@
       body: params.toString(),
       credentials: "same-origin"
     }).then(function (r) {
+      // In development, a failed request answers with the debugger page.
+      if (!r.ok && r.headers.get("X-Littoral-Debugger"))
+        return r.text().then(function (html) { showDebugger(html); throw debuggerShown; });
       if (!r.ok) throw new Error("HTTP " + r.status);
       return r.json();
     });
+  }
+
+  var debuggerShown = new Error("debugger shown");
+  function showDebugger(html) {
+    document.open(); document.write(html); document.close();
   }
 
   // The focused field and its value, as a request leaves.
@@ -62,7 +70,7 @@
         var complete = el && attr && el.getAttribute(attr + "-complete");
         if (complete) new Function("value", complete).call(el, data.value);
       })
-      .catch(function () { window.location.reload(); });
+      .catch(function (e) { if (e !== debuggerShown) window.location.reload(); });
   }
 
   // Swap in the components a response or a pushed event carries.
@@ -174,6 +182,7 @@
     ws.onmessage = function (event) {
       var message = JSON.parse(event.data);
       if (message.type === "reply") {
+        if (message.data && message.data.debugger) { showDebugger(message.data.debugger); return; }
         var resolve = waiting[message.id]; delete waiting[message.id];
         if (resolve) resolve(message.data);
       } else if (message.type === "update") {

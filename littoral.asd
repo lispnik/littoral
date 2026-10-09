@@ -54,7 +54,8 @@
                              (:module "tools"
                               :serial t
                               :components ((:file "halos")
-                                           (:file "config")))))
+                                           (:file "config")
+                                           (:file "debugger")))))
                (:module "static"
                 :components ((:static-file "littoral.js")
                              (:static-file "littoral.css"))))
