@@ -74,6 +74,29 @@ asks for one and keeps the result for the response."
                 (funcall callback (or (request-parameter "_lt_value") ""))
                 (funcall callback))))))
 
+(defun client-code (body &optional parameters)
+  "Register BODY, JavaScript taking PARAMETERS (strings), as browser code the
+page defines in its own script; the \"@ID\" for an attribute to name it by.
+Code never rides in attributes, so markup injected into a page can't bring
+code of its own past the content security policy."
+  (let ((id (format nil "c~A" (random-key 8))))
+    (if *render-context*
+        (push (list id parameters body) (render-client-code *render-context*))
+        (error "Browser code needs a page being rendered."))
+    (format nil "@~A" id)))
+
+(defun script-safe (javascript)
+  "JAVASCRIPT safe inside <script>: no \"</\" to close the element early."
+  (cl-ppcre:regex-replace-all "</" javascript "<\\/"))
+
+(defun client-code-script (definitions)
+  "JavaScript defining DEFINITIONS, (ID PARAMETERS BODY) lists, for littoral.js."
+  (with-output-to-string (out)
+    (format out "window.__ltCode=window.__ltCode||{};")
+    (loop for (id parameters body) in (reverse definitions)
+          do (format out "__ltCode[~A]=function(~{~A~^,~}){~A~%};"
+                     (json-string id) parameters (script-safe body)))))
+
 (defmethod emit-attribute (key (value ajax-spec) stream)
   ;; data-lt-on-click="CALLBACK-ID;ID ID…" — data-lt-periodical prefixes
   ;; the interval in milliseconds.  Options ride in data-lt-on-click-value,
@@ -85,9 +108,11 @@ asks for one and keeps the result for the response."
             (and (ajax-spec-every value) (round (* 1000 (ajax-spec-every value))))
             id
             (html-escape targets))
-    (loop for (suffix option) in `(("value" ,(ajax-spec-value value))
+    (loop for (suffix option) in `(("value" ,(and (ajax-spec-value value)
+                                                   (client-code (format nil "return (~A);" (ajax-spec-value value)))))
                                    ("confirm" ,(ajax-spec-confirm value))
-                                   ("complete" ,(ajax-spec-on-complete value)))
+                                   ("complete" ,(and (ajax-spec-on-complete value)
+                                                     (client-code (ajax-spec-on-complete value) '("value")))))
           when option
             do (format stream " data-lt-~(~A~)-~A=\"~A\"" key suffix (html-escape option)))))
 
@@ -146,11 +171,17 @@ SCRIPTS to run."
             (push (cons id (with-canvas-to-string () (render-component component))) found)
             (push id missing))))
     (with-output-to-string (out)
-      (format out "{\"fragments\":{~{~A~^,~}},\"missing\":[~{~A~^,~}],\"value\":~A,\"scripts\":[~{~A~^,~}]~@[,\"redirect\":~A~]~@[,\"toasts\":~A~]}"
+      (format out "{\"fragments\":{~{~A~^,~}},\"missing\":[~{~A~^,~}],\"value\":~A,\"scripts\":[~{~A~^,~}]~@[,\"redirect\":~A~]~@[,\"toasts\":~A~]~@[,\"code\":~A~]}"
               (loop for (id . html) in (nreverse found)
                     collect (format nil "~A:~A" (json-string id) (json-string html)))
               (mapcar #'json-string (nreverse missing))
               (json-value value)
               (mapcar #'json-string scripts)
               (and redirect (json-string redirect))
-              (and toasts (toasts-json toasts))))))
+              (and toasts (toasts-json toasts))
+              ;; Browser code the fragments use, to define before they run.
+              (let ((code (and *render-context* (render-client-code *render-context*))))
+                (and code (format nil "[~{~A~^,~}]"
+                                  (loop for (id parameters body) in (reverse code)
+                                        collect (format nil "[~A,[~{~A~^,~}],~A]" (json-string id)
+                                                        (mapcar #'json-string parameters) (json-string body))))))))))

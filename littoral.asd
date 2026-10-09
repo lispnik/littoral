@@ -89,6 +89,7 @@
                              (:file "contacts")
                              (:file "widgets")
                              (:file "dialogs")
+                             (:file "csp")
                              (:file "index")
                              (:file "register")))))
 

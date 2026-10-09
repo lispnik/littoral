@@ -595,6 +595,11 @@ Roles and permissions are kept in two tables, keyed by name, so they work with a
 - **Development mode.** Halos can inspect and change component state, so `start` warns when an application in development mode is served on a public address. Deploy with `:mode :deployment`.
 - **New pieces.** Sign-in, reset links and WebSockets have protections of their own, described in their sections.
 - **Translations** are FORMAT control strings, so catalogues may not contain the `~/…/` directive, which would call a function named in the text. `define-translations` and `load-translations` refuse it.
+- **Content security policy.** Every page sends a strict policy by default: scripts run only from the site itself, and only if they carry the page's nonce, a random value new for each page.
+  - Littoral's browser code, including Parenscript handlers, AJAX `:value` and `:on-complete` code and `execute-script`, is defined by the page's own nonce'd script. Attributes name it by id (`data-lt-on-click-js="@c…"`), so markup injected into a page can't bring code past the policy. Nothing needs `'unsafe-eval'`.
+  - The origins of an application's own external scripts and stylesheets are allowed automatically.
+  - `:content-security-policy` on `register-application` takes `:strict`, your own policy string (with `{nonce}` for the nonce), or `nil`.
+  - `/examples/csp` writes typed HTML into the page unescaped, on purpose, and shows the policy stopping the script in it. CI fails if any other example page breaks its policy.
 - **Escaping.** Text and attribute values are escaped; `raw` is the one way around that. `:href` is written as given, so don't pass it a URL you haven't checked (it could be `javascript:`). An upload's `file-name` comes from the browser; don't use it as a path.
 
 ## Deployment and scale

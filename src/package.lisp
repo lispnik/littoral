@@ -96,6 +96,7 @@
    #:*max-event-streams* #:*max-event-streams-per-session*
    #:application-max-request-size #:application-local-only-p #:application-language
    #:application-around-actions #:application-around-request #:application-websockets-p
+   #:application-content-security-policy
    #:*configuration-file* #:save-configuration #:load-configuration
    #:configure-application #:application-settings
    #:register-application #:unregister-application #:find-application

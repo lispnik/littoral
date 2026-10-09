@@ -55,7 +55,9 @@
   (with-fresh-applications (("/ajax" 'littoral-examples:ajax-demo :mode :deployment))
     (let ((b (make-instance 'browser)))
       (visit b "/ajax")
-      (is (search "data-lt-on-click-value=\"window.innerWidth + &#39;x&#39; + window.innerHeight\"" (browser-html b)))
+      ;; The value expression is defined by the page's script; the attribute names it.
+      (is (cl-ppcre:scan "data-lt-on-click-value=\"@c[0-9A-Za-z]+\"" (browser-html b)))
+      (is (search "return (window.innerWidth + 'x' + window.innerHeight);" (browser-html b)))
       (is (search "data-lt-on-click-complete=" (browser-html b)))
       (is (search "data-lt-on-click-confirm=\"Reset the counter to zero?\"" (browser-html b)))
       ;; The browser's value reaches the callback; its result comes back.

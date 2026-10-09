@@ -27,7 +27,8 @@
      ("ajax" "AJAX" "Updating components in place, a live preview and a clock.")
      ("upload" "Upload" "Receiving files.")
      ("progress" "Progress" "A background job updating the page through server push.")
-     ("parenscript" "Parenscript" "Browser code written in Lisp."))))
+     ("parenscript" "Parenscript" "Browser code written in Lisp.")
+     ("csp" "Content security policy" "Injected script, stopped by the page's policy."))))
 
 (defun example-registered-p (path)
   "True when an application is registered at exactly PATH: the admin,

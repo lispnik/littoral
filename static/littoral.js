@@ -21,6 +21,27 @@
     }
   }
 
+  // Browser code.  The page defines its code in its own script, under ids
+  // (window.__ltCode); attributes name it as "@id" and never hold code, so
+  // markup injected into the page can't bring code past the content
+  // security policy.  Code arriving later (AJAX, push) is defined through
+  // script elements carrying the page's nonce, never eval.
+  var NONCE = (document.currentScript && document.currentScript.nonce) || null;
+  window.__ltCode = window.__ltCode || {};
+  function makeFunction(params, body) {
+    if (!NONCE) return Function.apply(null, params.concat([body]));
+    var key = "__lt" + Math.random().toString(36).slice(2);
+    var s = document.createElement("script");
+    s.nonce = NONCE;
+    s.textContent = "window." + key + "=function(" + params.join(",") + "){" + body + "\n};";
+    document.head.appendChild(s); s.remove();
+    var f = window[key]; delete window[key];
+    return f || function () {};
+  }
+  function code(ref) {
+    return ref && ref.charAt(0) === "@" ? window.__ltCode[ref.slice(1)] || null : null;
+  }
+
   // The page's WebSocket, when it has one open (littoral/websocket).
   var socket = null, nextId = 1, waiting = {};
 
@@ -68,7 +89,8 @@
       .then(function (data) {
         apply(data, sent);
         var complete = el && attr && el.getAttribute(attr + "-complete");
-        if (complete) new Function("value", complete).call(el, data.value);
+        var done = code(complete);
+        if (done) done.call(el, data.value);
       })
       .catch(function (e) { if (e !== debuggerShown) window.location.reload(); });
   }
@@ -131,6 +153,8 @@
   // SENT: the focused field as the request left (NIL for pushes).
   function apply(data, sent) {
     if (data.redirect) { window.location.href = data.redirect; return; }
+    // Code the new fragments use, defined before they arrive.
+    (data.code || []).forEach(function (c) { window.__ltCode[c[0]] = makeFunction(c[1], c[2]); });
     showToasts(data.toasts);
     var active = document.activeElement;
     var focused = active && active.id;
@@ -168,7 +192,7 @@
       }
     });
     if (data.missing.length) window.location.reload();
-    (data.scripts || []).forEach(function (script) { new Function(script)(); });
+    (data.scripts || []).forEach(function (script) { makeFunction([], script)(); });
     scanPeriodicals();
     document.dispatchEvent(new CustomEvent("littoral:updated",
       { detail: { ids: Object.keys(data.fragments) } }));
@@ -242,7 +266,8 @@
     var params = new URLSearchParams();
     var valueExpression = el.getAttribute(attr + "-value");
     if (valueExpression) {
-      var value = new Function("return (" + valueExpression + ");").call(el);
+      var compute = code(valueExpression);
+      var value = compute ? compute.call(el) : null;
       params.append("_lt_value", value == null ? "" : String(value));
     }
     if (el.form && (el.type === "submit" || attr === "data-lt-on-submit")) {
@@ -276,7 +301,8 @@
   function clientDelegate(type, attr) {
     document.addEventListener(type, function (event) {
       var el = event.target.closest ? event.target.closest("[" + attr + "]") : null;
-      if (el) new Function("event", el.getAttribute(attr)).call(el, event);
+      var handler = el && code(el.getAttribute(attr));
+      if (handler) handler.call(el, event);
     });
   }
   clientDelegate("click", "data-lt-on-click-js");

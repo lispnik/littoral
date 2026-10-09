@@ -1098,6 +1098,11 @@ application's database.
 Reads the websockets-p of an application.  Carry `ajax` and server push over one WebSocket per page
 (with littoral/websocket loaded), on pages that have push.
 
+#### `application-content-security-policy` `object` — generic function
+
+Reads the content-security-policy of an application.  :`strict` (scripts only with the page's nonce), a policy
+string with {nonce} for the nonce, or `nil` for none.
+
 #### `*configuration-file*` — variable
 
 Where `save-configuration` writes, and the /config application saves after
@@ -1123,7 +1128,7 @@ when there is none.  Sessions, and settings not given, are kept.
 
 `app`'s configuration as a plist, as `save-configuration` writes it.
 
-#### `register-application` `path root-class &rest initargs &key title mode session-timeout max-continuations cookie-sessions stylesheets scripts credentials max-sessions error-handler expired-notice max-request-size local-only language around-actions around-request websockets languages` — function
+#### `register-application` `path root-class &rest initargs &key title mode session-timeout max-continuations cookie-sessions stylesheets scripts credentials max-sessions error-handler expired-notice max-request-size local-only language around-actions around-request websockets languages content-security-policy` — function
 
 Serve `root-class`, a component class, at `path`.  Replaces any application
 already there.  Returns the `application`.

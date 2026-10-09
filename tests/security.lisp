@@ -148,3 +148,58 @@
         (is (= 2 (count-shown second-tab)))
         (is (not (string= (subseq (browser-url first-tab) 0 (search "&_k" (browser-url first-tab)))
                           (subseq (browser-url second-tab) 0 (search "&_k" (browser-url second-tab))))))))))
+
+;;; Content security policy
+
+(test pages-carry-a-strict-policy-with-a-nonce
+  (with-fresh-applications (("/ajax" 'littoral-examples:ajax-demo :mode :deployment))
+    (let ((b (make-instance 'browser)))
+      (multiple-value-bind (status headers html) (raw-request b :get "/ajax")
+        (declare (ignore status headers html)))
+      (visit b "/ajax")
+      (multiple-value-bind (status headers) (raw-request b :get (browser-url b))
+        (is (= 200 status))
+        (let* ((policy (getf headers :content-security-policy))
+               (nonce (cl-ppcre:register-groups-bind (n) ("'nonce-([A-Za-z0-9]+)'" policy) n)))
+          (is (search "script-src 'self' 'nonce-" policy))
+          (is (search "object-src 'none'" policy))
+          (is (not (search "unsafe-eval" policy)))
+          (is (not (search "script-src 'self' 'unsafe-inline'" policy)))
+          ;; Every script on the page carries the nonce, and no attribute holds code.
+          (is (not (null nonce)))
+          (is (= (length (cl-ppcre:all-matches-as-strings "<script" (browser-html b)))
+                 (length (cl-ppcre:all-matches-as-strings "<script[^>]* nonce=\"[A-Za-z0-9]+\"" (browser-html b)))))
+          (is (not (search "window.innerWidth" (cl-ppcre:regex-replace-all "(?s)<script.*?</script>" (browser-html b) ""))))
+          ;; A new nonce for every page.
+          (multiple-value-bind (status2 headers2) (raw-request b :get (browser-url b))
+            (declare (ignore status2))
+            (is (string/= policy (getf headers2 :content-security-policy)))))))))
+
+(test applications-choose-their-policy
+  (with-fresh-applications (("/open" 'littoral-examples:counter :mode :deployment :content-security-policy nil)
+                            ("/own" 'littoral-examples:counter :mode :deployment
+                                    :content-security-policy "script-src 'nonce-{nonce}' https://cdn.example")
+                            ("/cdn" 'littoral-examples:counter :mode :deployment
+                                    :scripts '("https://cdn.example.org/lib.js")))
+    (let ((b (make-instance 'browser)))
+      (visit b "/open")
+      (is (null (getf (nth-value 1 (raw-request b :get (browser-url b))) :content-security-policy)))
+      (visit b "/own")
+      (let ((policy (getf (nth-value 1 (raw-request b :get (browser-url b))) :content-security-policy)))
+        (is (cl-ppcre:scan "^script-src 'nonce-[A-Za-z0-9]+' https://cdn.example$" policy)))
+      ;; An application's own external scripts are allowed by origin.
+      (visit b "/cdn")
+      (is (search "https://cdn.example.org" (getf (nth-value 1 (raw-request b :get (browser-url b)))
+                                                 :content-security-policy))))))
+
+(test the-csp-example-writes-markup-raw
+  ;; The demonstration page is deliberately vulnerable; the policy is what saves it.
+  (with-fresh-applications (("/csp" 'littoral-examples:csp-demo :mode :deployment))
+    (let ((b (make-instance 'browser)))
+      (visit b "/csp")
+      (is (search "onerror=\"document.title = 'hacked'\"" (browser-html b)))
+      (multiple-value-bind (status headers) (raw-request b :get (browser-url b))
+        (declare (ignore status))
+        (is (search "'nonce-" (getf headers :content-security-policy))))
+      ;; The injected button names no defined code, so littoral.js runs nothing.
+      (is (search "data-lt-on-click-js=\"document.title" (browser-html b))))))

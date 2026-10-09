@@ -34,6 +34,10 @@ string for the error page, or NIL for the standard one.")
    (languages :initarg :languages :initform '() :accessor application-languages
               :documentation "Languages offered besides LANGUAGE: a new session takes the
 first of these and LANGUAGE that the browser's Accept-Language asks for.")
+   (content-security-policy :initarg :content-security-policy :initform :strict
+                            :accessor application-content-security-policy
+                            :documentation ":STRICT (scripts only with the page's nonce), a policy
+string with {nonce} for the nonce, or NIL for none.")
    (websockets-p :initarg :websockets :initform nil :accessor application-websockets-p
                  :documentation "Carry AJAX and server push over one WebSocket per page
 (with littoral/websocket loaded), on pages that have push.")
@@ -72,13 +76,13 @@ session expired.  NIL starts them over silently.")
                                cookie-sessions stylesheets scripts credentials
                                max-sessions error-handler expired-notice
                                max-request-size local-only language around-actions around-request
-                               websockets languages)
+                               websockets languages content-security-policy)
   "Serve ROOT-CLASS, a component class, at PATH.  Replaces any application
 already there.  Returns the APPLICATION."
   (declare (ignore title mode session-timeout max-continuations cookie-sessions
                    stylesheets scripts credentials max-sessions error-handler expired-notice
                    max-request-size local-only language around-actions around-request
-                   websockets languages))
+                   websockets languages content-security-policy))
   (let* ((path (normalize-path path))
          (app (apply #'make-instance 'application :path path :root-class root-class initargs)))
     (sb-thread:with-mutex (*applications-lock*)

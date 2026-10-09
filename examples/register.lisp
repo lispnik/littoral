@@ -20,6 +20,7 @@
   (register-application "/examples/progress" 'progress-demo :title "Progress")
   (register-application "/examples/contacts" 'contacts-app :title "Contacts" :languages '("fr" "de"))
   (register-application "/examples/widgets" 'widget-demo :title "Widgets")
-  (register-application "/examples/dialogs" 'dialogs-demo :title "Dialogs"))
+  (register-application "/examples/dialogs" 'dialogs-demo :title "Dialogs")
+  (register-application "/examples/csp" 'csp-demo :title "Content security policy"))
 
 (register-examples)

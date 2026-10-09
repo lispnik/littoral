@@ -31,8 +31,10 @@
   code)
 
 (defmethod littoral::emit-attribute (key (value client-handler) stream)
-  ;; data-lt-on-click-js="…": littoral.js runs it with THIS and EVENT.
-  (format stream " data-lt-~(~A~)-js=\"~A\"" key (html-escape (client-handler-code value))))
+  ;; data-lt-on-click-js="@ID": littoral.js runs the code the page defined
+  ;; under ID, with THIS and EVENT.
+  (format stream " data-lt-~(~A~)-js=\"~A\"" key
+          (html-escape (littoral::client-code (client-handler-code value) '("event")))))
 
 (defun client-callback (function &key update)
   "Register FUNCTION, of the string the browser sends, for littoral.call;

@@ -116,7 +116,10 @@ change state: do it in a callback instead."
    (action-url :initarg :action-url :reader render-action-url
                :documentation "Base URL (path plus _s/_k) callbacks are appended to.")
    (halos-p :initarg :halos-p :initform nil :reader render-halos-p)
-   (ajax-p :initarg :ajax-p :initform nil :reader render-ajax-p))
+   (ajax-p :initarg :ajax-p :initform nil :reader render-ajax-p)
+   (client-code :initform '() :accessor render-client-code
+                :documentation "(ID PARAMETERS BODY) for each piece of browser code the
+page uses, defined by the page's own script rather than kept in attributes."))
   (:documentation "Where callbacks registered while rendering go, and the URL they are appended to."))
 
 (defun action-url-params (session continuation-key)

@@ -234,13 +234,39 @@ add, then the session and page keys."
   "True when APP shows the toolbar and halos."
   (eql (application-mode app) :development))
 
+(defvar *csp-nonce* nil "The nonce the page being written gives its scripts.")
+
+(defun url-origin (url)
+  "scheme://host[:port] of an absolute URL, or NIL for a relative one."
+  (cl-ppcre:register-groups-bind (origin) ("^(https?://[^/?#]+)" url) origin))
+
+(defun content-security-policy (app script-urls style-urls)
+  "The Content-Security-Policy header for APP's page, or NIL.  :STRICT, the
+default, allows scripts only from this site, carrying the page's nonce, or
+from the origins of SCRIPT-URLS; a string is used as it is, with {nonce}
+replaced."
+  (let ((setting (application-content-security-policy app)))
+    (cond ((null setting) nil)
+          ((stringp setting) (cl-ppcre:regex-replace-all "\\{nonce\\}" setting *csp-nonce*))
+          (t (let* ((secure (secure-request-p))
+                    (host (gethash "host" (lack/request:request-headers *request*)))
+                    (scripts (remove-duplicates (remove nil (mapcar #'url-origin script-urls)) :test #'string=))
+                    (styles (remove-duplicates (remove nil (mapcar #'url-origin style-urls)) :test #'string=)))
+               (format nil "default-src 'self'; script-src 'self' 'nonce-~A'~{ ~A~}; ~
+style-src 'self' 'unsafe-inline'~{ ~A~}; img-src 'self' data: blob: https:; font-src 'self' data:~{ ~A~}; ~
+connect-src 'self'~@[ ~A~]; frame-ancestors 'self'; base-uri 'none'; object-src 'none'"
+                       *csp-nonce* scripts styles styles
+                       (and host (format nil "ws~:[~;s~]://~A" secure host))))))))
+
 (defun render-document (session body-html action-url)
-  "The whole HTML document for SESSION's page: head from UPDATE-ROOT, then BODY-HTML."
+  "The whole HTML document for SESSION's page: head from UPDATE-ROOT, then
+BODY-HTML.  Second value: its Content-Security-Policy, or NIL."
   (let ((app (session-application session))
-        (root (make-instance 'html-root)))
+        (root (make-instance 'html-root))
+        (html nil))
     (setf (root-title root) (or (application-title app) (application-path app)))
     (map-visible (lambda (c) (update-root c root)) (session-root session))
-    (with-output-to-string (out)
+    (setf html (with-output-to-string (out)
       (format out "<!DOCTYPE html>~%<html lang=\"~A\"><head><meta charset=\"utf-8\">~
 <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">~
 <title>~A</title>~%" (html-escape (current-language)) (html-escape (root-title root)))
@@ -262,7 +288,7 @@ add, then the session and page keys."
       (dolist (url (append (list (static-url "littoral.js"))
                            (application-scripts app)
                            (reverse (root-scripts root))))
-        (format out "<script src=\"~A\" defer></script>~%" (html-escape url)))
+        (format out "<script src=\"~A\" defer~@[ nonce=\"~A\"~]></script>~%" (html-escape url) *csp-nonce*))
       (format out "</head>~%<body data-lt-action=\"~A\"~@[ data-lt-events=\"~A\"~]~@[ data-lt-ws=\"~A\"~]~@[ data-lt-live=\"~A\"~]>~%"
               (html-escape action-url)
               (when (page-listens-p session)
@@ -276,9 +302,14 @@ add, then the session and page keys."
               (when (page-polls-p session)
                 (html-escape (format nil "~A&_lt_live=~D" action-url *code-version*))))
       (write-string body-html out)
-      (when (root-inline-scripts root)
-        (format out "~%<script>~%~{~A~%~}</script>" (reverse (root-inline-scripts root))))
-      (format out "~%</body></html>~%"))))
+      (let ((code (and *render-context* (render-client-code *render-context*))))
+        (when (or code (root-inline-scripts root))
+          (format out "~%<script~@[ nonce=\"~A\"~]>~%~@[~A~%~]~{~A~%~}</script>" *csp-nonce*
+                  (and code (client-code-script code))
+                  (mapcar #'script-safe (reverse (root-inline-scripts root))))))
+      (format out "~%</body></html>~%")))
+    (values html (content-security-policy app (append (application-scripts app) (root-scripts root))
+                                          (append (application-stylesheets app) (root-stylesheets root))))))
 
 (defun render-page (session continuation)
   "Render CONTINUATION's page, registering its callbacks afresh."
@@ -288,6 +319,7 @@ add, then the session and page keys."
          (start (get-internal-real-time)))
     (clear-callbacks callbacks)
     (let* ((*render-profile* (if (session-profiling-p session) '() :off))
+           (*csp-nonce* (and (application-content-security-policy app) (random-key 22)))
            (*render-context* (make-instance 'render-context
                                             :callbacks callbacks
                                             :action-url action-url
@@ -299,7 +331,8 @@ add, then the session and page keys."
                    (when (development-p app)
                      (render-toolbar session start))
                    (render-toasts (take-toasts session)))))
-      (html-response (render-document session body action-url)))))
+      (multiple-value-bind (html policy) (render-document session body action-url)
+        (html-response html :headers (and policy (list :content-security-policy policy)))))))
 
 ;;; The cycle
 

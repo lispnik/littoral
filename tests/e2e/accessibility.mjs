@@ -23,7 +23,7 @@ await new Promise((r) => ws.addEventListener("open", r));
 ws.addEventListener("message", (m) => { const d = JSON.parse(m.data);
   if (d.id && pending.has(d.id)) { pending.get(d.id)(d); pending.delete(d.id); } else events.push(d); });
 const send = (method, params = {}) => new Promise((r) => { const n = ++id; pending.set(n, r); ws.send(JSON.stringify({ id: n, method, params })); });
-await send("Page.enable"); await send("Runtime.enable");
+await send("Page.enable"); await send("Runtime.enable"); await send("Log.enable");
 const evaluate = async (expr) => { const r = await send("Runtime.evaluate", { expression: expr, awaitPromise: true, returnByValue: true });
   if (r.result.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails)); return r.result.result.value; };
 const waitLoad = async () => { await sleep(300); for (let i = 0; i < 50; i++) { if (await evaluate("document.readyState") === "complete") return; await sleep(100); } };
@@ -56,7 +56,21 @@ const axeSource = await (await fetch(AXE)).text();
 let failures = 0;
 const results = [];
 
+// Content security policy: no page may break its own policy, except the
+// demonstration page that breaks it on purpose.
+let seenEvents = 0;
+function checkPolicy(label) {
+  const fresh = events.slice(seenEvents); seenEvents = events.length;
+  const violations = fresh.filter((e) => e.method === "Log.entryAdded" &&
+                                         /Content Security Policy/.test(e.params.entry.text));
+  if (violations.length && !label.includes("/examples/csp")) {
+    failures++;
+    console.log(`FAIL ${label}: content security policy violation: ${violations[0].params.entry.text.slice(0, 200)}`);
+  }
+}
+
 async function auditAs(label) {
+  checkPolicy(label);
   await evaluate(axeSource);
   const found = await evaluate(`axe.run(document, { runOnly: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] })
     .then(r => r.violations.map(v => ({ id: v.id, impact: v.impact, help: v.help,
@@ -72,7 +86,7 @@ const pages = ["/examples", "/examples/counter", "/examples/multi-counter", "/ex
   "/examples/login", "/examples/ajax", "/examples/todo", "/examples/upload", "/examples/topics",
   "/examples/report", "/examples/store", "/examples/wiki", "/examples/chat", "/examples/progress",
   "/examples/contacts", "/examples/widgets", "/tracker", "/config", "/tutorial/reading-list",
-  "/examples/admin", "/examples/dialogs", "/examples/parenscript", "/examples/members", "/examples/demo-idp", "/examples/accounts", "/examples/gallery"];
+  "/examples/admin", "/examples/dialogs", "/examples/parenscript", "/examples/members", "/examples/demo-idp", "/examples/accounts", "/examples/gallery", "/examples/csp"];
 
 try {
  // Both colour schemes: contrast differs between them.

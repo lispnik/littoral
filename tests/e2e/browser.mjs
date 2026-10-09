@@ -160,6 +160,14 @@ try {
   check("gallery upload shows its thumbnail",
         await evaluate(`(() => { const i = document.querySelector(".gallery img"); return !!i && i.complete && i.naturalWidth > 0; })()`));
 
+  // The content security policy stops script injected into the page.
+  await go("/examples/csp");
+  await sleep(400);
+  await evaluate(`[...document.querySelectorAll("button")].find(b => b.textContent.includes("An injected button")).click()`);
+  await sleep(300);
+  check("injected script doesn't run", await evaluate("document.title") !== "hacked", await evaluate("document.title"));
+  check("the policy reports what it blocked", (await evaluate(`document.getElementById("csp-report").textContent`)).includes("Blocked"));
+
   // Members: sign in through DemoID, the whole OAuth flow in a real browser.
   await go("/examples/members");
   await clickLink("Sign in");
