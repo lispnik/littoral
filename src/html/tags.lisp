@@ -15,7 +15,7 @@
   table thead tbody tfoot tr td th caption
   em strong b i u small code pre blockquote sup sub
   section article aside nav header footer main figure figcaption
-  fieldset legend label abbr cite mark dfn kbd samp)
+  fieldset legend label abbr cite mark dfn kbd samp details summary)
 
 ;; VAR is too useful a name to take from users.
 (define-tag var-tag :tag "var")

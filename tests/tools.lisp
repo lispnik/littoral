@@ -330,3 +330,39 @@
         (is (= 500 (browser-status b)))
         (is (not (search "RISKY-DIVISION" (browser-html b))))
         (is (not (search "denominator" (browser-html b))))))))
+
+;;; History and the component tree
+
+(test history-shows-pages-and-what-changed
+  (with-fresh-applications (("/dev" 'littoral-examples:devtools-demo :mode :development))
+    (let ((b (make-instance 'browser)))
+      (visit b "/dev")
+      (click b "++")
+      (click b "++")
+      (fill-in b "note" "hello")
+      (press b "Save the note")
+      (click b "History")
+      (is (has-text-p b "History"))
+      (is (has-text-p b "#1"))
+      (is (has-text-p b "newest"))
+      ;; The note's change, opened.
+      (click b "1 slot ▸")
+      (is (has-text-p b "note"))
+      (is (search "&quot;hello&quot;" (browser-html b)))
+      ;; Opening the first page puts its state back.
+      (let ((first-page (cl-ppcre:register-groups-bind (u) ("(?s).*<a href=\"([^\"]*)\">Open</a>" (browser-html b)) (unescape u))))
+        (visit b first-page)
+        (is (search "<h1>0</h1>" (browser-html b)))))))
+
+(test the-component-tree
+  (with-fresh-applications (("/dev" 'littoral-examples:devtools-demo :mode :development))
+    (let ((b (make-instance 'browser)))
+      (visit b "/dev")
+      (click b "++")
+      (click b "Components")
+      (is (has-text-p b "Components"))
+      (is (has-text-p b "devtools-demo"))
+      (is (= 2 (length (cl-ppcre:all-matches-as-strings "<code>counter c" (browser-html b)))))
+      (is (has-text-p b "2 children"))
+      (click b "inspect")
+      (is (has-text-p b "Inspector")))))

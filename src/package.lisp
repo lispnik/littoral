@@ -14,7 +14,7 @@
    #:table #:thead #:tbody #:tfoot #:tr #:td #:th #:caption
    #:em #:strong #:b #:i #:u #:small #:code #:pre #:blockquote #:sup #:sub
    #:section #:article #:aside #:nav #:header #:footer #:main #:figure #:figcaption
-   #:fieldset #:legend #:label #:abbr #:cite #:mark #:dfn #:kbd #:samp #:var-tag
+   #:fieldset #:legend #:label #:abbr #:cite #:mark #:dfn #:kbd #:samp #:var-tag #:details #:summary
    #:img #:br #:hr #:tag
    ;; Brushes with callbacks
    #:anchor #:form #:text-input #:password-input #:number-input #:hidden-input

@@ -376,6 +376,10 @@ Applications in `:development` mode, the default, end each page with a toolbar:
 - **Halos**: frames every component, with buttons to inspect it, see its HTML, or see (and edit) its Lisp source.
 - **Profile**: per-component render times.
 - **Sessions**: a session browser.
+- **History**: time travel. It lists every page the session has shown, newest first.
+  - Each page shows what the action that made it changed: which slot of which object, before and after.
+  - **Open** goes back to a page, with its state restored.
+- **Components**: the live component tree, with each component's slots, what it's calling, and an inspector link.
 - Timings for the last action, snapshot and render.
 
 Each halo has three buttons:
@@ -387,6 +391,8 @@ Each halo has three buttons:
 When Emacs is connected through SLIME/Swank, the code view also has an **edit** button that opens that definition in Emacs. Set `*source-editor*` to a function of a pathname and a character position to use another editor.
 
 The toolbar reports the last action's callback time, snapshot time and size, and the render time. **Profile** adds a table of every component's inclusive render time, indented by nesting. The session browser shows each session's age, idle time, pages kept, the objects in its newest snapshot, and the snapshot entries held across all its pages.
+
+`/examples/devtools` is a page to try them on.
 
 **The debugger.** When a callback or a render signals an error in a development-mode application, the page becomes a debugger:
 - the condition and its message

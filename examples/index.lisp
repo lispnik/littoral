@@ -6,6 +6,7 @@
   '(("Basics"
      ("counter" "Counter" "The first Seaside example: callbacks and backtracking.")
      ("multi-counter" "Multi-Counter" "Components embedding components.")
+     ("devtools" "Development tools" "History, the component tree, halos and the debugger, to try.")
      ("login" "Login" "call/answer without a task, with validation.")
      ("todo" "To Do" "Forms, checkboxes and editing through a dialog."))
     ("Flow and navigation"

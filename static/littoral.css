@@ -112,3 +112,8 @@ dialog.lt-modal { position: fixed; top: 12vh; margin: 0 auto; max-width: min(36r
 /* Stored files */
 .lt-thumbnail img { max-width: 240px; max-height: 240px; border-radius: 6px; border: 1px solid var(--lt-border); }
 .lt-file-current { display: flex; flex-wrap: wrap; gap: .8rem; align-items: center; margin-bottom: .4rem; }
+
+/* Development tools: history and the component tree */
+.lt-history-changes > td { background: var(--lt-panel); }
+.lt-tree-list { list-style: none; padding-left: 1.2rem; margin: .2rem 0; }
+.lt-tree-list summary { cursor: pointer; }

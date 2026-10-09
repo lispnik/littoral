@@ -1545,6 +1545,14 @@ Write a <samp> element.
 
 Write a <var> element.
 
+#### `details` `&rest arguments` — macro
+
+Write a <details> element.
+
+#### `summary` `&rest arguments` — macro
+
+Write a <summary> element.
+
 #### `img` `&rest arguments` — macro
 
 Write a <img> element.

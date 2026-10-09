@@ -60,7 +60,8 @@
                               :serial t
                               :components ((:file "halos")
                                            (:file "config")
-                                           (:file "debugger")))))
+                                           (:file "debugger")
+                                           (:file "history")))))
                (:module "static"
                 :components ((:static-file "littoral.js")
                              (:static-file "littoral.css"))))
@@ -94,6 +95,7 @@
                              (:file "dialogs")
                              (:file "csp")
                              (:file "api")
+                             (:file "devtools")
                              (:file "index")
                              (:file "register")))))
 
