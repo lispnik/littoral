@@ -55,19 +55,22 @@ jobs:
           done
           exit 1
 
-      - name: Start MinIO, for the S3 tests
-        # The S3 test runs only if a server comes up; the build doesn't depend on the image.
+      - name: Start an S3-compatible server, for the S3 tests
+        # RustFS checks Signature V4 like S3 (MinIO no longer publishes images).
+        # The S3 test runs only if it comes up; the build doesn't depend on it.
         run: |
-          for image in quay.io/minio/minio:latest minio/minio:latest; do
-            if docker run -d --name minio -p 9000:9000 "$image" server /data; then break; fi
-            docker rm -f minio 2>/dev/null || true
-          done
-          for i in $(seq 1 60); do
-            if curl -sf http://127.0.0.1:9000/minio/health/live; then
-              echo "LITTORAL_TEST_S3=http://127.0.0.1:9000" >> "$GITHUB_ENV"; echo "MinIO is up"; break
-            fi
-            sleep 1
-          done
+          if docker run -d --name s3 -p 9000:9000 rustfs/rustfs:latest; then
+            for i in $(seq 1 60); do
+              code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:9000/ || true)
+              if [ "$code" != "000" ]; then
+                { echo "LITTORAL_TEST_S3=http://127.0.0.1:9000"; echo "LITTORAL_TEST_S3_KEY=rustfsadmin";
+                  echo "LITTORAL_TEST_S3_SECRET=rustfsadmin"; } >> "$GITHUB_ENV"
+                echo "S3 server is up (HTTP $code)"; break
+              fi
+              sleep 1
+            done
+            docker logs s3 2>&1 | tail -20
+          fi
 
       - name: Unit tests
         run: |
