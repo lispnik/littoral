@@ -288,6 +288,15 @@ try {
   await go("/examples/admin");
   check("admin lists projects", (await evaluate("document.body.innerText")).includes("Littoral"));
   await clickLink("Tasks");
+  // Search updates as you type; the caret stays put while results swap in.
+  await evaluate(`document.getElementById("search").focus()`);
+  for (const ch of "admin") { await send("Input.insertText", { text: ch }); await sleep(60); }
+  await sleep(900);
+  check("typing while results swap keeps order", await evaluate(`document.getElementById("search").value`) === "admin",
+        await evaluate(`document.getElementById("search").value`));
+  check("search filters", (await evaluate("document.body.innerText")).includes("Admin interface"));
+  await go("/examples/admin");
+  await clickLink("Tasks");
   await evaluate(`document.querySelector(".lt-report tbody a").click()`); await waitLoad();
   check("admin opens a task", /Task #\d+/.test(await evaluate("document.body.innerText")));
 

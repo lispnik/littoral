@@ -45,13 +45,20 @@
     });
   }
 
+  // The focused field and its value, as a request leaves.
+  function fieldState() {
+    var active = document.activeElement;
+    return active && active.id && typeof active.value === "string" ? { id: active.id, value: active.value } : null;
+  }
+
   function post(callback, targets, params, el, attr) {
     params.append("_lt_ajax", "1");
     params.append("_lt_update", targets);
     if (callback) params.append(callback, "1");
+    var sent = fieldState();
     return send(params)
       .then(function (data) {
-        apply(data);
+        apply(data, sent);
         var complete = el && attr && el.getAttribute(attr + "-complete");
         if (complete) new Function("value", complete).call(el, data.value);
       })
@@ -113,10 +120,15 @@
     }
   });
 
-  function apply(data) {
+  // SENT: the focused field as the request left (NIL for pushes).
+  function apply(data, sent) {
     if (data.redirect) { window.location.href = data.redirect; return; }
     showToasts(data.toasts);
-    var focused = document.activeElement && document.activeElement.id;
+    var active = document.activeElement;
+    var focused = active && active.id;
+    var live = active && typeof active.value === "string" && /^(INPUT|TEXTAREA)$/.test(active.tagName) &&
+               !/^(checkbox|radio|file|submit|button)$/.test(active.type)
+      ? { value: active.value, start: active.selectionStart, end: active.selectionEnd } : null;
     Object.keys(data.fragments).forEach(function (id) {
       var old = document.getElementById(id);
       if (!old) return;
@@ -138,6 +150,14 @@
       var target = (focused && fresh.querySelector("#" + CSS.escape(focused))) ||
                    fresh.querySelector("[autofocus]");
       if (target && target.focus) target.focus();
+      // Typing goes on while a request is out: when the server sent back the
+      // value it was given, keep what has been typed since, and the caret.
+      // A value the server changed (a cleared message box) stands.
+      if (live && target && target.id === focused && typeof target.value === "string" &&
+          (!sent || (sent.id === focused && target.value === sent.value))) {
+        target.value = live.value;
+        try { target.setSelectionRange(live.start, live.end); } catch (e) {}
+      }
     });
     if (data.missing.length) window.location.reload();
     (data.scripts || []).forEach(function (script) { new Function(script)(); });
