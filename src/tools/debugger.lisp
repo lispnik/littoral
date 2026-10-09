@@ -50,7 +50,7 @@ framework's rather than the application's.")
 (defun frame-source (debug-fun)
   "\"file:line\" where DEBUG-FUN's function is defined, or NIL."
   (ignore-errors
-   (let* ((function (sb-di:debug-fun-fun debug-fun))
+   (let* ((function (sb-di::debug-fun-fun debug-fun))
           (source (and function (sb-introspect:find-definition-source function)))
           (pathname (and source (sb-introspect:definition-source-pathname source)))
           (offset (and source (sb-introspect:definition-source-character-offset source))))
@@ -65,11 +65,11 @@ framework's rather than the application's.")
 (defun frame-locals (frame debug-fun)
   "FRAME's valid local variables, as (NAME . PRINTED-VALUE)."
   (ignore-errors
-   (let ((location (sb-di:frame-code-location frame)))
-     (loop for var in (sb-di:ambiguous-debug-vars debug-fun "")
-           when (eq (sb-di:debug-var-validity var location) :valid)
-             collect (cons (string-downcase (princ-to-string (sb-di:debug-var-symbol var)))
-                           (printed (sb-di:debug-var-value var frame)))))))
+   (let ((location (sb-di::frame-code-location frame)))
+     (loop for var in (sb-di::ambiguous-debug-vars debug-fun "")
+           when (eq (sb-di::debug-var-validity var location) :valid)
+             collect (cons (string-downcase (princ-to-string (sb-di::debug-var-symbol var)))
+                           (printed (sb-di::debug-var-value var frame)))))))
 
 (defun frame-call (frame)
   "FRAME's function and arguments, as printed text."
@@ -89,10 +89,11 @@ framework's rather than the application's.")
   "The frames from where the error was signalled outwards, as plists of
 :CALL :LOCALS :SOURCE :LIBRARY."
   (let ((frames '()))
-    (sb-debug:map-backtrace
+    ;; MAP-BACKTRACE is exported only by newer SBCLs; it exists in older ones.
+    (funcall (find-symbol "MAP-BACKTRACE" "SB-DEBUG")
      (lambda (frame)
-       (let* ((debug-fun (sb-di:frame-debug-fun frame))
-              (name (ignore-errors (sb-di:debug-fun-name debug-fun))))
+       (let* ((debug-fun (sb-di::frame-debug-fun frame))
+              (name (ignore-errors (sb-di::debug-fun-name debug-fun))))
          (push (list :name name :call (frame-call frame)
                      :locals (frame-locals frame debug-fun)
                      :source (frame-source debug-fun)
