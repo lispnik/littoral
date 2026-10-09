@@ -44,7 +44,7 @@
     (p () "This application answers JSON at " (code () (text (format nil "~A/notes" base)))
       " as well as serving this page. The endpoints share the application's database and "
       "sign-in, but not its sessions: they suit mobile apps, scripts and webhooks.")
-    (pre (:class "api-code")
+    (pre (:class "api-code" :tabindex "0")
       (text (format nil "(define-endpoint \"/examples/api\" :post \"/notes\" ()
   (let ((text (gethash \"text\" (endpoint-body))))
     (values (create-note text) 201)))
@@ -58,7 +58,7 @@ curl -X POST -H 'Content-Type: application/json' -d '{\"text\":\"hi\"}' ~A/notes
       (littoral::emit-tag "button" (list :type "button" :id "api-post") (lambda () (text "POST /notes")))
       (littoral::emit-tag "button" (list :type "button" :id "api-get") (lambda () (text "GET /notes"))))
     (p (:role "status") (strong () "Response: ") (code (:id "api-status") "—"))
-    (pre (:id "api-output" :class "api-code") "Press a button.")))
+    (pre (:id "api-output" :class "api-code" :tabindex "0") "Press a button.")))
 
 (defmethod script ((self api-demo))
   ;; Plain fetch calls: this script carries the page's nonce.
