@@ -743,6 +743,50 @@ A function of (`socket` `stream` `writer`) that serves `stream` from an event
 loop, set by an optional system such as littoral/woo; `nil` when there is
 none and each stream gets a waiting thread.
 
+### Health, metrics, request logs
+
+#### `add-health-check` `name function` — function
+
+Have /healthz call `function`, of no arguments; it fails when `function`
+signals or returns `nil`.  Replaces any check called `name`.
+
+#### `remove-health-check` `name` — function
+
+*Undocumented.*
+
+#### `serve-metrics` `&key (path "/metrics") (local-only t)` — function
+
+Serve metrics at `path` for Prometheus to scrape.  With `local-only` (the
+default) only requests from this machine get them: put the scraper there,
+or behind the proxy with *TRUST-FORWARDED-FOR* and an allow list.
+
+#### `metrics-text` — function
+
+Every metric, in Prometheus's text exposition format.
+
+#### `metrics-summary` — function
+
+A plist of headline numbers, for pages that show them: :`requests` :`errors`
+:`sessions` :`streams` :`jobs-running` :`heap` :`threads` :`uptime` and :`mean-ms`.
+
+#### `reset-metrics` — function
+
+*Undocumented.*
+
+#### `log-requests-to` `stream &key (format :json)` — function
+
+Write a line to `stream` for every request: `json` (`format` :`json`, for log
+collectors) or text (:`text`).  `nil` for `stream` stops logging.
+
+#### `*request-log*` — variable
+
+A function of a plist describing each request (:`time` :`method` :`path` :`app` :`kind`
+:`status` :`milliseconds` :`address`), or `nil`.  See `log-requests-to`.
+
+#### `*latency-buckets*` — variable
+
+Upper bounds, in seconds, of the request duration histogram's buckets.
+
 ### Background jobs (the class JOB is not exported: the name is too common)
 
 #### `submit-job` `function &key (name "Job") (attempts 1) (backoff 2)` — function

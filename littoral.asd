@@ -51,6 +51,7 @@
                              (:file "dispatcher")
                              (:file "push")
                              (:file "jobs")
+                             (:file "observe")
                              (:file "live")
                              (:module "tools"
                               :serial t
@@ -160,7 +161,8 @@
                              (:file "passwords")
                              (:file "auth-store")
                              (:file "jobs")
-                             (:file "storage"))))
+                             (:file "storage")
+                             (:file "observe"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
                                        (uiop:find-symbol* :littoral :littoral/tests))

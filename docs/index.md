@@ -680,6 +680,11 @@ location / { proxy_pass http://$littoral_backend; proxy_buffering off; }
 
 With cookie sessions, route on the cookie instead. Turning `proxy_buffering` off, or sending `X-Accel-Buffering: no` (littoral does this on its event streams), keeps server push working.
 
+**Health, metrics and logs.**
+- `/healthz` answers `{"status":"ok"}` for load balancers. It answers 503 when a check you add with `add-health-check` fails, for example a database ping.
+- `(serve-metrics)` serves Prometheus metrics at `/metrics`, to this machine only by default: requests by application, kind and status, a latency histogram, sessions, push streams, jobs, heap and threads.
+- `(log-requests-to stream)` writes a JSON (or `:format :text`) line per request. Lines carry the path but never the query string, so session keys stay out of logs.
+
 **Restarts.** Sessions don't survive a restart. A session is a graph of live objects, the closures its pages' callbacks hold, and cl-cont continuations for flows in progress. None of these can be serialised, which is also true of Seaside outside image-based persistence. Configuration does survive (see `:configuration-file`). Keep data that must last in your own store, not in components. Use `:expired-notice` to tell people when their session is gone.
 
 ## License

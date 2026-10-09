@@ -71,3 +71,13 @@
     (is (eq nil checked))
     (littoral::process-callbacks '(("2" . "off") ("2" . "on")) registry)
     (is (eq t checked))))
+
+(test tags-stay-macros
+  ;; A DEFUN in a package using LITTORAL.HTML on a name like LABEL or MAIN
+  ;; replaces the tag for everyone; this notices.
+  (do-external-symbols (symbol :littoral.html)
+    (when (and (fboundp symbol)
+               (not (member symbol '(littoral.html:text littoral.html:raw littoral.html:html-escape
+                                     littoral.html:file-name littoral.html:file-content-type
+                                     littoral.html:file-contents))))
+      (is (macro-function symbol) "~S is no longer a macro" symbol))))

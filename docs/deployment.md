@@ -95,7 +95,13 @@ On Hunchentoot every open page with server push holds a thread (about 1.5 MB). I
 
 The README's "Deployment and scale" section has measurements of both.
 
-## 8. Checklist
+## 8. Health checks, metrics and logs
+
+- **Health.** Point the load balancer or uptime monitor at `/healthz`. It answers 200, or 503 when a check fails. Add checks with `(add-health-check "database" (lambda () (littoral.db:db-query "SELECT 1")))`, run inside a `using-database` binding when the application has its own database.
+- **Metrics.** `(serve-metrics)` serves Prometheus metrics at `/metrics` to the machine itself. Scrape from there, or expose the path only to your monitoring network.
+- **Logs.** `(log-requests-to *standard-output*)` sends a JSON line per request to the journal. It never includes the query string, which carries session keys.
+
+## 9. Checklist
 
 - [ ] Applications registered with `:mode :deployment`
 - [ ] Littoral listening on 127.0.0.1, behind a proxy with TLS

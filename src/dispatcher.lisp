@@ -617,7 +617,12 @@ handler mounted at PREFIX."
 PREFIX is the path it is mounted under when the mounting middleware does
 not set :SCRIPT-NAME (lack's mount middleware does not)."
   (let ((prefix (string-right-trim "/" prefix)))
-    (lambda (env) (with-sane-printing () (handle-request env prefix)))))
+    (lambda (env)
+      (with-sane-printing ()
+        (let* ((start (get-internal-real-time))
+               (response (handle-request env prefix)))
+          (observe-request env response start)
+          response)))))
 
 (defvar *handler* nil)
 
