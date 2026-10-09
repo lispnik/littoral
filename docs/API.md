@@ -182,7 +182,8 @@ The component actually showing in `component`'s place.
 
 #### `html-root` — class
 
-The document head a page collects from `update-root`: title, stylesheets and scripts.
+The document head a page collects from `update-root`: title, meta
+tags, links, stylesheets and scripts.
 
 #### `root-title` `object` — generic function
 
@@ -199,6 +200,19 @@ Load the script at `url` in the page.
 #### `add-style` `root css` — function
 
 Add the `css` text `css` to the page head.
+
+#### `add-head-meta` `root key content` — function
+
+Add a meta tag `key` with `content` to the page head: description, theme-color,
+og:title, twitter:card and the like.  Open Graph keys (og:..., article:...)
+are written as property=, the rest as name=.  A later call with the same
+`key` replaces the earlier one, so a child component can override its parent.
+
+#### `add-head-link` `root rel href &rest attributes` — function
+
+Add a link element (rel `rel`, href `href`) to the page head, with `attributes`, a plist of
+keywords and strings such as :type "image/svg+xml" or :sizes "180x180".
+The same `rel` and `href` are added once.  For stylesheets use `add-stylesheet`.
 
 ### Decorations
 

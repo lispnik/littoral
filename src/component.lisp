@@ -66,8 +66,11 @@ REQUEST-EXTRA-PATH and REQUEST-PARAMETER.")
    (stylesheets :initform '() :accessor root-stylesheets)
    (scripts :initform '() :accessor root-scripts)
    (styles :initform '() :accessor root-styles)
-   (inline-scripts :initform '() :accessor root-inline-scripts))
-  (:documentation "The document head a page collects from UPDATE-ROOT: title, stylesheets and scripts."))
+   (inline-scripts :initform '() :accessor root-inline-scripts)
+   (metas :initform '() :accessor root-metas)    ; (key . content), newest first
+   (links :initform '() :accessor root-links))   ; (rel href . attributes), newest first
+  (:documentation "The document head a page collects from UPDATE-ROOT: title, meta
+tags, links, stylesheets and scripts."))
 
 (defun add-stylesheet (root url)
   "Link the stylesheet at URL from the page."
@@ -80,6 +83,33 @@ REQUEST-EXTRA-PATH and REQUEST-PARAMETER.")
 (defun add-style (root css)
   "Add the CSS text CSS to the page head."
   (pushnew css (root-styles root) :test #'string=))
+
+(defun meta-property-p (key)
+  "True when the meta KEY is an Open Graph style property (og:title,
+article:author, ...), written as property= rather than name=."
+  (some (lambda (prefix) (alexandria:starts-with-subseq prefix key :test #'char-equal))
+        '("og:" "article:" "book:" "profile:" "music:" "video:" "fb:")))
+
+(defun add-head-meta (root key content)
+  "Add a meta tag KEY with CONTENT to the page head: description, theme-color,
+og:title, twitter:card and the like.  Open Graph keys (og:..., article:...)
+are written as property=, the rest as name=.  A later call with the same
+KEY replaces the earlier one, so a child component can override its parent."
+  (setf (root-metas root)
+        (cons (cons key content)
+              (remove key (root-metas root) :key #'car :test #'string-equal))))
+
+(defun add-head-link (root rel href &rest attributes)
+  "Add a link element (rel REL, href HREF) to the page head, with ATTRIBUTES, a plist of
+keywords and strings such as :type \"image/svg+xml\" or :sizes \"180x180\".
+The same REL and HREF are added once.  For stylesheets use ADD-STYLESHEET."
+  (loop for (key) on attributes by #'cddr
+        unless (and (keywordp key) (every (lambda (c) (or (alpha-char-p c) (char= c #\-)))
+                                          (symbol-name key)))
+          do (error "add-head-link: ~S is not an attribute name." key))
+  (unless (find-if (lambda (link) (and (string-equal rel (first link)) (string= href (second link))))
+                   (root-links root))
+    (push (list* rel href attributes) (root-links root))))
 
 (defun add-inline-script (root js)
   "Add the JavaScript text JS at the end of the page."

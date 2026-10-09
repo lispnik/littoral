@@ -38,6 +38,7 @@
    #:request-extra-path
    #:call #:answer #:show #:home #:visible-children #:active-component
    #:html-root #:root-title #:add-stylesheet #:add-script #:add-style
+   #:add-head-meta #:add-head-link
    ;; Decorations
    #:decoration #:add-decoration #:remove-decoration #:decorations
    #:delegation #:answer-handler #:message-decoration #:form-decoration

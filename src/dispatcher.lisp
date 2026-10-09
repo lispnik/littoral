@@ -244,6 +244,15 @@ add, then the session and page keys."
       (format out "<!DOCTYPE html>~%<html lang=\"~A\"><head><meta charset=\"utf-8\">~
 <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">~
 <title>~A</title>~%" (html-escape (current-language)) (html-escape (root-title root)))
+      (loop for (key . content) in (reverse (root-metas root))
+            do (format out "<meta ~A=\"~A\" content=\"~A\">~%"
+                       (if (meta-property-p key) "property" "name")
+                       (html-escape key) (html-escape content)))
+      (loop for (rel href . attributes) in (reverse (root-links root))
+            do (format out "<link rel=\"~A\" href=\"~A\"~:{ ~(~A~)=\"~A\"~}>~%"
+                       (html-escape rel) (html-escape href)
+                       (loop for (key value) on attributes by #'cddr
+                             collect (list key (html-escape (princ-to-string value))))))
       (dolist (url (append (list (static-url "littoral.css"))
                            (application-stylesheets app)
                            (reverse (root-stylesheets root))))

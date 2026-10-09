@@ -422,3 +422,41 @@
   (let ((littoral::*static-directory* #p"/nonexistent/littoral-static/"))
     (is (search "littoral" (littoral::static-file "littoral.js")))
     (is (search "?v=" (littoral::static-url "littoral.css")))))
+
+;;; Meta tags and links in the head
+
+(defclass head-test-page (component) ())
+
+(defmethod render ((self head-test-page))
+  (p () "Hello"))
+
+(defmethod update-root ((self head-test-page) root)
+  (call-next-method)
+  (add-head-meta root "description" "A <page> & \"more\"")
+  (add-head-meta root "og:title" "First")
+  (add-head-meta root "og:title" "Head test")       ; replaces "First"
+  (add-head-meta root "twitter:card" "summary_large_image")
+  (add-head-link root "icon" "/icon.svg" :type "image/svg+xml")
+  (add-head-link root "icon" "/icon.svg" :type "image/svg+xml")
+  (add-head-link root "apple-touch-icon" "/touch.png" :sizes "180x180"))
+
+(test head-meta-and-links
+  (with-fresh-applications (("/head" 'head-test-page :mode :deployment))
+    (let ((b (make-instance 'browser)))
+      (visit b "/head")
+      (let* ((html (browser-html b))
+             (head (subseq html 0 (search "</head>" html))))
+        (is (search "<meta name=\"description\" content=\"A &lt;page&gt; &amp; &quot;more&quot;\">" head))
+        (is (search "<meta property=\"og:title\" content=\"Head test\">" head)
+            "og: keys are properties, and the last value wins")
+        (is (not (search "content=\"First\"" head)))
+        (is (search "<meta name=\"twitter:card\" content=\"summary_large_image\">" head))
+        (is (search "<link rel=\"icon\" href=\"/icon.svg\" type=\"image/svg+xml\">" head))
+        (is (= 1 (length (cl-ppcre:all-matches-as-strings "rel=\"icon\"" head)))
+            "the same link is written once")
+        (is (search "<link rel=\"apple-touch-icon\" href=\"/touch.png\" sizes=\"180x180\">" head))
+        (is (< (search "og:title" head) (search "<link rel=\"icon\"" head)))))))
+
+(test head-link-attribute-names-are-checked
+  (signals error (add-head-link (make-instance 'html-root) "icon" "/x" :|on"load| "y"))
+  (signals error (add-head-link (make-instance 'html-root) "icon" "/x" "type" "y")))

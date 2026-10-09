@@ -126,6 +126,20 @@ A `cancel-button` runs its callback and nothing else: what was typed into the fo
 
 Rendering must not change state. Calling `call`, `show`, `answer` or `home` while a page renders signals `render-phase-error`; do it in a callback instead.
 
+### The page head
+
+A component's `update-root` method adds to the page's `<head>`. Besides `style`, `script` and `add-stylesheet`, it can add meta tags and links, for link previews and icons:
+
+```lisp
+(defmethod update-root ((self shop) root)
+  (call-next-method)                                  ; keeps STYLE and SCRIPT
+  (add-head-meta root "description" "Fresh sushi, delivered.")
+  (add-head-meta root "og:image" "https://shop.example/preview.png")
+  (add-head-link root "icon" "/static/icon.svg" :type "image/svg+xml"))
+```
+
+Open Graph keys (`og:…`, `article:…`) are written as `property=`, the rest as `name=`. A later `add-head-meta` for the same key replaces the earlier one, so a child component can override its parent. Values are escaped.
+
 ### Bookmarkable URLs
 
 Every page URL starts with the application's path. Each visible component's `update-url` method can then add to it:
