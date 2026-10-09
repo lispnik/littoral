@@ -136,3 +136,12 @@
           (click b "Halos")
           (click-nth b "inspect" 0)
           (is (has-text-p b "Inspector")))))))
+
+(test malformed-bodies-dont-break-requests
+  ;; Lack parses JSON bodies as it makes a request; broken JSON sent to a page
+  ;; must not be an unhandled error.
+  (with-fresh-applications (("/c" 'littoral-examples:counter :mode :deployment))
+    (let ((b (make-instance 'browser)))
+      (visit b "/c")
+      (multiple-value-bind (status) (raw-request b :post (browser-url b) :body "{not json" :content-type "application/json")
+        (is (member status '(200 302)))))))

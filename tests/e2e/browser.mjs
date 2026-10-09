@@ -160,6 +160,11 @@ try {
   check("gallery upload shows its thumbnail",
         await evaluate(`(() => { const i = document.querySelector(".gallery img"); return !!i && i.complete && i.naturalWidth > 0; })()`));
 
+  // JSON endpoints, called from the page with fetch.
+  await go("/examples/api");
+  await evaluate(`document.getElementById("api-post").click()`); await sleep(700);
+  check("endpoint answers a POST", (await evaluate(`document.getElementById("api-status").textContent`)).startsWith("201"));
+
   // The content security policy stops script injected into the page.
   await go("/examples/csp");
   await sleep(400);

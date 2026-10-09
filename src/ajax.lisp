@@ -122,7 +122,7 @@ and keyword plists as objects, other lists as arrays."
   (flet ((plistp (list)
            (and (evenp (length list))
                 (loop for (k) on list by #'cddr always (keywordp k)))))
-    (cond ((null value) "null")
+    (cond ((or (null value) (eq value :null)) "null")
           ((eq value t) "true")
           ((eql value :false) "false")
           ((stringp value) (json-string value))
@@ -141,6 +141,8 @@ and keyword plists as objects, other lists as arrays."
                    (loop for (k v) on value by #'cddr
                          collect (format nil "~A:~A" (json-string (string-downcase k)) (json-value v)))))
           ((listp value) (format nil "[~{~A~^,~}]" (mapcar #'json-value value)))
+          ((and (vectorp value) (not (stringp value)))
+           (format nil "[~{~A~^,~}]" (map 'list #'json-value value)))
           ((symbolp value) (json-string (string-downcase value)))
           (t (json-string (princ-to-string value))))))
 

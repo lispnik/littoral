@@ -295,6 +295,29 @@ A socket opens only from a page of the same site: its `Origin` must match the ho
 
 The gallery example (`/examples/gallery`, system `littoral/storage-demo`) uploads photos with an optional attachment.
 
+### JSON endpoints
+
+An application can answer JSON beside its pages, for mobile apps, scripts and webhooks:
+
+```lisp
+(define-endpoint "/notes" :get "/api/notes/:id" (id)
+  (let ((note (find-note id)))
+    (unless note (endpoint-error 404 "No note ~A." id))
+    (list :id (note-id note) :title (note-title note))))
+
+(define-endpoint "/notes" :post "/api/notes" ()
+  (let ((user (littoral.auth:require-endpoint-user)))        ; 401 without one
+    (values (create-note user (gethash "title" (endpoint-body))) 201)))
+```
+
+- **Values become JSON.** Keyword plists and hash tables become objects; lists and vectors become arrays (`#()` for an empty one); `t`, `:false` and `:null` (or `nil`) become true, false and null. A second value sets the status, and a third adds headers.
+- **Errors** are answered as JSON too. `endpoint-error` sets the status. An unknown method gets 405. Other errors get 500, with the message only in development mode.
+- **Context.** Endpoints run through the application's `:around-request`, so they share its database, but outside any session. `endpoint-body` parses the JSON sent.
+- **Who's asking.** `endpoint-user` comes from an `Authorization: Bearer` token made with `create-api-token`, or from the browser's sign-in cookie.
+- **Cross-site safety.** A write signed in by cookie must be sent as `application/json`, which a cross-site form can't do.
+
+`/examples/api` calls its own endpoints from the page. The members example answers `GET /api/me` and makes API tokens.
+
 ### Background jobs
 
 `submit-job` runs work on a pool of threads (`*job-workers*`, 4) and keeps the page up to date while it does:

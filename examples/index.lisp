@@ -28,7 +28,8 @@
      ("upload" "Upload" "Receiving files.")
      ("progress" "Progress" "A background job updating the page through server push.")
      ("parenscript" "Parenscript" "Browser code written in Lisp.")
-     ("csp" "Content security policy" "Injected script, stopped by the page's policy."))))
+     ("csp" "Content security policy" "Injected script, stopped by the page's policy.")
+     ("api" "JSON endpoints" "An API beside the pages, called from the browser."))))
 
 (defun example-registered-p (path)
   "True when an application is registered at exactly PATH: the admin,

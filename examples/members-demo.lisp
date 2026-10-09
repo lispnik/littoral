@@ -85,8 +85,9 @@ form shows in its place, so the rest of the page stays in view."))
                              (toast "You may edit posts." :kind :success)))
           "Edit a post (needs the edit-posts permission)")))
 
-(defclass sessions-box (littoral.auth:restricted component) ()
-  (:documentation "The signed-in user's sign-ins, with ways to end them."))
+(defclass sessions-box (littoral.auth:restricted component)
+  ((token :initform nil :accessor new-token :documentation "An API token just made, shown once."))
+  (:documentation "The signed-in user's sign-ins, with ways to end them, and API tokens."))
 
 (defun describe-agent (agent)
   (cond ((null agent) "an unknown browser")
@@ -115,7 +116,19 @@ form shows in its place, so the rest of the page stays in view."))
                        (anchor (:callback (lambda () (littoral.auth:revoke-session id)
                                             (toast "That sign-in has ended.")))
                          "End")))))))
-    (p () (anchor (:callback (lambda () (littoral.auth:log-out-everywhere))) "Sign out everywhere"))))
+    (p () (anchor (:callback (lambda () (littoral.auth:log-out-everywhere))) "Sign out everywhere"))
+    (h3 () "API")
+    (p () "This application also answers JSON: " (code () "GET /api/me") " tells a script who it is, "
+      "with a bearer token or this browser's sign-in.")
+    (if (new-token self)
+        (let ((curl (format nil "curl -H 'Authorization: Bearer ~A' ~A~A/api/me"
+                            (new-token self) (littoral.auth:request-base-url)
+                            (url-for (application-path *application*)))))
+          (p () "Your new token, shown only now:")
+          (pre (:class "members-token") (text curl))
+          (p () (anchor (:callback (lambda () (setf (new-token self) nil))) "Done")))
+        (p () (anchor (:callback (lambda () (setf (new-token self) (littoral.auth:create-api-token user :days 30))))
+                "Create an API token")))))
 
 (defclass admin-console (littoral.auth:restricted component)
   ((users :initarg :users :initform (lambda () (littoral.db:db-select 'littoral.auth:user :order-by "name"))
@@ -249,6 +262,7 @@ form shows in its place, so the rest of the page stays in view."))
 (defmethod style ((self members-root))
   ".members-mail { border: 1px solid var(--lt-border); border-radius: 6px; padding: .2rem .8rem; margin: .5rem 0; }
 .members-mail pre { white-space: pre-wrap; font-size: .85rem; }
+.members-token { white-space: pre-wrap; word-break: break-all; font-size: .8rem; background: var(--lt-panel); padding: .5rem; border-radius: 6px; }
 .lt-oauth form { display: inline-block; margin: .5rem .5rem 0 0; }
 .lt-remember { display: flex; gap: .4rem; align-items: center; }
 .lt-remember label { margin: 0; }")
@@ -391,6 +405,13 @@ and asks to go back to the members demo's own OAuth address."
           :userinfo-url "https://openidconnect.googleapis.com/v1/userinfo"
           :client-id id :client-secret secret)))
     (register-application idp-path 'demo-idp :title "DemoID")
+    ;; JSON beside the pages: who is asking, by bearer token or sign-in cookie.
+    (register-endpoint path :get "/api/me"
+                       (lambda ()
+                         (let ((user (littoral.auth:require-endpoint-user)))
+                           (list :name (littoral.auth:user-name user)
+                                 :email (littoral.auth:user-email user)
+                                 :roles (coerce (mapcar #'string-downcase (littoral.auth:user-roles user)) 'vector)))))
     (register-application path 'members-root
                           :title "Members"
                           ;; Each request: this demo's database, and mail to the demo mailbox.

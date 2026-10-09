@@ -20,6 +20,8 @@
                #:quri
                #:cl-base64
                #:lack-request
+               #:com.inuoe.jzon
+               #:flexi-streams
                #:clack
                ;; Clack finds handlers by package; load the default one.
                #:clack-handler-hunchentoot)
@@ -52,6 +54,7 @@
                              (:file "push")
                              (:file "jobs")
                              (:file "observe")
+                             (:file "endpoints")
                              (:file "live")
                              (:module "tools"
                               :serial t
@@ -90,6 +93,7 @@
                              (:file "widgets")
                              (:file "dialogs")
                              (:file "csp")
+                             (:file "api")
                              (:file "index")
                              (:file "register")))))
 
@@ -163,7 +167,8 @@
                              (:file "auth-store")
                              (:file "jobs")
                              (:file "storage")
-                             (:file "observe"))))
+                             (:file "observe")
+                             (:file "endpoints"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
                                        (uiop:find-symbol* :littoral :littoral/tests))

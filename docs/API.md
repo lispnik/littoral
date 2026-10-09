@@ -743,6 +743,37 @@ A function of (`socket` `stream` `writer`) that serves `stream` from an event
 loop, set by an optional system such as littoral/woo; `nil` when there is
 none and each stream gets a waiting thread.
 
+### JSON endpoints
+
+#### `define-endpoint` `application-path method pattern (&rest parameters) &body body` — macro
+
+Serve `body` as `json` for `method` (:`get`, :`post`, :`put`, :`patch`, :`delete`)
+requests to `pattern`, such as "/api/items/:id", under the application at
+`application-path`.  `parameters` are bound to `pattern`'s :`name` segments, in order.
+
+#### `register-endpoint` `application-path method pattern function` — function
+
+Serve `function` for `method` requests to `pattern` under `application-path`.
+`pattern`'s :`name` segments become `function`'s arguments, as strings.
+
+#### `endpoint-error` — condition
+
+Signalled by `endpoint-error`: answered as {"error": message} with its status.
+
+#### `endpoint-error` `status message &rest arguments` — function
+
+Answer the current endpoint request with `status` and {"error": `message`}.
+
+#### `endpoint-body` — function
+
+The request's `json` body, parsed (objects as hash tables), or `nil` when empty.
+Signals `endpoint-error` 400 when it isn't `json`.
+
+#### `*endpoint-authenticator*` — variable
+
+A function of no arguments answering who an endpoint request comes from,
+and how (:`token` or :`cookie`); littoral/auth sets it.
+
 ### Health, metrics, request logs
 
 #### `add-health-check` `name function` — function

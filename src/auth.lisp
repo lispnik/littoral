@@ -34,6 +34,7 @@
            #:set-password #:check-password #:authenticate
            #:current-user #:log-in #:log-out #:signed-in-p #:has-role-p #:require-role
            #:user-sessions #:revoke-session #:log-out-everywhere
+           #:endpoint-user #:require-endpoint-user #:create-api-token #:revoke-api-tokens
            #:*remember-days* #:*sign-in-idle-hours* #:*auth-session-check-seconds* #:*offer-remember-me*
            #:grant-role #:revoke-role #:grant-permission #:revoke-permission
            #:role-permissions #:user-permissions #:has-permission-p #:require-permission
@@ -895,3 +896,61 @@ password reset links and, with littoral/oauth, sign-in callbacks."))
         (show root (make-instance 'password-reset :user-id (user-id user)))
         (show root (make-instance 'message-dialog
                                   :message (translate "That link has expired or been used. Ask for a new one."))))))
+
+;;; Who a JSON endpoint request comes from: an API token, or the sign-in cookie
+
+(defun token-user (token)
+  "The active user whose unexpired API token is TOKEN, or NIL."
+  (let ((row (first (db-select 'auth-token :where "token_hash = ? AND purpose = ?"
+                                           :params (list (token-hash token) "api")))))
+    (and row (or (null (slot-value row 'expires)) (> (slot-value row 'expires) (get-universal-time)))
+         (let ((user (find-user-by-id (slot-value row 'user-id))))
+           (and user (user-active-p user) user)))))
+
+(defun cookie-user ()
+  "The active user the browser's sign-in cookie names, or NIL."
+  (let* ((token (request-cookie (sign-in-cookie-name)))
+         (row (and token (plusp (length token))
+                   (first (db-select 'auth-session :where "token_hash = ? AND expires > ?"
+                                                   :params (list (token-hash token) (get-universal-time))))))
+         (user (and row (find-user-by-id (auth-session-user-id row)))))
+    (and user (user-active-p user) user)))
+
+(defun endpoint-authenticate ()
+  "Who the endpoint request comes from, and how: (VALUES USER :TOKEN) for an
+Authorization: Bearer token, (VALUES USER :COOKIE) for the sign-in cookie,
+or NIL."
+  (let ((header (gethash "authorization" (lack/request:request-headers *request*))))
+    (cond ((and header (> (length header) 7) (string-equal "Bearer " header :end2 7))
+           (values (token-user (string-trim " " (subseq header 7))) :token))
+          ((request-cookie (sign-in-cookie-name))
+           (let ((user (cookie-user))) (values user (and user :cookie))))
+          (t (values nil nil)))))
+
+(setf littoral:*endpoint-authenticator* 'endpoint-authenticate)
+
+(defun endpoint-user ()
+  "In a JSON endpoint: the user the request comes from, or NIL."
+  (values (endpoint-authenticate)))
+
+(defun require-endpoint-user (&optional role)
+  "In a JSON endpoint: the user the request comes from, answering 401 when
+there is none and 403 when they lack ROLE."
+  (let ((user (endpoint-user)))
+    (cond ((null user) (endpoint-error 401 "Sign in, or send an API token."))
+          ((and role (not (member role (user-roles user)))) (endpoint-error 403 "You don't have permission to do that."))
+          (t user))))
+
+(defun create-api-token (user &key (days 365))
+  "A new API token for USER, valid DAYS days: send it as
+\"Authorization: Bearer TOKEN\".  Only its hash is kept, so show it once."
+  (let ((token (format nil "lt_~A" (littoral::random-key 40))))
+    (db-insert (make-instance 'auth-token :token-hash (token-hash token)
+                                          :user-id (princ-to-string (user-id user)) :purpose "api"
+                                          :expires (and days (+ (get-universal-time) (* days 86400)))))
+    token))
+
+(defun revoke-api-tokens (user)
+  "Void all of USER's API tokens."
+  (db-execute "DELETE FROM auth_tokens WHERE user_id = ? AND purpose = ?"
+              (princ-to-string (user-id user)) "api"))

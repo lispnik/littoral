@@ -547,6 +547,7 @@ the handler falls back to the standard page."
         (list 401 (list :content-type "text/plain"
                         :www-authenticate (format nil "Basic realm=~S" (application-path app)))
               (list "Authorization required.")))
+      ((handle-endpoint app))
       (t
        (call-with-error-page
          app
@@ -628,9 +629,39 @@ handler mounted at PREFIX."
 (defun unmount-handler (prefix)
   (setf *mounts* (remove prefix *mounts* :key #'car :test #'string=)))
 
+(defun make-safe-request (env)
+  "A Lack request for ENV.  Lack parses JSON and form bodies as it makes one,
+and a malformed body would signal there; then the request is made without
+parsing, and whatever reads the body (an endpoint) answers it."
+  ;; JSON bodies are read once into memory, so that each attempt (and an
+  ;; endpoint after them) reads them from the start.
+  (let ((json (and (search "json" (or (getf env :content-type) ""))
+                   (getf env :raw-body)
+                   (let* ((length (or (getf env :content-length) 0))
+                          (buffer (make-array (min length *max-request-size*) :element-type '(unsigned-byte 8))))
+                     (subseq buffer 0 (read-sequence buffer (getf env :raw-body)))))))
+    (flet ((with-body (env)
+             (if json
+                 (let ((copy (copy-list env)))
+                   (setf (getf copy :raw-body) (flexi-streams:make-in-memory-input-stream json))
+                   copy)
+                 env)))
+      (setf env (with-body env))
+      (handler-case (lack/request:make-request env)
+        (error ()
+          (let ((plain (with-body env)))
+        (setf (getf plain :content-type) "application/octet-stream")
+        (let ((headers (getf plain :headers)))
+          (when (hash-table-p headers)
+            (let ((copy (make-hash-table :test 'equal)))
+              (maphash (lambda (k v) (setf (gethash k copy) v)) headers)
+              (setf (gethash "content-type" copy) "application/octet-stream"
+                    (getf plain :headers) copy))))
+            (lack/request:make-request plain)))))))
+
 (defun handle-sized-request (env prefix)
   "Answer the Lack request ENV, whose size has been checked."
-  (let* ((*request* (lack/request:make-request env))
+  (let* ((*request* (make-safe-request env))
          (*base-path* (string-right-trim
                        "/" (concatenate 'string prefix (or (getf env :script-name) ""))))
          (path (or (request-path) "/")))
