@@ -22,7 +22,7 @@
   (:use #:cl #:littoral #:littoral.html)
   (:documentation "Store uploaded files on disk or in S3, with thumbnails and description fields.")
   (:export #:storage #:*storage* #:disk-storage #:make-disk-storage #:s3-storage #:make-s3-storage
-           #:storage-put #:storage-get #:storage-delete #:storage-url
+           #:storage-put #:storage-get #:storage-delete #:storage-url #:ensure-bucket
            #:store-upload #:store-octets #:delete-stored-file
            #:stored-file #:stored-file-key #:stored-file-name #:stored-file-type #:stored-file-size
            #:stored-file-thumbnail #:stored-file-url #:stored-file-thumbnail-url
@@ -397,14 +397,46 @@ and expire; otherwise they point straight at the bucket."
            (authorization (format nil "AWS4-HMAC-SHA256 Credential=~A/~A/~A/s3/aws4_request, SignedHeaders=~A, Signature=~A"
                                   (s3-access-key storage) date (s3-region storage) signed
                                   (sigv4-signature (s3-secret-key storage) (s3-region storage) date amz-date canonical))))
-      (handler-case
-          (dex:request (format nil "~A~A" (s3-endpoint storage) (uri-encode path))
-                       :method method
-                       :headers (append (list (cons "Authorization" authorization))
-                                        (remove "host" headers :key #'car :test #'string=))
-                       :content (if (eq method :put) content nil)
-                       :force-binary t :keep-alive nil)
-        (dex:http-request-not-found () (values nil 404))))))
+      (flet ((send ()
+               (dex:request (format nil "~A~A" (s3-endpoint storage) (uri-encode path))
+                            :method method
+                            :headers (append (list (cons "Authorization" authorization))
+                                             (remove "host" headers :key #'car :test #'string=))
+                            :content (if (eq method :put) content nil)
+                            :force-binary t :keep-alive nil)))
+        ;; Reading or deleting what isn't there is NIL; any other failure,
+        ;; a PUT's above all, signals.
+        (if (eq method :put)
+            (send)
+            (handler-case (send)
+              (dex:http-request-not-found () (values nil 404))))))))
+
+(defun ensure-bucket (storage)
+  "Create STORAGE's bucket unless it exists (for tests and first runs)."
+  (handler-case
+      (multiple-value-bind (amz-date date) (amz-time)
+        (let* ((path (if (s3-path-style-p storage) (format nil "/~A" (s3-bucket storage)) "/"))
+               (payload-hash (sha256-hex (make-array 0 :element-type '(unsigned-byte 8))))
+               (headers (list (cons "host" (endpoint-host storage))
+                              (cons "x-amz-content-sha256" payload-hash)
+                              (cons "x-amz-date" amz-date)))
+               (canonical (format nil "PUT~%~A~%~%~{~A~%~}~%host;x-amz-content-sha256;x-amz-date~%~A"
+                                  path (mapcar (lambda (h) (format nil "~A:~A" (car h) (cdr h))) headers)
+                                  payload-hash)))
+          (dex:request (format nil "~A~A" (s3-endpoint storage) path)
+                       :method :put
+                       :headers (list (cons "Authorization"
+                                            (format nil "AWS4-HMAC-SHA256 Credential=~A/~A/~A/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=~A"
+                                                    (s3-access-key storage) date (s3-region storage)
+                                                    (sigv4-signature (s3-secret-key storage) (s3-region storage)
+                                                                     date amz-date canonical)))
+                                      (cons "x-amz-content-sha256" payload-hash)
+                                      (cons "x-amz-date" amz-date))
+                       :content "" :keep-alive nil)
+          t))
+    ;; 409: it exists already.
+    (dex:http-request-failed (e)
+      (if (eql (dex:response-status e) 409) t (error e)))))
 
 (defmethod storage-put ((storage s3-storage) key octets content-type)
   (s3-request storage :put key :content octets :content-type content-type)

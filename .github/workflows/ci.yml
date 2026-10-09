@@ -62,7 +62,7 @@ jobs:
           if docker run -d --name s3 -p 9000:9000 rustfs/rustfs:latest; then
             for i in $(seq 1 60); do
               code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:9000/ || true)
-              if [ "$code" != "000" ]; then
+              if [ "$code" != "000" ] && [ "$code" != "503" ]; then
                 { echo "LITTORAL_TEST_S3=http://127.0.0.1:9000"; echo "LITTORAL_TEST_S3_KEY=rustfsadmin";
                   echo "LITTORAL_TEST_S3_SECRET=rustfsadmin"; } >> "$GITHUB_ENV"
                 echo "S3 server is up (HTTP $code)"; break

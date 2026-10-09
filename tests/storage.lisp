@@ -157,7 +157,7 @@
                          :access-key (or (uiop:getenv "LITTORAL_TEST_S3_KEY") "minioadmin")
                          :secret-key (or (uiop:getenv "LITTORAL_TEST_S3_SECRET") "minioadmin")))
                (file (progn
-                       (ignore-errors (littoral.storage::s3-request storage :put ""))   ; the bucket, if need be
+                       (littoral.storage:ensure-bucket storage)
                        (littoral.storage:store-octets (png-octets 300 200) "s3.png" :storage storage :thumbnail t))))
           (multiple-value-bind (octets type) (littoral.storage:storage-get storage (littoral.storage:stored-file-key file))
             (is (string= "image/png" type))
