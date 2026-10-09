@@ -415,3 +415,10 @@
       (is (equal "ginger" (cdr (assoc "flavour" (browser-cookies b) :test #'string=))))))
   (signals error (set-cookie "bad name" "x" :session (make-instance 'littoral::session)))
   (signals error (set-cookie "ok" "semi;colon" :session (make-instance 'littoral::session))))
+
+(test static-files-outlive-their-directory
+  ;; An executable built here and run elsewhere has no static/ directory.
+  (littoral::embed-static-files)
+  (let ((littoral::*static-directory* #p"/nonexistent/littoral-static/"))
+    (is (search "littoral" (littoral::static-file "littoral.js")))
+    (is (search "?v=" (littoral::static-url "littoral.css")))))

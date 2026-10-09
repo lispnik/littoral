@@ -1,0 +1,35 @@
+# /etc/systemd/system/{{name}}.service — a Littoral application as a service.
+# Install the executable `make build` writes as /opt/{{name}}/{{name}}, then:
+#   systemctl daemon-reload && systemctl enable --now {{name}}
+[Unit]
+Description={{title}} (Littoral)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{name}}
+Group={{name}}
+WorkingDirectory=/opt/{{name}}
+ExecStart=/opt/{{name}}/{{name}}
+Environment=PORT={{port}}
+Environment=ADDRESS=127.0.0.1
+Environment=PUBLIC_URL=https://{{name}}.example.org
+Environment=TRUST_PROXY=1
+Environment=DATA_DIR=/opt/{{name}}/data
+EnvironmentFile=-/etc/{{name}}.env
+Restart=on-failure
+RestartSec=2
+# SBCL ignores SIGTERM while Hunchentoot threads run; give it a moment, then kill.
+TimeoutStopSec=5
+KillSignal=SIGTERM
+SendSIGKILL=yes
+# Hardening: a web application needs little of the system.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/{{name}}/data
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

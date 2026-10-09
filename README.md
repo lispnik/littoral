@@ -52,7 +52,13 @@ make run           # http://127.0.0.1:8080/, in development mode
 make build         # bin/bookshop, a standalone executable
 ```
 
-The project has a root component (a counter, a confirmation dialog and a form), tests that click through it, a Makefile that finds this checkout, a README and a license. From a REPL: `(asdf:load-system :littoral/generator)`, then `(littoral.generator:make-project "bookshop" :directory "~/src/bookshop/" :author "…" :license "MIT" :port 8080)`.
+The project has a root component (a counter, a confirmation dialog and a form), tests that click through it, a Makefile that finds this checkout, a README and a license.
+
+`TEMPLATE=app` starts something bigger:
+- users who sign in and keep private notes, with a described model, editors and an admin at `/admin`
+- SQLite or PostgreSQL, through `DATABASE_URL`
+- `make user` to add people
+- an executable configured from the environment, with a systemd unit and a Caddyfile in `deploy/` From a REPL: `(asdf:load-system :littoral/generator)`, then `(littoral.generator:make-project "bookshop" :directory "~/src/bookshop/" :author "…" :license "MIT" :port 8080)`.
 
 Other targets:
 
@@ -62,6 +68,7 @@ make a11y          # WCAG checks (axe-core) over every example page
 make bench         # request and snapshot timings
 make docs          # regenerate docs/API.md from the docstrings
 make clean-check   # build a fresh clone against nothing but its ocicl.csv
+make tour          # the narrated video tour, recorded into tour/ (Chrome, Node, ffmpeg)
 make lint          # ocicl lint
 ```
 
@@ -519,6 +526,14 @@ Roles and permissions are kept in two tables, keyed by name, so they work with a
 - **Escaping.** Text and attribute values are escaped; `raw` is the one way around that. `:href` is written as given, so don't pass it a URL you haven't checked (it could be `javascript:`). An upload's `file-name` comes from the browser; don't use it as a path.
 
 ## Deployment and scale
+
+**[The deployment guide](docs/deployment.md)** covers the whole process:
+- building an executable
+- a systemd service
+- nginx or Caddy with TLS, WebSockets and server push
+- PostgreSQL
+- several processes
+- a production checklist
 
 **Performance.** `make load` measures over real HTTP, using Hunchentoot on an Apple-silicon Mac with SBCL 2.6.8:
 

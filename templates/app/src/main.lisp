@@ -1,0 +1,63 @@
+;;;; main.lisp — the database, serving, and the executable's entry point
+
+(in-package #:{{name}})
+
+(defun database-spec ()
+  "The database to use: $DATABASE_URL (postgres://user:password@host:port/db),
+or SQLite in $DATA_DIR (default data/), as CONNECT-DATABASE takes it."
+  (let ((url (uiop:getenv "DATABASE_URL")))
+    (if (and url (plusp (length url)))
+        (let* ((uri (quri:uri url))
+               (userinfo (or (quri:uri-userinfo uri) ""))
+               (colon (position #\: userinfo)))
+          (list :postgres
+                :database-name (string-left-trim "/" (quri:uri-path uri))
+                :host (quri:uri-host uri) :port (or (quri:uri-port uri) 5432)
+                :username (if colon (subseq userinfo 0 colon) userinfo)
+                :password (if colon (quri:url-decode (subseq userinfo (1+ colon))) "")))
+        (let ((directory (uiop:ensure-directory-pathname (or (uiop:getenv "DATA_DIR") "data/"))))
+          (ensure-directories-exist directory)
+          (list :sqlite3 :database-name (namestring (merge-pathnames "{{name}}.sqlite3" directory)))))))
+
+(defun call-with-database (spec thunk)
+  (funcall (apply #'littoral.db:using-database spec) thunk))
+
+(defun setup-database (spec)
+  "Create the tables unless they exist; safe at every start."
+  (call-with-database spec (lambda ()
+                             (littoral.db:create-table 'note)
+                             (littoral.auth:create-auth-tables))))
+
+(defun create-user (name email password &key admin (database (database-spec)))
+  "Add a user who can sign in; with ADMIN, one who may use /admin too."
+  (call-with-database database
+                      (lambda ()
+                        (littoral.auth:add-user name email password :roles (when admin '(:admin))))))
+
+(defun register-app (&key (path "/") (mode :development) (database (database-spec)))
+  "Serve the application at PATH and its admin at /admin, over DATABASE.
+:DEVELOPMENT adds the toolbar and halos."
+  (setup-database database)
+  (register-application path 'app-root :title "{{title}}" :mode mode
+                        :around-request (apply #'littoral.db:using-database database)
+                        ;; Each request's callbacks in one transaction.
+                        :around-actions (littoral.db:transactional))
+  ;; The admin answers only this machine unless given :CREDENTIALS.
+  (littoral.admin:register-admin "/admin" '(note) :title "{{title}} admin" :database database))
+
+(defun serve (&key (port {{port}}) (address "127.0.0.1") (mode :development))
+  "Register the application and start the web server."
+  (register-app :mode mode)
+  (start :port port :address address))
+
+(defun toplevel ()
+  "The entry point of the executable `make build` writes: serves in deployment
+mode on $PORT (default {{port}}) and $ADDRESS, with $PUBLIC_URL as the address
+mail links use, and $TRUST_PROXY set when behind a reverse proxy."
+  (let ((public-url (uiop:getenv "PUBLIC_URL")))
+    (setf littoral.auth:*public-url* (and public-url (plusp (length public-url)) public-url)
+          *trust-forwarded-for* (and (uiop:getenv "TRUST_PROXY") t)))
+  (serve :port (parse-integer (or (uiop:getenv "PORT") "{{port}}"))
+         :address (or (uiop:getenv "ADDRESS") "127.0.0.1")
+         :mode :deployment)
+  (loop (sleep 3600)))

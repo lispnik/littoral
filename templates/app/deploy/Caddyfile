@@ -1,0 +1,10 @@
+# Caddy in front of one Littoral process: TLS certificates are automatic,
+# and WebSockets and streams pass through as they are.
+{{name}}.example.org {
+    request_body {
+        max_size 10MB
+    }
+    reverse_proxy 127.0.0.1:{{port}} {
+        flush_interval -1
+    }
+}

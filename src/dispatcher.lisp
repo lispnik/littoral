@@ -23,20 +23,30 @@
 
 (defun static-file (name)
   "The contents and fingerprint of static file NAME, or NIL.  Re-read when
-the file changes on disk."
-  (let ((path (merge-pathnames name *static-directory*)))
-    (when (and (not (search ".." name)) (probe-file path))
-      (let ((date (file-write-date path))
-            (cached (gethash name *static-cache*)))
-        (unless (eql date (first cached))
-          (let ((contents (alexandria:read-file-into-string path :external-format :utf-8)))
-            (setf cached (list date contents
-                               (subseq (ironclad:byte-array-to-hex-string
-                                        (ironclad:digest-sequence
-                                         :sha1 (sb-ext:string-to-octets contents :external-format :utf-8)))
-                                       0 10))
-                  (gethash name *static-cache*) cached)))
-        (values (second cached) (third cached))))))
+the file changes on disk; served from memory when it isn't on disk, as in
+an executable built on another machine (see EMBED-STATIC-FILES)."
+  (unless (search ".." name)
+    (let ((path (merge-pathnames name *static-directory*))
+          (cached (gethash name *static-cache*)))
+      (when (probe-file path)
+        (let ((date (file-write-date path)))
+          (unless (eql date (first cached))
+            (let ((contents (alexandria:read-file-into-string path :external-format :utf-8)))
+              (setf cached (list date contents
+                                 (subseq (ironclad:byte-array-to-hex-string
+                                          (ironclad:digest-sequence
+                                           :sha1 (sb-ext:string-to-octets contents :external-format :utf-8)))
+                                         0 10))
+                    (gethash name *static-cache*) cached)))))
+      (and cached (values (second cached) (third cached))))))
+
+(defun embed-static-files ()
+  "Read littoral's static files into memory, so an image saved now serves
+them wherever it runs.  Runs by itself before SAVE-LISP-AND-DIE."
+  (dolist (path (uiop:directory-files *static-directory*))
+    (static-file (file-namestring path))))
+
+(pushnew 'embed-static-files sb-ext:*save-hooks*)
 
 (defun static-url (name)
   "The URL of littoral's static file NAME, fingerprinted with its contents

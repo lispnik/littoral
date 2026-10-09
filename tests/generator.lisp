@@ -54,3 +54,24 @@
            (is (null (probe-file (merge-pathnames "LICENSE" dir))))
            (is (search "BSD-2-Clause" (uiop:read-file-string (merge-pathnames "lt-other.asd" dir)))))
       (uiop:delete-directory-tree dir :validate t :if-does-not-exist :ignore))))
+
+(test the-app-template-works
+  ;; A database, signing in and an admin: its own tests pass here too.
+  (let ((dir (scratch-directory)))
+    (unwind-protect
+         (let ((*standard-output* (make-broadcast-stream)))
+           (littoral.generator:make-project "lt-generated-app" :directory dir :template "app")
+           (is (probe-file (merge-pathnames "deploy/lt-generated-app.service" dir)))
+           (is (search "PUBLIC_URL" (uiop:read-file-string (merge-pathnames "README.md" dir))))
+           (asdf:load-asd (merge-pathnames "lt-generated-app.asd" dir))
+           (asdf:load-system "lt-generated-app/tests")
+           (let ((results (let ((fiveam:*test-dribble* (make-broadcast-stream)))
+                            (fiveam:run (uiop:find-symbol* '#:lt-generated-app '#:lt-generated-app/tests)))))
+             (is (>= (length results) 10))
+             (is (every (lambda (r) (typep r 'fiveam::test-passed)) results)
+                 "~{~A~%~}" (mapcar #'fiveam::reason (remove-if (lambda (r) (typep r 'fiveam::test-passed)) results)))))
+      ;; Its tests set the iteration count for themselves; put ours back.
+      (setf littoral.auth:*pbkdf2-iterations* 1000)
+      (asdf:clear-system "lt-generated-app")
+      (asdf:clear-system "lt-generated-app/tests")
+      (uiop:delete-directory-tree dir :validate t :if-does-not-exist :ignore))))

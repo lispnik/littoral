@@ -1,7 +1,7 @@
 SBCL ?= sbcl
 PORT ?= 8080
 
-.PHONY: new test test-postgres e2e a11y bench load docs clean-check run tracker lint clean
+.PHONY: new tour test test-postgres e2e a11y bench load docs clean-check run tracker lint clean
 
 test:
 	$(SBCL) --non-interactive --eval '(asdf:test-system :littoral)'
@@ -13,11 +13,25 @@ test-postgres:
 	LITTORAL_TEST_DATABASE=$(LITTORAL_TEST_DATABASE) $(SBCL) --non-interactive \
 	  --eval '(asdf:load-system :littoral/tests)' --eval '(littoral/tests::run-database-suites)'
 
-# A new application: make new NAME=bookshop [DIR=~/src/bookshop]
+# The narrated video tour, recorded from a fresh server into tour/littoral-tour.mp4.
+# Needs Chrome, Node 22+ and ffmpeg; narration needs macOS `say` (captions only otherwise).
+TOUR_DIR ?= $(CURDIR)/tour
+TOUR_PORT ?= 8097
+tour:
+	@if curl -s -o /dev/null http://127.0.0.1:$(TOUR_PORT)/; then echo "Port $(TOUR_PORT) is in use: set TOUR_PORT"; exit 1; fi
+	@rm -rf $(TOUR_DIR) && mkdir -p $(TOUR_DIR)/data $(TOUR_DIR)/inbox
+	@TOUR_DIR=$(TOUR_DIR) TOUR_PORT=$(TOUR_PORT) $(SBCL) --load tools/tour/server.lisp > $(TOUR_DIR)/server.log 2>&1 & pid=$$!; \
+	  until curl -s -o /dev/null http://127.0.0.1:$(TOUR_PORT)/; do sleep 1; kill -0 $$pid 2>/dev/null || exit 1; done; \
+	  TOUR_DIR=$(TOUR_DIR) INBOX=$(TOUR_DIR)/inbox BASE=http://127.0.0.1:$(TOUR_PORT) $(NODE) tools/tour/tour.mjs; status=$$?; \
+	  kill -9 $$pid; \
+	  [ $$status = 0 ] && TOUR_DIR=$(TOUR_DIR) OUT=$(TOUR_DIR)/littoral-tour.mp4 $(NODE) tools/tour/build.mjs
+
+# A new application: make new NAME=bookshop [DIR=~/src/bookshop] [TEMPLATE=app]
+# (basic: a component and tests; app: also a database, signing in, an admin, deploy files)
 new:
 	@test -n "$(NAME)" || { echo "Usage: make new NAME=my-app [DIR=path]"; exit 2; }
 	@$(SBCL) --noinform --non-interactive --eval '(asdf:load-system :littoral/generator)' \
-	  --eval '(littoral.generator:make-project "$(NAME)" $(if $(DIR),:directory "$(abspath $(DIR))/"))' 2>&1 | grep -v '^;\|^WARNING'
+	  --eval '(littoral.generator:make-project "$(NAME)" $(if $(DIR),:directory "$(abspath $(DIR))/") $(if $(TEMPLATE),:template "$(TEMPLATE)"))' 2>&1 | grep -v '^;\|^WARNING'
 
 # A fresh clone, built against nothing but its own ocicl.csv.
 clean-check:

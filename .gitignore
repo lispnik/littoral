@@ -1,3 +1,4 @@
 ocicl/
 *.fasl
 tracker-data.lisp
+tour/
