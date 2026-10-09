@@ -17,6 +17,9 @@
   ("Collapse" "Replier") ("Expand" "Déplier") ("Move up" "Monter") ("Move down" "Descendre")
   ("Move item ~D up" "Monter l'élément ~D") ("Move item ~D down" "Descendre l'élément ~D")
   ("Language" "Langue")
+  ("Waiting to start." "En attente.") ("Working… ~D%" "En cours… ~D %") ("Done." "Terminé.")
+  ("Failed: ~A" "Échec : ~A") ("Cancelled." "Annulé.")
+  ("Failed (~A); trying again in ~D s, attempt ~D of ~D." "Échec (~A) ; nouvel essai dans ~D s, essai ~D sur ~D.")
   ;; Validation
   ("required" "obligatoire")
   ("~A is required." "~A est obligatoire.")
@@ -77,6 +80,9 @@ Le lien ne sert qu'une fois, pendant une heure.  Si ce n'était pas vous, ignore
   ("Collapse" "Zuklappen") ("Expand" "Aufklappen") ("Move up" "Nach oben") ("Move down" "Nach unten")
   ("Move item ~D up" "Eintrag ~D nach oben") ("Move item ~D down" "Eintrag ~D nach unten")
   ("Language" "Sprache")
+  ("Waiting to start." "Wartet.") ("Working… ~D%" "In Arbeit… ~D %") ("Done." "Fertig.")
+  ("Failed: ~A" "Fehlgeschlagen: ~A") ("Cancelled." "Abgebrochen.")
+  ("Failed (~A); trying again in ~D s, attempt ~D of ~D." "Fehlgeschlagen (~A); neuer Versuch in ~D s, Versuch ~D von ~D.")
   ;; Validation
   ("required" "Pflichtfeld")
   ("~A is required." "~A ist erforderlich.")
@@ -137,6 +143,9 @@ Der Link funktioniert einmal, eine Stunde lang.  Falls Sie das nicht waren, igno
   ("Collapse" "Contraer") ("Expand" "Expandir") ("Move up" "Subir") ("Move down" "Bajar")
   ("Move item ~D up" "Subir el elemento ~D") ("Move item ~D down" "Bajar el elemento ~D")
   ("Language" "Idioma")
+  ("Waiting to start." "En espera.") ("Working… ~D%" "Trabajando… ~D %") ("Done." "Hecho.")
+  ("Failed: ~A" "Error: ~A") ("Cancelled." "Cancelado.")
+  ("Failed (~A); trying again in ~D s, attempt ~D of ~D." "Error (~A); se reintentará en ~D s, intento ~D de ~D.")
   ;; Validation
   ("required" "obligatorio")
   ("~A is required." "~A es obligatorio.")

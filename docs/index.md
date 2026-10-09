@@ -252,6 +252,26 @@ Nothing else changes: callbacks, `publish` and `notify` behave as before. Render
 
 A socket opens only from a page of the same site: its `Origin` must match the host, or be in `littoral.websocket:*allowed-origins*`. Sockets count against the event-stream limits. Messages are capped at `*max-message-size*` (1 MB), malformed messages are ignored, and in deployment mode a failing request answers "The request failed." rather than the error.
 
+### Background jobs
+
+`submit-job` runs work on a pool of threads (`*job-workers*`, 4) and keeps the page up to date while it does:
+
+```lisp
+(let ((job (submit-job (lambda ()
+                         (dotimes (i 10)
+                           (resize-photo i)
+                           (job-progress (/ (1+ i) 10) "Resizing…")))
+                       :name "Resize photos" :attempts 3 :backoff 2)))
+  (watch-job job (make-instance 'job-view :job job)))
+```
+
+- **Retries.** A job that signals is tried again, up to `:attempts` times. The first retry comes after `:backoff` seconds, and each one after waits twice as long as the last. The job's value becomes `job-result`, and `job-error` keeps the last failure.
+- **Progress.** `job-progress` records how far the job has got and redraws every component `watch-job` has attached, by server push. A `job-view` shows a progress bar, the status (waiting, working, retrying, done, failed, cancelled) and a Cancel button.
+- **Cancelling.** `cancel-job` stops a job at once if it's queued or waiting to retry, and at its next `job-progress` if it's running.
+- **Inspecting.** `job-status`, `wait-for-job` and `list-jobs` let you check on jobs.
+
+Jobs live in memory, so a restart forgets them. The progress example runs one job that succeeds and one that fails once and is retried.
+
 ### Live redefinition
 
 In development mode, recompile a component's `render` method in Emacs (`C-c C-c`) and every open page showing that component redraws itself within a couple of seconds, with its state intact. A watcher notices when methods of `render`, `style`, `script`, `update-root`, `children` or `render-decoration` are redefined. Pages showing an instance of that class then reload, and because each page's URL names its saved state, reloading keeps that state. Pages with a push stream hear about it through the stream; the others poll a cheap endpoint, so live reloading holds no connection (and on Hunchentoot no thread) open.

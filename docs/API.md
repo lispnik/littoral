@@ -729,6 +729,100 @@ A function of (`socket` `stream` `writer`) that serves `stream` from an event
 loop, set by an optional system such as littoral/woo; `nil` when there is
 none and each stream gets a waiting thread.
 
+### Background jobs (the class JOB is not exported: the name is too common)
+
+#### `submit-job` `function &key (name "Job") (attempts 1) (backoff 2)` — function
+
+Run `function`, of no arguments, in the background; the `job`.  It is tried
+up to `attempts` times, waiting `backoff` seconds before the second and twice
+as long before each after.  Its value becomes the `job-result`.
+
+#### `job-progress` `fraction &optional message (job *current-job*)` — function
+
+From inside a job: it is `fraction` (0 to 1) done, with `message` to show.
+Re-renders the components watching it.  Signals `job-cancelled` once the job
+has been cancelled, ending it.
+
+#### `cancel-job` `job` — function
+
+Stop `job`: at once if it hasn't started or is waiting to retry, otherwise
+at its next `job-progress`.
+
+#### `watch-job` `job component &optional (session *session*)` — function
+
+Re-render `component` on `session`'s pages whenever `job` changes.  The page
+must listen for pushes: a `job-view` does; another component can subscribe
+to *JOBS-CHANNEL*.
+
+#### `wait-for-job` `job &optional (timeout 60)` — function
+
+Wait until `job` has finished, at most `timeout` seconds; its status.
+
+#### `list-jobs` — function
+
+Recent jobs, newest first.
+
+#### `job-view` — class
+
+A job's progress bar, status and Cancel button, kept up to
+date by server push once `watch-job` has been called on it.
+
+#### `job-view-job` `object` — generic function
+
+Reads the job of a job-view.
+
+#### `job-cancelled` — condition
+
+Signalled by `job-progress` in a job that `cancel-job` was called on.
+
+#### `*current-job*` — variable
+
+The job this thread is running.
+
+#### `*job-workers*` — variable
+
+Threads running jobs at once.
+
+#### `*jobs-channel*` — variable
+
+Subscribed to by `job-view` so that its page listens for pushes; never published.
+
+#### `job-id` `object` — generic function
+
+Reads the id of a job.
+
+#### `job-name` `object` — generic function
+
+Reads the name of a job.
+
+#### `job-status` `object` — generic function
+
+Reads the status of a job.  :`queued`, :`running`, :`waiting` (to retry), :`done`, :`failed` or :`cancelled`.
+
+#### `job-progress-fraction` `object` — generic function
+
+Reads the progress of a job.
+
+#### `job-message` `object` — generic function
+
+Reads the message of a job.
+
+#### `job-result` `object` — generic function
+
+Reads the result of a job.
+
+#### `job-error` `object` — generic function
+
+Reads the error of a job.  The last failure, as text.
+
+#### `job-attempt` `object` — generic function
+
+Reads the attempt of a job.
+
+#### `job-attempts` `object` — generic function
+
+Reads the attempts of a job.
+
 #### `*live-reload*` — variable
 
 When true, open pages of applications in development mode reload after

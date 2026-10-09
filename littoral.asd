@@ -50,6 +50,7 @@
                              (:file "ajax")
                              (:file "dispatcher")
                              (:file "push")
+                             (:file "jobs")
                              (:file "live")
                              (:module "tools"
                               :serial t
@@ -155,7 +156,8 @@
                              (:file "generator")
                              (:file "members")
                              (:file "passwords")
-                             (:file "auth-store"))))
+                             (:file "auth-store")
+                             (:file "jobs"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
                                        (uiop:find-symbol* :littoral :littoral/tests))

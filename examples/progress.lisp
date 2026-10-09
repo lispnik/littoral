@@ -1,72 +1,50 @@
-;;;; progress.lisp — a background job reporting to the page with NOTIFY
+;;;; progress.lisp — background jobs reporting to the page
+;;;;
+;;;; SUBMIT-JOB runs work on a pool of threads; JOB-PROGRESS reports how far
+;;;; it has got, and the JOB-VIEW watching it is redrawn on this page by
+;;;; server push.  The second job fails on its first try and is retried.
 
 (in-package #:littoral-examples)
-
-(defvar *progress-channel* (make-channel "progress demo")
-  "Never published: subscribing just opens the page's event stream, which
-NOTIFY then uses.")
 
 (defparameter *job-steps* 20)
 (defparameter *job-step-seconds* 0.15)
 
-(defclass progress-bar (component updatable)
-  ((done :initform 0 :accessor done-steps)
-   (running :initform nil :accessor job-running-p)
-   (finished :initform nil :accessor job-finished-p))
-  (:documentation "A bar showing a background job's progress, updated by NOTIFY."))
+(defun steady-work ()
+  (dotimes (i *job-steps*)
+    (sleep *job-step-seconds*)
+    (job-progress (/ (1+ i) *job-steps*) "Crunching numbers…")))
 
-(defun run-job (bar session)
-  "Work in another thread, telling the page after every step."
-  (sb-thread:make-thread
-   (lambda ()
-     (dotimes (i *job-steps*)
-       (sleep *job-step-seconds*)
-       (with-session (session) (setf (done-steps bar) (1+ i)))
-       (notify bar session))
-     (with-session (session)
-       (setf (job-running-p bar) nil
-             (job-finished-p bar) t))
-     (notify bar session))
-   :name "progress example job"))
-
-(defun start-job (bar)
-  "Start BAR's job in another thread unless it is already running."
-  (unless (job-running-p bar)
-    (setf (done-steps bar) 0
-          (job-running-p bar) t
-          (job-finished-p bar) nil)
-    (run-job bar *session*)))
-
-(defmethod render ((self progress-bar))
-  (let ((percent (round (* 100 (done-steps self)) *job-steps*)))
-    (div (:class "progress")
-      (div (:class "progress-track")
-        (div (:class "progress-fill" :style (format nil "width: ~D%" percent))))
-      (p () (text (cond ((job-running-p self) (format nil "Working… ~D%" percent))
-                        ((job-finished-p self) "Done.")
-                        (t "Not started."))))
-      (button (:on-click (ajax :callback (lambda () (start-job self)) :update self)
-               :disabled (job-running-p self))
-        (text (if (job-finished-p self) "Run again" "Start the job"))))))
+(defun flaky-work ()
+  ;; The first attempt fails half-way; the retry succeeds.
+  (dotimes (i *job-steps*)
+    (sleep *job-step-seconds*)
+    (when (and (= i 8) (= (job-attempt *current-job*) 1))
+      (error "the network dropped"))
+    (job-progress (/ (1+ i) *job-steps*) "Fetching…")))
 
 (defclass progress-demo (component)
-  ((bar :initform (make-instance 'progress-bar) :reader demo-bar))
+  ((view :initform (make-instance 'job-view) :reader demo-view))
   (:documentation "The progress example page."))
 
 (defmethod children ((self progress-demo))
-  (list (demo-bar self)))
+  (list (demo-view self)))
 
-;; The page must listen for pushes while a job might report.
-(defmethod subscriptions ((self progress-bar))
-  (list *progress-channel*))
+(defun start-demo-job (self work name attempts)
+  (let ((job (submit-job work :name name :attempts attempts :backoff 1)))
+    (setf (job-view-job (demo-view self)) job)
+    (watch-job job (demo-view self))))
 
 (defmethod render ((self progress-demo))
   (h1 () "Progress")
-  (p () "The job runs in a background thread and calls " (code () "notify")
-    " after each step; the bar is re-rendered on this page by server push.")
-  (render-component (demo-bar self)))
-
-(defmethod style ((self progress-demo))
-  ".progress-track { height: 1rem; border: 1px solid var(--lt-border); border-radius: 999px;
-                   overflow: hidden; max-width: 30rem; }
-.progress-fill { height: 100%; background: var(--lt-accent); transition: width .1s; }")
+  (p () "Each button starts a background job with " (code () "submit-job")
+    ". The job reports with " (code () "job-progress")
+    ", and the bar below is redrawn on this page by server push.")
+  (p ()
+    (button (:on-click (ajax :callback (lambda () (start-demo-job self #'steady-work "Steady job" 1))
+                             :update self))
+      "Start the job")
+    " "
+    (button (:on-click (ajax :callback (lambda () (start-demo-job self #'flaky-work "Flaky job" 3))
+                             :update self))
+      "Start a job that fails once"))
+  (render-component (demo-view self)))

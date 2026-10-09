@@ -102,3 +102,9 @@ dialog.lt-modal { position: fixed; top: 12vh; margin: 0 auto; max-width: min(36r
 
 /* Language chooser */
 .lt-languages ul { display: flex; flex-wrap: wrap; gap: .8rem; list-style: none; padding: 0; margin: 0; }
+
+/* Background jobs */
+.lt-job-track { height: 1rem; max-width: 30rem; border: 1px solid var(--lt-border); border-radius: 999px; overflow: hidden; }
+.lt-job-fill { height: 100%; background: var(--lt-accent); transition: width .15s; }
+.lt-job-failed .lt-job-fill { background: var(--lt-error); }
+.lt-job-status { margin: .4rem 0; }
