@@ -55,7 +55,16 @@ jobs:
           done
           exit 1
 
+      - name: Start MinIO, for the S3 tests
+        run: |
+          docker run -d --name minio -p 9000:9000 minio/minio server /data
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:9000/minio/health/live && break; sleep 1; done
+          docker run --rm --network host --entrypoint sh minio/mc -c \
+            "mc alias set local http://127.0.0.1:9000 minioadmin minioadmin && mc mb -p local/littoral-test"
+
       - name: Unit tests
+        env:
+          LITTORAL_TEST_S3: http://127.0.0.1:9000
         run: |
           sbcl --non-interactive \
             --eval '(asdf:initialize-source-registry (list :source-registry (list :directory (uiop:getcwd)) :inherit-configuration))' \
@@ -88,6 +97,7 @@ jobs:
             --eval '(asdf:load-system :littoral/tutorial)' --eval '(reading-list:register)' \
             --eval '(asdf:load-system :littoral/admin-demo)' --eval '(littoral-admin-demo:register)' \
             --eval '(asdf:load-system :littoral/members-demo)' --eval '(littoral-members-demo:register)' \
+            --eval '(asdf:load-system :littoral/storage-demo)' --eval '(littoral-gallery:register)' \
             --eval '(asdf:load-system :littoral/parenscript-demo)' --eval '(littoral-parenscript-demo:register)' \
             --eval '(asdf:load-system :littoral/websocket)' \
             --eval '(littoral:start :port 8765)' --eval '(sleep 900)' > server.log 2>&1 &
@@ -105,6 +115,7 @@ jobs:
             --eval '(asdf:load-system :littoral/tutorial)' --eval '(reading-list:register)' \
             --eval '(asdf:load-system :littoral/admin-demo)' --eval '(littoral-admin-demo:register)' \
             --eval '(asdf:load-system :littoral/members-demo)' --eval '(littoral-members-demo:register)' \
+            --eval '(asdf:load-system :littoral/storage-demo)' --eval '(littoral-gallery:register)' \
             --eval '(asdf:load-system :littoral/parenscript-demo)' --eval '(littoral-parenscript-demo:register)' \
             --eval '(asdf:load-system :littoral/websocket)' \
             --eval '(asdf:load-system :littoral/woo)' \

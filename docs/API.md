@@ -891,6 +891,20 @@ called while answering a WebSocket message.
 
 The value of the request's cookie `name`, or `nil`.
 
+#### `mount-handler` `prefix handler` — function
+
+Answer requests for paths under `prefix` (such as "/files/") with `handler`, a
+function of the rest of the path that returns a Lack response.  Replaces any
+handler mounted at `prefix`.
+
+#### `unmount-handler` `prefix` — function
+
+*Undocumented.*
+
+#### `field-multipart-p` `field` — generic function
+
+True when `field`'s input uploads a file, so its form must be multipart.
+
 #### `application` — class
 
 A root component class served at a path, with its settings and live sessions.
@@ -1665,7 +1679,8 @@ Choose the option labelled `label` in the select with `dom` id `id`.
 
 #### `attach-file` `browser id filename content-type contents` — function
 
-Choose a file for the file input with `dom` id `id`.  `contents` is a string.
+Choose a file for the file input with `dom` id `id`.  `contents` is a string
+or a vector of octets.
 
 #### `press` `browser text` — function
 

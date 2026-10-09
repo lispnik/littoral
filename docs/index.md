@@ -252,6 +252,35 @@ Nothing else changes: callbacks, `publish` and `notify` behave as before. Render
 
 A socket opens only from a page of the same site: its `Origin` must match the host, or be in `littoral.websocket:*allowed-origins*`. Sockets count against the event-stream limits. Messages are capped at `*max-message-size*` (1 MB), malformed messages are ignored, and in deployment mode a failing request answers "The request failed." rather than the error.
 
+### Files people upload
+
+`littoral/storage` keeps uploads on disk or in S3, and gives descriptions file fields:
+
+```lisp
+(setf littoral.storage:*storage*
+      (littoral.storage:make-disk-storage #p"/var/lib/app/files/"))   ; served at /files/
+;; or (littoral.storage:make-s3-storage :bucket "app-files" :region "eu-west-1"
+;;                                      :access-key … :secret-key …)
+
+(define-description photo
+  ((caption :required t)
+   (picture :type :image :required t :max-size 8000000)    ; with a thumbnail
+   (attachment :type :file)))
+```
+
+- **Editors** get a file chooser, with the current file and a Remove box. Their form becomes multipart by itself.
+- **Viewers and reports** show an image's thumbnail, linked to the original, and any other file as a download link.
+- **In a database**, a stored file is one text column: its key, name, type, size and thumbnail.
+- **Types come from the bytes**, not from what the browser said.
+  - Only PNG, JPEG, GIF and WebP are ever shown in the page. Anything else is served as an attachment, with `nosniff` and a sandboxing CSP, so an uploaded HTML or SVG file can't run script on your site.
+  - `:image` refuses files that aren't images.
+- **Thumbnails** are JPEGs `*thumbnail-size*` (240) pixels on their longer side, made with opticl. The image's dimensions are read from its header first, so a small file claiming enormous dimensions (a decompression bomb) is never decoded.
+- **Private files.** `:private t` serves files only through signed URLs that expire. On disk, the signature is an HMAC with `*signing-key*`; on S3 it's a presigned URL.
+- **S3.** The S3 backend speaks the S3 API with AWS Signature V4, so it also works with MinIO, R2, Spaces and others: give `:endpoint`. CI tests it against MinIO.
+- **Your own code** can use `store-upload`, `store-octets`, `stored-file-url` and `delete-stored-file`.
+
+The gallery example (`/examples/gallery`, system `littoral/storage-demo`) uploads photos with an optional attachment.
+
 ### Background jobs
 
 `submit-job` runs work on a pool of threads (`*job-workers*`, 4) and keeps the page up to date while it does:

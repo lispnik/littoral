@@ -146,6 +146,20 @@ try {
   const text = await evaluate("document.body.innerText");
   check("upload received", text.includes("littoral-e2e-profile-upload.txt") && text.includes("hello from chrome"), text.slice(0, 200));
 
+  // Gallery: an image through a real multipart upload, shown by its thumbnail.
+  const dot = PROFILE + "/littoral-e2e-dot.png";
+  writeFileSync(dot, Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64"));
+  await go("/examples/gallery");
+  await clickLink("Add a photo");
+  await evaluate(`document.getElementById("caption").value = "e2e dot"`);
+  const gdoc = await send("DOM.getDocument");
+  const gnode = await send("DOM.querySelector", { nodeId: gdoc.result.root.nodeId, selector: "#picture" });
+  await send("DOM.setFileInputFiles", { files: [dot], nodeId: gnode.result.nodeId });
+  await evaluate(`[...document.querySelectorAll("button")].find(b => b.textContent.includes("Upload")).click()`); await waitLoad();
+  await sleep(500);
+  check("gallery upload shows its thumbnail",
+        await evaluate(`(() => { const i = document.querySelector(".gallery img"); return !!i && i.complete && i.naturalWidth > 0; })()`));
+
   // Members: sign in through DemoID, the whole OAuth flow in a real browser.
   await go("/examples/members");
   await clickLink("Sign in");

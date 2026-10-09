@@ -118,6 +118,8 @@
                #:littoral/parenscript-demo
                #:littoral/websocket
                #:littoral/generator
+               #:littoral/storage
+               #:littoral/storage-demo
                #:dexador
                #:dbd-sqlite3
                #:dbd-postgres
@@ -157,7 +159,8 @@
                              (:file "members")
                              (:file "passwords")
                              (:file "auth-store")
-                             (:file "jobs"))))
+                             (:file "jobs")
+                             (:file "storage"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
                                        (uiop:find-symbol* :littoral :littoral/tests))
@@ -259,3 +262,15 @@
   :license "MIT"
   :depends-on (#:alexandria #:cl-ppcre)
   :components ((:module "src" :components ((:file "generator")))))
+
+(asdf:defsystem #:littoral/storage
+  :description "Store uploaded files on disk or in S3, with thumbnails and description fields."
+  :author "Matthew Kennedy"
+  :license "MIT"
+  :depends-on (#:littoral #:littoral/db #:opticl #:dexador #:flexi-streams #:ironclad #:cl-ppcre #:quri)
+  :components ((:module "src" :components ((:file "storage")))))
+
+(asdf:defsystem #:littoral/storage-demo
+  :description "A photo gallery: uploads kept in storage, with thumbnails."
+  :depends-on (#:littoral/storage #:dbd-sqlite3)
+  :components ((:module "examples" :components ((:file "gallery")))))

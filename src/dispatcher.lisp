@@ -572,6 +572,20 @@ the body is touched."
   (or (oversized-response env)
       (handle-sized-request env prefix)))
 
+(defvar *mounts* '()
+  "(PATH-PREFIX . HANDLER) pairs answering paths outside any application, such
+as stored files; see MOUNT-HANDLER.")
+
+(defun mount-handler (prefix handler)
+  "Answer requests for paths under PREFIX (such as \"/files/\") with HANDLER, a
+function of the rest of the path that returns a Lack response.  Replaces any
+handler mounted at PREFIX."
+  (setf *mounts* (acons prefix handler (remove prefix *mounts* :key #'car :test #'string=)))
+  prefix)
+
+(defun unmount-handler (prefix)
+  (setf *mounts* (remove prefix *mounts* :key #'car :test #'string=)))
+
 (defun handle-sized-request (env prefix)
   "Answer the Lack request ENV, whose size has been checked."
   (let* ((*request* (lack/request:make-request env))
@@ -580,6 +594,10 @@ the body is touched."
          (path (or (request-path) "/")))
     (cond ((alexandria:starts-with-subseq "/littoral/files/" path)
            (serve-static (subseq path (length "/littoral/files/"))))
+          ((find-if (lambda (mount) (alexandria:starts-with-subseq (car mount) path)) *mounts*)
+           (let ((mount (find-if (lambda (mount) (alexandria:starts-with-subseq (car mount) path)) *mounts*)))
+             (with-sane-printing ()
+               (funcall (cdr mount) (subseq path (length (car mount)))))))
           ((application-for-path path)
            (handle-application (application-for-path path)))
           ((string= path "/") (index-page))

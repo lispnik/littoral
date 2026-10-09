@@ -108,3 +108,7 @@ dialog.lt-modal { position: fixed; top: 12vh; margin: 0 auto; max-width: min(36r
 .lt-job-fill { height: 100%; background: var(--lt-accent); transition: width .15s; }
 .lt-job-failed .lt-job-fill { background: var(--lt-error); }
 .lt-job-status { margin: .4rem 0; }
+
+/* Stored files */
+.lt-thumbnail img { max-width: 240px; max-height: 240px; border-radius: 6px; border: 1px solid var(--lt-border); }
+.lt-file-current { display: flex; flex-wrap: wrap; gap: .8rem; align-items: center; margin-bottom: .4rem; }

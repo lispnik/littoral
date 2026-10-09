@@ -73,6 +73,7 @@ e2e:
 	  --eval '(asdf:load-system :littoral/tutorial)' --eval '(reading-list:register)' \
 	  --eval '(asdf:load-system :littoral/admin-demo)' --eval '(littoral-admin-demo:register)' \
 	  --eval '(asdf:load-system :littoral/members-demo)' --eval '(littoral-members-demo:register)' \
+	  --eval '(asdf:load-system :littoral/storage-demo)' --eval '(littoral-gallery:register)' \
 	  --eval '(asdf:load-system :littoral/parenscript-demo)' --eval '(littoral-parenscript-demo:register)' \
 	  --eval '(asdf:load-system :littoral/websocket)' \
 	  --eval '(when (eq :$(SERVER) :woo) (asdf:load-system :littoral/woo))' \
@@ -90,6 +91,7 @@ a11y:
 	  --eval '(asdf:load-system :littoral/tutorial)' --eval '(reading-list:register)' \
 	  --eval '(asdf:load-system :littoral/admin-demo)' --eval '(littoral-admin-demo:register)' \
 	  --eval '(asdf:load-system :littoral/members-demo)' --eval '(littoral-members-demo:register)' \
+	  --eval '(asdf:load-system :littoral/storage-demo)' --eval '(littoral-gallery:register)' \
 	  --eval '(asdf:load-system :littoral/parenscript-demo)' --eval '(littoral-parenscript-demo:register)' \
 	  --eval '(asdf:load-system :littoral/websocket)' \
 	  --eval '(littoral:start :port $(E2E_PORT))' --eval '(sleep 600)' >/dev/null 2>&1 & pid=$$!; \
@@ -102,6 +104,7 @@ run:
 	$(SBCL) --eval '(asdf:load-system :littoral/examples)' \
 	  --eval '(asdf:load-system :littoral/admin-demo)' --eval '(littoral-admin-demo:register)' \
 	  --eval '(asdf:load-system :littoral/members-demo)' --eval '(littoral-members-demo:register)' \
+	  --eval '(asdf:load-system :littoral/storage-demo)' --eval '(littoral-gallery:register)' \
 	  --eval '(asdf:load-system :littoral/parenscript-demo)' --eval '(littoral-parenscript-demo:register)' \
 	  --eval '(asdf:load-system :littoral/websocket)' \
 	  --eval '(littoral:start :port $(PORT))'

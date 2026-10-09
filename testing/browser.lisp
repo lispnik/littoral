@@ -245,10 +245,13 @@ only the one server, so http://localhost/a?b is /a?b."
                   fields)))
 
 (defun attach-file (browser id filename content-type contents)
-  "Choose a file for the file input with DOM id ID.  CONTENTS is a string."
+  "Choose a file for the file input with DOM id ID.  CONTENTS is a string
+or a vector of octets."
   (let ((name (element-name browser id)))
     (push (list name filename content-type
-                (flexi-streams:string-to-octets contents :external-format :utf-8))
+                (if (stringp contents)
+                    (flexi-streams:string-to-octets contents :external-format :utf-8)
+                    (coerce contents '(vector (unsigned-byte 8)))))
           (browser-files browser))
     browser))
 

@@ -72,6 +72,10 @@ Methods should call CALL-NEXT-METHOD to keep the general checks.")
            (funcall (field-validator field) value))
           (t nil))))
 
+(defgeneric field-multipart-p (field)
+  (:documentation "True when FIELD's input uploads a file, so its form must be multipart.")
+  (:method ((field field)) nil))
+
 (defgeneric render-field-input (field id text callback)
   (:documentation "Write the input for FIELD, with DOM id ID, showing TEXT;
 CALLBACK receives what is submitted.")
@@ -451,7 +455,7 @@ keep the problems to show."
       (when (editor-title self) (h2 () (text (editor-title self))))
       (let ((general (cdr (assoc nil problems))))
         (when general (p (:class "lt-validation-error" :role "alert") (text general))))
-      (form ()
+      (form (:multipart (some #'field-multipart-p (description-fields (editor-description self))))
         (dolist (field (remove-if #'field-hidden-p (description-fields (editor-description self))))
           (let* ((name (field-name field))
                  (id (string-downcase (symbol-name name)))
