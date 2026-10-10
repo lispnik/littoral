@@ -54,6 +54,25 @@ journalctl -u bookshop -f
 
 SBCL ignores SIGTERM while Hunchentoot's threads run, so the unit kills the process after five seconds. Nothing is lost by this: data belongs in the database, and sign-ins are kept there too.
 
+### Or in a container
+
+Projects made with `TEMPLATE=app` have a Dockerfile. `make docker` builds an image from the same executable, on Ubuntu, with Littoral and its dependencies taken from your checkout. (It needs Docker with BuildKit, the default today.)
+
+```sh
+make docker
+docker volume create bookshop-data
+docker run -d --name bookshop --restart unless-stopped -p 127.0.0.1:8080:8080 \
+  -e PUBLIC_URL=https://bookshop.example.org -e TRUST_PROXY=1 -v bookshop-data:/data bookshop
+docker exec bookshop bookshop create-user ada ada@example.org 'a long passphrase' admin
+```
+
+- The image runs as an unprivileged user, listens on 0.0.0.0 inside the container, and keeps SQLite in `/data`. Pass `DATABASE_URL` to use PostgreSQL.
+- It checks `/healthz` itself, so `docker ps` shows whether it's healthy.
+- Publish the port on 127.0.0.1 and put the proxy below in front, as for the service.
+- `docker stop` waits ten seconds and then kills it, for the SIGTERM reason above.
+
+Littoral's own `make docker` builds `littoral-demo`, every example in one image: `docker run --rm -p 127.0.0.1:8080:8080 littoral-demo`. The examples run in development mode, so keep that one on your own machine.
+
 ## 4. Put a reverse proxy in front
 
 Littoral should listen on 127.0.0.1, with a proxy taking the public connections and handling TLS.

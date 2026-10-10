@@ -7,6 +7,7 @@ make user NAME=ada EMAIL=ada@example.org PASSWORD='a long passphrase' ADMIN=1
 make run     # http://127.0.0.1:{{port}}/ in development mode; /admin from this machine
 make test    # FiveAM tests through Littoral's fake browser, each on its own database
 make build   # bin/{{name}}, a standalone executable
+make docker  # the image {{name}}, built from that executable
 ```
 
 Data lives in SQLite under `data/` (or `$DATA_DIR`). Set `DATABASE_URL=postgres://user:password@host:5432/db` to use PostgreSQL instead.
@@ -31,5 +32,15 @@ Sign-ins are kept in the database, so they survive restarts; the sign-in form of
 | `PUBLIC_URL` | the site's address, for links in mail; required in deployment |
 | `TRUST_PROXY` | set behind a reverse proxy, so limits see real client addresses |
 | `DATABASE_URL` or `DATA_DIR` | PostgreSQL, or where the SQLite file goes |
+
+Or run it in a container: `make docker` builds the image `{{name}}` (Littoral comes from your checkout), and
+
+```sh
+docker run -d -p 127.0.0.1:{{port}}:{{port}} -e PUBLIC_URL=https://example.org -e TRUST_PROXY=1 \
+  -v {{name}}-data:/data --name {{name}} {{name}}
+docker exec {{name}} {{name}} create-user ada ada@example.org 'a long passphrase' admin
+```
+
+keeps the SQLite file in the volume `{{name}}-data` (or pass `DATABASE_URL`). The image checks `/healthz` itself.
 
 [Littoral's deployment guide](https://lispnik.github.io/littoral/deployment.html) covers the rest.

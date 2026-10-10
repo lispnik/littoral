@@ -1,7 +1,7 @@
 SBCL ?= sbcl
 PORT ?= 8080
 
-.PHONY: new tour test test-chrome test-postgres e2e a11y bench load docs clean-check run tracker lint clean
+.PHONY: new tour build docker test test-chrome test-postgres e2e a11y bench load docs clean-check run tracker lint clean
 
 test:
 	$(SBCL) --non-interactive --eval '(asdf:test-system :littoral)'
@@ -77,7 +77,7 @@ e2e:
 	  --eval '(asdf:load-system :littoral/tracker)' --eval '(littoral-tracker:register-tracker)' \
 	  --eval '(asdf:load-system :littoral/tutorial)' --eval '(reading-list:register)' \
 	  --eval '(asdf:load-system :littoral/admin-demo)' --eval '(littoral-admin-demo:register)' \
-	  --eval '(asdf:load-system :littoral/members-demo)' --eval '(littoral-members-demo:register)' \
+	  --eval '(asdf:load-system :littoral/members-demo)' --eval '(littoral-members-demo:register :file (format nil "/tmp/members-~D.sqlite3" (random 1000000 (make-random-state t))))' \
 	  --eval '(asdf:load-system :littoral/storage-demo)' --eval '(littoral-gallery:register)' \
 	  --eval '(asdf:load-system :littoral/search-demo)' --eval '(littoral-search-demo:register)' \
 	  --eval '(asdf:load-system :littoral/parenscript-demo)' --eval '(littoral-parenscript-demo:register)' \
@@ -96,7 +96,7 @@ a11y:
 	  --eval '(asdf:load-system :littoral/tracker)' --eval '(littoral-tracker:register-tracker)' \
 	  --eval '(asdf:load-system :littoral/tutorial)' --eval '(reading-list:register)' \
 	  --eval '(asdf:load-system :littoral/admin-demo)' --eval '(littoral-admin-demo:register)' \
-	  --eval '(asdf:load-system :littoral/members-demo)' --eval '(littoral-members-demo:register)' \
+	  --eval '(asdf:load-system :littoral/members-demo)' --eval '(littoral-members-demo:register :file (format nil "/tmp/members-~D.sqlite3" (random 1000000 (make-random-state t))))' \
 	  --eval '(asdf:load-system :littoral/storage-demo)' --eval '(littoral-gallery:register)' \
 	  --eval '(asdf:load-system :littoral/search-demo)' --eval '(littoral-search-demo:register)' \
 	  --eval '(asdf:load-system :littoral/parenscript-demo)' --eval '(littoral-parenscript-demo:register)' \
@@ -107,6 +107,15 @@ a11y:
 	kill -9 $$pid; exit $$status
 
 # The examples on http://127.0.0.1:$(PORT)/ with a REPL in the terminal.
+# Every example and demo in one executable, bin/littoral-demo: PORT=8080 bin/littoral-demo
+build:
+	$(SBCL) --non-interactive --load tools/demo-server.lisp --eval '(littoral-demo:build "bin/littoral-demo")'
+
+# The same in a container image: docker run --rm -p 127.0.0.1:8080:8080 littoral-demo
+docker:
+	@test -d ocicl || ocicl install
+	docker build -t littoral-demo .
+
 run:
 	$(SBCL) --eval '(asdf:load-system :littoral/examples)' \
 	  --eval '(asdf:load-system :littoral/admin-demo)' --eval '(littoral-admin-demo:register)' \

@@ -1,4 +1,4 @@
-# {{title}}: make test, make run, make build.
+# {{title}}: make test, make run, make build, make docker.
 
 # Where Littoral is checked out, with its dependencies in ocicl/.
 LITTORAL ?= {{littoral}}
@@ -6,7 +6,7 @@ PORT ?= {{port}}
 
 SBCL = sbcl --noinform --eval '(asdf:initialize-source-registry (quote (:source-registry (:directory "$(CURDIR)/") (:directory "$(LITTORAL)") (:tree "$(LITTORAL)ocicl/") :inherit-configuration)))'
 
-.PHONY: test run build user clean
+.PHONY: test run build docker user clean
 
 test:
 	$(SBCL) --non-interactive --eval '(asdf:test-system :{{name}})'
@@ -26,6 +26,11 @@ build:
 	mkdir -p bin
 	$(SBCL) --non-interactive --eval '(asdf:load-system :{{name}})' \
 	  --eval '(sb-ext:save-lisp-and-die "bin/{{name}}" :executable t :toplevel (function {{name}}:toplevel))'
+
+# The executable in a container image, with Littoral from LITTORAL (needs Docker with BuildKit):
+#   docker run --rm -p 127.0.0.1:$(PORT):$(PORT) -e PUBLIC_URL=… -v {{name}}-data:/data {{name}}
+docker:
+	docker build --build-context littoral=$(LITTORAL) -t {{name}} .
 
 clean:
 	rm -rf bin

@@ -1,0 +1,5 @@
+.git
+bin
+tour
+**/*.fasl
+tracker-data.lisp

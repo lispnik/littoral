@@ -53,7 +53,15 @@ or SQLite in $DATA_DIR (default data/), as CONNECT-DATABASE takes it."
 (defun toplevel ()
   "The entry point of the executable `make build` writes: serves in deployment
 mode on $PORT (default {{port}}) and $ADDRESS, with $PUBLIC_URL as the address
-mail links use, and $TRUST_PROXY set when behind a reverse proxy."
+mail links use, and $TRUST_PROXY set when behind a reverse proxy.  With the
+arguments create-user NAME EMAIL PASSWORD [admin], adds that user instead."
+  (let ((arguments (uiop:command-line-arguments)))
+    (when (equal (first arguments) "create-user")
+      (destructuring-bind (name email password &optional admin) (rest arguments)
+        (setup-database (database-spec))
+        (create-user name email password :admin (equal admin "admin"))
+        (format t "Added ~A.~%" name)
+        (uiop:quit 0))))
   (let ((public-url (uiop:getenv "PUBLIC_URL")))
     (setf littoral.auth:*public-url* (and public-url (plusp (length public-url)) public-url)
           *trust-forwarded-for* (and (uiop:getenv "TRUST_PROXY") t)))

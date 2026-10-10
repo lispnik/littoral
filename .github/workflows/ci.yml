@@ -104,7 +104,7 @@ jobs:
             --eval '(asdf:load-system :littoral/tracker)' --eval '(littoral-tracker:register-tracker)' \
             --eval '(asdf:load-system :littoral/tutorial)' --eval '(reading-list:register)' \
             --eval '(asdf:load-system :littoral/admin-demo)' --eval '(littoral-admin-demo:register)' \
-            --eval '(asdf:load-system :littoral/members-demo)' --eval '(littoral-members-demo:register)' \
+            --eval '(asdf:load-system :littoral/members-demo)' --eval '(littoral-members-demo:register :file (format nil "/tmp/members-~D.sqlite3" (random 1000000 (make-random-state t))))' \
             --eval '(asdf:load-system :littoral/storage-demo)' --eval '(littoral-gallery:register)' \
             --eval '(asdf:load-system :littoral/search-demo)' --eval '(littoral-search-demo:register)' \
             --eval '(asdf:load-system :littoral/parenscript-demo)' --eval '(littoral-parenscript-demo:register)' \
@@ -131,7 +131,7 @@ jobs:
             --eval '(asdf:load-system :littoral/tracker)' --eval '(littoral-tracker:register-tracker)' \
             --eval '(asdf:load-system :littoral/tutorial)' --eval '(reading-list:register)' \
             --eval '(asdf:load-system :littoral/admin-demo)' --eval '(littoral-admin-demo:register)' \
-            --eval '(asdf:load-system :littoral/members-demo)' --eval '(littoral-members-demo:register)' \
+            --eval '(asdf:load-system :littoral/members-demo)' --eval '(littoral-members-demo:register :file (format nil "/tmp/members-~D.sqlite3" (random 1000000 (make-random-state t))))' \
             --eval '(asdf:load-system :littoral/storage-demo)' --eval '(littoral-gallery:register)' \
             --eval '(asdf:load-system :littoral/search-demo)' --eval '(littoral-search-demo:register)' \
             --eval '(asdf:load-system :littoral/parenscript-demo)' --eval '(littoral-parenscript-demo:register)' \
@@ -140,3 +140,58 @@ jobs:
             --eval '(setf littoral:*new-sessions-per-minute* nil)' --eval '(littoral:start :port 8766 :server :woo)' --eval '(sleep 900)' > woo-server.log 2>&1 &
           for i in $(seq 1 120); do curl -s -o /dev/null http://127.0.0.1:8766/ && break; sleep 1; done
           LITTORAL_SERVER=woo BASE=http://127.0.0.1:8766 CHROME="$(command -v google-chrome || command -v chromium)" node tests/e2e/browser.mjs
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SBCL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sbcl
+
+      - name: Cache ocicl
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.local/share/ocicl
+            ~/.local/bin/ocicl
+            ocicl
+          key: ocicl-${{ runner.os }}-${{ hashFiles('ocicl.csv') }}
+
+      - name: Install ocicl and fetch dependencies
+        run: |
+          if [ ! -x ~/.local/bin/ocicl ]; then
+            git clone --depth 1 https://github.com/ocicl/ocicl.git /tmp/ocicl
+            (cd /tmp/ocicl && sbcl --non-interactive --load setup.lisp)
+          fi
+          export PATH="$HOME/.local/bin:$PATH"
+          ocicl setup > ~/.sbclrc
+          for attempt in 1 2 3 4; do
+            ocicl install && exit 0
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+      - name: The demo image (make docker)
+        run: |
+          make docker
+          docker run -d --name demo -p 127.0.0.1:8099:8080 littoral-demo
+          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:8099/healthz && break; sleep 1; done
+          for page in /examples /examples/members /examples/search /examples/gallery /tracker; do
+            test "$(curl -s -o /dev/null -w '%{http_code}' -L http://127.0.0.1:8099$page)" = 200 || { echo "$page failed"; docker logs demo; exit 1; }
+          done
+
+      - name: A generated project's image
+        run: |
+          sbcl --non-interactive \
+            --eval '(asdf:initialize-source-registry (list :source-registry (list :directory (uiop:getcwd)) :inherit-configuration))' \
+            --eval '(asdf:load-system :littoral/generator)' \
+            --eval '(littoral.generator:make-project "ci-app" :directory "/tmp/ci-app/" :author "CI" :template "app")'
+          make -C /tmp/ci-app docker
+          docker run -d --name app -p 127.0.0.1:8098:8080 -e PUBLIC_URL=http://localhost:8098 -v ci-app-data:/data ci-app
+          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:8098/healthz && break; sleep 1; done
+          docker exec app ci-app create-user ada ada@example.org 'a long passphrase' admin | grep -q "Added ada"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -L http://127.0.0.1:8098/)" = 200 || { docker logs app; exit 1; }

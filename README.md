@@ -58,14 +58,20 @@ The project has a root component (a counter, a confirmation dialog and a form), 
 - users who sign in and keep private notes, with a described model, editors and an admin at `/admin`
 - SQLite or PostgreSQL, through `DATABASE_URL`
 - `make user` to add people
-- an executable configured from the environment, with a systemd unit and a Caddyfile in `deploy/` From a REPL: `(asdf:load-system :littoral/generator)`, then `(littoral.generator:make-project "bookshop" :directory "~/src/bookshop/" :author "…" :license "MIT" :port 8080)`.
+- an executable configured from the environment, with a systemd unit and a Caddyfile in `deploy/`
+- a Dockerfile: `make docker` builds an image from that executable
+
+From a REPL: `(asdf:load-system :littoral/generator)`, then `(littoral.generator:make-project "bookshop" :directory "~/src/bookshop/" :author "…" :license "MIT" :port 8080)`.
 
 Other targets:
 
 ```sh
+make test-chrome   # the examples in headless Chrome, driven from Lisp
 make e2e           # littoral.js in headless Chrome (needs Node 22+)
 make a11y          # WCAG checks (axe-core) over every example page
 make bench         # request and snapshot timings
+make build         # bin/littoral-demo, every example in one executable
+make docker        # the same as the image littoral-demo
 make docs          # regenerate docs/API.md from the docstrings
 make clean-check   # build a fresh clone against nothing but its ocicl.csv
 make tour          # the narrated video tour, recorded into tour/ (Chrome, Node, ffmpeg)
@@ -709,7 +715,7 @@ The fake browser doesn't run JavaScript. For drag and drop, the back button with
 
 **[The deployment guide](docs/deployment.md)** covers the whole process:
 - building an executable
-- a systemd service
+- a systemd service, or a container (`make docker`)
 - nginx or Caddy with TLS, WebSockets and server push
 - PostgreSQL
 - several processes

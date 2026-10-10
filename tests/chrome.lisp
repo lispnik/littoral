@@ -67,7 +67,10 @@
   (unless (ignore-errors (chrome-path))
     (format t "~&No Chrome: skipping the Chrome tests.~%")
     (return-from run-chrome-tests t))
-  (littoral-members-demo:register)
+  ;; A database of its own: users here gain passkeys.
+  (littoral-members-demo:register :file (merge-pathnames (format nil "littoral-chrome-members-~36R.sqlite3"
+                                                                 (random (expt 36 8) (make-random-state t)))
+                                                         (uiop:temporary-directory)))
   (setf littoral:*new-sessions-per-minute* nil)
   (let ((port (free-port)))
     (littoral:start :port port)
