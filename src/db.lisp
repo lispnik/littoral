@@ -198,15 +198,26 @@ NIL becomes :NULL there; SQLite's driver binds NIL as NULL already."
       (substitute :null nil parameters)
       parameters))
 
+;;; Each statement is freed as soon as it has run.  A SQLite statement left
+;;; unfinished (as DBI:ROW-COUNT leaves its "SELECT changes()") keeps its
+;;; connection's read lock until the garbage collector finalizes it, and
+;;; no other connection can commit meanwhile.
+
 (defun execute (sql &optional parameters)
   "Run SQL with PARAMETERS; the rows it returns, as plists."
-  (dbi:fetch-all (dbi:execute (dbi:prepare (database-connection) sql) (sql-parameters parameters))))
+  (let ((query (dbi:prepare (database-connection) sql)))
+    (unwind-protect (dbi:fetch-all (dbi:execute query (sql-parameters parameters)))
+      (dbi:free-query-resources query))))
 
 (defun execute-count (sql &optional parameters)
   "Run SQL with PARAMETERS; how many rows it changed."
-  (let ((connection (database-connection)))
-    (dbi:execute (dbi:prepare connection sql) (sql-parameters parameters))
-    (dbi:row-count connection)))
+  (let* ((connection (database-connection))
+         (query (dbi:prepare connection sql)))
+    (unwind-protect (dbi:execute query (sql-parameters parameters))
+      (dbi:free-query-resources query))
+    (if (eq (driver) :sqlite3)
+        (row-value (first (execute "SELECT changes() AS n")) "n")
+        (dbi:row-count connection))))
 
 (defun db-query (sql &rest parameters)
   "Run SQL, with ? for each of PARAMETERS; the rows, as plists keyed by
@@ -443,8 +454,25 @@ signals.  Inside another, just BODY."
   (if (equal *in-transaction* *database*)
       (funcall thunk)
       (let ((*in-transaction* *database*))
-        (dbi:with-transaction (database-connection)
-          (funcall thunk)))))
+        (if (eq (driver) :sqlite3)
+            (call-with-sqlite-transaction thunk)
+            (dbi:with-transaction (database-connection)
+              (funcall thunk))))))
+
+(defun call-with-sqlite-transaction (thunk)
+  "Call THUNK in a SQLite transaction that takes the write lock at once.  A
+transaction that reads and then writes can't take the lock while another
+connection writes, and SQLite fails it at once rather than wait (it would
+deadlock); one begun IMMEDIATE waits its turn, up to *SQLITE-BUSY-TIMEOUT*."
+  (let ((connection (database-connection))
+        (committed nil))
+    (dbi:do-sql connection "BEGIN IMMEDIATE")
+    (unwind-protect
+         (multiple-value-prog1 (funcall thunk)
+           (dbi:do-sql connection "COMMIT")
+           (setf committed t))
+      (unless committed
+        (ignore-errors (dbi:do-sql connection "ROLLBACK"))))))
 
 (defun using-database (driver &rest parameters)
   "An :AROUND-REQUEST function giving an application its own database,
