@@ -114,9 +114,8 @@ later than AFTER (so a code works once), or NIL."
 
 (defun qr-svg (text &key (module 4) (label "QR code"))
   "TEXT as a QR code, inline SVG."
-  (let* ((symbol (cl-qrencode:encode-symbol text :level :level-m))
-         (matrix (cl-qrencode:matrix symbol))
-         (size (cl-qrencode:modules symbol))
+  (let* ((code (clqr:encode text :error-correction :m))
+         (size (clqr:qr-size code))
          (margin 4)
          (total (+ size (* 2 margin))))
     (with-output-to-string (out)
@@ -124,7 +123,7 @@ later than AFTER (so a code works once), or NIL."
               total total (* total module) (* total module) (littoral.html:html-escape label))
       (dotimes (i size)
         (dotimes (j size)
-          (when (cl-qrencode:dark-module-p matrix i j)
+          (when (clqr:qr-module code i j)
             (format out "M~D ~Dh1v1h-1z" (+ j margin) (+ i margin)))))
       (format out "\"/></svg>"))))
 

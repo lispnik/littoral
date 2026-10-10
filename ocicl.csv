@@ -31,8 +31,6 @@ cl-postgres, ghcr.io/ocicl/cl-postgres@sha256:9a0989d2bd1618f9451476d5c4fb92d986
 cl-postgres_plus_local-time, ghcr.io/ocicl/local-time@sha256:73545a4ff5ab4edc96acf2affd1cbe28295d655d7bd51eaff509269a476b6bda, local-time-20260812-59d93f7/cl-postgres+local-time.asd
 cl-ppcre, ghcr.io/ocicl/cl-ppcre@sha256:bf073924cf4fd5957a4fd961a95d446ed0e53fa32a5002cbd2d52182874f45e5, cl-ppcre-20250606-a2ea581/cl-ppcre.asd
 cl-ppcre-unicode, ghcr.io/ocicl/cl-ppcre@sha256:bf073924cf4fd5957a4fd961a95d446ed0e53fa32a5002cbd2d52182874f45e5, cl-ppcre-20250606-a2ea581/cl-ppcre-unicode.asd
-cl-qrencode, ghcr.io/ocicl/cl-qrencode@sha256:e581a36606e20879962b842eee5f14eea39ecfa253298e9597ebff44e613f93e, cl-qrencode-20240503-0de2d8a/cl-qrencode.asd
-cl-qrencode-test, ghcr.io/ocicl/cl-qrencode@sha256:e581a36606e20879962b842eee5f14eea39ecfa253298e9597ebff44e613f93e, cl-qrencode-20240503-0de2d8a/cl-qrencode-test.asd
 cl-speedy-queue, ghcr.io/ocicl/cl-speedy-queue@sha256:11c3c23233ae74fe439147e4e392a2f57d26c7e7aa0498283fe97dfd7e52417d, cl-speedy-queue-20230808-0425c7c/cl-speedy-queue.asd
 cl-tga, ghcr.io/ocicl/cl-tga@sha256:2e321784df925dc46d8ce17fad7936b38a96ed7624c54aded400613287941810, cl-tga-20240503-4dc2f7b/cl-tga.asd
 cl-utilities, ghcr.io/ocicl/cl-utilities@sha256:e5e0676a4e0627332a0fe64d56ed4f1890f0466d715a11e8d95561b4c2baa38f, cl-utilities-20240503-6b4de39/cl-utilities.asd
@@ -46,6 +44,7 @@ clack-handler-wookie, ghcr.io/ocicl/clack@sha256:9457bea28f1ee9c49a7626c2ee23c18
 clack-socket, ghcr.io/ocicl/clack@sha256:9457bea28f1ee9c49a7626c2ee23c181b5af3636b5e64a27a46ef8535818947f, clack-20241101-935be5b/clack-socket.asd
 clack-test, ghcr.io/ocicl/clack@sha256:9457bea28f1ee9c49a7626c2ee23c181b5af3636b5e64a27a46ef8535818947f, clack-20241101-935be5b/clack-test.asd
 closer-mop, ghcr.io/ocicl/closer-mop@sha256:39ec579e68118a8be57a7882812ff31094a031f88b77f11cf4434a92261f1126, closer-mop-20260329-04db182/closer-mop.asd
+clqr, ghcr.io/ocicl/clqr@sha256:7c879c50b732cf412379232fe57fee6c3eb013445db238835eab1488974993ab, clqr-20260729-ed7c000/clqr.asd
 com.gigamonkeys.binary-data, ghcr.io/ocicl/com.gigamonkeys.binary-data@sha256:1e43273fe575082bd116238ec1ab640c2b3b257e6e776bb02f4b9bde358eef4c, monkeylib-binary-data-20240503-22e9089/com.gigamonkeys.binary-data.asd
 com.inuoe.jzon, ghcr.io/ocicl/com.inuoe.jzon@sha256:b0cfbc3d8fb3c09526d92575b40b13a68ad93be7edeb48fd69dcea053c5611a5, jzon-20251113-f05afbb/com.inuoe.jzon.asd
 com.inuoe.jzon-tests, ghcr.io/ocicl/com.inuoe.jzon@sha256:b0cfbc3d8fb3c09526d92575b40b13a68ad93be7edeb48fd69dcea053c5611a5, jzon-20251113-f05afbb/com.inuoe.jzon-tests.asd

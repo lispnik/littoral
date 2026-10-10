@@ -257,7 +257,7 @@
   :description "Users, signing in, roles and password reset for Littoral."
   :author "Matthew Kennedy"
   :license "MIT"
-  :depends-on (#:littoral #:littoral/db #:cl-qrencode #:com.inuoe.jzon #:cl-base64)
+  :depends-on (#:littoral #:littoral/db #:clqr #:com.inuoe.jzon #:cl-base64)
   :components ((:module "src" :serial t
                 :components ((:file "auth") (:file "passwords") (:file "auth-store")
                              (:file "second-factor") (:file "second-factor-ui")))))
