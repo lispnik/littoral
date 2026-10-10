@@ -4,7 +4,7 @@
 LITTORAL ?= {{littoral}}
 PORT ?= {{port}}
 
-SBCL = sbcl --noinform --eval '(asdf:initialize-source-registry (quote (:source-registry (:directory "$(CURDIR)/") (:directory "$(LITTORAL)") (:tree "$(LITTORAL)ocicl/") :inherit-configuration)))'
+SBCL = sbcl --noinform --eval '(require :asdf)' --eval '(asdf:initialize-source-registry (quote (:source-registry (:directory "$(CURDIR)/") (:directory "$(LITTORAL)") (:tree "$(LITTORAL)ocicl/") :inherit-configuration)))'
 
 .PHONY: test run build clean
 

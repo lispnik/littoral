@@ -12,7 +12,7 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 COPY . .
-RUN sbcl --non-interactive \
+RUN sbcl --non-interactive --eval '(require :asdf)' \
       --eval '(asdf:initialize-source-registry (quote (:source-registry (:directory "/src/") (:tree "/src/ocicl/") :ignore-inherited-configuration)))' \
       --load tools/demo-server.lisp --eval '(littoral-demo:build "/src/bin/littoral-demo")'
 
