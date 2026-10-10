@@ -287,10 +287,15 @@ and that URL."
 
 (test unknown-names-take-as-long-as-wrong-passwords
   (with-auth (b)
+    ;; The fastest of several tries: a stall (a busy CI machine, the
+    ;; database) only ever makes one try slower.
     (flet ((time-of (name)
-             (let ((start (get-internal-real-time)))
-               (dotimes (i 3) (littoral.auth:authenticate name "wrong password"))
-               (- (get-internal-real-time) start))))
+             (loop repeat 7
+                   ;; Never the lockout's quick refusal.
+                   do (clrhash littoral.auth::*failures*)
+                   minimize (let ((start (get-internal-real-time)))
+                              (littoral.auth:authenticate name "wrong password")
+                              (- (get-internal-real-time) start)))))
       (clrhash littoral.auth::*failures*)
       (let ((known (time-of "bob")) (unknown (time-of "nobody-at-all")))
         (clrhash littoral.auth::*failures*)
