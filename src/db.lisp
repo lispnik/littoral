@@ -30,7 +30,7 @@
            #:persistent #:object-id #:object-version
            #:define-table #:find-table #:table-name #:table-class #:create-table #:drop-table
            #:db-find #:db-select #:db-count #:db-insert #:db-update #:db-save #:db-delete
-           #:db-reload #:db-query #:db-execute #:with-transaction #:transactional #:using-database
+           #:db-reload #:db-query #:db-execute #:db-search #:search-condition #:highlight-matches #:with-transaction #:transactional #:using-database
            #:stale-object #:stale-object-object
            #:reference-field #:reference-class #:object-label #:sql-type #:to-sql #:from-sql))
 
@@ -84,7 +84,9 @@ changed (or gone) since the object was read."))
 (defclass table ()
   ((class :initarg :class :reader table-class)
    (name :initarg :name :reader table-name)
-   (description :initarg :description :reader table-description))
+   (description :initarg :description :reader table-description)
+   (search :initarg :search :initform '() :reader table-search-fields
+           :documentation "Names of the fields kept in the full-text index, or NIL."))
   (:documentation "How a class's objects are stored."))
 
 (defvar *tables* (make-hash-table) "Class name → TABLE.")
@@ -93,13 +95,15 @@ changed (or gone) since the object was read."))
   "SYMBOL as a SQL identifier: lower case, underscores for dashes."
   (substitute #\_ #\- (string-downcase (symbol-name symbol))))
 
-(defmacro define-table (class &key name description)
+(defmacro define-table (class &key name description search)
   "Keep objects of CLASS (a PERSISTENT class with a description) in the
-table NAME (default: the class name), with DESCRIPTION's fields as columns."
+table NAME (default: the class name), with DESCRIPTION's fields as columns.
+SEARCH names text fields to keep in a full-text index, for DB-SEARCH."
   `(setf (gethash ',class *tables*)
          (make-instance 'table :class ',class
                                :name ,(or name (sql-name class))
-                               :description (find-description ',(or description class)))))
+                               :description (find-description ',(or description class))
+                               :search ',search)))
 
 (defun find-table (designator)
   "The table of DESIGNATOR, a class name or an object."
@@ -211,11 +215,123 @@ column name (\"login\" → :|login|), NULL as NIL."
              (table-name table)
              (if (eq (driver) :postgres) "BIGSERIAL PRIMARY KEY" "INTEGER PRIMARY KEY AUTOINCREMENT")
              (mapcar (lambda (f) (format nil "~A ~A" (column-name f) (sql-type f))) (table-fields table))))
+    (when (table-search-fields table)
+      (ensure-search-index table))
     class))
 
 (defun drop-table (class)
-  "Drop CLASS's table if it exists."
-  (execute-count (format nil "DROP TABLE IF EXISTS ~A" (table-name (find-table class)))))
+  "Drop CLASS's table if it exists, with its full-text index."
+  (let ((table (find-table class)))
+    (when (and (table-search-fields table) (not (eq (driver) :postgres)))
+      (execute-count (format nil "DROP TABLE IF EXISTS ~A_search" (table-name table))))
+    (execute-count (format nil "DROP TABLE IF EXISTS ~A" (table-name table)))))
+
+;;; Full-text search
+;;;
+;;; On SQLite an FTS5 table, kept in step by triggers; on PostgreSQL a GIN
+;;; index over to_tsvector('simple', …).  Queries are words, each matching
+;;; words that start with it, all of them required.
+
+(defun search-columns (table)
+  (mapcar #'sql-name (table-search-fields table)))
+
+(defun search-document (table)
+  "The SQL text PostgreSQL indexes for TABLE: its search columns, joined."
+  (format nil "to_tsvector('simple', ~{coalesce(~A, '')~^ || ' ' || ~})" (search-columns table)))
+
+(defun ensure-search-index (table)
+  "Create TABLE's full-text index unless it exists, filling it from the rows already there."
+  (let ((name (table-name table)) (columns (search-columns table)))
+    (if (eq (driver) :postgres)
+        (execute-count (format nil "CREATE INDEX IF NOT EXISTS ~A_search ON ~A USING GIN (~A)"
+                               name name (search-document table)))
+        (let ((exists (execute "SELECT name FROM sqlite_master WHERE name = ?" (list (format nil "~A_search" name)))))
+          (execute-count (format nil "CREATE VIRTUAL TABLE IF NOT EXISTS ~A_search USING fts5(~{~A~^, ~}, content='~A', content_rowid='id')"
+                                 name columns name))
+          (flet ((values-of (row) (format nil "~{~A.~A~^, ~}" (loop for c in columns append (list row c)))))
+            (execute-count (format nil "CREATE TRIGGER IF NOT EXISTS ~A_search_insert AFTER INSERT ON ~A BEGIN ~
+INSERT INTO ~A_search(rowid, ~{~A~^, ~}) VALUES (new.id, ~A); END" name name name columns (values-of "new")))
+            (execute-count (format nil "CREATE TRIGGER IF NOT EXISTS ~A_search_delete AFTER DELETE ON ~A BEGIN ~
+INSERT INTO ~A_search(~A_search, rowid, ~{~A~^, ~}) VALUES ('delete', old.id, ~A); END" name name name name columns (values-of "old")))
+            (execute-count (format nil "CREATE TRIGGER IF NOT EXISTS ~A_search_update AFTER UPDATE ON ~A BEGIN ~
+INSERT INTO ~A_search(~A_search, rowid, ~{~A~^, ~}) VALUES ('delete', old.id, ~A); ~
+INSERT INTO ~A_search(rowid, ~{~A~^, ~}) VALUES (new.id, ~A); END"
+                                   name name name name columns (values-of "old") name columns (values-of "new"))))
+          (unless exists
+            (execute-count (format nil "INSERT INTO ~A_search(~A_search) VALUES ('rebuild')" name name)))))))
+
+(defun search-words (query)
+  "QUERY's words, letters and digits only, at most ten."
+  (let ((words '()) (word (make-string-output-stream)))
+    (flet ((end-word ()
+             (let ((w (get-output-stream-string word)))
+               (when (plusp (length w)) (push w words)))))
+      (loop for char across (or query "")
+            do (if (alphanumericp char) (write-char char word) (end-word)))
+      (end-word))
+    (let ((words (nreverse words)))
+      (subseq words 0 (min 10 (length words))))))
+
+(defun search-query (words)
+  "WORDS as the database's query language: each a prefix, all required."
+  (if (eq (driver) :postgres)
+      (format nil "~{~A:*~^ & ~}" (mapcar #'string-downcase words))
+      (format nil "~{\"~A\"*~^ ~}" words)))
+
+(defun search-condition (class query)
+  "A WHERE clause matching CLASS's objects that QUERY finds, and its
+parameters, for DB-SELECT; NIL when QUERY has no words."
+  (let ((table (find-table class))
+        (words (search-words query)))
+    (when (and words (table-search-fields table))
+      (values (if (eq (driver) :postgres)
+                  (format nil "~A @@ to_tsquery('simple', ?)" (search-document table))
+                  (format nil "id IN (SELECT rowid FROM ~A_search WHERE ~A_search MATCH ?)"
+                          (table-name table) (table-name table)))
+              (list (search-query words))))))
+
+(defun db-search (class query &key limit offset)
+  "CLASS's objects that QUERY finds in its search fields, the best first."
+  (let* ((table (find-table class))
+         (words (search-words query))
+         (name (table-name table)))
+    (unless (table-search-fields table)
+      (error "~S has no full-text index: give DEFINE-TABLE :SEARCH fields." class))
+    (when words
+      (mapcar (lambda (row) (object-from-row table row))
+              (execute (if (eq (driver) :postgres)
+                           (format nil "SELECT * FROM ~A WHERE ~A @@ to_tsquery('simple', ?) ~
+ORDER BY ts_rank(~A, to_tsquery('simple', ?)) DESC, id~@[ LIMIT ~D~]~@[ OFFSET ~D~]"
+                                   name (search-document table) (search-document table) limit (and limit offset))
+                           (format nil "SELECT ~A.* FROM ~A JOIN ~A_search ON ~A_search.rowid = ~A.id ~
+WHERE ~A_search MATCH ? ORDER BY bm25(~A_search), ~A.id~@[ LIMIT ~D~]~@[ OFFSET ~D~]"
+                                   name name name name name name name name limit (and limit offset)))
+                       (if (eq (driver) :postgres)
+                           (list (search-query words) (search-query words))
+                           (list (search-query words))))))))
+
+(defun highlight-matches (text query)
+  "TEXT as HTML, escaped, with the words QUERY finds marked <mark>: words of
+TEXT that start with one of QUERY's words."
+  (let ((words (mapcar #'string-downcase (search-words query)))
+        (text (or text ""))
+        (start 0))
+    (with-output-to-string (out)
+      (loop with i = 0
+            while (< i (length text))
+            do (if (and (alphanumericp (char text i))
+                        (or (zerop i) (not (alphanumericp (char text (1- i))))))
+                   ;; At the start of a word: does it begin with one of WORDS?
+                   (let ((end (or (position-if-not #'alphanumericp text :start i) (length text))))
+                     (when (some (lambda (w) (and (<= (length w) (- end i))
+                                                  (string-equal w text :start2 i :end2 (+ i (length w)))))
+                                 words)
+                       (write-string (html-escape (subseq text start i)) out)
+                       (format out "<mark>~A</mark>" (html-escape (subseq text i end)))
+                       (setf start end))
+                     (setf i end))
+                   (incf i)))
+      (write-string (html-escape (subseq text start)) out))))
 
 (defun row-value (row column)
   "COLUMN's value in ROW, a plist from cl-dbi."

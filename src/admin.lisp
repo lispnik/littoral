@@ -129,15 +129,21 @@ classes, that point at CLASS."
   (let ((clauses '()) (params '())
         (query (string-trim " " (list-query list)))
         (class (list-class list)))
-    (when (and (string/= query "") (text-fields class))
-      ;; LOWER on both sides: PostgreSQL's LIKE minds case, SQLite's doesn't.
-      (push (format nil "(~{LOWER(~A) LIKE LOWER(?)~^ OR ~})"
-                    (mapcar (lambda (f) (substitute #\_ #\- (string-downcase (symbol-name (field-name f)))))
-                            (text-fields class)))
-            clauses)
-      (dolist (f (text-fields class))
-        (declare (ignore f))
-        (push (format nil "%~A%" query) params)))
+    (when (string/= query "")
+      ;; The full-text index when the table has one, else LIKE over text fields.
+      (multiple-value-bind (search-where search-params) (search-condition class query)
+        (cond (search-where
+               (push search-where clauses)
+               (dolist (p search-params) (push p params)))
+              ((text-fields class)
+               ;; LOWER on both sides: PostgreSQL's LIKE minds case, SQLite's doesn't.
+               (push (format nil "(~{LOWER(~A) LIKE LOWER(?)~^ OR ~})"
+                             (mapcar (lambda (f) (substitute #\_ #\- (string-downcase (symbol-name (field-name f)))))
+                                     (text-fields class)))
+                     clauses)
+               (dolist (f (text-fields class))
+                 (declare (ignore f))
+                 (push (format nil "%~A%" query) params))))))
     (loop for (name . value) in (list-filters list)
           for field = (find-field class name)
           do (push (format nil "~A = ?" (substitute #\_ #\- (string-downcase (symbol-name name)))) clauses)

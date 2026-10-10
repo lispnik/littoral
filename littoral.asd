@@ -132,6 +132,7 @@
                #:littoral/generator
                #:littoral/storage
                #:littoral/storage-demo
+               #:littoral/search-demo
                #:dexador
                #:dbd-sqlite3
                #:dbd-postgres
@@ -290,3 +291,8 @@
   :description "A photo gallery: uploads kept in storage, with thumbnails."
   :depends-on (#:littoral/storage #:dbd-sqlite3)
   :components ((:module "examples" :components ((:file "gallery")))))
+
+(asdf:defsystem #:littoral/search-demo
+  :description "Full-text search over the COMMON-LISP package's documentation."
+  :depends-on (#:littoral/db #:dbd-sqlite3)
+  :components ((:module "examples" :components ((:file "search-demo")))))

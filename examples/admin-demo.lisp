@@ -25,7 +25,7 @@
    (budget :type :integer :min 0)
    (status :type :choice :choices '(:active :paused :finished) :labels #'string-capitalize)))
 
-(define-table project)
+(define-table project :search (name owner))
 
 (defclass task (persistent)
   ((title :initarg :title :initform nil)
@@ -42,7 +42,7 @@
    (done :type :boolean)
    (project :type :reference :to 'project)))
 
-(define-table task)
+(define-table task :search (title notes))
 
 (defun seed ()
   "Fill an empty database with a few projects and tasks."

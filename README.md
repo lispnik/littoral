@@ -507,6 +507,22 @@ The contacts example is translated into French and German.
 - **References:** a field of `:type :reference :to 'project` holds another stored object. It's chosen from that table in editors and kept as its id.
 - **Transactions:** `(register-application … :around-actions (littoral.db:transactional))` runs each request's callbacks, page or AJAX, in one transaction, rolled back if any of them signals.
 
+### Full-text search
+
+Give `define-table` the fields to index, and `db-search` finds objects by their words, the best matches first:
+
+```lisp
+(littoral.db:define-table article :search (title body))
+(littoral.db:db-search 'article "macro writ")      ; words starting so, all of them
+(littoral.db:highlight-matches (article-body a) "macro writ")   ; HTML, the words <mark>ed
+```
+
+- **SQLite** keeps an FTS5 index in step with the table through triggers. **PostgreSQL** uses a GIN index over `to_tsvector('simple', …)`. `create-table` makes the index and fills it from any rows already there.
+- **Combining.** `search-condition` gives a `WHERE` clause and its parameters, to combine with other conditions in `db-select`.
+- **The admin's search box** uses the index whenever a table has one.
+
+`/examples/search` (system `littoral/search-demo`) searches the documentation of every documented symbol in `COMMON-LISP`, as you type.
+
 ## A generated admin
 
 `littoral/admin` builds a whole administration interface from descriptions and tables:

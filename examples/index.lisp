@@ -24,7 +24,8 @@
      ("admin" "Admin" "An admin generated from descriptions, over projects and tasks in SQLite.")
      ("members" "Members" "Signing in, roles and permissions, kept sign-ins, password reset and OAuth.")
      ("accounts" "Accounts" "The same, signing in against an existing table with bcrypt hashes.")
-     ("gallery" "Gallery" "Uploads kept on disk, with thumbnails and downloads."))
+     ("gallery" "Gallery" "Uploads kept on disk, with thumbnails and downloads.")
+     ("search" "Search" "Full-text search over Common Lisp's documentation, as you type."))
     ("Browser features"
      ("ajax" "AJAX" "Updating components in place, a live preview and a clock.")
      ("upload" "Upload" "Receiving files.")

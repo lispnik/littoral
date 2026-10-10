@@ -170,3 +170,67 @@
     (let ((field (find-field 'job 'project)))
       (is (equal '("Alpha" "Beta") (mapcar (lambda (p) (format-field field p)) (field-choices field))))
       (is (string= "Beta" (slot-value (parse-field field "1") 'name))))))
+
+;;; Full-text search
+
+(defclass article (littoral.db:persistent)
+  ((title :initarg :title :initform nil)
+   (body :initarg :body :initform nil)))
+
+(define-description article ((title :required t) (body :type :text)))
+
+(littoral.db:define-table article :name "articles" :search (title body))
+
+(test full-text-search
+  (connect-test-database)
+  (littoral.db:drop-table 'article)
+  (littoral.db:create-table 'article)
+  (dolist (spec '(("Lisp macros" "Macros transform code before it runs.")
+                  ("Garbage collection" "Collectors free memory nobody refers to.")
+                  ("Macro-writing macros" "Macros all the way down: writing macros that write macros.")))
+    (littoral.db:db-save (make-instance 'article :title (first spec) :body (second spec))))
+  (flet ((titles (query) (mapcar (lambda (a) (slot-value a 'title)) (littoral.db:db-search 'article query))))
+    ;; Words match word starts; every word is required.
+    (is (equal '("Garbage collection") (titles "collect")))
+    (is (= 2 (length (titles "macro"))))
+    (is (equal '("Macro-writing macros") (titles "writing macro")))
+    ;; The page about macros most of all comes first.
+    (is (string= "Macro-writing macros" (first (titles "macros"))))
+    (is (null (titles "")))
+    (is (null (titles "!!! ''")))
+    ;; The index follows changes.
+    (let ((gc (first (littoral.db:db-search 'article "garbage"))))
+      (setf (slot-value gc 'body) "Now about compilers.")
+      (littoral.db:db-save gc)
+      (is (null (titles "memory")))
+      (is (equal '("Garbage collection") (titles "compilers")))
+      (littoral.db:db-delete gc)
+      (is (null (titles "compilers"))))
+    ;; A condition to combine with others.
+    (multiple-value-bind (where params) (littoral.db:search-condition 'article "macros")
+      (is (= 2 (length (littoral.db:db-select 'article :where where :params params)))))
+    ;; Rows already there are indexed when the index is first made.
+    (littoral.db:db-execute (format nil "DROP ~:[TABLE~;INDEX~] IF EXISTS articles_search" (postgres-test-p)))
+    (littoral.db:create-table 'article)
+    (is (= 2 (length (titles "macro"))))))
+
+(test highlighting-matches
+  (is (string= "Use <mark>Macros</mark> &amp; <mark>macrolet</mark>, not &lt;script&gt;"
+               (littoral.db:highlight-matches "Use Macros & macrolet, not <script>" "macro")))
+  (is (string= "a &amp; b" (littoral.db:highlight-matches "a & b" "amp"))))
+
+(test the-search-example
+  (let ((file (merge-pathnames (format nil "littoral-search-test-~36R.sqlite3" (random (expt 36 8))) (uiop:temporary-directory))))
+    (unwind-protect
+         (with-fresh-applications ()
+           (littoral-search-demo:register :file file)
+           (let ((b (make-instance 'browser)))
+             (visit b "/examples/search")
+             ;; The first query, "list", finds LIST itself among the first.
+             (is (search "<mark>list</mark>" (browser-html b)))
+             (let* ((input (element-name b "query"))
+                    (spec (first (ajax-specs b "on-input")))
+                    (json (ajax-request b (car spec) (cdr spec) :fields (list (cons input "hash table")))))
+               (is (search "<mark>hash</mark>" json))
+               (is (search "gethash" json)))))
+      (uiop:delete-file-if-exists file))))
