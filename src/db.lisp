@@ -48,11 +48,21 @@ Each thread gets its own connection, made when first needed."
   (setf *database* (cons driver parameters))
   (database-connection))
 
+(defvar *sqlite-busy-timeout* 5000
+  "Milliseconds a SQLite connection waits for another's lock before giving up,
+unless the database spec gives :BUSY-TIMEOUT.  Threads (requests, mail
+delivery) each have a connection, and SQLite allows one writer at a time.")
+
+(defun connection-arguments (spec)
+  (if (and (eq (first spec) :sqlite3) (not (getf (rest spec) :busy-timeout)) *sqlite-busy-timeout*)
+      (append spec (list :busy-timeout *sqlite-busy-timeout*))
+      spec))
+
 (defun database-connection ()
   "This thread's connection to *DATABASE*."
   (unless *database*
     (error "No database: call CONNECT-DATABASE first."))
-  (apply #'dbi:connect-cached *database*))
+  (apply #'dbi:connect-cached (connection-arguments *database*)))
 
 (defun disconnect-database ()
   "Forget the database (connections close as their threads end)."

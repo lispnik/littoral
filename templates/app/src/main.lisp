@@ -26,7 +26,8 @@ or SQLite in $DATA_DIR (default data/), as CONNECT-DATABASE takes it."
   "Create the tables unless they exist; safe at every start."
   (call-with-database spec (lambda ()
                              (littoral.db:create-table 'note)
-                             (littoral.auth:create-auth-tables))))
+                             (littoral.auth:create-auth-tables)
+                             (littoral.mail:create-mail-tables))))
 
 (defun create-user (name email password &key admin (database (database-spec)))
   "Add a user who can sign in; with ADMIN, one who may use /admin too."
@@ -39,15 +40,34 @@ or SQLite in $DATA_DIR (default data/), as CONNECT-DATABASE takes it."
 :DEVELOPMENT adds the toolbar and halos."
   (setup-database database)
   (register-application path 'app-root :title "{{title}}" :mode mode
-                        :around-request (apply #'littoral.db:using-database database)
+                        ;; Mail, such as password reset links, goes to the outbox:
+                        ;; the delivery thread SERVE starts sends it.
+                        :around-request (let ((use-database (apply #'littoral.db:using-database database))
+                                              (send-mail (littoral.mail:outbox-sender)))
+                                          (lambda (thunk)
+                                            (let ((littoral.auth:*send-mail* send-mail))
+                                              (funcall use-database thunk))))
                         ;; Each request's callbacks in one transaction.
                         :around-actions (littoral.db:transactional))
   ;; The admin answers only this machine unless given :CREDENTIALS.
   (littoral.admin:register-admin "/admin" '(note) :title "{{title}} admin" :database database))
 
-(defun serve (&key (port {{port}}) (address "127.0.0.1") (mode :development))
-  "Register the application and start the web server."
-  (register-app :mode mode)
+(defun mailer ()
+  "What sends mail: the SMTP server $SMTP_URL names (smtp://user:password@host:587
+for STARTTLS, smtps://… for TLS), or else one that prints mail to the log."
+  (let ((url (uiop:getenv "SMTP_URL")))
+    (if (and url (plusp (length url)))
+        (littoral.mail:smtp-mailer-from-url url)
+        littoral.mail:*mailer*)))
+
+(defun serve (&key (port {{port}}) (address "127.0.0.1") (mode :development) (database (database-spec)))
+  "Register the application, start sending its mail, and start the web server.
+Mail comes from $MAIL_FROM."
+  (let ((from (uiop:getenv "MAIL_FROM")))
+    (when (and from (plusp (length from)))
+      (setf littoral.mail:*mail-from* from)))
+  (register-app :mode mode :database database)
+  (littoral.mail:start-mail-delivery :database database :mailer (mailer))
   (start :port port :address address))
 
 (defun toplevel ()

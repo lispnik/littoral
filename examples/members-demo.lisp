@@ -21,35 +21,35 @@
 (defpackage #:littoral-members-demo
   (:use #:cl #:littoral #:littoral.html)
   (:documentation "Users, roles, password reset and OAuth sign-in.")
-  (:export #:register #:members-root #:demo-idp #:*outbox*))
+  (:export #:register #:members-root #:demo-idp))
 
 (in-package #:littoral-members-demo)
 
-;;; The demo mailbox: where reset mail goes instead of out
+;;; The demo mailbox: reset mail goes through the outbox to the mail demo's
+;;; pretend server, and the latest arrives here.
 
-(defvar *outbox* '() "Mail the demo would have sent, newest first: (TO SUBJECT BODY).")
-(defvar *outbox-lock* (sb-thread:make-mutex :name "members demo outbox"))
+(defvar *mail-path* "/examples/mail" "Where the mail demo, with the outbox, is served.")
 
-(defun deliver-mail (to subject body)
-  "A *SEND-MAIL* that keeps the last few mails for the page to show."
-  (sb-thread:with-mutex (*outbox-lock*)
-    (setf *outbox* (subseq (cons (list to subject body) *outbox*) 0 (min 5 (1+ (length *outbox*)))))))
+(defclass members-mailbox (component updatable) ()
+  (:documentation "The pretend mail server's latest mail, refreshed every two seconds."))
 
-(defun outbox ()
-  (sb-thread:with-mutex (*outbox-lock*) (copy-list *outbox*)))
-
-(defun render-mailbox ()
-  (section (:class "members-mailbox")
+(defmethod render ((self members-mailbox))
+  (section (:class "members-mailbox" :periodical (periodical 2 :update self))
     (h2 () "Demo mailbox")
-    (if (null (outbox))
-        (p () "Empty. Mail sent by password reset would arrive here.")
-        (dolist (mail (outbox))
-          (destructuring-bind (to subject body) mail
-            (article (:class "members-mail")
-              (p () (strong () "To: ") (text to) (br) (strong () "Subject: ") (text subject))
-              (pre () (text body))
-              (let ((link (cl-ppcre:scan-to-strings "https?://\\S+/reset\\?token=\\S+" body)))
-                (when link (p () (anchor (:href link) "Open the reset link"))))))))))
+    (let ((messages (littoral.mail:mailer-messages littoral-mail-demo:*mailbox*)))
+      (if (null messages)
+          (p () "Empty. Mail sent by password reset arrives here, a moment after it's queued.")
+          (dolist (message (subseq messages 0 (min 3 (length messages))))
+            (let ((mime (littoral.mail:sent-message-text message)))
+              (article (:class "members-mail")
+                (p () (strong () "To: ") (text (littoral.mail:message-header mime "To")) (br)
+                  (strong () "Subject: ") (text (littoral.mail:message-header mime "Subject")))
+                (pre () (text (littoral.mail:message-text mime)))
+                (let ((link (cl-ppcre:scan-to-strings "https?://\\S+/reset\\?token=\\S+"
+                                                      (littoral.mail:message-text mime))))
+                  (when link (p () (anchor (:href link) "Open the reset link")))))))))
+    (p () "Mail goes through an outbox in the database; "
+      (anchor (:href (url-for *mail-path*)) "the mail demo") " shows it, retries and all.")))
 
 ;;; The page
 
@@ -179,11 +179,13 @@ form shows in its place, so the rest of the page stays in view."))
    (news :initform (make-instance 'members-news) :reader root-news)
    (sessions :initform (make-instance 'sessions-box) :reader root-sessions)
    (security :initform (make-instance 'littoral.auth:security-settings) :reader root-security)
-   (console :initform (make-instance 'admin-console) :accessor root-console))
+   (console :initform (make-instance 'admin-console) :accessor root-console)
+   (mailbox :initform (make-instance 'members-mailbox) :reader root-mailbox))
   (:documentation "The members demo: a public part, a members' part, an admins' part."))
 
 (defmethod children ((self members-root))
-  (list (root-account self) (root-news self) (root-sessions self) (root-security self) (root-console self)))
+  (list (root-account self) (root-news self) (root-sessions self) (root-security self) (root-console self)
+        (root-mailbox self)))
 
 (defgeneric render-try-it (root)
   (:documentation "The demo accounts to try, and what to try."))
@@ -197,7 +199,7 @@ form shows in its place, so the rest of the page stays in view."))
     (li () "Under Security, add an authenticator app (signing in then asks for its code), passkeys "
       "(sign in with your fingerprint or face, no password) and recovery codes.")
     (li () "Five wrong passwords for a name lock it for a minute.")
-    (li () "Forgot a password? Ask for a link for bob@example.org; it arrives in the demo mailbox below.")
+    (li () "Forgot a password? Ask for a link for bob@example.org; it arrives in the demo mailbox below, through the outbox.")
     (li () "Or sign in with DemoID, a pretend OAuth provider, as carol. Her account is created on first sign-in.")))
 
 (defgeneric page-heading (root)
@@ -224,7 +226,7 @@ form shows in its place, so the rest of the page stays in view."))
   (section ()
     (h2 () "Admins")
     (render-component (root-console self)))
-  (render-mailbox))
+  (render-component (root-mailbox self)))
 
 ;;; The same page over an existing table
 
@@ -391,11 +393,17 @@ and asks to go back to the members demo's own OAuth address."
   (seed-accounts))
 
 (defun register (&key (path "/examples/members") (idp-path "/examples/demo-idp")
-                   (accounts-path "/examples/accounts")
+                   (accounts-path "/examples/accounts") (mail-path "/examples/mail")
                    (file (merge-pathnames "littoral-members-demo.sqlite3" (uiop:temporary-directory))))
-  "Serve the members demo at PATH and DemoID at IDP-PATH, keeping users in FILE."
-  (let ((database (littoral.db:using-database :sqlite3 :database-name (namestring file))))
+  "Serve the members demo at PATH, DemoID at IDP-PATH and the mail demo at
+MAIL-PATH, keeping users and the outbox in FILE."
+  (let* ((spec (list :sqlite3 :database-name (namestring file)))
+         (database (apply #'littoral.db:using-database spec))
+         (send-mail (littoral.mail:outbox-sender :from "Members demo <members@example.org>")))
     (funcall database #'seed)
+    (setf *mail-path* mail-path)
+    (littoral-mail-demo:start-demo-delivery spec)
+    (register-application mail-path 'littoral-mail-demo:mail-root :title "Mail")
     (install-demo-endpoints)
     (littoral.oauth:define-oauth-provider :demoid
       :label "DemoID"
@@ -420,9 +428,9 @@ and asks to go back to the members demo's own OAuth address."
                                  :roles (coerce (mapcar #'string-downcase (littoral.auth:user-roles user)) 'vector)))))
     (register-application path 'members-root
                           :title "Members"
-                          ;; Each request: this demo's database, and mail to the demo mailbox.
+                          ;; Each request: this demo's database, and mail to its outbox.
                           :around-request (lambda (thunk)
-                                            (let ((littoral.auth:*send-mail* #'deliver-mail))
+                                            (let ((littoral.auth:*send-mail* send-mail))
                                               (funcall database thunk)))
                           :around-actions (littoral.db:transactional))
     (register-application accounts-path 'accounts-root
@@ -430,6 +438,6 @@ and asks to go back to the members demo's own OAuth address."
                           :around-request (littoral.auth:using-user-store
                                            (accounts-store)
                                            (lambda (thunk)
-                                             (let ((littoral.auth:*send-mail* #'deliver-mail))
+                                             (let ((littoral.auth:*send-mail* send-mail))
                                                (funcall database thunk))))
                           :around-actions (littoral.db:transactional))))

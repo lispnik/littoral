@@ -18,12 +18,13 @@
        (unwind-protect
             (with-fresh-applications ()
               (littoral-members-demo:register :file ,file)
-              (setf littoral-members-demo:*outbox* '())
+              (littoral.mail:clear-mailer littoral-mail-demo:*mailbox*)
               (clrhash littoral.auth::*failures*)
               (let ((,b (make-instance 'browser)))
                 (visit ,b "/examples/members")
                 ,@body))
          (setf littoral.oauth::*providers* '())
+         (littoral.mail:stop-mail-delivery)
          (uiop:delete-file-if-exists ,file)))))
 
 (defun members-sign-in (b name password)
@@ -66,7 +67,9 @@
     (fill-in b "reset-email" "bob@example.org")
     (press b "Send me a link")
     (is (has-text-p b "is on its way"))
-    ;; The mail is in the demo mailbox, on the same page.
+    ;; Queued in the outbox; once sent, it's in the demo mailbox.
+    (littoral-mail-demo:deliver-now)
+    (visit b "/examples/members")
     (is (has-text-p b "To: bob@example.org"))
     (let ((link (find-link b "Open the reset link")))
       (is (search "/examples/members/reset?token=" link))
@@ -177,3 +180,33 @@
                   (lambda ()
                     (getf (first (littoral.db:db-query "SELECT pw_hash FROM accounts WHERE login = 'eve'"))
                           :|pw_hash|)))))))
+
+(test mail-demo-outbox
+  (with-members (b)
+    (visit b "/examples/mail")
+    (is (has-text-p b "Outbox"))
+    (fill-in b "mail-to" "Ada <ada@example.org>")
+    (fill-in b "mail-subject" "Über die Post")
+    (press b "Queue it")
+    (is (has-text-p b "Queued."))
+    (littoral-mail-demo:deliver-now)
+    (visit b "/examples/mail")
+    (is (has-text-p b "Über die Post"))
+    (is (has-text-p b "sent"))
+    ;; The server goes down: the welcome mail waits, with the reason.
+    (click b "Switch it off")
+    (unwind-protect
+         (progn
+           (press b "Queue the welcome template")
+           (littoral-mail-demo:deliver-now)
+           (visit b "/examples/mail")
+           (is (has-text-p b "Connection refused"))
+           (is (has-text-p b "queued")))
+      (setf littoral-mail-demo:*server-down* nil))
+    ;; Back up, and retried by hand.
+    (visit b "/examples/mail")
+    (click b "Retry")
+    (littoral-mail-demo:deliver-now)
+    (visit b "/examples/mail")
+    (is (has-text-p b "Welcome to the Littoral demo"))
+    (is (search "<!DOCTYPE html>" (browser-html b)) "The HTML version is previewed")))

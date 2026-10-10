@@ -140,6 +140,7 @@
                #:littoral/members-demo
                #:littoral/auth
                #:littoral/oauth
+               #:littoral/mail
                #:littoral/parenscript-demo
                #:littoral/websocket
                #:littoral/generator
@@ -191,7 +192,8 @@
                              (:file "endpoints")
                              (:file "widgets-extra")
                              (:file "wizard")
-                             (:file "second-factor"))))
+                             (:file "second-factor")
+                             (:file "mail"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
                                        (uiop:find-symbol* :littoral :littoral/tests))
@@ -204,7 +206,7 @@
 
 (asdf:defsystem #:littoral/docs
   :description "Writes docs/API.md from the docstrings: make docs."
-  :depends-on (#:littoral #:littoral/test #:littoral/browser-test #:sb-introspect)
+  :depends-on (#:littoral #:littoral/test #:littoral/browser-test #:littoral/mail #:sb-introspect)
   :components ((:module "tools" :components ((:file "api-docs")))))
 
 (asdf:defsystem #:littoral/tracker
@@ -250,8 +252,8 @@
 
 (asdf:defsystem #:littoral/members-demo
   :description "Signing in, roles, password reset and OAuth, with a pretend identity provider."
-  :depends-on (#:littoral/auth #:littoral/oauth #:dbd-sqlite3)
-  :components ((:module "examples" :components ((:file "members-demo")))))
+  :depends-on (#:littoral/auth #:littoral/oauth #:littoral/mail #:dbd-sqlite3)
+  :components ((:module "examples" :serial t :components ((:file "mail-demo") (:file "members-demo")))))
 
 (asdf:defsystem #:littoral/auth
   :description "Users, signing in, roles and password reset for Littoral."
@@ -261,6 +263,14 @@
   :components ((:module "src" :serial t
                 :components ((:file "auth") (:file "passwords") (:file "auth-store")
                              (:file "second-factor") (:file "second-factor-ui")))))
+
+(asdf:defsystem #:littoral/mail
+  :description "Sending mail: MIME messages, SMTP with TLS, templates and an outbox that retries."
+  :author "Matthew Kennedy"
+  :license "MIT"
+  :depends-on (#:littoral #:littoral/db #:cl+ssl #:usocket #:cl-base64 #:quri #:cl-ppcre #:alexandria)
+  :components ((:module "src" :serial t
+                :components ((:file "mail") (:file "smtp") (:file "outbox")))))
 
 (asdf:defsystem #:littoral/oauth
   :description "Sign in to Littoral applications with OAuth 2 / OpenID Connect providers."

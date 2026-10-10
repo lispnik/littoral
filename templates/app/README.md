@@ -20,7 +20,7 @@ Data lives in SQLite under `data/` (or `$DATA_DIR`). Set `DATABASE_URL=postgres:
 - `tests/app.lisp`: signing in, editing notes, and checking they stay private.
 - `deploy/`: a systemd unit and a Caddyfile.
 
-Sign-ins are kept in the database, so they survive restarts; the sign-in form offers "Keep me signed in". "Forgot your password?" mails a reset link: plug your mailer into `littoral.auth:*send-mail*`.
+Sign-ins are kept in the database, so they survive restarts; the sign-in form offers "Keep me signed in". "Forgot your password?" mails a reset link. Mail goes into an outbox table and a background thread sends it, trying again if the mail server is down: set `SMTP_URL` to send it, or it's printed to the log.
 
 ## Deploying
 
@@ -32,6 +32,8 @@ Sign-ins are kept in the database, so they survive restarts; the sign-in form of
 | `PUBLIC_URL` | the site's address, for links in mail; required in deployment |
 | `TRUST_PROXY` | set behind a reverse proxy, so limits see real client addresses |
 | `DATABASE_URL` or `DATA_DIR` | PostgreSQL, or where the SQLite file goes |
+| `SMTP_URL` | the mail server: `smtp://user:password@host:587` (STARTTLS) or `smtps://…:465` (TLS); without it, mail is printed to the log |
+| `MAIL_FROM` | the From address, such as `Bookshop <hello@example.org>` |
 
 Or run it in a container: `make docker` builds the image `{{name}}` (Littoral comes from your checkout), and
 

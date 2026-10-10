@@ -123,7 +123,8 @@
 do not edit by hand.~%")
       (dolist (entry '(("littoral" "src/package.lisp") ("littoral.html" "src/package.lisp")
                        ("littoral.test" "testing/package.lisp")
-                       ("littoral.browser-test" "testing/chrome.lisp")))
+                       ("littoral.browser-test" "testing/chrome.lisp")
+                       ("littoral.mail" "src/mail.lisp")))
         (destructuring-bind (package file) entry
         (format out "~%## Package `~A`~%~%~A~%" package
                 (or (documentation (find-package (string-upcase package)) t) ""))

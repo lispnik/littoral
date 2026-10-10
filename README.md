@@ -367,6 +367,48 @@ An application can answer JSON beside its pages, for mobile apps, scripts and we
 
 Jobs live in memory, so a restart forgets them. The progress example runs one job that succeeds and one that fails once and is retried.
 
+### Sending mail
+
+`littoral/mail` writes MIME messages, sends them over SMTP, makes them from templates, and keeps them in an outbox in the database until they've gone:
+
+```lisp
+(setf littoral.mail:*mailer* (littoral.mail:smtp-mailer-from-url "smtp://app:secret@smtp.example.org:587")
+      littoral.mail:*mail-from* "Bookshop <hello@example.org>")
+
+(littoral.mail:define-mail order-shipped (order)
+  :to (order-email order)
+  :subject (translate "Your order ~A is on its way" (order-number order))
+  :html ((p () "It left the warehouse today.")
+         (p () (anchor (:href (tracking-url order)) "Track it"))))
+
+(littoral.mail:create-mail-tables)
+(littoral.mail:start-mail-delivery :database spec)   ; a background thread sends the outbox
+;; …and in an action:
+(littoral.mail:queue-mail (order-shipped order))
+```
+
+- **The outbox.**
+  - `queue-mail` writes the message to the `mail_outbox` table in the request's transaction, so mail goes only if the action that sent it commits. The page never waits for the mail server.
+  - The delivery thread sends at once, then tries again after `*mail-retry-seconds*` (60), doubling each time, up to `*mail-attempts*` (8). A refusal (an SMTP 5xx) fails at once.
+  - Several processes can share the table: each one claims a message before sending it.
+  - `outbox-messages`, `retry-mail` and `purge-sent-mail` look after it. `deliver-queued-mail` sends what's due right away, which tests find handy.
+- **SMTP.**
+  - `make-smtp-mailer` takes `:security`: `:starttls` (port 587, the default), `:tls` (465) or `:none` (25, for a relay on the same machine).
+  - With STARTTLS, a server that doesn't offer it is refused rather than used in the clear, and the certificate must match the host. Pass `:ca-file` for a private authority.
+  - It signs in with AUTH PLAIN or LOGIN. Errors never include the password.
+  - `smtp-mailer-from-url` reads `smtp://`, `smtps://` and `smtp+insecure://` URLs.
+- **Messages.**
+  - `make-mail` takes To, Cc, Bcc, Reply-To, a text body, an HTML body or both, attachments and extra headers.
+  - Everything is UTF-8: bodies are quoted-printable, and headers with non-ASCII text are encoded, display names included.
+  - A line break in a header value is an error, so form input can't add headers.
+  - Bcc goes in the SMTP envelope only, never in the headers.
+- **Templates.**
+  - `define-mail` writes the HTML with Littoral's tags, as in `render`, inside `*mail-layout*`: a plain layout that mail programs show well.
+  - Without `:text`, the plain-text part is made from the HTML, with links written out.
+- **Other mailers.** The default `*mailer*` prints each mail, which is what you want in development. A `memory-mailer` keeps them, for tests: `message-header`, `message-text` and `message-html` read a sent message back.
+- **Password reset.** Set `littoral.auth:*send-mail*` to `(littoral.mail:outbox-sender)` and reset links go through the outbox. Then the reset form takes the same time whether or not the address has an account. The `TEMPLATE=app` projects do this, and send through `$SMTP_URL`.
+- **The example.** `/examples/mail` queues plain and templated mail and lets you switch the pretend mail server off to watch the retries. It previews the HTML. CI sends through a real server, Mailpit, over STARTTLS with certificate checks.
+
 ### Live redefinition
 
 In development mode, recompile a component's `render` method in Emacs (`C-c C-c`) and every open page showing that component redraws itself within a couple of seconds, with its state intact. A watcher notices when methods of `render`, `style`, `script`, `update-root`, `children` or `render-decoration` are redefined. Pages showing an instance of that class then reload, and because each page's URL names its saved state, reloading keeps that state. Pages with a push stream hear about it through the stream; the others poll a cheap endpoint, so live reloading holds no connection (and on Hunchentoot no thread) open.
@@ -583,7 +625,7 @@ Each request's changes run in one transaction. `:database` gives the admin its o
   - **Recovery codes.** Ten single-use codes, stored hashed, made when an authenticator app is set up or on request.
   - Failed codes count towards the lockout, like failed passwords. The members example has a Security section with all three, and CI signs in with a passkey through Chrome's virtual authenticator.
 - **Signing in gives the session a new key**, as does signing out, and closes the session's open streams and sockets. A session URL someone had beforehand, perhaps from a link they sent, is then useless.
-- **Password reset.** "Forgot your password?" emails a single-use link that expires after an hour. The answer is the same whether or not the address has an account. Each account gets at most one mail a minute, and each client address `*reset-mails-per-address*` in the window. `*send-mail*` is where you plug in your mailer; by default it prints the mail.
+- **Password reset.** "Forgot your password?" emails a single-use link that expires after an hour. The answer is the same whether or not the address has an account. Each account gets at most one mail a minute, and each client address `*reset-mails-per-address*` in the window. `*send-mail*` is where you plug in your mailer; by default it prints the mail. With `littoral/mail`, `(littoral.mail:outbox-sender)` queues it in the outbox (see "Sending mail").
 - **`*public-url*`.** Set `littoral.auth:*public-url*` to the site's address (`"https://example.org"`): it is where reset links and OAuth redirects point. In deployment mode it is required, because the Host header is the client's to choose, and a reset link built from a forged one would send its token to someone else's site. In development the request's host is used.
 - **OAuth / OpenID Connect.** Load `littoral/oauth` and call `define-oauth-provider` with a provider's URLs and your client id and secret. The sign-in form then offers "Sign in with …". The flow is the authorisation code flow with PKCE, and its state is tied to the browser. Users are found by email, or created; an email the provider marks `"email_verified": false` is refused. Register `/<app>/oauth/<provider>` as the redirect address with the provider.
 

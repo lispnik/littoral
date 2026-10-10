@@ -72,6 +72,27 @@ jobs:
             docker logs s3 2>&1 | tail -20
           fi
 
+      - name: Start an SMTP server with STARTTLS, for the mail tests
+        # Mailpit, with a certificate made here: the test checks it against
+        # this CA, signs in, and reads the message back through Mailpit's API.
+        run: |
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj "/CN=localhost" \
+            -addext "subjectAltName=DNS:localhost" -keyout /tmp/smtp-key.pem -out /tmp/smtp-cert.pem
+          chmod 644 /tmp/smtp-key.pem
+          if docker run -d --name smtp -p 1025:1025 -p 8025:8025 -v /tmp:/certs:ro \
+               -e MP_SMTP_TLS_CERT=/certs/smtp-cert.pem -e MP_SMTP_TLS_KEY=/certs/smtp-key.pem \
+               -e MP_SMTP_REQUIRE_STARTTLS=true -e MP_SMTP_AUTH_ACCEPT_ANY=true axllent/mailpit:latest; then
+            for i in $(seq 1 30); do
+              if curl -fs -o /dev/null http://127.0.0.1:8025/api/v1/info; then
+                { echo "LITTORAL_TEST_SMTP=localhost:1025"; echo "LITTORAL_TEST_SMTP_CA=/tmp/smtp-cert.pem";
+                  echo "LITTORAL_TEST_SMTP_API=http://127.0.0.1:8025"; } >> "$GITHUB_ENV"
+                echo "Mailpit is up"; break
+              fi
+              sleep 1
+            done
+            docker logs smtp 2>&1 | tail -10
+          fi
+
       - name: Unit tests
         run: |
           sbcl --non-interactive \

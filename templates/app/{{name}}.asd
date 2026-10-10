@@ -5,7 +5,7 @@
   :author "{{author}}"
   :license "{{license}}"
   :version "0.1.0"
-  :depends-on (#:littoral #:littoral/db #:littoral/auth #:littoral/admin #:dbd-sqlite3 #:dbd-postgres)
+  :depends-on (#:littoral #:littoral/db #:littoral/auth #:littoral/admin #:littoral/mail #:dbd-sqlite3 #:dbd-postgres)
   :serial t
   :components ((:module "src"
                 :serial t

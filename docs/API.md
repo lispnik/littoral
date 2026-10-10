@@ -1466,6 +1466,10 @@ Write a <dt> element.
 
 Write a <dd> element.
 
+#### `table` — class
+
+How a class's objects are stored.
+
 #### `table` `&rest arguments` — macro
 
 Write a <table> element.
@@ -1964,3 +1968,308 @@ Give `page` a platform authenticator that always says yes, for passkey tests.
 #### `browser-error` — condition
 
 Chrome couldn't do what a test asked: no such element, a timeout, a JavaScript error.
+
+## Package `littoral.mail`
+
+Sending mail: MIME messages, SMTP, templates and an outbox that retries.
+
+### Messages
+
+#### `mail` — class
+
+A mail to send: `make-mail` makes one.
+
+#### `make-mail` `&key to cc bcc (from *mail-from*) reply-to (subject "") text html attachments headers` — function
+
+A mail.  `to`, `cc` and `bcc` are addresses ("ada@example.org" or "Ada <ada@example.org>")
+or lists of them; `text` and `html` its plain and `html` bodies (one is enough: the
+plain one is made from the `html` when missing); `attachments` (`file-name`
+`content-type` `data`) lists, `data` octets or a string; `headers` (`name` . `value`) pairs.
+
+#### `mail-to` `object` — generic function
+
+Reads the to of a mail.
+
+#### `mail-cc` `object` — generic function
+
+Reads the cc of a mail.
+
+#### `mail-bcc` `object` — generic function
+
+Reads the bcc of a mail.
+
+#### `mail-from` `object` — generic function
+
+Reads the from of a mail.
+
+#### `mail-reply-to` `object` — generic function
+
+Reads the reply-to of a mail.
+
+#### `mail-subject` `object` — generic function
+
+Reads the subject of a mail.
+
+#### `mail-text` `object` — generic function
+
+Reads the text of a mail.
+
+#### `mail-html` `object` — generic function
+
+Reads the html of a mail.
+
+#### `mail-attachments` `object` — generic function
+
+Reads the attachments of a mail.  (`file-name` `content-type` `octets-or-string`) lists.
+
+#### `mail-headers` `object` — generic function
+
+Reads the headers of a mail.  Extra headers, as (`name` . `value`) pairs.
+
+#### `mail-string` `mail &key (date (get-universal-time))` — function
+
+`mail` as a `mime` message, with `crlf` line breaks; Bcc isn't written.
+
+#### `mail-recipients` `mail` — function
+
+Everyone `mail` goes to, Bcc included, as bare addresses.
+
+#### `*mail-from*` — variable
+
+The From address of mail that doesn't give one.
+
+#### `address-spec` `address` — function
+
+The bare address in `address`: "Ada <ada@example.org>" → "ada@example.org".
+
+### Reading messages back
+
+#### `message-header` `message name` — function
+
+The header `name` of `message` (a `mime` string), decoded, or `nil`.
+
+#### `message-text` `message` — function
+
+The plain text of `message` (a `mime` string), with plain newlines.
+
+#### `message-html` `message` — function
+
+The `html` part of `message` (a `mime` string), or `nil`.
+
+### Mailers
+
+#### `*mailer*` — variable
+
+What sends mail: an `smtp-mailer`, or by default a `log-mailer` that prints it.
+
+#### `send-message` `mailer from recipients message` — generic function
+
+Send `message`, a `mime` string, from the address `from` to the addresses
+`recipients`.  Signals on failure; an `smtp-error` that is `smtp-error-permanent-p`
+won't succeed if tried again.
+
+#### `send-mail` `mail &key (mailer *mailer*)` — function
+
+Send `mail` now, waiting for the mailer.  `queue-mail` sends it in the
+background instead, and tries again when it fails.
+
+#### `smtp-mailer` — class
+
+Sends mail through an `smtp` server: `make-smtp-mailer` makes one.
+
+#### `make-smtp-mailer` `&key (host "localhost") port (security :starttls) username password (helo (machine-instance)) (verify t) ca-file (timeout 30)` — function
+
+A mailer sending through the `smtp` server at `host`.  `security` is :`starttls`
+(port 587 by default), :`tls` (465) or :`none` (25, for a relay on this machine).
+With `username`, signs in with `auth` `plain` (or `login`).  The server's certificate
+is checked against the system's authorities, or `ca-file`'s, unless `verify` is `nil`.
+`timeout`, in seconds, bounds each send.
+
+#### `smtp-mailer-from-url` `url &rest options` — function
+
+A mailer from `url`: smtp://user:password@host:port (`starttls`), smtps://… (`tls`)
+or smtp+insecure://… (neither).  `options` go to `make-smtp-mailer`.
+
+#### `smtp-error` — condition
+
+The `smtp` server refused, or the conversation went wrong.
+
+#### `smtp-error-code` `condition` — generic function
+
+The server's reply code in an `smtp-error`, such as 550, or `nil` when the conversation itself failed.
+
+#### `smtp-error-permanent-p` `condition` — function
+
+True when `condition` is a refusal (a 5xx reply) that trying again won't change.
+
+#### `log-mailer` — class
+
+Prints each message's addresses, subject and text, instead of sending it.
+
+#### `memory-mailer` — class
+
+Keeps the messages it is given, newest first, instead of sending them.
+
+#### `make-memory-mailer` `&key (keep 50)` — function
+
+A mailer that keeps the last `keep` messages, for tests and demos.
+
+#### `mailer-messages` `mailer` — function
+
+The messages `mailer` (a `memory-mailer`) has kept, newest first.
+
+#### `clear-mailer` `mailer` — function
+
+Forget the messages `mailer` (a `memory-mailer`) has kept.
+
+#### `sent-message` — class
+
+A message a `memory-mailer` was given.
+
+#### `sent-message-from` `object` — generic function
+
+Reads the from of a sent-message.
+
+#### `sent-message-recipients` `object` — generic function
+
+Reads the recipients of a sent-message.
+
+#### `sent-message-text` `object` — generic function
+
+Reads the text of a sent-message.  The `mime` message.
+
+#### `sent-message-time` `object` — generic function
+
+Reads the time of a sent-message.
+
+### Templates
+
+#### `define-mail` `name lambda-list &key to cc bcc from reply-to subject text html attachments headers` — macro
+
+Define `name`, a function of `lambda-list` making a mail.  The keyword forms are
+evaluated each time, with `lambda-list`'s variables bound; `html` is a list of
+forms written with Littoral's `html` tags (as in `render`), inside *MAIL-LAYOUT*.
+Without `text`, the plain text is made from the `html`.
+
+#### `*mail-layout*` — variable
+
+A function of (`subject` `body-thunk`) that writes the `html` around a template's content.
+
+#### `default-mail-layout` `subject body` — function
+
+Write an `html` mail around `body`, a thunk writing its content: a plain,
+readable page that mail programs show well.
+
+#### `html-to-text` `html` — function
+
+A plain-text version of `html`: paragraphs and line breaks kept, links
+written out after their text, tags dropped, entities decoded.
+
+### The outbox
+
+#### `outbox-mail` — class
+
+A message in the outbox, and how sending it has gone.
+
+#### `create-mail-tables` — function
+
+Create the outbox table unless it exists.
+
+#### `drop-mail-tables` — function
+
+Drop the outbox table.
+
+#### `queue-mail` `mail` — function
+
+Put `mail` in the outbox, in the current database, for the delivery thread
+to send; returns its `outbox-mail`.
+
+#### `outbox-sender` `&key (from *mail-from*)` — function
+
+A function of (`to` `subject` `body`) that queues a plain-text mail, for
+`littoral`.`auth`:*SEND-MAIL*.
+
+#### `deliver-queued-mail` `&key (mailer *mailer*) (limit 50)` — function
+
+Send the messages in the current database's outbox that are due, with
+`mailer`; returns how many were sent.  The delivery thread calls this; so can
+a test, to send what's queued without waiting.
+
+#### `start-mail-delivery` `&key (database *database*) (mailer *mailer*) (interval 10) (attempts *mail-attempts*) (retry-seconds *mail-retry-seconds*)` — function
+
+Send the outbox of `database` (a spec, as `littoral`.`db`:*DATABASE* holds) with
+`mailer` from a background thread: at once when mail is queued in this process,
+and every `interval` seconds for retries and other processes' mail.  `attempts`
+and `retry-seconds` stand for *MAIL-ATTEMPTS* and *MAIL-RETRY-SECONDS* there.
+
+#### `stop-mail-delivery` — function
+
+Stop the delivery thread, letting it finish the message it is sending.
+
+#### `mail-delivery-running-p` — function
+
+True while the delivery thread runs.
+
+#### `outbox-messages` `&key status (limit 50)` — function
+
+The outbox's messages, newest first; only those with `status` (a string) if given.
+
+#### `retry-mail` `id` — function
+
+Send the message `id` again now, with its attempts counted afresh.
+
+#### `purge-sent-mail` `&key (older-than (* 7 24 3600))` — function
+
+Delete sent messages more than `older-than` seconds old; returns how many.
+
+#### `*mail-attempts*` — variable
+
+Times a message is tried before it is marked failed.
+
+#### `*mail-retry-seconds*` — variable
+
+Seconds before a failed message is tried again, doubling with each attempt.
+
+#### `outbox-id` `message` — function
+
+`message`'s id in the outbox, for `retry-mail`.
+
+#### `outbox-sender-address` `object` — generic function
+
+Reads the sender of an outbox-mail.
+
+#### `outbox-recipients` `object` — generic function
+
+Reads the recipients of an outbox-mail.  The addresses it goes to, separated by spaces.
+
+#### `outbox-subject` `object` — generic function
+
+Reads the subject of an outbox-mail.
+
+#### `outbox-message` `object` — generic function
+
+Reads the message of an outbox-mail.  The `mime` message.
+
+#### `outbox-status` `object` — generic function
+
+Reads the status of an outbox-mail.  "queued", "sending", "sent" or "failed".
+
+#### `outbox-attempts` `object` — generic function
+
+Reads the attempts of an outbox-mail.
+
+#### `outbox-next-attempt` `object` — generic function
+
+Reads the next-attempt of an outbox-mail.
+
+#### `outbox-last-error` `object` — generic function
+
+Reads the last-error of an outbox-mail.
+
+#### `outbox-created` `object` — generic function
+
+Reads the created of an outbox-mail.
+
+#### `outbox-sent` `object` — generic function
+
+Reads the sent of an outbox-mail.
