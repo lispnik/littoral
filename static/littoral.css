@@ -168,3 +168,14 @@ polyline.lt-chart-line { fill: none; }
 /* Markdown */
 .lt-markdown > :first-child { margin-top: 0; }
 .lt-markdown pre { background: var(--lt-panel); padding: .5rem; border-radius: 6px; overflow-x: auto; }
+
+/* Wizards */
+.lt-wizard-steps { display: flex; flex-wrap: wrap; gap: .4rem 1rem; list-style: none; padding: 0; margin: 0 0 1rem; font-size: .9rem; }
+.lt-wizard-steps li { color: var(--lt-muted); }
+.lt-wizard-steps li.lt-current { color: var(--lt-fg); font-weight: 600; }
+.lt-wizard-steps li.lt-done { color: var(--lt-accent); }
+.lt-wizard-number { display: inline-grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 50%;
+                    border: 1px solid currentColor; font-size: .8rem; }
+.lt-wizard-steps li.lt-current .lt-wizard-number { background: var(--lt-accent); color: var(--lt-bg); border-color: var(--lt-accent); }
+.lt-wizard-review dt { font-weight: 600; margin-top: .5rem; }
+.lt-wizard-review dd { margin: 0; }

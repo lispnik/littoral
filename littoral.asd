@@ -47,6 +47,7 @@
                              (:file "widgets-more")
                              (:file "descriptions")
                              (:file "widgets-extra")
+                             (:file "wizard")
                              (:file "session")
                              (:file "application")
                              (:file "configuration")
@@ -98,6 +99,7 @@
                              (:file "api")
                              (:file "devtools")
                              (:file "monitoring")
+                             (:file "wizard")
                              (:file "index")
                              (:file "register")))))
 
@@ -173,7 +175,8 @@
                              (:file "storage")
                              (:file "observe")
                              (:file "endpoints")
-                             (:file "widgets-extra"))))
+                             (:file "widgets-extra")
+                             (:file "wizard"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
                                        (uiop:find-symbol* :littoral :littoral/tests))

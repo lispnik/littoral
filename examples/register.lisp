@@ -25,6 +25,7 @@
   (register-application "/examples/api" 'api-demo :title "JSON endpoints")
   (register-application "/examples/devtools" 'devtools-demo :title "Development tools")
   (register-application "/examples/monitoring" 'monitoring-demo :title "Monitoring")
+  (register-application "/examples/wizard" 'wizard-demo :title "Wizard")
   ;; Prometheus metrics, for this machine (the monitoring example links to them).
   (serve-metrics))
 

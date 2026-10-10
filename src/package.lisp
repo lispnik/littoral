@@ -73,6 +73,8 @@
    #:ajax #:ajax-update #:periodical #:execute-script
    #:channel #:make-channel #:subscriptions #:publish #:notify #:close-event-streams
    #:with-session #:*source-editor* #:*async-stream-opener*
+   ;; Wizards
+   #:wizard #:make-wizard #:wizard-step
    ;; More widgets
    #:data-grid #:bar-chart #:line-chart #:sparkline #:calendar #:calendar-year #:calendar-month
    #:kanban #:kanban-columns #:move-card #:markdown-html #:markdown-field

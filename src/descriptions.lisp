@@ -224,8 +224,11 @@ CALLBACK receives what is submitted.")
     (if (functionp choices) (funcall choices) choices)))
 
 (defmethod parse-field ((field choice-field) string)
-  ;; The input posts the chosen item's position.
-  (let ((index (handler-case (parse-integer string) (error () nil))))
+  ;; The input posts the chosen item's position; a choice's label (as
+  ;; FORMAT-FIELD writes it, before anything is posted) means it too.
+  (let ((index (or (handler-case (parse-integer string) (error () nil))
+                   (position string (field-choices field)
+                             :key (lambda (c) (format-field field c)) :test #'string=))))
     (cond ((or (null index) (minusp index)) nil)
           ((< index (length (field-choices field))) (nth index (field-choices field)))
           (t (field-problem "~A is not one of the choices." (translate (field-label field)))))))
@@ -234,8 +237,11 @@ CALLBACK receives what is submitted.")
   (if (null value) "" (funcall (field-labels field) value)))
 
 (defmethod render-field-input ((field choice-field) id text callback)
-  (let ((selected (position text (field-choices field)
-                            :key (lambda (c) (format-field field c)) :test #'string=)))
+  (let ((selected (or (position text (field-choices field)
+                                :key (lambda (c) (format-field field c)) :test #'string=)
+                      ;; A position, as posted.
+                      (let ((index (ignore-errors (parse-integer text))))
+                        (and index (< -1 index (length (field-choices field))) index)))))
     (emit-tag "select" (list :id id :name (register :value callback))
               (lambda ()
                 (unless (field-required-p field)

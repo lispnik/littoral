@@ -11,6 +11,7 @@
      ("todo" "To Do" "Forms, checkboxes and editing through a dialog."))
     ("Flow and navigation"
      ("guess" "Guess the Number" "A task: a multi-page flow as straight-line code.")
+     ("wizard" "Wizard" "Signing up in steps, from one description, with a review.")
      ("topics" "Topics" "Bookmarkable URLs with update-url and initial-request.")
      ("report" "Report" "A sortable, paged table.")
      ("widgets" "Widgets" "Tabs, a tree, autocomplete, sortable lists, a data grid, charts, a calendar, kanban and Markdown.")

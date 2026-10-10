@@ -168,6 +168,23 @@ A `report` is a table. Clicking a column heading sorts by that column, and click
                                    (anchor (:callback (lambda () (open-order row))) "open")))))
 ```
 
+### Wizards
+
+`make-wizard` shows a description's fields a few at a time:
+
+```lisp
+(call self (make-wizard (make-instance 'subscriber) :title "Sign up"
+                        :steps '(("Account" name email) ("Plan" plan seats) ("About you" about))))
+```
+
+- A row of steps shows where the user is.
+- **Next** checks the current step's fields, and **Back** keeps what was typed.
+- A review lists every answer, with a link back to the step that asked it.
+- **Finish** runs the description's whole-object check. It then writes the values to the object and answers it, or answers them as a plist with `:write nil`.
+- **Cancel** answers NIL.
+
+It's an ordinary component, so a flow can `call` it. `/examples/wizard` signs someone up in three steps.
+
 ### More widgets
 
 - **`data-grid`** shows a description's objects as a table, with a filter box per column, sortable headings and paging. **Edit** turns a row into the description's own inputs, with its validation; `:on-save` gets the object after the values are written to it.

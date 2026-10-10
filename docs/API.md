@@ -743,6 +743,21 @@ A function of (`socket` `stream` `writer`) that serves `stream` from an event
 loop, set by an optional system such as littoral/woo; `nil` when there is
 none and each stream gets a waiting thread.
 
+### Wizards
+
+#### `wizard` — class
+
+A description's fields in steps, with a review before finishing.
+
+#### `make-wizard` `object &key (description object) steps title (write t)` — function
+
+A wizard for `object`, described by `description`, in `steps`: (`title` `field-name` …)
+lists.  Without `steps`, one step per field not hidden.
+
+#### `wizard-step` `object` — generic function
+
+Reads the step of a wizard.  The step shown; the number of steps for the review.
+
 ### More widgets
 
 #### `data-grid` — class
