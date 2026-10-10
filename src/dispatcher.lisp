@@ -627,6 +627,7 @@ handler mounted at PREFIX."
   prefix)
 
 (defun unmount-handler (prefix)
+  "Stop serving PREFIX with the handler MOUNT-HANDLER gave it."
   (setf *mounts* (remove prefix *mounts* :key #'car :test #'string=)))
 
 (defun make-safe-request (env)

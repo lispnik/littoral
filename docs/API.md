@@ -856,7 +856,7 @@ signals or returns `nil`.  Replaces any check called `name`.
 
 #### `remove-health-check` `name` — function
 
-*Undocumented.*
+Forget the health check `name`.
 
 #### `serve-metrics` `&key (path "/metrics") (local-only t)` — function
 
@@ -875,7 +875,7 @@ A plist of headline numbers, for pages that show them: :`requests` :`errors`
 
 #### `reset-metrics` — function
 
-*Undocumented.*
+Start the request counts and timings again from zero.
 
 #### `log-requests-to` `stream &key (format :json)` — function
 
@@ -1061,7 +1061,7 @@ handler mounted at `prefix`.
 
 #### `unmount-handler` `prefix` — function
 
-*Undocumented.*
+Stop serving `prefix` with the handler `mount-handler` gave it.
 
 #### `field-multipart-p` `field` — generic function
 
@@ -1897,3 +1897,70 @@ Poll `predicate` for up to `seconds`; true when it came true.
 #### `with-fresh-applications` `(&rest registrations) &body body` — macro
 
 Run `body` with only the given applications registered.
+
+## Package `littoral.browser-test`
+
+Drive headless Chrome from Lisp tests.
+
+### General
+
+#### `with-chrome` `(page &rest options &key base width height) &body body` — macro
+
+Run `body` with `page` a headless Chrome tab, its paths relative to `base`.
+
+#### `chrome-path` — function
+
+Chrome or Chromium: $`chrome`, $LITTORAL_TEST_CHROME, or the usual places.
+
+#### `page` — class
+
+A Chrome tab, driven over the DevTools protocol.
+
+#### `visit` `page path` — function
+
+Open `path` (relative to the page's base `url`, or absolute).
+
+#### `evaluate` `page javascript` — function
+
+The value of `javascript` in `page` (promises awaited), as JSON-able Lisp data.
+
+#### `click-text` `page text &key (among "a, button")` — function
+
+Click the first link or button (or what `among` selects) whose text is `text`,
+or failing that contains it.
+
+#### `click-css` `page selector` — function
+
+Click the first element `selector` matches, as a user would.
+
+#### `type-into` `page selector string` — function
+
+Type `string` into the field `selector` matches, key by key.
+
+#### `text` `page &optional (selector "body")` — function
+
+The visible text of what `selector` matches.
+
+#### `page-url` `page` — function
+
+Where `page` is.
+
+#### `back` `page` — function
+
+The browser's back button.
+
+#### `wait-until` `page javascript &key (timeout 10)` — function
+
+Wait until `javascript` is true in `page`; signals `browser-error` after `timeout` seconds.
+
+#### `screenshot` `page pathname` — function
+
+Save `page` as a `png` at `pathname`.
+
+#### `add-virtual-authenticator` `page` — function
+
+Give `page` a platform authenticator that always says yes, for passkey tests.
+
+#### `browser-error` — condition
+
+Chrome couldn't do what a test asked: no such element, a timeout, a JavaScript error.

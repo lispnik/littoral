@@ -114,6 +114,19 @@
                 :components ((:file "package")
                              (:file "browser")))))
 
+(asdf:defsystem #:littoral/browser-test
+  :description "Drive headless Chrome from Lisp tests: real JavaScript, AJAX, push and passkeys."
+  :author "Matthew Kennedy"
+  :license "MIT"
+  :depends-on (#:alexandria #:websocket-driver-client #:dexador #:com.inuoe.jzon #:cl-base64 #:usocket)
+  :components ((:module "testing" :components ((:file "chrome")))))
+
+(asdf:defsystem #:littoral/chrome-tests
+  :description "Littoral's examples in a real Chrome, through littoral/browser-test."
+  :depends-on (#:littoral/browser-test #:littoral/examples #:littoral/members-demo #:fiveam)
+  :components ((:module "tests" :components ((:file "chrome"))))
+  :perform (asdf:test-op (o c) (uiop:symbol-call :littoral/chrome-tests :run-chrome-tests)))
+
 (asdf:defsystem #:littoral/tests
   :description "FiveAM test suite for Littoral."
   :depends-on (#:littoral
@@ -191,7 +204,7 @@
 
 (asdf:defsystem #:littoral/docs
   :description "Writes docs/API.md from the docstrings: make docs."
-  :depends-on (#:littoral #:littoral/test #:sb-introspect)
+  :depends-on (#:littoral #:littoral/test #:littoral/browser-test #:sb-introspect)
   :components ((:module "tools" :components ((:file "api-docs")))))
 
 (asdf:defsystem #:littoral/tracker

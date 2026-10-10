@@ -30,6 +30,15 @@ const waitLoad = async () => { await sleep(300); for (let i = 0; i < 50; i++) { 
 const go = async (path) => { await send("Page.navigate", { url: BASE + path }); await waitLoad(); };
 const clickLink = async (text) => { await evaluate(`[...document.querySelectorAll("a")].find(a => a.textContent.includes(${JSON.stringify(text)})).click()`); await waitLoad(); };
 // A second tab with its own DevTools connection (a separate session).
+// Click the button whose text matches, waiting for it; on failure, say what the page shows.
+const clickButton = async (text, exact = false) => {
+  const find = `[...document.querySelectorAll("button")].find(b => ${exact ? `b.textContent.trim() === ${JSON.stringify(text)}` : `b.textContent.includes(${JSON.stringify(text)})`})`;
+  for (let i = 0; i < 50 && !(await evaluate(`!!${find}`)); i++) await sleep(100);
+  if (!(await evaluate(`!!${find}`)))
+    throw new Error(`No button ${JSON.stringify(text)} at ${await evaluate("location.href")}:\n${(await evaluate("document.body.innerText")).slice(0, 1500)}`);
+  await evaluate(`${find}.click()`); await waitLoad();
+};
+
 async function openTab() {
   const t = await (await fetch("http://127.0.0.1:9333/json/new?about:blank", { method: "PUT" })).json();
   const sock = new WebSocket(t.webSocketDebuggerUrl);
@@ -212,14 +221,14 @@ try {
   await clickLink("Sign in");
   await evaluate(`document.getElementById("sign-in-name").value = "ada"`);
   await evaluate(`document.getElementById("sign-in-password").value = "correct horse battery"`);
-  await evaluate(`[...document.querySelectorAll("button")].find(b => b.textContent.trim() === "Sign in").click()`); await waitLoad();
-  await evaluate(`[...document.querySelectorAll("button")].find(b => b.textContent.includes("Add a passkey")).click()`);
+  await clickButton("Sign in", true);
+  await clickButton("Add a passkey");
   await sleep(1500);
   check("a passkey is added", (await evaluate("document.body.innerText")).includes("Passkey 1"),
         await evaluate(`(document.getElementById("lt-passkey-status") || {}).textContent`));
   await clickLink("Sign out");
   await clickLink("Sign in");
-  await evaluate(`[...document.querySelectorAll("button")].find(b => b.textContent.includes("Sign in with a passkey")).click()`);
+  await clickButton("Sign in with a passkey");
   await sleep(1500); await waitLoad();
   check("signed in with the passkey, no password", (await evaluate("document.body.innerText")).includes("Signed in as ada"));
 

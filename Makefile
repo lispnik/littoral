@@ -1,10 +1,15 @@
 SBCL ?= sbcl
 PORT ?= 8080
 
-.PHONY: new tour test test-postgres e2e a11y bench load docs clean-check run tracker lint clean
+.PHONY: new tour test test-chrome test-postgres e2e a11y bench load docs clean-check run tracker lint clean
 
 test:
 	$(SBCL) --non-interactive --eval '(asdf:test-system :littoral)'
+
+# The examples in a real headless Chrome, driven from Lisp (set CHROME if it isn't found):
+test-chrome:
+	$(SBCL) --non-interactive --eval '(asdf:load-system :littoral/chrome-tests)' \
+	  --eval '(uiop:quit (if (littoral/chrome-tests:run-chrome-tests) 0 1))'
 
 # The database suites against PostgreSQL:
 #   make test-postgres [LITTORAL_TEST_DATABASE=postgres://user:password@host:5432/db]
@@ -78,7 +83,7 @@ e2e:
 	  --eval '(asdf:load-system :littoral/parenscript-demo)' --eval '(littoral-parenscript-demo:register)' \
 	  --eval '(asdf:load-system :littoral/websocket)' \
 	  --eval '(when (eq :$(SERVER) :woo) (asdf:load-system :littoral/woo))' \
-	  --eval '(littoral:start :port $(E2E_PORT) :server :$(SERVER))' --eval '(sleep 600)' >/dev/null 2>&1 & pid=$$!; \
+	  --eval '(setf littoral:*new-sessions-per-minute* nil)' --eval '(littoral:start :port $(E2E_PORT) :server :$(SERVER))' --eval '(sleep 600)' >/dev/null 2>&1 & pid=$$!; \
 	for i in $$(seq 1 60); do curl -s -o /dev/null http://127.0.0.1:$(E2E_PORT)/ && break; sleep 1; done; \
 	LITTORAL_SERVER=$(SERVER) BASE=http://127.0.0.1:$(E2E_PORT) $(NODE) tests/e2e/browser.mjs; status=$$?; \
 	kill -9 $$pid; exit $$status
@@ -96,7 +101,7 @@ a11y:
 	  --eval '(asdf:load-system :littoral/search-demo)' --eval '(littoral-search-demo:register)' \
 	  --eval '(asdf:load-system :littoral/parenscript-demo)' --eval '(littoral-parenscript-demo:register)' \
 	  --eval '(asdf:load-system :littoral/websocket)' \
-	  --eval '(littoral:start :port $(E2E_PORT))' --eval '(sleep 600)' >/dev/null 2>&1 & pid=$$!; \
+	  --eval '(setf littoral:*new-sessions-per-minute* nil)' --eval '(littoral:start :port $(E2E_PORT))' --eval '(sleep 600)' >/dev/null 2>&1 & pid=$$!; \
 	for i in $$(seq 1 60); do curl -s -o /dev/null http://127.0.0.1:$(E2E_PORT)/ && break; sleep 1; done; \
 	BASE=http://127.0.0.1:$(E2E_PORT) $(NODE) tests/e2e/accessibility.mjs; status=$$?; \
 	kill -9 $$pid; exit $$status

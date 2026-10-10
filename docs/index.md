@@ -652,6 +652,32 @@ Roles and permissions are kept in two tables, keyed by name, so they work with a
 
 `with-fresh-applications` gives a test its own registry of applications. `ajax-request` and `ajax-specs` exercise AJAX; `open-stream`, `sink-text` and `wait-for` exercise server push. The API reference lists everything.
 
+### In a real browser
+
+The fake browser doesn't run JavaScript. For drag and drop, the back button with Chrome's caches, or passkeys, `littoral/browser-test` drives headless Chrome from Lisp over the DevTools protocol, so the tests stay in FiveAM next to the rest:
+
+```lisp
+(defpackage #:my-app/chrome-tests (:use #:cl #:fiveam #:littoral.browser-test))
+(in-package #:my-app/chrome-tests)
+
+(test passkeys
+  (with-chrome (page :base "http://localhost:8080")   ; a fresh profile each time
+    (add-virtual-authenticator page)                  ; a passkey device that always says yes
+    (visit page "/members")
+    (click-text page "Sign in")
+    (type-into page "#sign-in-name" "ada")            ; real key events, by CSS selector
+    (type-into page "#sign-in-password" "correct horse battery")
+    (click-text page "Sign in" :among "button")
+    (click-text page "Add a passkey")
+    (wait-until page "document.body.innerText.includes('Passkey 1')")
+    (is (search "Passkey 1" (text page)))))
+```
+
+- Start your application first, with `start`; serve it at `localhost` rather than `127.0.0.1` when testing passkeys, since WebAuthn won't accept an IP address as the site.
+- `evaluate` runs JavaScript in the page and returns its value; `click-css`, `back`, `page-url` and `screenshot` do what they say. Clicks wait for any page load they start. A missing element signals `browser-error`.
+- Chrome is found in the usual places, or set `CHROME` to its path.
+- `make test-chrome` runs Littoral's own examples this way (`tests/chrome.lisp`, a model for your own), and CI runs it too.
+
 ## Accessibility
 
 `make a11y` runs axe-core's WCAG 2 A and AA rules over every example page, and over the states reached by acting on them, in headless Chrome. CI runs it on every push. What littoral does for you:

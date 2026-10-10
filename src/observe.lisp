@@ -70,6 +70,7 @@
                       :milliseconds (float (* 1000 seconds)) :address (getf env :remote-addr)))))))
 
 (defun reset-metrics ()
+  "Start the request counts and timings again from zero."
   (sb-thread:with-mutex (*metrics-lock*)
     (clrhash *request-counts*) (clrhash *request-times*)))
 
@@ -112,6 +113,7 @@ signals or returns NIL.  Replaces any check called NAME."
   name)
 
 (defun remove-health-check (name)
+  "Forget the health check NAME."
   (setf *health-checks* (remove name *health-checks* :key #'car :test #'string=)))
 
 (defun health-response (rest)
