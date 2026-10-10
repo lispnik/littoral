@@ -12,7 +12,14 @@
 
 (in-package #:littoral)
 
-(defvar *started* (get-universal-time) "When this process started serving.")
+(defvar *started* (get-universal-time) "When this process started.")
+
+(defun reset-start-time ()
+  "Count uptime from now: runs when a saved image (an executable) starts, so
+uptime isn't counted from when it was built."
+  (setf *started* (get-universal-time)))
+
+(pushnew 'reset-start-time sb-ext:*init-hooks*)
 
 ;;; Counting requests
 
@@ -175,7 +182,7 @@ signals or returns NIL.  Replaces any check called NAME."
       (format out "littoral_heap_bytes ~D~%" (sb-kernel:dynamic-usage))
       (head "littoral_threads" "gauge" "Lisp threads.")
       (format out "littoral_threads ~D~%" (length (sb-thread:list-all-threads)))
-      (head "littoral_uptime_seconds" "gauge" "Seconds since the process started serving.")
+      (head "littoral_uptime_seconds" "gauge" "Seconds since the process started.")
       (format out "littoral_uptime_seconds ~D~%" (- (get-universal-time) *started*)))))
 
 (defun serve-metrics (&key (path "/metrics") (local-only t))

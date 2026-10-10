@@ -24,6 +24,15 @@
            (is (search "the disk is full" body)))
       (remove-health-check "flaky"))))
 
+(test uptime-counts-from-when-an-image-starts
+  ;; An executable saved an hour after loading must not report that hour.
+  (is (member 'littoral::reset-start-time sb-ext:*init-hooks*))
+  (let ((littoral::*started* (- (get-universal-time) 3600)))
+    (mapc #'funcall (remove 'littoral::reset-start-time sb-ext:*init-hooks* :test-not #'eq))
+    (multiple-value-bind (status headers body) (fetch (make-instance 'browser) "/healthz")
+      (declare (ignore status headers))
+      (is (cl-ppcre:scan "\"uptime\":[0-5]," body)))))
+
 (test metrics-count-and-time-requests
   (reset-metrics)
   (with-fresh-applications (("/counted" 'littoral-examples:counter :mode :deployment))
