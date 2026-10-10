@@ -393,10 +393,11 @@ and asks to go back to the members demo's own OAuth address."
   (seed-accounts))
 
 (defun register (&key (path "/examples/members") (idp-path "/examples/demo-idp")
-                   (accounts-path "/examples/accounts") (mail-path "/examples/mail")
+                   (accounts-path "/examples/accounts") (mail-path "/examples/mail") (jobs-path "/examples/jobs")
                    (file (merge-pathnames "littoral-members-demo.sqlite3" (uiop:temporary-directory))))
-  "Serve the members demo at PATH, DemoID at IDP-PATH and the mail demo at
-MAIL-PATH, keeping users and the outbox in FILE."
+  "Serve the members demo at PATH, DemoID at IDP-PATH, the mail demo at
+MAIL-PATH and the jobs demo at JOBS-PATH, keeping users, the outbox and the
+jobs in FILE."
   (let* ((spec (list :sqlite3 :database-name (namestring file)))
          (database (apply #'littoral.db:using-database spec))
          (send-mail (littoral.mail:outbox-sender :from "Members demo <members@example.org>")))
@@ -404,6 +405,8 @@ MAIL-PATH, keeping users and the outbox in FILE."
     (setf *mail-path* mail-path)
     (littoral-mail-demo:start-demo-delivery spec)
     (register-application mail-path 'littoral-mail-demo:mail-root :title "Mail")
+    (littoral-jobs-demo:start-demo-jobs spec)
+    (register-application jobs-path 'littoral-jobs-demo:jobs-root :title "Jobs")
     (install-demo-endpoints)
     (littoral.oauth:define-oauth-provider :demoid
       :label "DemoID"

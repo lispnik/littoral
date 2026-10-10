@@ -27,7 +27,8 @@ or SQLite in $DATA_DIR (default data/), as CONNECT-DATABASE takes it."
   (call-with-database spec (lambda ()
                              (littoral.db:create-table 'note)
                              (littoral.auth:create-auth-tables)
-                             (littoral.mail:create-mail-tables))))
+                             (littoral.mail:create-mail-tables)
+                             (littoral.jobs:create-job-tables))))
 
 (defun create-user (name email password &key admin (database (database-spec)))
   "Add a user who can sign in; with ADMIN, one who may use /admin too."
@@ -60,14 +61,22 @@ for STARTTLS, smtps://… for TLS), or else one that prints mail to the log."
         (littoral.mail:smtp-mailer-from-url url)
         littoral.mail:*mailer*)))
 
+;; Background jobs: (enqueue-job (list 'some-job 42)) inside a request queues
+;; one, in the request's transaction, for the runner SERVE starts.
+(littoral.jobs:define-job (tidy-up :every (littoral.jobs:daily-at 3)) ()
+  "Every night, forget sent mail and finished jobs more than a week old."
+  (littoral.mail:purge-sent-mail)
+  (littoral.jobs:purge-durable-jobs))
+
 (defun serve (&key (port {{port}}) (address "127.0.0.1") (mode :development) (database (database-spec)))
-  "Register the application, start sending its mail, and start the web server.
-Mail comes from $MAIL_FROM."
+  "Register the application, start sending its mail and running its jobs, and
+start the web server.  Mail comes from $MAIL_FROM."
   (let ((from (uiop:getenv "MAIL_FROM")))
     (when (and from (plusp (length from)))
       (setf littoral.mail:*mail-from* from)))
   (register-app :mode mode :database database)
   (littoral.mail:start-mail-delivery :database database :mailer (mailer))
+  (littoral.jobs:start-job-runner :database database)
   (start :port port :address address))
 
 (defun toplevel ()

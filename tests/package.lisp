@@ -42,7 +42,7 @@
 (defun postgres-test-p ()
   (eq (first (test-database-spec)) :postgres))
 
-(defparameter *database-suites* '(db auth auth-store admin outbox)
+(defparameter *database-suites* '(db auth auth-store admin outbox durable-jobs)
   "The suites that use the test database, run again against PostgreSQL.")
 
 (defun run-database-suites ()

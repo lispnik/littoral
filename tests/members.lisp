@@ -25,6 +25,7 @@
                 ,@body))
          (setf littoral.oauth::*providers* '())
          (littoral.mail:stop-mail-delivery)
+         (littoral.jobs:stop-job-runner)
          (uiop:delete-file-if-exists ,file)))))
 
 (defun members-sign-in (b name password)
@@ -210,3 +211,42 @@
     (visit b "/examples/mail")
     (is (has-text-p b "Welcome to the Littoral demo"))
     (is (search "<!DOCTYPE html>" (browser-html b)) "The HTML version is previewed")))
+
+(test jobs-demo-queue
+  (with-members (b)
+    ;; The tests run the queue themselves.
+    (littoral.jobs:stop-job-runner)
+    (visit b "/examples/jobs")
+    (is (has-text-p b "The queue"))
+    (press b "A job that fails twice")
+    (is (has-text-p b "Queued a flaky job."))
+    (littoral-jobs-demo:run-now)
+    (visit b "/examples/jobs")
+    (is (has-text-p b "The service it calls was down (try 1)"))
+    (press b "A job that always fails")
+    ;; Due again three times: the flaky job succeeds, the doomed one is given up on.
+    (dotimes (i 3)
+      (let ((littoral.db:*database* littoral-jobs-demo::*demo-database*))
+        (littoral.db:db-execute "UPDATE job_queue SET run_at = 0 WHERE status = 'queued' AND name NOT LIKE '%TIDY-UP'"))
+      (littoral-jobs-demo:run-now))
+    (visit b "/examples/jobs")
+    (is (has-text-p b "Worked on try 3"))
+    (is (has-text-p b "This job always fails"))
+    (is (has-text-p b "failed"))
+    ;; Retried by hand.
+    (click b "Retry")
+    (is (string= "queued" (littoral.jobs:durable-job-status
+                           (first (let ((littoral.db:*database* littoral-jobs-demo::*demo-database*))
+                                    (littoral.jobs:durable-jobs :status "queued" :queue "demo"))))))
+    ;; A digest, in ten seconds, goes to the mail demo's outbox.
+    (fill-in b "digest-address" "ada@example.org")
+    (press b "Send it in 10 seconds")
+    (let ((littoral.db:*database* littoral-jobs-demo::*demo-database*))
+      (littoral.db:db-execute "UPDATE job_queue SET run_at = 0 WHERE name LIKE '%SEND-DIGEST'"))
+    (littoral-jobs-demo:run-now)
+    (littoral-mail-demo:deliver-now)
+    ;; Or the demo's delivery thread got there first.
+    (loop repeat 20 until (littoral.mail:mailer-messages littoral-mail-demo:*mailbox*) do (sleep 0.1))
+    (is (string= "ada@example.org"
+                 (first (littoral.mail:sent-message-recipients
+                         (first (littoral.mail:mailer-messages littoral-mail-demo:*mailbox*))))))))

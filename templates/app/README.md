@@ -20,7 +20,7 @@ Data lives in SQLite under `data/` (or `$DATA_DIR`). Set `DATABASE_URL=postgres:
 - `tests/app.lisp`: signing in, editing notes, and checking they stay private.
 - `deploy/`: a systemd unit and a Caddyfile.
 
-Sign-ins are kept in the database, so they survive restarts; the sign-in form offers "Keep me signed in". "Forgot your password?" mails a reset link. Mail goes into an outbox table and a background thread sends it, trying again if the mail server is down: set `SMTP_URL` to send it, or it's printed to the log.
+Sign-ins are kept in the database, so they survive restarts; the sign-in form offers "Keep me signed in". "Forgot your password?" mails a reset link. Mail goes into an outbox table and a background thread sends it, trying again if the mail server is down: set `SMTP_URL` to send it, or it's printed to the log. Background jobs (`define-job` and `enqueue-job`, in `src/main.lisp`) are kept in the database too, so they survive restarts; a nightly one tidies up sent mail and finished jobs.
 
 ## Deploying
 

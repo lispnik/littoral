@@ -2273,3 +2273,158 @@ Reads the created of an outbox-mail.
 #### `outbox-sent` `object` — generic function
 
 Reads the sent of an outbox-mail.
+
+## Package `littoral.jobs`
+
+Background jobs kept in the database: retried, scheduled, and run by any process.
+
+### General
+
+#### `define-job` `name-and-options lambda-list &body body` — macro
+
+Define the job `name`, run with arguments as `lambda-list` takes them; also a
+function `name` that runs `body` at once.  `name-and-options` is `name` or (`name`
+&key `queue` `attempts` `retry-seconds` `timeout` `transaction` `every`):
+  `queue`          the queue it goes to, "default"
+  `attempts`       tries before it is marked failed, 5
+  `retry-seconds`  the wait before the second try, doubling after, 30
+  `timeout`        seconds a runner holds it before another may take it over, 600
+  `transaction`    true to run it, and mark it done, in one transaction
+  `every`          seconds between runs, or a function from a universal time to
+                 the next time to run (see `daily-at`): it then takes no arguments,
+                 is scheduled by the runners, and is never enqueued by hand.
+
+#### `enqueue-job` `call &key at in key queue` — function
+
+Queue `call`, (`name` . `arguments`), in the current database, to run at once,
+`in` seconds, or `at` a universal time; its id.  With `key` (a string), nothing is
+queued while a job with that key waits untried, and the value is `nil`.  `queue`
+overrides the job's own.
+
+#### `daily-at` `hour &optional (minute 0)` — function
+
+For :`every`: once a day, at `hour`:`minute` local time.
+
+#### `create-job-tables` — function
+
+Create the job_queue table unless it exists.
+
+#### `drop-job-tables` — function
+
+Drop the job_queue table.
+
+#### `run-due-jobs` `&key (queues (quote ("default"))) (limit 100)` — function
+
+Run the jobs in `queues` of the current database that are due, here and now,
+at most `limit` of them; how many ran.  Runners call this; so can a test.
+
+#### `start-job-runner` `&key (database *database*) (threads 1) (queues (quote ("default"))) (interval 5)` — function
+
+Run the jobs in `queues` of `database` (a spec, as `littoral`.`db`:*DATABASE* holds)
+on `threads` background threads: at once when a job is enqueued in this
+process, and every `interval` seconds for scheduled jobs, retries and other
+processes' jobs.  Stops any runner already started.
+
+#### `stop-job-runner` — function
+
+Stop the runner threads, letting each finish the job it is running.
+
+#### `job-runner-running-p` — function
+
+True while this process's runner threads run.
+
+#### `*durable-job*` — variable
+
+The `durable-job` this thread is running.
+
+#### `note-job-progress` `text` — function
+
+From inside a job: record `text` as how it's going (`durable-job-progress`),
+and hold on to the job for another `timeout`.
+
+#### `abandon-job` `control &rest arguments` — function
+
+From inside a job: fail it now, for the reason `control` and `arguments`
+format, without trying again.
+
+#### `job-abandoned` — condition
+
+Signalled by `abandon-job`: the job fails without being tried again.
+
+#### `durable-job` — class
+
+A job in the job_queue table, as it was when read.
+
+#### `durable-job-id` `object` — generic function
+
+Reads the id of a durable-job.
+
+#### `durable-job-name` `object` — generic function
+
+Reads the name of a durable-job.  The job's name, a symbol (or its text, when unreadable here).
+
+#### `durable-job-arguments` `object` — generic function
+
+Reads the arguments of a durable-job.
+
+#### `durable-job-queue` `object` — generic function
+
+Reads the queue of a durable-job.
+
+#### `durable-job-status` `object` — generic function
+
+Reads the status of a durable-job.  "queued", "running", "done", "failed" or "cancelled".
+
+#### `durable-job-attempts` `object` — generic function
+
+Reads the attempts of a durable-job.  Tries so far; inside the job, which try this is.
+
+#### `durable-job-run-at` `object` — generic function
+
+Reads the run-at of a durable-job.  When it is due; while running, when another runner may take it over.
+
+#### `durable-job-key` `object` — generic function
+
+Reads the key of a durable-job.
+
+#### `durable-job-progress` `object` — generic function
+
+Reads the progress of a durable-job.  What `note-job-progress` said last.
+
+#### `durable-job-last-error` `object` — generic function
+
+Reads the last-error of a durable-job.
+
+#### `durable-job-created` `object` — generic function
+
+Reads the created of a durable-job.
+
+#### `durable-job-finished` `object` — generic function
+
+Reads the finished of a durable-job.
+
+#### `find-durable-job` `id` — function
+
+The job `id`, or `nil`.
+
+#### `durable-jobs` `&key status queue (limit 50)` — function
+
+Jobs, newest first; only those with `status` and in `queue` (strings) if given.
+
+#### `durable-job-counts` — function
+
+How many jobs have each status: (("queued" . 3) ("done" . 40) …).
+
+#### `retry-durable-job` `id` — function
+
+Run the failed or cancelled job `id` again now, its tries counted afresh;
+true unless it wasn't failed or cancelled, or a job with its key waits already.
+
+#### `cancel-durable-job` `id` — function
+
+Cancel the job `id` unless it has started; true if it was cancelled.
+
+#### `purge-durable-jobs` `&key (older-than (* 7 24 3600)) (statuses (quote ("done" "cancelled")))` — function
+
+Delete jobs with one of `statuses` that finished more than `older-than`
+seconds ago; how many.

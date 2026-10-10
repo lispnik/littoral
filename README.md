@@ -365,7 +365,32 @@ An application can answer JSON beside its pages, for mobile apps, scripts and we
 - **Cancelling.** `cancel-job` stops a job at once if it's queued or waiting to retry, and at its next `job-progress` if it's running.
 - **Inspecting.** `job-status`, `wait-for-job` and `list-jobs` let you check on jobs.
 
-Jobs live in memory, so a restart forgets them. The progress example runs one job that succeeds and one that fails once and is retried.
+Jobs live in memory, so a restart forgets them; for work that must not be lost, use durable jobs (below). The progress example runs one job that succeeds and one that fails once and is retried.
+
+### Durable jobs
+
+`littoral/jobs` keeps jobs in the database, in a `job_queue` table, so they survive restarts and any process sharing the database can run them:
+
+```lisp
+(define-job (send-digest :attempts 5 :retry-seconds 60) (user-id)
+  (queue-mail (digest-mail (find-user-by-id user-id))))
+
+(define-job (tidy-up :every (daily-at 3)) ()        ; every night at three
+  (purge-durable-jobs))
+
+(create-job-tables)
+(start-job-runner :database spec :threads 2)
+
+(enqueue-job (list 'send-digest (user-id user)) :in 600)
+```
+
+- **Enqueueing.** `enqueue-job` writes the job inside the request's transaction, so it exists only if the action commits. A job is a name and its arguments, which must print readably (numbers, strings, symbols, lists). Pass ids, not objects. `:in` and `:at` schedule it later. With `:key`, a second job with the same key isn't queued while the first is still waiting, which collapses repeated requests such as "refresh feed 7".
+- **Retries.** A job that signals is tried again after `:retry-seconds` (30), doubling each time, up to `:attempts` (5) tries. Then it's marked failed, with its error and backtrace. `abandon-job` fails it at once, for errors that trying again won't fix.
+- **Running.** A runner claims a job by updating its row, so each job runs in one process at a time. The runner holds the job for its `:timeout` (600 seconds), extended by each `note-job-progress`. If the process dies, another runner takes the job over once that time has passed, so jobs should be safe to repeat. With `:transaction t`, the job's database work and its being marked done commit together. Runners take jobs only from their `:queues` (`("default")`), and only jobs their process defines, so a rolling deploy doesn't fail jobs that only the new code knows.
+- **Recurring jobs.** `:every` takes seconds or a function from a time to the next one, such as `daily-at`. Runners keep exactly one run scheduled, however many processes there are.
+- **Looking after them.** `durable-jobs`, `find-durable-job`, `durable-job-counts`, `retry-durable-job`, `cancel-durable-job` and `purge-durable-jobs` cover inspecting and housekeeping. In tests, `run-due-jobs` runs what's due without a runner.
+
+`/examples/jobs` has a report that shows its progress, a job that fails twice and then succeeds, one that always fails, and a job that sends mail ten seconds later through the mail demo's outbox. Generated apps start a runner and tidy up every night.
 
 ### Sending mail
 
