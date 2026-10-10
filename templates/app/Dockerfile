@@ -10,7 +10,7 @@ FROM ubuntu:24.04 AS build
 RUN apt-get update \
  && apt-get install -y --no-install-recommends sbcl gcc libc6-dev make ca-certificates libsqlite3-0 \
  && rm -rf /var/lib/apt/lists/*
-COPY --from=littoral littoral.asd /littoral/
+COPY --from=littoral littoral.asd README.md /littoral/
 COPY --from=littoral src /littoral/src
 COPY --from=littoral static /littoral/static
 COPY --from=littoral ocicl /littoral/ocicl
