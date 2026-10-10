@@ -179,3 +179,8 @@ polyline.lt-chart-line { fill: none; }
 .lt-wizard-steps li.lt-current .lt-wizard-number { background: var(--lt-accent); color: var(--lt-bg); border-color: var(--lt-accent); }
 .lt-wizard-review dt { font-weight: 600; margin-top: .5rem; }
 .lt-wizard-review dd { margin: 0; }
+
+/* Security settings */
+.lt-qr { display: block; margin: .6rem 0; max-width: 100%; height: auto; }
+.lt-recovery-codes { columns: 2; list-style: none; padding: 0; }
+.lt-passkey-button { margin: .2rem 0; }

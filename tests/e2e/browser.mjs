@@ -202,6 +202,27 @@ try {
   await waitLoad();
   check("signed in through demoid", (await evaluate("document.body.innerText")).includes("Signed in as carol"));
 
+  // Passkeys, with Chrome's virtual authenticator.  WebAuthn won't take an IP
+  // address as the site, so this part uses localhost.
+  const LOCAL = BASE.replace("127.0.0.1", "localhost");
+  await send("WebAuthn.enable");
+  await send("WebAuthn.addVirtualAuthenticator", { options: { protocol: "ctap2", transport: "internal",
+    hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true } });
+  await send("Page.navigate", { url: LOCAL + "/examples/members" }); await waitLoad();
+  await clickLink("Sign in");
+  await evaluate(`document.getElementById("sign-in-name").value = "ada"`);
+  await evaluate(`document.getElementById("sign-in-password").value = "correct horse battery"`);
+  await evaluate(`[...document.querySelectorAll("button")].find(b => b.textContent.trim() === "Sign in").click()`); await waitLoad();
+  await evaluate(`[...document.querySelectorAll("button")].find(b => b.textContent.includes("Add a passkey")).click()`);
+  await sleep(1500);
+  check("a passkey is added", (await evaluate("document.body.innerText")).includes("Passkey 1"),
+        await evaluate(`(document.getElementById("lt-passkey-status") || {}).textContent`));
+  await clickLink("Sign out");
+  await clickLink("Sign in");
+  await evaluate(`[...document.querySelectorAll("button")].find(b => b.textContent.includes("Sign in with a passkey")).click()`);
+  await sleep(1500); await waitLoad();
+  check("signed in with the passkey, no password", (await evaluate("document.body.innerText")).includes("Signed in as ada"));
+
   // Chat: join, then send with a real Enter keypress; AJAX, no reload, focus kept.
   await go("/examples/chat");
   await clickLink("Join the room");

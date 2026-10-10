@@ -35,6 +35,10 @@
            #:current-user #:log-in #:log-out #:signed-in-p #:has-role-p #:require-role
            #:user-sessions #:revoke-session #:log-out-everywhere
            #:endpoint-user #:require-endpoint-user #:create-api-token #:revoke-api-tokens
+           #:security-settings #:second-factor-p #:user-factors #:*offer-passkeys*
+           #:hotp #:totp-code #:verify-totp #:new-totp-secret #:totp-uri #:base32-encode #:base32-decode
+           #:make-recovery-codes #:use-recovery-code #:recovery-codes-left
+           #:add-passkey #:verify-registration #:verify-assertion #:passkey-error #:cbor-decode #:qr-svg
            #:*remember-days* #:*sign-in-idle-hours* #:*auth-session-check-seconds* #:*offer-remember-me*
            #:grant-role #:revoke-role #:grant-permission #:revoke-permission
            #:role-permissions #:user-permissions #:has-permission-p #:require-permission
@@ -298,7 +302,7 @@ and is seen by every process: the browser holds its token in a cookie."))
 (defun drop-auth-tables (&key (users t))
   "Drop the tables CREATE-AUTH-TABLES makes, for tests: everything is lost."
   (dolist (table (append (when users '("users"))
-                         '("auth_tokens" "auth_sessions" "user_roles" "role_permissions")))
+                         '("auth_tokens" "auth_sessions" "auth_factors" "user_roles" "role_permissions")))
     (db-execute (format nil "DROP TABLE IF EXISTS ~A" table)))
   (forget-cached-roles))
 
@@ -312,6 +316,7 @@ users come from an application's own table, and the tokens table."
     (db-execute "CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users (LOWER(email))"))
   (create-table 'auth-token)
   (db-execute "CREATE UNIQUE INDEX IF NOT EXISTS auth_tokens_hash ON auth_tokens (token_hash)")
+  (create-table 'auth-factor)
   (create-table 'auth-session)
   (db-execute "CREATE UNIQUE INDEX IF NOT EXISTS auth_sessions_hash ON auth_sessions (token_hash)")
   (db-execute "CREATE INDEX IF NOT EXISTS auth_sessions_user ON auth_sessions (user_id)")
@@ -678,6 +683,8 @@ REQUIRED-ROLE; the default lets anyone signed in see it."))
 
 ;;; The sign-in form
 
+(defvar *offer-passkeys* t "Whether the sign-in form offers signing in with a passkey.")
+
 (defvar *sign-in-extras* '()
   "Functions of the SIGN-IN component writing more ways to sign in (OAuth
 buttons, from littoral/oauth).")
@@ -686,18 +693,29 @@ buttons, from littoral/oauth).")
   ((name :initform "" :accessor sign-in-name)
    (password :initform "" :accessor sign-in-password)
    (remember :initform nil :accessor sign-in-remember)
-   (message :initform nil :accessor sign-in-message))
+   (message :initform nil :accessor sign-in-message)
+   (pending :initform nil :accessor sign-in-pending
+            :documentation "The id of a user whose password was right, owing a second step.")
+   (code :initform "" :accessor sign-in-code)
+   (recovery-p :initform nil :accessor sign-in-recovery-p)
+   (challenge :initform (new-challenge) :accessor sign-in-challenge
+              :documentation "For a passkey: made in callbacks, never while rendering."))
   (:documentation "Asks for a name and password; signs the user in and answers them."))
 
 (defun try-sign-in (self)
   (multiple-value-bind (user problem) (authenticate (string-trim " " (sign-in-name self)) (sign-in-password self))
     (setf (sign-in-password self) "")
-    (if user
-        (progn (log-in user :remember (sign-in-remember self)) (answer self user))
-        (setf (sign-in-message self) problem))))
+    (cond ((null user) (setf (sign-in-message self) problem))
+          ;; A second factor: the password alone isn't enough.
+          ((second-factor-p user)
+           (setf (sign-in-pending self) (user-id user) (sign-in-message self) nil (sign-in-recovery-p self) nil))
+          (t (log-in user :remember (sign-in-remember self)) (answer self user)))))
 
 (defmethod render ((self sign-in))
   (div (:class "lt-dialog lt-sign-in")
+   (if (sign-in-pending self)
+    (render-second-step self)
+    (progn
     (h2 () (translate "Sign in"))
     (when (sign-in-message self)
       (p (:class "lt-validation-error" :role "alert") (text (sign-in-message self))))
@@ -720,8 +738,13 @@ buttons, from littoral/oauth).")
         (cancel-button (:callback (lambda () (answer self nil))) (translate "Cancel"))))
     (p () (anchor (:callback (lambda () (show self (make-instance 'password-reset-request))))
             (translate "Forgot your password?")))
+    (when *offer-passkeys*
+      (p () (passkey-button :get (assertion-options (sign-in-challenge self))
+                            (passkey-signs-in self) (translate "Sign in with a passkey")
+                            :status-id "lt-passkey-status"))
+      (p (:id "lt-passkey-status" :role "status")))
     (dolist (extra *sign-in-extras*)
-      (funcall extra self))))
+      (funcall extra self))))))
 
 (defun sign-out-link (&key (label "Sign out") then)
   "Write a link that signs the user out, then calls THEN, a thunk."

@@ -365,6 +365,46 @@
     trigger(list, "data-lt-sortable", null);
   });
 
+  // Passkeys (littoral/auth): a button carries navigator.credentials options
+  // (binary fields in base 64 URL) and the callback that receives the answer.
+  function fromB64url(s) {
+    s = s.replace(/-/g, "+").replace(/_/g, "/"); while (s.length % 4) s += "=";
+    var b = atob(s), a = new Uint8Array(b.length);
+    for (var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i);
+    return a.buffer;
+  }
+  function toB64url(buffer) {
+    var b = "", a = new Uint8Array(buffer);
+    for (var i = 0; i < a.length; i++) b += String.fromCharCode(a[i]);
+    return btoa(b).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+  document.addEventListener("click", function (event) {
+    var button = event.target.closest ? event.target.closest("[data-lt-passkey]") : null;
+    if (!button) return;
+    event.preventDefault();
+    var status = document.getElementById(button.getAttribute("data-lt-passkey-status") || "");
+    var say = function (text) { if (status) status.textContent = text; };
+    if (!window.PublicKeyCredential) { say("This browser doesn't support passkeys."); return; }
+    var options = JSON.parse(button.getAttribute("data-lt-passkey-options"));
+    options.challenge = fromB64url(options.challenge);
+    var create = button.getAttribute("data-lt-passkey") === "create";
+    if (create) options.user.id = fromB64url(options.user.id);
+    (options.allowCredentials || options.excludeCredentials || []).forEach(function (c) { c.id = fromB64url(c.id); });
+    var request = create ? navigator.credentials.create({ publicKey: options })
+                         : navigator.credentials.get({ publicKey: options });
+    request.then(function (credential) {
+      var r = credential.response, response = { clientDataJSON: toB64url(r.clientDataJSON) };
+      if (create) response.attestationObject = toB64url(r.attestationObject);
+      else {
+        response.authenticatorData = toB64url(r.authenticatorData);
+        response.signature = toB64url(r.signature);
+        if (r.userHandle) response.userHandle = toB64url(r.userHandle);
+      }
+      return window.littoral.call(button.getAttribute("data-lt-passkey-callback"),
+                                  JSON.stringify({ id: credential.id, type: credential.type, response: response }));
+    }).catch(function (e) { say(e && e.name === "NotAllowedError" ? "Cancelled." : "That didn't work."); });
+  });
+
   // Kanban boards: drag a card within its column or to another; on release,
   // post "from-column,from-index,to-column,to-index" through the board's callback.
   var card = null, cardFrom = null;

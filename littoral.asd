@@ -177,7 +177,8 @@
                              (:file "observe")
                              (:file "endpoints")
                              (:file "widgets-extra")
-                             (:file "wizard"))))
+                             (:file "wizard")
+                             (:file "second-factor"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
                                        (uiop:find-symbol* :littoral :littoral/tests))
@@ -243,9 +244,10 @@
   :description "Users, signing in, roles and password reset for Littoral."
   :author "Matthew Kennedy"
   :license "MIT"
-  :depends-on (#:littoral #:littoral/db)
+  :depends-on (#:littoral #:littoral/db #:cl-qrencode #:com.inuoe.jzon #:cl-base64)
   :components ((:module "src" :serial t
-                :components ((:file "auth") (:file "passwords") (:file "auth-store")))))
+                :components ((:file "auth") (:file "passwords") (:file "auth-store")
+                             (:file "second-factor") (:file "second-factor-ui")))))
 
 (asdf:defsystem #:littoral/oauth
   :description "Sign in to Littoral applications with OAuth 2 / OpenID Connect providers."
