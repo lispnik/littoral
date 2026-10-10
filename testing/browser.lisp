@@ -129,8 +129,12 @@ only the one server, so http://localhost/a?b is /a?b."
    :simple-calls t))
 
 (defun strip-tags (html)
-  "HTML with its tags removed and escapes undone."
-  (unescape (cl-ppcre:regex-replace-all "<[^>]*>" html "")))
+  "HTML with its tags removed and escapes undone.  Scripts and style sheets
+go whole, as they aren't text (and a < in them isn't a tag)."
+  (unescape (cl-ppcre:regex-replace-all
+             "<[^>]*>"
+             (cl-ppcre:regex-replace-all "(?is)<(script|style)\\b[^>]*>.*?</\\1>" html "")
+             "")))
 
 (defun page-text (browser)
   "The current page's text without markup."

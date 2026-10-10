@@ -86,7 +86,7 @@ const pages = ["/examples", "/examples/counter", "/examples/multi-counter", "/ex
   "/examples/login", "/examples/ajax", "/examples/todo", "/examples/upload", "/examples/topics",
   "/examples/report", "/examples/store", "/examples/wiki", "/examples/chat", "/examples/progress",
   "/examples/contacts", "/examples/widgets", "/tracker", "/config", "/tutorial/reading-list",
-  "/examples/admin", "/examples/dialogs", "/examples/parenscript", "/examples/members", "/examples/demo-idp", "/examples/accounts", "/examples/gallery", "/examples/csp", "/examples/api", "/examples/devtools"];
+  "/examples/admin", "/examples/dialogs", "/examples/parenscript", "/examples/members", "/examples/demo-idp", "/examples/accounts", "/examples/gallery", "/examples/csp", "/examples/api", "/examples/devtools", "/examples/monitoring"];
 
 try {
  // Both colour schemes: contrast differs between them.
@@ -100,7 +100,9 @@ try {
   await audit("contacts editor with errors");
   await go("/examples/login"); await clickLink("Log in"); await audit("login dialog");
   await go("/examples/widgets");
-  for (const tab of ["Tree", "Autocomplete", "Sortable"]) { await clickLink(tab); await audit("widgets: " + tab); }
+  for (const tab of ["Tree", "Autocomplete", "Sortable", "Data grid", "Charts", "Calendar", "Kanban", "Markdown"]) {
+    await clickLink(tab); await audit("widgets: " + tab);
+  }
   await go("/examples/store");
   await evaluate(`document.querySelector("a.add").click()`); await waitLoad();
   await clickLink("Checkout"); await audit("store: cart review");

@@ -743,6 +743,64 @@ A function of (`socket` `stream` `writer`) that serves `stream` from an event
 loop, set by an optional system such as littoral/woo; `nil` when there is
 none and each stream gets a waiting thread.
 
+### More widgets
+
+#### `data-grid` — class
+
+A table of a description's objects: a filter box per column,
+sorting by column, paging, and editing a row in place with the description's
+own inputs and validation.
+
+#### `bar-chart` `data &key (title "") (width 480) (height 220) (format-value (function princ-to-string))` — function
+
+Write a bar chart of `data`, a list of (`label` . `value`), as accessible `svg`.
+
+#### `line-chart` `series &key (title "") (width 480) (height 220) x-labels (format-value (function princ-to-string))` — function
+
+Write a line chart of `series`, a list of (`name` . `values`), the values all
+the same length, as accessible `svg`.  `x-labels` name the points.
+
+#### `sparkline` `values &key (label "") (width 120) (height 28)` — function
+
+Write a small line of `values`, with `label` for screen readers.
+
+#### `calendar` — class
+
+A month of days, Monday first, with their events, and links
+to the months before and after.
+
+#### `calendar-year` `object` — generic function
+
+Reads the year of a calendar.
+
+#### `calendar-month` `object` — generic function
+
+Reads the month of a calendar.
+
+#### `kanban` — class
+
+Columns of cards to drag between, or move with the arrow
+buttons on each card (which work without JavaScript or a mouse).
+
+#### `kanban-columns` `object` — generic function
+
+Reads the columns of a kanban.  (`title` . `items`) for each column, replaced on every move.
+
+#### `move-card` `board from-column from-index to-column to-index` — function
+
+Move the card at `from-index` of `from-column` to `to-index` of `to-column`; `nil` if out of range.
+
+#### `markdown-html` `markdown` — function
+
+`markdown` as `html`: paragraphs, # headings, - and 1. lists, > quotes, ```
+code blocks, `code`, **strong**, *emphasis* and [links](https://…).  All
+of `markdown`'s own `html` is escaped, and links go only to http(s), mailto or
+this site, so the result is safe to show whoever wrote it.
+
+#### `markdown-field` — class
+
+Text written in Markdown, shown as safe `html`.
+
 ### JSON endpoints
 
 #### `define-endpoint` `application-path method pattern (&rest parameters) &body body` — macro
@@ -1755,7 +1813,8 @@ The value of attribute `name` in `attributes`.
 
 #### `strip-tags` `html` — function
 
-`html` with its tags removed and escapes undone.
+`html` with its tags removed and escapes undone.  Scripts and style sheets
+go whole, as they aren't text (and a < in them isn't a tag).
 
 ### Acting on it
 

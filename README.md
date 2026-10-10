@@ -168,6 +168,16 @@ A `report` is a table. Clicking a column heading sorts by that column, and click
                                    (anchor (:callback (lambda () (open-order row))) "open")))))
 ```
 
+### More widgets
+
+- **`data-grid`** shows a description's objects as a table, with a filter box per column, sortable headings and paging. **Edit** turns a row into the description's own inputs, with its validation; `:on-save` gets the object after the values are written to it.
+- **Charts**: `bar-chart`, `line-chart` and `sparkline` write inline SVG, styled by the theme. Each chart is an image with a caption and carries its data as a table for screen readers.
+- **`calendar`** shows a month, Monday first, with events (`(date . title)`) and month names in the session's language; `:on-select` gets the day chosen.
+- **`kanban`** shows columns of cards. Cards can be dragged between columns, or moved with arrow buttons that work by keyboard and without JavaScript; `:on-move` hears about every move.
+- **Markdown**: the `:markdown` field kind and `markdown-html` render Markdown as safe HTML. Raw HTML is escaped, and links go only to http(s), mailto or the site itself, so it's safe to show to whoever wrote it.
+
+They're in the widgets example. `/examples/monitoring` charts the server's own metrics live.
+
 ### Request cycle
 
 Littoral follows Seaside's request cycle. A request that names callbacks goes through these steps:

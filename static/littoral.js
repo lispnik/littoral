@@ -365,6 +365,48 @@
     trigger(list, "data-lt-sortable", null);
   });
 
+  // Kanban boards: drag a card within its column or to another; on release,
+  // post "from-column,from-index,to-column,to-index" through the board's callback.
+  var card = null, cardFrom = null;
+  function kanbanCard(target) {
+    return target.closest ? target.closest("[data-lt-kanban] ol > li") : null;
+  }
+  document.addEventListener("dragstart", function (event) {
+    var item = kanbanCard(event.target);
+    if (!item) return;
+    card = item;
+    cardFrom = [item.parentNode.getAttribute("data-lt-column"), item.getAttribute("data-lt-index")];
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", "");
+    item.classList.add("lt-dragging");
+  });
+  document.addEventListener("dragover", function (event) {
+    if (!card) return;
+    var board = card.closest("[data-lt-kanban]");
+    var list = event.target.closest ? event.target.closest("[data-lt-kanban] ol") : null;
+    if (!list || list.closest("[data-lt-kanban]") !== board) return;
+    event.preventDefault();
+    var over = kanbanCard(event.target);
+    if (over === card) return;
+    if (over && over.parentNode === list) {
+      var box = over.getBoundingClientRect();
+      list.insertBefore(card, event.clientY > box.top + box.height / 2 ? over.nextSibling : over);
+    } else if (!over) {
+      list.appendChild(card);
+    }
+  });
+  document.addEventListener("dragend", function () {
+    if (!card) return;
+    var board = card.closest("[data-lt-kanban]");
+    var to = [card.parentNode.getAttribute("data-lt-column"),
+              String(Array.prototype.indexOf.call(card.parentNode.children, card))];
+    card.classList.remove("lt-dragging");
+    card = null;
+    if (to[0] === cardFrom[0] && to[1] === cardFrom[1]) return;
+    board.dataset.move = cardFrom.concat(to).join(",");
+    trigger(board, "data-lt-kanban", null);
+  });
+
   var timers = [];
   function scanPeriodicals() {
     timers.forEach(clearInterval);

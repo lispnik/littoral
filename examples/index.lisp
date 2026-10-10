@@ -13,7 +13,7 @@
      ("guess" "Guess the Number" "A task: a multi-page flow as straight-line code.")
      ("topics" "Topics" "Bookmarkable URLs with update-url and initial-request.")
      ("report" "Report" "A sortable, paged table.")
-     ("widgets" "Widgets" "Tabs, navigation, a tree, autocomplete and a sortable list.")
+     ("widgets" "Widgets" "Tabs, a tree, autocomplete, sortable lists, a data grid, charts, a calendar, kanban and Markdown.")
      ("dialogs" "Dialogs" "Dialogs over the page, and toasts."))
     ("Applications"
      ("store" "Sushi Store" "Catalog, cart and a checkout task with validation, a date picker and isolation.")
@@ -28,6 +28,7 @@
      ("ajax" "AJAX" "Updating components in place, a live preview and a clock.")
      ("upload" "Upload" "Receiving files.")
      ("progress" "Progress" "A background job updating the page through server push.")
+     ("monitoring" "Monitoring" "This server's requests, latency and memory, charted live.")
      ("parenscript" "Parenscript" "Browser code written in Lisp.")
      ("csp" "Content security policy" "Injected script, stopped by the page's policy.")
      ("api" "JSON endpoints" "An API beside the pages, called from the browser."))))

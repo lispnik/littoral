@@ -160,6 +160,25 @@ try {
   check("gallery upload shows its thumbnail",
         await evaluate(`(() => { const i = document.querySelector(".gallery img"); return !!i && i.complete && i.naturalWidth > 0; })()`));
 
+  // Kanban: drag the first card into the last column.
+  await go("/examples/widgets");
+  await clickLink("Kanban");
+  await evaluate(`(() => {
+    const card = document.querySelector("[data-lt-kanban] ol li");
+    const target = document.querySelectorAll("[data-lt-kanban] ol")[2];
+    const data = new DataTransfer();
+    card.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: data }));
+    target.dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer: data }));
+    target.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: data }));
+    card.dispatchEvent(new DragEvent("dragend", { bubbles: true, dataTransfer: data }));
+  })()`);
+  await sleep(700);
+  check("kanban card dragged to another column",
+        (await evaluate(`document.querySelectorAll("[data-lt-kanban] ol")[2].innerText`)).includes("Write the docs"));
+  await send("Page.reload"); await waitLoad();
+  check("the move is kept on the server",
+        (await evaluate(`document.querySelectorAll("[data-lt-kanban] ol")[2].innerText`)).includes("Write the docs"));
+
   // JSON endpoints, called from the page with fetch.
   await go("/examples/api");
   await evaluate(`document.getElementById("api-post").click()`); await sleep(700);

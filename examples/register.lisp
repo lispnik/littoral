@@ -23,6 +23,9 @@
   (register-application "/examples/dialogs" 'dialogs-demo :title "Dialogs")
   (register-application "/examples/csp" 'csp-demo :title "Content security policy")
   (register-application "/examples/api" 'api-demo :title "JSON endpoints")
-  (register-application "/examples/devtools" 'devtools-demo :title "Development tools"))
+  (register-application "/examples/devtools" 'devtools-demo :title "Development tools")
+  (register-application "/examples/monitoring" 'monitoring-demo :title "Monitoring")
+  ;; Prometheus metrics, for this machine (the monitoring example links to them).
+  (serve-metrics))
 
 (register-examples)
