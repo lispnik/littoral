@@ -2474,7 +2474,8 @@ are universal times.
 
 #### `audit-actions` — function
 
-The actions recorded so far, in order.
+The actions recorded so far, in order.  Sorted here: PostgreSQL's
+collation would put "invoices" before "invoice.sent".
 
 #### `purge-audit-log` `&key (older-than (* 365 24 3600))` — function
 

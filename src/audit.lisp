@@ -170,9 +170,11 @@ are universal times."
                    parameters))))
 
 (defun audit-actions ()
-  "The actions recorded so far, in order."
-  (mapcar (lambda (row) (getf row :|action|))
-          (littoral.db:db-query "SELECT DISTINCT action FROM audit_log ORDER BY action")))
+  "The actions recorded so far, in order.  Sorted here: PostgreSQL's
+collation would put \"invoices\" before \"invoice.sent\"."
+  (sort (mapcar (lambda (row) (getf row :|action|))
+                (littoral.db:db-query "SELECT DISTINCT action FROM audit_log"))
+        #'string<))
 
 (defun purge-audit-log (&key (older-than (* 365 24 3600)))
   "Delete events more than OLDER-THAN seconds old (a year); how many."
