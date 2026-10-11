@@ -4,9 +4,9 @@
 
 ;;; The second step
 
-(defun finish-second-step (self user)
+(defun finish-second-step (self user method)
   (setf (sign-in-pending self) nil (sign-in-code self) "")
-  (log-in user :remember (sign-in-remember self))
+  (log-in user :remember (sign-in-remember self) :method method)
   (answer self user))
 
 (defun try-second-step (self)
@@ -19,8 +19,9 @@
            (setf (sign-in-message self) (translate "Too many failed attempts; try again in a minute.")))
           ((sign-in-recovery-p self)
            (if (use-recovery-code user code)
-               (finish-second-step self user)
+               (finish-second-step self user "password+recovery-code")
                (progn (note-attempt name nil)
+                      (audit-failure name user "wrong-recovery-code")
                       (setf (sign-in-message self) (translate "That code isn't right.")))))
           (t
            (let* ((factor (first (user-factors user "totp")))
@@ -29,8 +30,9 @@
                  (progn (setf (factor-counter factor) step)
                         (db-save factor)
                         (note-attempt name t)
-                        (finish-second-step self user))
+                        (finish-second-step self user "password+totp"))
                  (progn (note-attempt name nil)
+                        (audit-failure name user "wrong-totp-code")
                         (setf (sign-in-message self) (translate "That code isn't right.")))))))))
 
 (defun passkey-signs-in (self &optional expected-user)
@@ -40,9 +42,10 @@
      (let ((challenge (shiftf (sign-in-challenge self) (new-challenge))))
        (handler-case
            (let ((user (verify-assertion challenge (com.inuoe.jzon:parse json) expected-user)))
-             (finish-second-step self user))
+             (finish-second-step self user (if expected-user "password+passkey" "passkey")))
          (error (e)
            (declare (ignorable e))
+           (littoral.audit:audit "sign-in.failed" :actor-id nil :details (list :reason "passkey-refused"))
            (setf (sign-in-message self) (translate "That passkey didn't work."))))))))
 
 (defun render-second-step (self)
@@ -96,6 +99,7 @@ passkeys and recovery codes."))
           (db-insert (make-instance 'auth-factor :user-id (princ-to-string (user-id user)) :kind "totp"
                                                  :name (translate "Authenticator app") :data secret :counter step
                                                  :created (get-universal-time)))
+          (audit-user "second-factor.added" user :kind "totp")
           (setf (settings-totp-secret self) nil (settings-message self) nil)
           (when (zerop (recovery-codes-left user))
             (setf (settings-codes self) (make-recovery-codes user)))
@@ -104,6 +108,7 @@ passkeys and recovery codes."))
 
 (defun remove-factor (factor)
   (db-delete factor)
+  (audit-user "second-factor.removed" (find-user-by-id (factor-user-id factor)) :kind (factor-kind factor))
   (littoral:toast (translate "Removed.")))
 
 (defmethod render ((self security-settings))

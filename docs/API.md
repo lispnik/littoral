@@ -2428,3 +2428,99 @@ Cancel the job `id` unless it has started; true if it was cancelled.
 
 Delete jobs with one of `statuses` that finished more than `older-than`
 seconds ago; how many.
+
+## Package `littoral.audit`
+
+An audit log: who did what, and when, kept in the database.
+
+### General
+
+#### `audit` `action &key subject subject-label details (actor-id () actor-given) actor-name` — function
+
+Record that `action` (a string such as "invoice.sent") happened to `subject`
+(a string such as "invoice:42", named `subject-label` for people), with
+`details`, a plist of short values.  The actor is `actor-id` and `actor-name` when
+given, or else whoever *AUDIT-ACTOR* finds.
+
+#### `create-audit-tables` — function
+
+Create the audit_log table unless it exists, and record events in this database.
+
+#### `drop-audit-tables` — function
+
+Drop the audit_log table, and stop recording events in this database.
+
+#### `audit-enabled-p` — function
+
+True when events are recorded in the current database.
+
+#### `*audit-actor*` — variable
+
+A function of no arguments: the id and name (two values, strings or `nil`)
+of whoever is acting now.  littoral/auth makes it the signed-in user.
+
+#### `*audit-hook*` — variable
+
+A function of each event as a plist (:`time` :`actor-id` :`actor-name` :`action`
+:`subject` :`subject-label` :`details` :`address`), or `nil`.  Called even where
+there's no audit table.
+
+#### `audit-events` `&key action actor subject search since until (limit 50) (offset 0)` — function
+
+Events, newest first.  `action` matches itself and the actions under it
+("sign-in" matches "sign-in.failed"); `actor` is an actor id and `subject`
+a subject; `search` looks in the actor's and subject's names; `since` and `until`
+are universal times.
+
+#### `audit-actions` — function
+
+The actions recorded so far, in order.
+
+#### `purge-audit-log` `&key (older-than (* 365 24 3600))` — function
+
+Delete events more than `older-than` seconds old (a year); how many.
+
+#### `audit-event` — class
+
+An event read from the audit log.
+
+#### `audit-event-id` `object` — generic function
+
+Reads the id of an audit-event.
+
+#### `audit-event-time` `object` — generic function
+
+Reads the time of an audit-event.  A universal time.
+
+#### `audit-event-actor-id` `object` — generic function
+
+Reads the actor-id of an audit-event.
+
+#### `audit-event-actor-name` `object` — generic function
+
+Reads the actor-name of an audit-event.
+
+#### `audit-event-action` `object` — generic function
+
+Reads the action of an audit-event.
+
+#### `audit-event-subject` `object` — generic function
+
+Reads the subject of an audit-event.
+
+#### `audit-event-subject-label` `object` — generic function
+
+Reads the subject-label of an audit-event.
+
+#### `audit-event-details` `object` — generic function
+
+Reads the details of an audit-event.  An alist of ("key" . value), in the order recorded.
+
+#### `audit-event-address` `object` — generic function
+
+Reads the address of an audit-event.
+
+#### `audit-log-view` — class
+
+The audit log, newest first, filtered by action and by
+who or what.  Shows everything: put it where only those who may see it can.

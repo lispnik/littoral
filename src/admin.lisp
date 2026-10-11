@@ -216,6 +216,7 @@ classes, that point at CLASS."
   ((lists :initform (make-hash-table) :reader admin-lists)
    (selected :accessor admin-selected)
    (message :initform nil :accessor admin-message)
+   (audit :initform (make-instance 'littoral.audit:audit-log-view) :reader admin-audit-view)
    (main :reader admin-main))
   (:documentation "The root of an admin application: header, messages and
 menu stay; pages replace the main area."))
@@ -241,15 +242,22 @@ page shown in its place."))
   (list (admin-main self)))
 
 (defmethod children ((self main-area))
-  (list (class-list-for (area-admin self) (admin-selected (area-admin self)))))
+  (let ((admin (area-admin self)))
+    (if (eq (admin-selected admin) :audit-log)
+        (list (admin-audit-view admin))
+        (list (class-list-for admin (admin-selected admin))))))
 
 (defmethod render ((self main-area))
   (let* ((admin (area-admin self))
          (class (admin-selected admin)))
-    (h1 () (text (class-label class t)))
-    (p () (anchor (:callback (lambda () (create-object admin class)))
-            (text (translate "New ~A" (string-downcase (class-label class))))))
-    (render-component (class-list-for admin class))))
+    (cond ((eq class :audit-log)
+           (h1 () (translate "Audit log"))
+           (render-component (admin-audit-view admin)))
+          (t
+           (h1 () (text (class-label class t)))
+           (p () (anchor (:callback (lambda () (create-object admin class)))
+                   (text (translate "New ~A" (string-downcase (class-label class))))))
+           (render-component (class-list-for admin class))))))
 
 (defun show-page (admin page &rest show-arguments)
   "Show PAGE in ADMIN's main area, replacing whatever page was there."
@@ -260,11 +268,38 @@ page shown in its place."))
   "Show the object of CLASS numbered ID in ADMIN's main area."
   (show-page admin (make-instance 'object-page :class class :object-id id :admin admin)))
 
+(defun admin-actor ()
+  "Who is using the admin, for the audit log: the name in its credentials,
+or else someone on this machine."
+  (let ((credentials (application-credentials *application*)))
+    (if credentials (first credentials) "local admin")))
+
+(defun audit-record (action class id title &rest details)
+  "Record ACTION, done through the admin to the object of CLASS numbered ID,
+called TITLE."
+  (littoral.audit:audit action :actor-id nil :actor-name (admin-actor)
+                               :subject (format nil "~(~A~):~A" (table-name (find-table class)) id)
+                               :subject-label (format nil "~A #~A ~A" (class-label class) id title)
+                               :details details))
+
+(defun changed-fields (class old new)
+  "The fields whose values differ between OLD and NEW: a plist of field
+name → \"old → new\", passwords shown only as changed."
+  (loop for field in (class-fields class)
+        for before = (and old (format-field field (field-value field old)))
+        for after = (format-field field (field-value field new))
+        unless (equal before after)
+          append (list (field-name field)
+                       (if (typep field 'password-field) "changed" (format nil "~A → ~A" (or before "") after)))))
+
 (defun save-edited (admin class edited)
   "Save EDITED; on someone else's change, say so and show theirs."
-  (handler-case (progn (db-save edited)
-                       (setf (admin-message admin) (translate "Saved ~A #~D." (class-label class) (object-id edited)))
-                       (open-object admin class (object-id edited)))
+  (handler-case (let ((old (db-find class (object-id edited))))
+                  (db-save edited)
+                  (apply #'audit-record "record.updated" class (object-id edited) (object-title edited)
+                         (changed-fields class old edited))
+                  (setf (admin-message admin) (translate "Saved ~A #~D." (class-label class) (object-id edited)))
+                  (open-object admin class (object-id edited)))
     (stale-object ()
       (setf (admin-message admin) (translate "Someone else changed this record meanwhile; here it is as they left it."))
       (open-object admin class (object-id edited)))))
@@ -286,6 +321,8 @@ page shown in its place."))
         :on-answer (lambda (object)
                      (when object
                        (db-insert object)
+                       (apply #'audit-record "record.created" class (object-id object) (object-title object)
+                              (changed-fields class nil object))
                        (setf (admin-message admin)
                              (translate "Created ~A #~D." (class-label class) (object-id object)))
                        (open-object admin class (object-id object))))))
@@ -298,10 +335,12 @@ page shown in its place."))
         :on-answer (lambda (yes)
                      (when yes
                        (handler-case
-                           (progn (db-delete object)
-                                  (setf (admin-message admin)
-                                        (translate "Deleted ~A #~D." (class-label (page-class page))
-                                                (page-object-id page))))
+                           (let ((id (object-id object)) (title (object-title object)))
+                             (db-delete object)
+                             (audit-record "record.deleted" (page-class page) id title)
+                             (setf (admin-message admin)
+                                   (translate "Deleted ~A #~D." (class-label (page-class page))
+                                              (page-object-id page))))
                          (stale-object ()
                            (setf (admin-message admin)
                                  "Someone else changed or deleted this record meanwhile; nothing was deleted.")))
@@ -323,7 +362,16 @@ page shown in its place."))
                                    (home (admin-main self))
                                    (setf (admin-selected self) class
                                          (admin-message self) nil)))
-                (text (class-label class t))))))))
+                (text (class-label class t))))))
+        (when (littoral.audit:audit-enabled-p)
+          (let ((current (eq (admin-selected self) :audit-log)))
+            (li (:class (when current "lt-active"))
+              (anchor (:aria-current (when current "page")
+                       :callback (lambda ()
+                                   (home (admin-main self))
+                                   (setf (admin-selected self) :audit-log
+                                         (admin-message self) nil)))
+                (translate "Audit log")))))))
     (section (:class "admin-main")
       (render-component (admin-main self)))))
 
@@ -339,12 +387,17 @@ page shown in its place."))
 .admin-main { overflow-x: auto; }
 a.action { margin-right: .8rem; }")
 
-(defun register-admin (path classes &key (title "Admin") database credentials (mode :deployment))
+(defun register-admin (path classes &key (title "Admin") database credentials (mode :deployment) (audit t))
   "Serve an admin for CLASSES (stored classes, see DEFINE-TABLE) at PATH.
 DATABASE (a driver and parameters, as CONNECT-DATABASE takes them) gives
 it its own database; otherwise it uses the current one.  Without
-CREDENTIALS it answers only requests from this machine."
+CREDENTIALS it answers only requests from this machine.  With AUDIT (the
+default), it records what it creates, changes and deletes in the audit log
+(creating its table) and shows the log."
   (setf (gethash (littoral::normalize-path path) *admins*) classes)
+  (let ((*database* (or database *database*)))
+    (when (and audit *database*)
+      (littoral.audit:create-audit-tables)))
   (register-application path 'admin
                         :title title :mode mode
                         :credentials credentials

@@ -218,14 +218,16 @@ AROUND (another such function, such as USING-DATABASE's) if given."
   "Give USER the ROLE (a keyword), whatever their store."
   (let ((id (princ-to-string (user-id user))))
     (unless (member (name-keyword (role-name role)) (granted-roles user))
-      (db-execute "INSERT INTO user_roles (user_id, role) VALUES (?, ?)" id (role-name role)))
+      (db-execute "INSERT INTO user_roles (user_id, role) VALUES (?, ?)" id (role-name role))
+      (audit-user "role.granted" user :role (role-name role)))
     (forget-cached-roles)
     user))
 
 (defun revoke-role (user role)
   "Take ROLE from USER (only a role granted here: a store's own roles stay)."
-  (db-execute "DELETE FROM user_roles WHERE user_id = ? AND role = ?"
-              (princ-to-string (user-id user)) (role-name role))
+  (when (plusp (db-execute "DELETE FROM user_roles WHERE user_id = ? AND role = ?"
+                           (princ-to-string (user-id user)) (role-name role)))
+    (audit-user "role.revoked" user :role (role-name role)))
   (forget-cached-roles)
   user)
 
@@ -233,13 +235,20 @@ AROUND (another such function, such as USING-DATABASE's) if given."
   "Let users with ROLE do PERMISSION (both keywords)."
   (unless (member (name-keyword (role-name permission)) (role-permissions role))
     (db-execute "INSERT INTO role_permissions (role, permission) VALUES (?, ?)"
-                (role-name role) (role-name permission)))
+                (role-name role) (role-name permission))
+    (littoral.audit:audit "permission.granted" :subject (format nil "role:~A" (role-name role))
+                                               :subject-label (role-name role)
+                                               :details (list :permission (role-name permission))))
   (forget-cached-roles)
   permission)
 
 (defun revoke-permission (role permission)
-  (db-execute "DELETE FROM role_permissions WHERE role = ? AND permission = ?"
-              (role-name role) (role-name permission))
+  "Stop letting users with ROLE do PERMISSION."
+  (when (plusp (db-execute "DELETE FROM role_permissions WHERE role = ? AND permission = ?"
+                           (role-name role) (role-name permission)))
+    (littoral.audit:audit "permission.revoked" :subject (format nil "role:~A" (role-name role))
+                                               :subject-label (role-name role)
+                                               :details (list :permission (role-name permission))))
   (forget-cached-roles)
   permission)
 
@@ -300,16 +309,19 @@ and is seen by every process: the browser holds its token in a cookie."))
 (define-table auth-session :name "auth_sessions")
 
 (defun drop-auth-tables (&key (users t))
-  "Drop the tables CREATE-AUTH-TABLES makes, for tests: everything is lost."
+  "Drop the tables CREATE-AUTH-TABLES makes, the audit log too, for tests:
+everything is lost."
   (dolist (table (append (when users '("users"))
                          '("auth_tokens" "auth_sessions" "auth_factors" "user_roles" "role_permissions")))
     (db-execute (format nil "DROP TABLE IF EXISTS ~A" table)))
+  (littoral.audit:drop-audit-tables)
   (forget-cached-roles))
 
 (defun create-auth-tables (&key (users t))
   "Create the tables signing in needs unless they exist: the users table
 (names and emails unique whatever their case) unless USERS is NIL, as when
-users come from an application's own table, and the tokens table."
+users come from an application's own table, the tokens, sign-ins, roles
+and permissions tables, and the audit log."
   (when users
     (create-table 'user)
     (db-execute "CREATE UNIQUE INDEX IF NOT EXISTS users_name ON users (LOWER(name))")
@@ -324,7 +336,31 @@ users come from an application's own table, and the tokens table."
   (db-execute "CREATE UNIQUE INDEX IF NOT EXISTS user_roles_key ON user_roles (user_id, role)")
   (db-execute "CREATE TABLE IF NOT EXISTS role_permissions (role TEXT NOT NULL, permission TEXT NOT NULL)")
   (db-execute "CREATE UNIQUE INDEX IF NOT EXISTS role_permissions_key ON role_permissions (role, permission)")
+  (littoral.audit:create-audit-tables)
   (when users (migrate-role-column)))
+
+;;; The audit log (littoral/audit): events about a user name them as the
+;;; subject "user:ID"; the actor is the signed-in user unless given.
+
+(defun signed-in-actor ()
+  "The session's user's id and name, for LITTORAL.AUDIT:*AUDIT-ACTOR*."
+  (let ((id (and *session* (session-property :user-id))))
+    (when id
+      (let ((user (ignore-errors (find-user-by-id id))))
+        (values (princ-to-string id) (and user (user-name user)))))))
+
+(setf littoral.audit:*audit-actor* 'signed-in-actor)
+
+(defun audit-user (action user &rest details)
+  "Record ACTION, done to USER by whoever is signed in."
+  (littoral.audit:audit action :subject (and user (format nil "user:~A" (user-id user)))
+                               :subject-label (and user (user-name user)) :details details))
+
+(defun audit-by (user action &rest details)
+  "Record ACTION, done by USER to themselves (signing in, say)."
+  (littoral.audit:audit action :actor-id (princ-to-string (user-id user)) :actor-name (user-name user)
+                               :subject (format nil "user:~A" (user-id user)) :subject-label (user-name user)
+                               :details details))
 
 ;;; Users, whatever the store
 
@@ -350,6 +386,7 @@ users come from an application's own table, and the tokens table."
   (store-set-password-hash *user-store* user (hash-password password))
   (db-execute "DELETE FROM auth_tokens WHERE user_id = ? AND purpose = ?"
               (princ-to-string (user-id user)) "reset")
+  (audit-user "password.changed" user)
   user)
 
 (defun add-user (name email password &key roles)
@@ -357,9 +394,11 @@ users come from an application's own table, and the tokens table."
 store doesn't create users."
   (when (find-user name)
     (error "The name ~A is taken." name))
-  (or (store-create-user *user-store* :name name :email email :roles roles
-                                      :password-hash (and password (hash-password password)))
-      (error "This user store doesn't create users.")))
+  (let ((user (or (store-create-user *user-store* :name name :email email :roles roles
+                                                  :password-hash (and password (hash-password password)))
+                  (error "This user store doesn't create users."))))
+    (apply #'audit-user "user.created" user (when roles (list :roles roles)))
+    user))
 
 ;;; Signing in, with lockout
 
@@ -453,13 +492,23 @@ Django's) or with fewer than *PBKDF2-ITERATIONS*, where the store can write.")
     (verify-password (or password "") dummy)
     nil))
 
+(defun audit-failure (name user reason &optional (action "sign-in.failed"))
+  "Record a failed sign-in as NAME (USER's, when there's such a user)."
+  (littoral.audit:audit action :actor-id nil
+                               :subject (and user (format nil "user:~A" (user-id user)))
+                               :subject-label (if user (user-name user) (subseq name 0 (min 100 (length name))))
+                               :details (list :reason reason)))
+
 (defun authenticate (name password)
   "The active user NAME if PASSWORD is theirs and neither the name nor the
 client's address is locked out; otherwise NIL and, as a second value, why."
   (cond ((locked-p name)
+         (audit-failure name nil "locked-out")
          (values nil (translate "Too many failed attempts; try again in a minute.")))
         (t (let* ((user (find-user name))
                   (good (if user (check-password user password) (dummy-check password))))
+             (unless (and good (user-active-p user))
+               (audit-failure name user (cond ((null user) "unknown-user") (good "inactive") (t "wrong-password"))))
              (cond ((and good (user-active-p user))
                     (note-attempt name t)
                     (when (and *rehash-on-sign-in* (store-writable-p *user-store*)
@@ -582,7 +631,8 @@ looked at no more often than *AUTH-SESSION-CHECK-SECONDS*."
   "End USER's sign-in ID wherever it is; that browser is signed out within
 *AUTH-SESSION-CHECK-SECONDS*, this one at once."
   (when user
-    (db-execute "DELETE FROM auth_sessions WHERE id = ? AND user_id = ?" id (princ-to-string (user-id user)))
+    (when (plusp (db-execute "DELETE FROM auth_sessions WHERE id = ? AND user_id = ?" id (princ-to-string (user-id user))))
+      (audit-user "session.revoked" user :session id))
     (when (and *session* (eql id (session-property :auth-session)))
       (log-out))))
 
@@ -590,6 +640,7 @@ looked at no more often than *AUTH-SESSION-CHECK-SECONDS*."
   "End all of USER's sign-ins, this one too."
   (when user
     (db-execute "DELETE FROM auth_sessions WHERE user_id = ?" (princ-to-string (user-id user)))
+    (audit-user "sign-out.everywhere" user)
     (when (and *session* (equal (session-property :user-id) (user-id user)))
       (log-out))))
 
@@ -605,11 +656,13 @@ looked at no more often than *AUTH-SESSION-CHECK-SECONDS*."
 (defun signed-in-p ()
   (and (current-user) t))
 
-(defun log-in (user &key remember)
+(defun log-in (user &key remember (method "password"))
   "Sign USER in to this session, recording the sign-in in the database so
 it survives restarts; with REMEMBER, for *REMEMBER-DAYS* rather than until
 the browser closes.  The session gets a new key, so a link to it that
-someone else had beforehand no longer reaches it."
+someone else had beforehand no longer reaches it.  METHOD, how they proved
+who they are, goes in the audit log."
+  (audit-by user "sign-in" :method method :remember (and remember t))
   (when (session-property :auth-session) (close-auth-session))
   (setf (session-property :user-id) (user-id user))
   (when (and *session* *application*)
@@ -619,6 +672,8 @@ someone else had beforehand no longer reaches it."
 
 (defun log-out ()
   "Sign the session's user out, end its sign-in, and give the session a new key."
+  (multiple-value-bind (id name) (signed-in-actor)
+    (when id (littoral.audit:audit "sign-out" :subject (format nil "user:~A" id) :subject-label name)))
   (close-auth-session)
   (setf (session-property :user-id) nil)
   (when *session* (rotate-session-key *session*)))
@@ -814,6 +869,7 @@ The link works once, for an hour.  If it wasn't you, ignore this mail."
                               (user-name user) (request-base-url)
                               (url-for (application-path *application*)) token))))
       (setf *last-mail* mail)
+      (audit-user "password.reset-requested" user)
       (apply *send-mail* mail))))
 
 (defun user-for-reset-token (token)
@@ -971,9 +1027,11 @@ there is none and 403 when they lack ROLE."
     (db-insert (make-instance 'auth-token :token-hash (token-hash token)
                                           :user-id (princ-to-string (user-id user)) :purpose "api"
                                           :expires (and days (+ (get-universal-time) (* days 86400)))))
+    (audit-user "api-token.created" user :days days)
     token))
 
 (defun revoke-api-tokens (user)
   "Void all of USER's API tokens."
-  (db-execute "DELETE FROM auth_tokens WHERE user_id = ? AND purpose = ?"
-              (princ-to-string (user-id user)) "api"))
+  (prog1 (db-execute "DELETE FROM auth_tokens WHERE user_id = ? AND purpose = ?"
+                     (princ-to-string (user-id user)) "api")
+    (audit-user "api-tokens.revoked" user)))

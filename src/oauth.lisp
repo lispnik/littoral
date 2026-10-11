@@ -147,12 +147,15 @@ has not expired; it can be used once."
       ;; An existing user by email, or a new one where the store makes users;
       ;; a store that doesn't (an application's own table, say) signs in
       ;; only the users it has.
-      (let ((user (or (find-user-by-email email)
-                      (store-create-user *user-store*
-                                         :name (available-name (or name (subseq email 0 (position #\@ email))))
-                                         :email email))))
+      (let* ((existing (find-user-by-email email))
+             (user (or existing
+                       (store-create-user *user-store*
+                                          :name (available-name (or name (subseq email 0 (position #\@ email))))
+                                          :email email))))
+        (when (and user (not existing))
+          (littoral.auth::audit-user "user.created" user :via (format nil "oauth:~(~A~)" (provider-name provider))))
         (when (and user (user-active-p user))
-          (log-in user))))))
+          (log-in user :method (format nil "oauth:~(~A~)" (provider-name provider))))))))
 
 (defun available-name (wanted)
   "WANTED, made a valid user name not yet taken."

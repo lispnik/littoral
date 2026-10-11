@@ -250,3 +250,19 @@
     (is (string= "ada@example.org"
                  (first (littoral.mail:sent-message-recipients
                          (first (littoral.mail:mailer-messages littoral-mail-demo:*mailbox*))))))))
+
+(test members-audit-log
+  (with-members (b)
+    (members-sign-in b "bob" "wrong")
+    (fill-in b "sign-in-name" "ada")
+    (fill-in b "sign-in-password" "correct horse battery")
+    (press b "Sign in")
+    (is (has-text-p b "Audit log"))
+    (is (has-text-p b "sign-in.failed"))
+    (is (has-text-p b "reason: wrong-password"))
+    (click b "Make editor")
+    (is (has-text-p b "role: editor"))
+    ;; Bob doesn't see it.
+    (click b "Sign out")
+    (members-sign-in b "bob" "another passphrase")
+    (is (not (has-text-p b "reason: wrong-password")))))

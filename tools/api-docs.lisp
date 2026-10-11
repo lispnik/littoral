@@ -125,7 +125,8 @@ do not edit by hand.~%")
                        ("littoral.test" "testing/package.lisp")
                        ("littoral.browser-test" "testing/chrome.lisp")
                        ("littoral.mail" "src/mail.lisp")
-                       ("littoral.jobs" "src/durable-jobs.lisp")))
+                       ("littoral.jobs" "src/durable-jobs.lisp")
+                       ("littoral.audit" "src/audit.lisp")))
         (destructuring-bind (package file) entry
         (format out "~%## Package `~A`~%~%~A~%" package
                 (or (documentation (find-package (string-upcase package)) t) ""))

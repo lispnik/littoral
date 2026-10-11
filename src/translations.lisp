@@ -6,6 +6,11 @@
 (in-package #:littoral)
 
 (define-translations "fr"
+  ;; Audit log
+  ("Audit log" "Journal d'audit") ("Action" "Action") ("Who or what" "Qui ou quoi")
+  ("Nothing has been recorded." "Rien n'a été enregistré.") ("Audit log, newest first" "Journal d'audit, le plus récent d'abord")
+  ("When" "Quand") ("Who" "Qui") ("Subject" "Objet") ("Details" "Détails") ("Address" "Adresse")
+  ("« Newer" "« Plus récents") ("Older »" "Plus anciens »")
   ;; Dialogs
   ("OK" "OK") ("Yes" "Oui") ("No" "Non") ("Cancel" "Annuler") ("Continue" "Continuer")
   ("Answer" "Réponse") ("Choice" "Choix") ("Username" "Nom d'utilisateur") ("Password" "Mot de passe")
@@ -95,6 +100,11 @@ Le lien ne sert qu'une fois, pendant une heure.  Si ce n'était pas vous, ignore
    "Quelqu'un d'autre a modifié cet enregistrement entre-temps ; le voici tel qu'il l'a laissé."))
 
 (define-translations "de"
+  ;; Audit log
+  ("Audit log" "Audit-Protokoll") ("Action" "Aktion") ("Who or what" "Wer oder was")
+  ("Nothing has been recorded." "Noch nichts aufgezeichnet.") ("Audit log, newest first" "Audit-Protokoll, neueste zuerst")
+  ("When" "Wann") ("Who" "Wer") ("Subject" "Betrifft") ("Details" "Details") ("Address" "Adresse")
+  ("« Newer" "« Neuere") ("Older »" "Ältere »")
   ;; Dialogs
   ("OK" "OK") ("Yes" "Ja") ("No" "Nein") ("Cancel" "Abbrechen") ("Continue" "Weiter")
   ("Answer" "Antwort") ("Choice" "Auswahl") ("Username" "Benutzername") ("Password" "Passwort")
@@ -184,6 +194,11 @@ Der Link funktioniert einmal, eine Stunde lang.  Falls Sie das nicht waren, igno
    "Jemand anderes hat diesen Datensatz inzwischen geändert; hier ist er in dessen Fassung."))
 
 (define-translations "es"
+  ;; Audit log
+  ("Audit log" "Registro de auditoría") ("Action" "Acción") ("Who or what" "Quién o qué")
+  ("Nothing has been recorded." "No se ha registrado nada.") ("Audit log, newest first" "Registro de auditoría, lo más reciente primero")
+  ("When" "Cuándo") ("Who" "Quién") ("Subject" "Objeto") ("Details" "Detalles") ("Address" "Dirección")
+  ("« Newer" "« Más recientes") ("Older »" "Más antiguos »")
   ;; Dialogs
   ("OK" "Aceptar") ("Yes" "Sí") ("No" "No") ("Cancel" "Cancelar") ("Continue" "Continuar")
   ("Answer" "Respuesta") ("Choice" "Opción") ("Username" "Usuario") ("Password" "Contraseña")

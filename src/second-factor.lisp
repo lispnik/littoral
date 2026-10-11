@@ -133,6 +133,7 @@ later than AFTER (so a code works once), or NIL."
   "Ten new single-use recovery codes for USER, replacing any others; only
 their hashes are kept, so show them once."
   (db-execute "DELETE FROM auth_tokens WHERE user_id = ? AND purpose = ?" (princ-to-string (user-id user)) "recovery")
+  (audit-user "recovery-codes.created" user)
   (loop repeat count
         collect (let ((code (string-downcase (format nil "~A-~A" (subseq (base32-encode (ironclad:random-data 5)) 0 5)
                                                      (subseq (base32-encode (ironclad:random-data 5)) 0 5)))))
@@ -348,9 +349,10 @@ user it signs in, its passkey's signature count advanced."
          (inner (gethash "response" response)))
     (multiple-value-bind (id x y count)
         (verify-registration challenge (gethash "clientDataJSON" inner) (gethash "attestationObject" inner))
-      (db-insert (make-instance 'auth-factor :user-id (princ-to-string (user-id user)) :kind "passkey" :name name
-                                             :data (format nil "~A ~A ~A" id (b64url-encode x) (b64url-encode y))
-                                             :counter count :created (get-universal-time))))))
+      (prog1 (db-insert (make-instance 'auth-factor :user-id (princ-to-string (user-id user)) :kind "passkey" :name name
+                                                    :data (format nil "~A ~A ~A" id (b64url-encode x) (b64url-encode y))
+                                                    :counter count :created (get-universal-time)))
+        (audit-user "second-factor.added" user :kind "passkey" :name name)))))
 
 (defun passkey-callback (function)
   "A littoral.call spec running FUNCTION with the JSON the browser sends."

@@ -142,6 +142,7 @@
                #:littoral/oauth
                #:littoral/mail
                #:littoral/jobs
+               #:littoral/audit
                #:littoral/parenscript-demo
                #:littoral/websocket
                #:littoral/generator
@@ -195,7 +196,8 @@
                              (:file "wizard")
                              (:file "second-factor")
                              (:file "mail")
-                             (:file "durable-jobs"))))
+                             (:file "durable-jobs")
+                             (:file "audit"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
                                        (uiop:find-symbol* :littoral :littoral/tests))
@@ -208,7 +210,7 @@
 
 (asdf:defsystem #:littoral/docs
   :description "Writes docs/API.md from the docstrings: make docs."
-  :depends-on (#:littoral #:littoral/test #:littoral/browser-test #:littoral/mail #:littoral/jobs #:sb-introspect)
+  :depends-on (#:littoral #:littoral/test #:littoral/browser-test #:littoral/mail #:littoral/jobs #:littoral/audit #:sb-introspect)
   :components ((:module "tools" :components ((:file "api-docs")))))
 
 (asdf:defsystem #:littoral/tracker
@@ -240,11 +242,18 @@
   :depends-on (#:littoral #:dbi)
   :components ((:module "src" :components ((:file "db")))))
 
+(asdf:defsystem #:littoral/audit
+  :description "An audit log for Littoral applications: who did what, and when."
+  :author "Matthew Kennedy"
+  :license "MIT"
+  :depends-on (#:littoral #:littoral/db #:com.inuoe.jzon)
+  :components ((:module "src" :components ((:file "audit")))))
+
 (asdf:defsystem #:littoral/admin
   :description "An administration interface generated from descriptions and tables."
   :author "Matthew Kennedy"
   :license "MIT"
-  :depends-on (#:littoral #:littoral/db)
+  :depends-on (#:littoral #:littoral/db #:littoral/audit)
   :components ((:module "src" :components ((:file "admin")))))
 
 (asdf:defsystem #:littoral/admin-demo
@@ -254,7 +263,7 @@
 
 (asdf:defsystem #:littoral/members-demo
   :description "Signing in, roles, password reset and OAuth, with a pretend identity provider."
-  :depends-on (#:littoral/auth #:littoral/oauth #:littoral/mail #:littoral/jobs #:dbd-sqlite3)
+  :depends-on (#:littoral/auth #:littoral/oauth #:littoral/mail #:littoral/jobs #:littoral/audit #:dbd-sqlite3)
   :components ((:module "examples" :serial t
                 :components ((:file "mail-demo") (:file "jobs-demo") (:file "members-demo")))))
 
@@ -262,7 +271,7 @@
   :description "Users, signing in, roles and password reset for Littoral."
   :author "Matthew Kennedy"
   :license "MIT"
-  :depends-on (#:littoral #:littoral/db #:clqr #:com.inuoe.jzon #:cl-base64)
+  :depends-on (#:littoral #:littoral/db #:littoral/audit #:clqr #:com.inuoe.jzon #:cl-base64)
   :components ((:module "src" :serial t
                 :components ((:file "auth") (:file "passwords") (:file "auth-store")
                              (:file "second-factor") (:file "second-factor-ui")))))

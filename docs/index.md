@@ -698,6 +698,32 @@ Roles and permissions are kept in two tables, keyed by name, so they work with a
 - `revoke-role`, `revoke-permission`, `role-permissions` and `user-permissions` round it out.
 - `create-auth-tables` moves roles that earlier versions kept in a comma-separated column into the new tables.
 
+### The audit log
+
+`littoral/audit` keeps an `audit_log` table recording who did what, and when. `create-auth-tables` creates it, and from then on these are recorded with no further code:
+
+- **From `littoral/auth`:**
+  - Sign-ins, with how (password, passkey, OAuth, or password with a second factor) and whether "keep me signed in" was ticked.
+  - Failed sign-ins, with the reason: unknown user, wrong password, inactive, locked out or a wrong code.
+  - Sign-outs, sessions ended elsewhere, password resets asked for, and password changes.
+  - Users created, roles and permissions granted or revoked, API tokens, and second factors added or removed.
+- **From `littoral/admin`:** what it creates, changes (each field's old and new value, though password values are left out) and deletes.
+
+Applications record their own events:
+
+```lisp
+(littoral.audit:audit "invoice.sent" :subject "invoice:42" :subject-label "Invoice 42"
+                                     :details '(:to "ada@example.org"))
+(littoral.audit:audit-events :action "sign-in" :since (- (get-universal-time) 86400))
+```
+
+- **Who did it.** The actor is the signed-in user unless `:actor-id` and `:actor-name` are given. In the admin, it's the name in its credentials.
+- **Transactions.** An event is written in the current transaction, so an event whose action rolls back disappears with it.
+- **Without the table.** Events are recorded only where `create-audit-tables` (or `create-auth-tables`) has run in the process, so an application without the table works as before. `*audit-hook*` sees every event either way, if you also want to send them to a log.
+- **Looking through it.** `audit-events` filters by action (`"sign-in"` also matches `"sign-in.failed"`), actor, subject, text and time. The admin gets an "Audit log" page, and `audit-log-view` is a component you can put on an admins-only page of your own. `purge-audit-log` deletes old events.
+
+The members demo shows the log to ada, under Admins.
+
 ### PostgreSQL
 
 `littoral/db` and `littoral/auth` are tested on SQLite and on PostgreSQL. Connect with `(connect-database :postgres :database-name "app" :host "localhost" :username "app" :password "…")`; the driver is pure Lisp. `make test-postgres LITTORAL_TEST_DATABASE=postgres://user:password@host:5432/db` runs the database tests against one, as CI does.
