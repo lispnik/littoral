@@ -15,6 +15,8 @@ Littoral is a Common Lisp port of Smalltalk's [Seaside](https://seaside.st) web 
 
 It runs on SBCL and serves through Clack (Hunchentoot by default). Dependencies are managed with ocicl.
 
+Version 0.2.0 adds a database with migrations, users and signing in, an admin, mail, durable jobs and an audit log: see the [changelog](https://github.com/lispnik/littoral/blob/master/CHANGELOG.md).
+
 ```lisp
 (defpackage #:hello (:use #:cl #:littoral #:littoral.html))
 (in-package #:hello)
