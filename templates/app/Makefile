@@ -6,7 +6,7 @@ PORT ?= {{port}}
 
 SBCL = sbcl --noinform --eval '(require :asdf)' --eval '(asdf:initialize-source-registry (quote (:source-registry (:directory "$(CURDIR)/") (:directory "$(LITTORAL)") (:tree "$(LITTORAL)ocicl/") :inherit-configuration)))'
 
-.PHONY: test run build docker user clean
+.PHONY: test run build docker user migrate clean
 
 test:
 	$(SBCL) --non-interactive --eval '(asdf:test-system :{{name}})'
@@ -20,6 +20,11 @@ user:
 	@test -n "$(NAME)" -a -n "$(EMAIL)" -a -n "$(PASSWORD)" || { echo "Usage: make user NAME=… EMAIL=… PASSWORD=… [ADMIN=1]"; exit 2; }
 	$(SBCL) --non-interactive --eval '(asdf:load-system :{{name}})' \
 	  --eval '({{name}}:create-user "$(NAME)" "$(EMAIL)" "$(PASSWORD)" :admin $(if $(ADMIN),t,nil))'
+
+# Bring the database up to date (serving does this too), and list the migrations.
+migrate:
+	$(SBCL) --non-interactive --eval '(asdf:load-system :{{name}})' \
+	  --eval '({{name}}::setup-database ({{name}}::database-spec))' --eval '({{name}}::migration-report)'
 
 # A standalone executable, serving in deployment mode: PORT=8080 bin/{{name}}
 build:

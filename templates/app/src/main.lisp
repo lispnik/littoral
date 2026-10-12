@@ -22,13 +22,27 @@ or SQLite in $DATA_DIR (default data/), as CONNECT-DATABASE takes it."
 (defun call-with-database (spec thunk)
   (funcall (apply #'littoral.db:using-database spec) thunk))
 
+;; The schema: numbered SQL files in migrations/, applied in order, each once.
+;; Change a table by adding the next file (002-notes-get-a-due-date.sql),
+;; never by editing one already applied.
+(littoral.db:define-migrations :{{name}} (asdf:system-relative-pathname :{{name}} "migrations/"))
+
 (defun setup-database (spec)
-  "Create the tables unless they exist; safe at every start."
+  "Bring the tables up to date: Littoral's, then the application's
+migrations.  Safe at every start, and from several processes at once."
   (call-with-database spec (lambda ()
-                             (littoral.db:create-table 'note)
                              (littoral.auth:create-auth-tables)
                              (littoral.mail:create-mail-tables)
-                             (littoral.jobs:create-job-tables))))
+                             (littoral.jobs:create-job-tables)
+                             (littoral.db:migrate :{{name}}))))
+
+(defun migration-report (&key (database (database-spec)))
+  "Print each of the application's migrations and when it was applied."
+  (call-with-database database
+                      (lambda ()
+                        (dolist (migration (littoral.db:migration-status :{{name}}))
+                          (format t "~A  ~A~%" (getf migration :file)
+                                  (if (getf migration :applied) "applied" "waiting"))))))
 
 (defun create-user (name email password &key admin (database (database-spec)))
   "Add a user who can sign in; with ADMIN, one who may use /admin too."
@@ -83,8 +97,17 @@ start the web server.  Mail comes from $MAIL_FROM."
   "The entry point of the executable `make build` writes: serves in deployment
 mode on $PORT (default {{port}}) and $ADDRESS, with $PUBLIC_URL as the address
 mail links use, and $TRUST_PROXY set when behind a reverse proxy.  With the
-arguments create-user NAME EMAIL PASSWORD [admin], adds that user instead."
+argument migrate, brings the database up to date and stops; with
+migrations, lists the migrations; with create-user NAME EMAIL PASSWORD
+[admin], adds that user instead."
   (let ((arguments (uiop:command-line-arguments)))
+    (when (equal (first arguments) "migrate")
+      (setup-database (database-spec))
+      (migration-report)
+      (uiop:quit 0))
+    (when (equal (first arguments) "migrations")
+      (migration-report)
+      (uiop:quit 0))
     (when (equal (first arguments) "create-user")
       (destructuring-bind (name email password &optional admin) (rest arguments)
         (setup-database (database-spec))

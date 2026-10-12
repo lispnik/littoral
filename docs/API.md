@@ -2173,7 +2173,7 @@ A message in the outbox, and how sending it has gone.
 
 #### `create-mail-tables` — function
 
-Create the outbox table unless it exists.
+Create or bring up to date the outbox table (migrations :`littoral-mail`).
 
 #### `drop-mail-tables` — function
 
@@ -2307,7 +2307,7 @@ For :`every`: once a day, at `hour`:`minute` local time.
 
 #### `create-job-tables` — function
 
-Create the job_queue table unless it exists.
+Create or bring up to date the job_queue table (migrations :`littoral-jobs`).
 
 #### `drop-job-tables` — function
 
@@ -2444,7 +2444,8 @@ given, or else whoever *AUDIT-ACTOR* finds.
 
 #### `create-audit-tables` — function
 
-Create the audit_log table unless it exists, and record events in this database.
+Create or bring up to date the audit_log table (migrations
+:`littoral-audit`), and record events in this database.
 
 #### `drop-audit-tables` — function
 

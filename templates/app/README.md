@@ -6,6 +6,7 @@ A [Littoral](https://github.com/lispnik/littoral) application with a database an
 make user NAME=ada EMAIL=ada@example.org PASSWORD='a long passphrase' ADMIN=1
 make run     # http://127.0.0.1:{{port}}/ in development mode; /admin from this machine
 make test    # FiveAM tests through Littoral's fake browser, each on its own database
+make migrate # bring the database up to date (serving does this too) and list the migrations
 make build   # bin/{{name}}, a standalone executable
 make docker  # the image {{name}}, built from that executable
 ```
@@ -15,6 +16,7 @@ Data lives in SQLite under `data/` (or `$DATA_DIR`). Set `DATABASE_URL=postgres:
 ## What's here
 
 - `src/model.lisp`: `note`, a class, its description (validation, the editor, the table, the admin all come from it) and its table.
+- `migrations/`: the schema, as numbered SQL files applied in order, each once: `001-notes.sqlite.sql` and `001-notes.postgres.sql` make the notes table. To change a table, add the next file (`002-notes-get-a-due-date.sql`, or a `.sqlite.sql` and `.postgres.sql` pair where the two differ) and never edit one already applied. `make migrate` or starting the app applies new ones; several processes starting at once apply each only once.
 - `src/app.lisp`: the pages: who's signed in, and the notes with editors to add, change and remove them. `restricted` shows a sign-in prompt until someone signs in.
 - `src/main.lisp`: the database, `register-app`, `serve`, `create-user` and the executable's `toplevel`.
 - `tests/app.lisp`: signing in, editing notes, and checking they stay private.
@@ -41,6 +43,7 @@ Or run it in a container: `make docker` builds the image `{{name}}` (Littoral co
 docker run -d -p 127.0.0.1:{{port}}:{{port}} -e PUBLIC_URL=https://example.org -e TRUST_PROXY=1 \
   -v {{name}}-data:/data --name {{name}} {{name}}
 docker exec {{name}} {{name}} create-user ada ada@example.org 'a long passphrase' admin
+docker exec {{name}} {{name}} migrations     # which migrations have been applied
 ```
 
 keeps the SQLite file in the volume `{{name}}-data` (or pass `DATABASE_URL`). The image checks `/healthz` itself.

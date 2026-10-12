@@ -32,7 +32,10 @@
            #:db-find #:db-select #:db-count #:db-insert #:db-update #:db-save #:db-delete
            #:db-reload #:db-query #:db-execute #:db-search #:search-condition #:highlight-matches #:with-transaction #:transactional #:using-database
            #:stale-object #:stale-object-object
-           #:reference-field #:reference-class #:object-label #:sql-type #:to-sql #:from-sql))
+           #:reference-field #:reference-class #:object-label #:sql-type #:to-sql #:from-sql
+           ;; Migrations
+           #:define-migrations #:migrate #:migration-status #:baseline-migrations #:forget-migrations
+           #:migration-error #:migration-changed))
 
 (in-package #:littoral.db)
 

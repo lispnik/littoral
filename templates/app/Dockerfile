@@ -12,6 +12,7 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=littoral littoral.asd README.md /littoral/
 COPY --from=littoral src /littoral/src
+COPY --from=littoral migrations /littoral/migrations
 COPY --from=littoral static /littoral/static
 COPY --from=littoral ocicl /littoral/ocicl
 WORKDIR /app

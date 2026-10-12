@@ -47,13 +47,16 @@
 
 (littoral.db:define-table outbox-mail :name "mail_outbox")
 
+(littoral.db:define-migrations :littoral-mail (asdf:system-relative-pathname :littoral "migrations/mail/"))
+
 (defun create-mail-tables ()
-  "Create the outbox table unless it exists."
-  (littoral.db:create-table 'outbox-mail))
+  "Create or bring up to date the outbox table (migrations :LITTORAL-MAIL)."
+  (littoral.db:migrate :littoral-mail))
 
 (defun drop-mail-tables ()
   "Drop the outbox table."
-  (littoral.db:drop-table 'outbox-mail))
+  (littoral.db:drop-table 'outbox-mail)
+  (littoral.db:forget-migrations :littoral-mail))
 
 ;;; Queueing
 

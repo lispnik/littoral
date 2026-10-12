@@ -1,8 +1,9 @@
 ;;;; model.lisp — what the application keeps
 ;;;;
 ;;;; A class, a description (validation, editors, reports and the admin all
-;;;; come from it) and a table.  Add fields here; CREATE-TABLE makes the
-;;;; table, so a new column on an existing database needs an ALTER TABLE.
+;;;; come from it) and a table.  A new field also needs its column: add a
+;;;; migration, such as migrations/002-notes-get-a-due-date.sql with
+;;;; ALTER TABLE notes ADD COLUMN due BIGINT.
 
 (in-package #:{{name}})
 

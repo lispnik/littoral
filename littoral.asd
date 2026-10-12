@@ -197,7 +197,8 @@
                              (:file "second-factor")
                              (:file "mail")
                              (:file "durable-jobs")
-                             (:file "audit"))))
+                             (:file "audit")
+                             (:file "migrations"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
                                        (uiop:find-symbol* :littoral :littoral/tests))
@@ -239,8 +240,8 @@
   :description "Keep Littoral's described objects in a SQL database (cl-dbi)."
   :author "Matthew Kennedy"
   :license "MIT"
-  :depends-on (#:littoral #:dbi)
-  :components ((:module "src" :components ((:file "db")))))
+  :depends-on (#:littoral #:dbi #:cl-ppcre #:alexandria #:ironclad)
+  :components ((:module "src" :serial t :components ((:file "db") (:file "migrations")))))
 
 (asdf:defsystem #:littoral/audit
   :description "An audit log for Littoral applications: who did what, and when."

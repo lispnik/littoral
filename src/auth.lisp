@@ -308,6 +308,9 @@ and is seen by every process: the browser holds its token in a cookie."))
 
 (define-table auth-session :name "auth_sessions")
 
+(define-migrations :littoral-users (asdf:system-relative-pathname :littoral "migrations/users/"))
+(define-migrations :littoral-auth (asdf:system-relative-pathname :littoral "migrations/auth/"))
+
 (defun drop-auth-tables (&key (users t))
   "Drop the tables CREATE-AUTH-TABLES makes, the audit log too, for tests:
 everything is lost."
@@ -315,27 +318,18 @@ everything is lost."
                          '("auth_tokens" "auth_sessions" "auth_factors" "user_roles" "role_permissions")))
     (db-execute (format nil "DROP TABLE IF EXISTS ~A" table)))
   (littoral.audit:drop-audit-tables)
+  (when users (forget-migrations :littoral-users))
+  (forget-migrations :littoral-auth)
   (forget-cached-roles))
 
 (defun create-auth-tables (&key (users t))
-  "Create the tables signing in needs unless they exist: the users table
-(names and emails unique whatever their case) unless USERS is NIL, as when
-users come from an application's own table, the tokens, sign-ins, roles
-and permissions tables, and the audit log."
-  (when users
-    (create-table 'user)
-    (db-execute "CREATE UNIQUE INDEX IF NOT EXISTS users_name ON users (LOWER(name))")
-    (db-execute "CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users (LOWER(email))"))
-  (create-table 'auth-token)
-  (db-execute "CREATE UNIQUE INDEX IF NOT EXISTS auth_tokens_hash ON auth_tokens (token_hash)")
-  (create-table 'auth-factor)
-  (create-table 'auth-session)
-  (db-execute "CREATE UNIQUE INDEX IF NOT EXISTS auth_sessions_hash ON auth_sessions (token_hash)")
-  (db-execute "CREATE INDEX IF NOT EXISTS auth_sessions_user ON auth_sessions (user_id)")
-  (db-execute "CREATE TABLE IF NOT EXISTS user_roles (user_id TEXT NOT NULL, role TEXT NOT NULL)")
-  (db-execute "CREATE UNIQUE INDEX IF NOT EXISTS user_roles_key ON user_roles (user_id, role)")
-  (db-execute "CREATE TABLE IF NOT EXISTS role_permissions (role TEXT NOT NULL, permission TEXT NOT NULL)")
-  (db-execute "CREATE UNIQUE INDEX IF NOT EXISTS role_permissions_key ON role_permissions (role, permission)")
+  "Create or bring up to date the tables signing in needs, by their
+migrations (:LITTORAL-USERS, :LITTORAL-AUTH): the users table (names and
+emails unique whatever their case) unless USERS is NIL, as when users come
+from an application's own table, the tokens, sign-ins, roles and
+permissions tables, and the audit log."
+  (when users (migrate :littoral-users))
+  (migrate :littoral-auth)
   (littoral.audit:create-audit-tables)
   (when users (migrate-role-column)))
 

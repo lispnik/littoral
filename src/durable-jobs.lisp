@@ -117,22 +117,17 @@ function NAME that runs BODY at once.  NAME-AND-OPTIONS is NAME or (NAME
 
 ;;; The table
 
+(littoral.db:define-migrations :littoral-jobs (asdf:system-relative-pathname :littoral "migrations/jobs/"))
+
 (defun create-job-tables ()
-  "Create the job_queue table unless it exists."
-  (littoral.db:db-execute
-   (format nil "CREATE TABLE IF NOT EXISTS job_queue (id ~A, name TEXT NOT NULL, arguments TEXT NOT NULL,
-queue TEXT NOT NULL, status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, run_at BIGINT NOT NULL,
-unique_key TEXT, progress TEXT, last_error TEXT, created BIGINT NOT NULL, finished BIGINT)"
-           (if (eq (first littoral.db:*database*) :postgres) "BIGSERIAL PRIMARY KEY" "INTEGER PRIMARY KEY AUTOINCREMENT")))
-  (littoral.db:db-execute "CREATE INDEX IF NOT EXISTS job_queue_due ON job_queue (status, run_at)")
-  ;; One untried job per key: ENQUEUE-JOB's :KEY, and each recurring job.
-  (littoral.db:db-execute "CREATE UNIQUE INDEX IF NOT EXISTS job_queue_key ON job_queue (unique_key)
-WHERE status = 'queued' AND attempts = 0")
+  "Create or bring up to date the job_queue table (migrations :LITTORAL-JOBS)."
+  (littoral.db:migrate :littoral-jobs)
   t)
 
 (defun drop-job-tables ()
   "Drop the job_queue table."
-  (littoral.db:db-execute "DROP TABLE IF EXISTS job_queue"))
+  (littoral.db:db-execute "DROP TABLE IF EXISTS job_queue")
+  (littoral.db:forget-migrations :littoral-jobs))
 
 (defclass durable-job ()
   ((id :initarg :id :reader durable-job-id)

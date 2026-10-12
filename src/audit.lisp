@@ -40,15 +40,12 @@
        (member littoral.db:*database* *audit-databases* :test #'equal)
        t))
 
+(littoral.db:define-migrations :littoral-audit (asdf:system-relative-pathname :littoral "migrations/audit/"))
+
 (defun create-audit-tables ()
-  "Create the audit_log table unless it exists, and record events in this database."
-  (littoral.db:db-execute
-   (format nil "CREATE TABLE IF NOT EXISTS audit_log (id ~A, at BIGINT NOT NULL, actor_id TEXT, actor_name TEXT,
-action TEXT NOT NULL, subject TEXT, subject_label TEXT, details TEXT, address TEXT)"
-           (if (eq (first littoral.db:*database*) :postgres) "BIGSERIAL PRIMARY KEY" "INTEGER PRIMARY KEY AUTOINCREMENT")))
-  (littoral.db:db-execute "CREATE INDEX IF NOT EXISTS audit_log_action ON audit_log (action)")
-  (littoral.db:db-execute "CREATE INDEX IF NOT EXISTS audit_log_subject ON audit_log (subject)")
-  (littoral.db:db-execute "CREATE INDEX IF NOT EXISTS audit_log_actor ON audit_log (actor_id)")
+  "Create or bring up to date the audit_log table (migrations
+:LITTORAL-AUDIT), and record events in this database."
+  (littoral.db:migrate :littoral-audit)
   (sb-thread:with-mutex (*audit-databases-lock*)
     (pushnew (copy-tree littoral.db:*database*) *audit-databases* :test #'equal))
   t)
@@ -57,7 +54,8 @@ action TEXT NOT NULL, subject TEXT, subject_label TEXT, details TEXT, address TE
   "Drop the audit_log table, and stop recording events in this database."
   (sb-thread:with-mutex (*audit-databases-lock*)
     (setf *audit-databases* (remove littoral.db:*database* *audit-databases* :test #'equal)))
-  (littoral.db:db-execute "DROP TABLE IF EXISTS audit_log"))
+  (littoral.db:db-execute "DROP TABLE IF EXISTS audit_log")
+  (littoral.db:forget-migrations :littoral-audit))
 
 ;;; Recording
 

@@ -584,6 +584,32 @@ The contacts example is translated into French and German.
 - **References:** a field of `:type :reference :to 'project` holds another stored object. It's chosen from that table in editors and kept as its id.
 - **Transactions:** `(register-application … :around-actions (littoral.db:transactional))` runs each request's callbacks, page or AJAX, in one transaction, rolled back if any of them signals.
 
+### Schema migrations
+
+`create-table` is fine for trying things out. Once a database holds data you care about, keep its schema in numbered SQL files and let `migrate` apply the new ones:
+
+```
+migrations/001-contacts.sql
+migrations/002-contacts-get-a-phone.sql
+migrations/003-search.sqlite.sql          ; 003 for SQLite…
+migrations/003-search.postgres.sql        ; …and for PostgreSQL
+```
+
+```lisp
+(littoral.db:define-migrations :my-app (asdf:system-relative-pathname :my-app "migrations/"))
+(littoral.db:migrate :my-app)              ; applies 002 and 003 if they're new; returns what it applied
+(littoral.db:migration-status :my-app)     ; each file, and when it was applied
+```
+
+- **Files.** The version is the leading number, and gaps are fine. `NNN-name.sqlite.sql` or `NNN-name.postgres.sql` replaces `NNN-name.sql` on that database, for where the two differ (`INTEGER PRIMARY KEY AUTOINCREMENT` and `BIGSERIAL`, say). Statements are separated by semicolons; quotes, comments and PostgreSQL's `$$` bodies are understood. A leading comment `-- littoral: one statement` runs a file whole, as a SQLite trigger needs, and `-- littoral: no transaction` runs it outside a transaction, as `CREATE INDEX CONCURRENTLY` needs.
+- **Once, in order, all or nothing.** Each migration runs in a transaction that also records it in `schema_migrations`, under a lock: PostgreSQL's advisory lock, or SQLite's write lock. Several processes starting at once apply each migration exactly once, and one that fails is rolled back whole (SQLite and PostgreSQL both roll back DDL) and stops the rest with a `migration-error` naming the file.
+- **Forward only.** Fix a mistake with a new migration. Editing a file that's already applied signals a `migration-changed` warning and changes nothing.
+- **In an executable.** The files are read when `define-migrations` runs, so `make build` and Docker images carry them.
+- **A database that predates its migrations.** Write the first one with `IF NOT EXISTS`, or mark it as applied with `(baseline-migrations :my-app :through 1)`.
+- **Littoral's own tables** are migrations too (`:littoral-users`, `:littoral-auth`, `:littoral-mail`, `:littoral-jobs` and `:littoral-audit`, in `migrations/`), applied by `create-auth-tables`, `create-mail-tables`, `create-job-tables` and `create-audit-tables`. A database made by an earlier version is adopted as it is, and later versions change those tables by adding files.
+
+Generated applications keep their schema this way: `make migrate`, or `bin/app migrate` on a server, and starting the app migrates too.
+
 ### Full-text search
 
 Give `define-table` the fields to index, and `db-search` finds objects by their words, the best matches first:
