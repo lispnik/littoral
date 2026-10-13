@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- **`littoral/mail` sends through [smtp](https://github.com/lispnik/smtp)**, which replaces Littoral's own SMTP client and MIME writer.
+  - The mailer gains XOAUTH2 and OAUTHBEARER, PIPELINING, SIZE checks and internationalized addresses.
+  - `make-mail` now checks addresses when the mail is made.
+  - `smtp-error` is now the library's condition. Use `smtp-error-code` for the reply code, not a `:code` initarg.
+  - `:security :none` no longer sends a password unless the mailer is made with `:allow-insecure-auth t`.
+  - smtp isn't in the ocicl registry yet; see "Getting started" in the README.
+
 ## 0.2.0 (2026-10-12)
 
 Littoral can now carry a real application: a database, users who sign in, mail, background work, an audit trail, and a schema that can change after deployment.

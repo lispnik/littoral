@@ -11,12 +11,14 @@ trap 'rm -rf "$work"' EXIT
 git clone -q "$here" "$work/littoral"
 cd "$work/littoral"
 ocicl install >/dev/null 2>&1
+tools/fetch-smtp.sh "$work/smtp"
 cp ocicl.csv "$work/ocicl.csv.before"
 cat > "$work/check.lisp" <<LISP
 (load #P"~/.local/share/ocicl/ocicl-runtime.lisp")
 (asdf:clear-source-registry)
 (asdf:initialize-source-registry
- '(:source-registry (:directory "$work/littoral/") :ignore-inherited-configuration))
+ '(:source-registry (:directory "$work/littoral/") (:directory "$work/smtp/")
+   :ignore-inherited-configuration))
 (asdf:test-system :littoral)
 LISP
 sbcl --no-userinit --non-interactive --load "$work/check.lisp" > "$work/output.txt" 2>&1 || status=$?

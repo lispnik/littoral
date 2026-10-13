@@ -42,10 +42,10 @@
          (message (littoral.mail:mail-string
                    (littoral.mail:make-mail :to "ada@example.org" :subject "Report" :text "Attached."
                                             :attachments (list (list "report.bin" "application/octet-stream" data))))))
-    (is (search "Content-Disposition: attachment; filename=\"report.bin\"" message))
+    (is (cl-ppcre:scan "Content-Disposition: attachment; filename=\"?report\\.bin" message))
     (is (string= "Attached." (string-right-trim '(#\Newline) (littoral.mail:message-text message))))
     (let* ((start (+ 4 (search (crlf "" "") message :start2 (search "filename=" message))))
-           (end (search "--=_mixed" message :start2 start)))
+           (end (search (format nil "~C~C--" #\Return #\Newline) message :start2 start)))
       (is (equalp data (cl-base64:base64-string-to-usb8-array
                         (remove-if (lambda (c) (member c '(#\Return #\Newline))) (subseq message start end))))))))
 
@@ -131,7 +131,8 @@
 (defun fake-mailer (server &rest options)
   ;; OPTIONS first: the first of repeated keywords wins.
   (apply #'littoral.mail:make-smtp-mailer (append options (list :host "127.0.0.1" :port (fake-port server)
-                                                                :security :none :timeout 5))))
+                                                                :security :none :timeout 5
+                                                                :allow-insecure-auth t))))
 
 (test smtp-delivery
   (with-fake-smtp (server)
@@ -176,8 +177,6 @@
         "Nothing is said after STARTTLS is found missing")))
 
 (test smtp-errors-keep-passwords-out
-  (is (null (littoral.mail::command-verb "~A")) "AUTH LOGIN's name and password lines")
-  (is (string= "AUTH" (littoral.mail::command-verb "AUTH PLAIN ~A")))
   (with-fake-smtp (server :replies '(("AUTH" . "535 5.7.8 Bad credentials")))
     (let ((condition (handler-case
                          (littoral.mail:send-mail (littoral.mail:make-mail :to "ada@example.org" :text "x")
@@ -237,6 +236,10 @@
       (error (flaky-condition mailer))
       (littoral.mail:send-message (flaky-inner mailer) from recipients message)))
 
+(defun smtp-refusal (code text)
+  (make-condition (if (>= code 500) 'smtp:smtp-permanent-error 'smtp:smtp-transient-error)
+                  :reply (smtp::make-reply code (list text))))
+
 (defmacro with-outbox (() &body body)
   `(progn
      (connect-test-database)
@@ -277,11 +280,11 @@
     ;; A refusal fails at once.
     (littoral.mail:queue-mail (littoral.mail:make-mail :to "nobody@example.org" :text "x"))
     (littoral.mail:deliver-queued-mail
-     :mailer (make-instance 'flaky-mailer :condition (make-condition 'littoral.mail:smtp-error :code 550 :message "No such user")))
+     :mailer (make-instance 'flaky-mailer :condition (smtp-refusal 550 "No such user")))
     (is (string= "failed" (littoral.mail:outbox-status (outbox-row))))
     ;; Trouble that might pass is tried *MAIL-ATTEMPTS* times.
     (let ((littoral.mail:*mail-attempts* 3)
-          (mailer (make-instance 'flaky-mailer :condition (make-condition 'littoral.mail:smtp-error :code 421 :message "Busy"))))
+          (mailer (make-instance 'flaky-mailer :condition (smtp-refusal 421 "Busy"))))
       (littoral.mail:queue-mail (littoral.mail:make-mail :to "ada@example.org" :text "y"))
       (loop repeat 3
             do (littoral.db:db-execute "UPDATE mail_outbox SET next_attempt = 0 WHERE status = 'queued'")

@@ -8,13 +8,15 @@
 
 FROM ubuntu:24.04 AS build
 RUN apt-get update \
- && apt-get install -y --no-install-recommends sbcl gcc libc6-dev make ca-certificates libsqlite3-0 \
+ && apt-get install -y --no-install-recommends sbcl gcc libc6-dev make ca-certificates libsqlite3-0 git \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=littoral littoral.asd README.md /littoral/
 COPY --from=littoral src /littoral/src
 COPY --from=littoral migrations /littoral/migrations
 COPY --from=littoral static /littoral/static
 COPY --from=littoral ocicl /littoral/ocicl
+COPY --from=littoral tools/fetch-smtp.sh /littoral/tools/
+RUN /littoral/tools/fetch-smtp.sh /littoral/ocicl/smtp
 WORKDIR /app
 COPY . .
 RUN rm -rf bin && make build LITTORAL=/littoral/

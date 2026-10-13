@@ -55,6 +55,12 @@ jobs:
           done
           exit 1
 
+      - name: Fetch the smtp library
+        # Not in the ocicl registry; ASDF finds it through CL_SOURCE_REGISTRY.
+        run: |
+          tools/fetch-smtp.sh "$RUNNER_TEMP/smtp"
+          echo "CL_SOURCE_REGISTRY=$RUNNER_TEMP/smtp/:" >> "$GITHUB_ENV"
+
       - name: Start an S3-compatible server, for the S3 tests
         # RustFS checks Signature V4 like S3 (MinIO no longer publishes images).
         # The S3 test runs only if it comes up; the build doesn't depend on it.
@@ -195,6 +201,12 @@ jobs:
             sleep $((attempt * 10))
           done
           exit 1
+
+      - name: Fetch the smtp library
+        # Not in the ocicl registry; ASDF finds it through CL_SOURCE_REGISTRY.
+        run: |
+          tools/fetch-smtp.sh "$RUNNER_TEMP/smtp"
+          echo "CL_SOURCE_REGISTRY=$RUNNER_TEMP/smtp/:" >> "$GITHUB_ENV"
 
       - name: The demo image (make docker)
         run: |

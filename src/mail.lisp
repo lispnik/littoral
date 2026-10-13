@@ -8,13 +8,13 @@
 ;;;;     :html ((p () "We're glad you're here.")))
 ;;;;   (queue-mail (welcome-mail user))      ; sent by the outbox, retried until it goes
 ;;;;
-;;;; A mail is MAKE-MAIL's object; MAIL-STRING writes it as MIME (UTF-8,
-;;;; quoted-printable, multipart/alternative when it has HTML, attachments in
-;;;; base64).  A mailer sends it: an SMTP-MAILER, a LOG-MAILER (the default,
+;;;; A mail is MAKE-MAIL's object; MAIL-STRING writes it as MIME, through the
+;;;; smtp library (github.com/lispnik/smtp).  A mailer sends it: an SMTP-MAILER, a LOG-MAILER (the default,
 ;;;; which prints) or a MEMORY-MAILER (which keeps them, for tests and demos).
 
 (defpackage #:littoral.mail
   (:use #:cl)
+  (:import-from #:smtp #:smtp-error)
   (:documentation "Sending mail: MIME messages, SMTP, templates and an outbox that retries.")
   (:export
    ;; Messages
@@ -63,174 +63,50 @@
 
 (defun listify (x) (if (listp x) (remove nil x) (list x)))
 
-(defun check-header-value (value)
-  "VALUE, unless it holds a line break: a header can't be allowed to start another."
-  (when (and value (find-if (lambda (c) (member c '(#\Return #\Newline))) value))
-    (error "A line break in a mail header: ~S" value))
-  value)
-
 (defun make-mail (&key to cc bcc (from *mail-from*) reply-to (subject "") text html attachments headers)
   "A mail.  TO, CC and BCC are addresses (\"ada@example.org\" or \"Ada <ada@example.org>\")
 or lists of them; TEXT and HTML its plain and HTML bodies (one is enough: the
 plain one is made from the HTML when missing); ATTACHMENTS (FILE-NAME
-CONTENT-TYPE DATA) lists, DATA octets or a string; HEADERS (NAME . VALUE) pairs."
+CONTENT-TYPE DATA) lists, DATA octets or a string; HEADERS (NAME . VALUE) pairs.
+A bad address, or a line break in a header, is refused here."
   (let ((to (listify to)) (cc (listify cc)) (bcc (listify bcc)))
     (unless (or to cc bcc) (error "A mail needs someone to send it to."))
     (unless (or text html) (error "A mail needs a TEXT or an HTML body."))
-    (mapc #'check-header-value (append to cc bcc (list from reply-to subject)))
-    (loop for (name . value) in headers do (check-header-value name) (check-header-value value))
-    (make-instance 'mail :to to :cc cc :bcc bcc :from from :reply-to reply-to :subject subject
-                         :text (or text (html-to-text html)) :html html
-                         :attachments attachments :headers headers)))
+    (let ((mail (make-instance 'mail :to to :cc cc :bcc bcc :from from :reply-to reply-to :subject subject
+                                     :text (or text (html-to-text html)) :html html
+                                     :attachments attachments :headers headers)))
+      (smtp-message mail)
+      mail)))
+
+(defun utf-8 (string) (sb-ext:string-to-octets string :external-format :utf-8))
+
+(defun smtp-message (mail &key date)
+  "MAIL as an SMTP:MESSAGE, which checks every address and header."
+  (smtp:make-message :from (mail-from mail) :to (mail-to mail) :cc (mail-cc mail) :bcc (mail-bcc mail)
+                     :reply-to (mail-reply-to mail) :subject (mail-subject mail)
+                     :text (mail-text mail) :html (mail-html mail)
+                     :attachments (loop for (name type data) in (mail-attachments mail)
+                                        collect (smtp:make-attachment (if (stringp data) (utf-8 data) data)
+                                                                      :filename name :content-type type))
+                     :headers (mail-headers mail) :date date))
 
 (defun address-spec (address)
   "The bare address in ADDRESS: \"Ada <ada@example.org>\" → \"ada@example.org\"."
-  (let* ((open (position #\< address :from-end t))
-         (close (and open (position #\> address :start open)))
-         (spec (string-trim " " (if close (subseq address (1+ open) close) address))))
-    (when (or (zerop (length spec)) (find-if (lambda (c) (member c '(#\Space #\Tab #\< #\> #\Return #\Newline))) spec))
-      (error "Not a mail address: ~S" address))
-    spec))
+  (smtp:mailbox-address (smtp:parse-mailbox address)))
 
 (defun mail-recipients (mail)
   "Everyone MAIL goes to, Bcc included, as bare addresses."
   (remove-duplicates (mapcar #'address-spec (append (mail-to mail) (mail-cc mail) (mail-bcc mail)))
                      :test #'string-equal :from-end t))
 
-;;; Encodings
-
-(defun utf-8 (string) (sb-ext:string-to-octets string :external-format :utf-8))
-
-(defun ascii-p (string) (every (lambda (c) (< (char-code c) 128)) string))
-
-(defun encoded-words (string)
-  "STRING as RFC 2047 encoded words when it isn't plain ASCII, each short
-enough for a header line and never splitting a character."
-  (if (ascii-p string)
-      string
-      (let ((words '()) (chunk '()) (size 0))
-        (flet ((flush ()
-                 (when chunk
-                   (push (format nil "=?UTF-8?B?~A?=" (cl-base64:usb8-array-to-base64-string
-                                                     (utf-8 (coerce (reverse chunk) 'string))))
-                         words)
-                   (setf chunk '() size 0))))
-          (loop for c across string
-                for n = (length (utf-8 (string c)))
-                do (when (> (+ size n) 45) (flush))
-                   (push c chunk) (incf size n))
-          (flush))
-        (format nil "~{~A~^~%  ~}" (reverse words)))))
-
-(defun encode-address (address)
-  "ADDRESS for a header: a display name encoded or quoted as it needs."
-  (let ((open (position #\< address :from-end t)))
-    (if (null open)
-        (address-spec address)
-        (let ((name (string-trim " \"" (subseq address 0 open)))
-              (spec (address-spec address)))
-          (cond ((zerop (length name)) spec)
-                ((not (ascii-p name)) (format nil "~A <~A>" (encoded-words name) spec))
-                ((find-if (lambda (c) (find c "()<>[]:;@\\,.\"")) name)
-                 (format nil "\"~A\" <~A>" (remove #\" (remove #\\ name)) spec))
-                (t (format nil "~A <~A>" name spec)))))))
+(defun mail-string (mail &key (date (get-universal-time)))
+  "MAIL as a MIME message, with CRLF line breaks; Bcc isn't written."
+  (sb-ext:octets-to-string (smtp:render-message (smtp-message mail :date date)) :external-format :utf-8))
 
 (defun crlf-lines (string)
   "STRING's lines, however they were broken."
   (let ((lines (cl-ppcre:split "\\r\\n|\\r|\\n" string :limit most-positive-fixnum)))
     (if (and lines (string= (car (last lines)) "")) (butlast lines) lines)))
-
-(defun quoted-printable (string)
-  "STRING as UTF-8 quoted-printable, lines under 77 characters, CRLF breaks."
-  (with-output-to-string (out)
-    (dolist (line (crlf-lines string))
-      (let ((column 0)
-            (octets (utf-8 line)))
-        (loop for i from 0 below (length octets)
-              for byte = (aref octets i)
-              for last = (= i (1- (length octets)))
-              for piece = (if (or (> byte 126) (= byte 61) (and (< byte 32) (/= byte 9))
-                                  ;; Spaces at the end of a line would be stripped on the way.
-                                  (and last (member byte '(9 32))))
-                              (format nil "=~2,'0X" byte)
-                              (string (code-char byte)))
-              do (when (> (+ column (length piece)) 75)
-                   (format out "=~C~C" #\Return #\Newline)
-                   (setf column 0))
-                 (write-string piece out)
-                 (incf column (length piece))))
-      (format out "~C~C" #\Return #\Newline))))
-
-(defun base64-lines (octets)
-  (with-output-to-string (out)
-    (let ((encoded (cl-base64:usb8-array-to-base64-string octets)))
-      (loop for start from 0 below (length encoded) by 76
-            do (format out "~A~C~C" (subseq encoded start (min (length encoded) (+ start 76))) #\Return #\Newline)))))
-
-(defun rfc-5322-date (&optional (time (get-universal-time)))
-  (multiple-value-bind (s m h day month year weekday) (decode-universal-time time 0)
-    (format nil "~A, ~D ~A ~D ~2,'0D:~2,'0D:~2,'0D +0000"
-            (nth weekday '("Mon" "Tue" "Wed" "Thu" "Fri" "Sat" "Sun")) day
-            (nth (1- month) '("Jan" "Feb" "Mar" "Apr" "May" "Jun" "Jul" "Aug" "Sep" "Oct" "Nov" "Dec"))
-            year h m s)))
-
-(defun random-token (n) (littoral::random-key n))
-
-(defun mail-domain (mail)
-  (let* ((spec (address-spec (mail-from mail))) (at (position #\@ spec)))
-    (if at (subseq spec (1+ at)) "localhost")))
-
-(defun write-part (out content-type body)
-  (format out "Content-Type: ~A; charset=UTF-8~C~CContent-Transfer-Encoding: quoted-printable~C~C~C~C~A"
-          content-type #\Return #\Newline #\Return #\Newline #\Return #\Newline (quoted-printable body)))
-
-(defun write-body (out mail)
-  "The body of MAIL with its Content-Type headers: text, or text and HTML."
-  (if (mail-html mail)
-      (let ((boundary (format nil "=_alt_~A" (random-token 20))))
-        (format out "Content-Type: multipart/alternative; boundary=\"~A\"~C~C~C~C" boundary #\Return #\Newline #\Return #\Newline)
-        (format out "--~A~C~C" boundary #\Return #\Newline)
-        (write-part out "text/plain" (mail-text mail))
-        (format out "--~A~C~C" boundary #\Return #\Newline)
-        (write-part out "text/html" (mail-html mail))
-        (format out "--~A--~C~C" boundary #\Return #\Newline))
-      (write-part out "text/plain" (mail-text mail))))
-
-(defun mail-string (mail &key (date (get-universal-time)))
-  "MAIL as a MIME message, with CRLF line breaks; Bcc isn't written."
-  ;; Long header values are folded with ~% below; FOLD-NEWLINES makes them CRLF.
-  (fold-newlines (write-message mail date)))
-
-(defun write-message (mail date)
-  (with-output-to-string (out)
-    (flet ((header (name value)
-             (format out "~A: ~A~C~C" name value #\Return #\Newline)))
-      (header "Date" (rfc-5322-date date))
-      (header "From" (encode-address (mail-from mail)))
-      (when (mail-to mail) (header "To" (format nil "~{~A~^,~%  ~}" (mapcar #'encode-address (mail-to mail)))))
-      (when (mail-cc mail) (header "Cc" (format nil "~{~A~^,~%  ~}" (mapcar #'encode-address (mail-cc mail)))))
-      (when (mail-reply-to mail) (header "Reply-To" (encode-address (mail-reply-to mail))))
-      (header "Subject" (encoded-words (mail-subject mail)))
-      (header "Message-ID" (format nil "<~A@~A>" (random-token 24) (mail-domain mail)))
-      (header "MIME-Version" "1.0")
-      (loop for (name . value) in (mail-headers mail) do (header name (encoded-words value))))
-    (if (mail-attachments mail)
-        (let ((boundary (format nil "=_mixed_~A" (random-token 20))))
-          (format out "Content-Type: multipart/mixed; boundary=\"~A\"~C~C~C~C" boundary #\Return #\Newline #\Return #\Newline)
-          (format out "--~A~C~C" boundary #\Return #\Newline)
-          (write-body out mail)
-          (loop for (name type data) in (mail-attachments mail)
-                do (check-header-value name) (check-header-value type)
-                   (format out "--~A~C~CContent-Type: ~A; name=\"~A\"~C~CContent-Disposition: attachment; filename=\"~A\"~C~CContent-Transfer-Encoding: base64~C~C~C~C~A"
-                           boundary #\Return #\Newline type (encoded-words name) #\Return #\Newline
-                           (encoded-words name) #\Return #\Newline #\Return #\Newline #\Return #\Newline
-                           (base64-lines (if (stringp data) (utf-8 data) data))))
-          (format out "--~A--~C~C" boundary #\Return #\Newline))
-        (write-body out mail))))
-
-(defun fold-newlines (string)
-  "STRING with lone newlines made CRLF, for header folding done with ~%."
-  (cl-ppcre:regex-replace-all "(?<!\\r)\\n" string (format nil "~C~C" #\Return #\Newline)))
 
 ;;; Reading a message back, for tests, demos and the outbox page
 
@@ -252,22 +128,10 @@ enough for a header line and never splitting a character."
      (declare (ignore match charset space))
      (sb-ext:octets-to-string
       (if (string-equal kind "B")
-          (cl-base64:base64-string-to-usb8-array data)
-          (decode-qp-octets (substitute #\Space #\_ data)))
+          (smtp:base64-decode data)
+          (smtp:quoted-printable-decode (substitute #\Space #\_ data)))
       :external-format :utf-8))
    :simple-calls t))
-
-(defun decode-qp-octets (string)
-  (let ((out (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0))
-        (string (cl-ppcre:regex-replace-all "=\\r?\\n" string "")))
-    (loop with i = 0 while (< i (length string))
-          do (let ((c (char string i)))
-               (if (and (char= c #\=) (< (+ i 2) (length string)))
-                   (progn (vector-push-extend (parse-integer string :start (1+ i) :end (+ i 3) :radix 16) out)
-                          (incf i 3))
-                   (progn (loop for b across (utf-8 (string c)) do (vector-push-extend b out))
-                          (incf i)))))
-    out))
 
 (defun message-header (message name)
   "The header NAME of MESSAGE (a MIME string), decoded, or NIL."
@@ -278,17 +142,16 @@ enough for a header line and never splitting a character."
   "The decoded body of MESSAGE's first part of content type TYPE."
   (multiple-value-bind (headers body) (split-message message)
     (let* ((content-type (or (cdr (assoc "Content-Type" headers :test #'string-equal)) "text/plain"))
-           (boundary (nth-value 1 (cl-ppcre:scan-to-strings "boundary=\"([^\"]+)\"" content-type))))
+           (boundary (nth-value 1 (cl-ppcre:scan-to-strings "(?i)boundary=\"?([^\";]+)" content-type))))
       (if boundary
           (loop for part in (rest (cl-ppcre:split (format nil "--~A(?:--)?\\r\\n" (cl-ppcre:quote-meta-chars (aref boundary 0))) body))
                 thereis (find-part part type))
           (when (alexandria:starts-with-subseq type (string-downcase content-type))
             (let ((encoding (cdr (assoc "Content-Transfer-Encoding" headers :test #'string-equal))))
               (cond ((string-equal encoding "quoted-printable")
-                     (sb-ext:octets-to-string (decode-qp-octets body) :external-format :utf-8))
+                     (sb-ext:octets-to-string (smtp:quoted-printable-decode body) :external-format :utf-8))
                     ((string-equal encoding "base64")
-                     (sb-ext:octets-to-string (cl-base64:base64-string-to-usb8-array (remove-if (lambda (c) (member c '(#\Return #\Newline))) body))
-                                              :external-format :utf-8))
+                     (sb-ext:octets-to-string (smtp:base64-decode body) :external-format :utf-8))
                     (t body))))))))
 
 (defun message-text (message)

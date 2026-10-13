@@ -1985,6 +1985,7 @@ A mail.  `to`, `cc` and `bcc` are addresses ("ada@example.org" or "Ada <ada@exam
 or lists of them; `text` and `html` its plain and `html` bodies (one is enough: the
 plain one is made from the `html` when missing); `attachments` (`file-name`
 `content-type` `data`) lists, `data` octets or a string; `headers` (`name` . `value`) pairs.
+A bad address, or a line break in a header, is refused here.
 
 #### `mail-to` `object` — generic function
 
@@ -2077,13 +2078,14 @@ background instead, and tries again when it fails.
 
 Sends mail through an `smtp` server: `make-smtp-mailer` makes one.
 
-#### `make-smtp-mailer` `&key (host "localhost") port (security :starttls) username password (helo (machine-instance)) (verify t) ca-file (timeout 30)` — function
+#### `make-smtp-mailer` `&key (host "localhost") port (security :starttls) username password (helo (machine-instance)) (verify t) ca-file (timeout 30) allow-insecure-auth` — function
 
 A mailer sending through the `smtp` server at `host`.  `security` is :`starttls`
 (port 587 by default), :`tls` (465) or :`none` (25, for a relay on this machine).
-With `username`, signs in with `auth` `plain` (or `login`).  The server's certificate
+With `username`, signs in with the strongest `auth` method the server offers;
+without `tls` only when `allow-insecure-auth` is true.  The server's certificate
 is checked against the system's authorities, or `ca-file`'s, unless `verify` is `nil`.
-`timeout`, in seconds, bounds each send.
+`timeout`, in seconds, bounds connecting and each step of the conversation.
 
 #### `smtp-mailer-from-url` `url &rest options` — function
 
@@ -2092,15 +2094,18 @@ or smtp+insecure://… (neither).  `options` go to `make-smtp-mailer`.
 
 #### `smtp-error` — condition
 
-The `smtp` server refused, or the conversation went wrong.
+The root of every condition this library signals.
 
-#### `smtp-error-code` `condition` — generic function
+#### `smtp-error-code` `condition` — function
 
-The server's reply code in an `smtp-error`, such as 550, or `nil` when the conversation itself failed.
+The server's reply code in `condition`, such as 550, or `nil` when the
+conversation itself failed.  When recipients were refused, the first refusal's.
 
 #### `smtp-error-permanent-p` `condition` — function
 
-True when `condition` is a refusal (a 5xx reply) that trying again won't change.
+True when trying `condition`'s mail again won't change anything: a refusal
+(a 5xx reply, or every recipient refused with one), or a mail that can't be
+sent as it is.
 
 #### `log-mailer` — class
 

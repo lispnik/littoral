@@ -33,12 +33,13 @@ Version 0.2.0 adds a database with migrations, users and signing in, an admin, m
 
 ## Getting started
 
-You need SBCL and [ocicl](https://github.com/ocicl/ocicl).
+You need SBCL and [ocicl](https://github.com/ocicl/ocicl). `littoral/mail` also needs [smtp](https://github.com/lispnik/smtp), which isn't in the ocicl registry yet. `tools/fetch-smtp.sh` checks out the version Littoral is tested with, and any directory ASDF searches will do.
 
 ```sh
 git clone https://github.com/lispnik/littoral.git
 cd littoral
 ocicl install      # fetches everything in ocicl.csv into ./ocicl
+tools/fetch-smtp.sh ~/common-lisp/smtp   # the SMTP client, where ASDF looks by default
 make test          # FiveAM suite, in-process, no sockets
 make run           # examples on http://127.0.0.1:8080/examples
 make tracker       # the issue tracker on http://127.0.0.1:8080/tracker
@@ -420,14 +421,16 @@ Jobs live in memory, so a restart forgets them; for work that must not be lost, 
   - Several processes can share the table: each one claims a message before sending it.
   - `outbox-messages`, `retry-mail` and `purge-sent-mail` look after it. `deliver-queued-mail` sends what's due right away, which tests find handy.
 - **SMTP.**
+  - Sending goes through [smtp](https://github.com/lispnik/smtp), which also writes the MIME.
   - `make-smtp-mailer` takes `:security`: `:starttls` (port 587, the default), `:tls` (465) or `:none` (25, for a relay on the same machine).
   - With STARTTLS, a server that doesn't offer it is refused rather than used in the clear, and the certificate must match the host. Pass `:ca-file` for a private authority.
-  - It signs in with AUTH PLAIN or LOGIN. Errors never include the password.
+  - It signs in with the strongest method the server offers (PLAIN, LOGIN, XOAUTH2 or OAUTHBEARER). With `:security :none` it won't send a password unless you pass `:allow-insecure-auth t`. Errors never include the password.
   - `smtp-mailer-from-url` reads `smtp://`, `smtps://` and `smtp+insecure://` URLs.
+  - Failures are the library's conditions, all under `smtp-error`. `smtp-error-code` gives the reply code, and `smtp-error-permanent-p` says whether trying again could help.
 - **Messages.**
   - `make-mail` takes To, Cc, Bcc, Reply-To, a text body, an HTML body or both, attachments and extra headers.
-  - Everything is UTF-8: bodies are quoted-printable, and headers with non-ASCII text are encoded, display names included.
-  - A line break in a header value is an error, so form input can't add headers.
+  - Everything is UTF-8. Each part gets the transfer encoding it needs, and headers with non-ASCII text are encoded, display names and internationalized domains included.
+  - `make-mail` checks every address and header, so a bad address fails when the mail is made, not in the outbox. A line break in a header value is an error, so form input can't add headers.
   - Bcc goes in the SMTP envelope only, never in the headers.
 - **Templates.**
   - `define-mail` writes the HTML with Littoral's tags, as in `render`, inside `*mail-layout*`: a plain layout that mail programs show well.
