@@ -442,6 +442,53 @@ AND (unique_key IS NULL OR NOT EXISTS (SELECT 1 FROM job_queue q WHERE q.unique_
   (= 1 (littoral.db:db-execute "UPDATE job_queue SET status = 'cancelled', finished = ? WHERE id = ? AND status = 'queued'"
                                (get-universal-time) id)))
 
+;;; Metrics: /metrics reports each database whose job tables were made here
+
+(defun write-job-metrics (out)
+  "Write the durable job queues' metrics to OUT, in Prometheus's format."
+  (let ((now (get-universal-time))
+        (reports '()))
+    (dolist (spec (sb-thread:with-mutex (*job-databases-lock*) (copy-list *job-databases*)))
+      (push (cons (littoral.db:database-label spec)
+                  (handler-case
+                      (let ((littoral.db:*database* spec))
+                        (list (littoral.db:db-query "SELECT queue, status, COUNT(*) AS n FROM job_queue
+GROUP BY queue, status ORDER BY queue, status")
+                              (littoral.db:db-query "SELECT queue, MIN(run_at) AS due FROM job_queue
+WHERE status = 'queued' AND run_at <= ? GROUP BY queue" now)))
+                    (error () :down)))
+            reports))
+    (setf reports (nreverse reports))
+    (flet ((head (name help)
+             (format out "# HELP ~A ~A~%# TYPE ~A gauge~%" name help name)))
+      (head "littoral_durable_jobs" "Durable jobs, by database, queue and status.")
+      (loop for (database . report) in reports
+            unless (eq report :down)
+              do (dolist (row (first report))
+                   (format out "littoral_durable_jobs{database=\"~A\",queue=\"~A\",status=\"~A\"} ~D~%"
+                           (littoral:metric-label database) (littoral:metric-label (getf row :|queue|))
+                           (littoral:metric-label (getf row :|status|)) (getf row :|n|))))
+      (head "littoral_durable_jobs_oldest_due_seconds"
+            "How long the longest-waiting due job has waited, by database and queue: 0 when none is due.")
+      (loop for (database . report) in reports
+            unless (eq report :down)
+              do (dolist (queue (remove-duplicates (mapcar (lambda (row) (getf row :|queue|)) (first report))
+                                                   :test #'string=))
+                   (let ((due (getf (find queue (second report) :key (lambda (row) (getf row :|queue|))
+                                                                :test #'string=)
+                                    :|due|)))
+                     (format out "littoral_durable_jobs_oldest_due_seconds{database=\"~A\",queue=\"~A\"} ~D~%"
+                             (littoral:metric-label database) (littoral:metric-label queue)
+                             (if due (max 0 (- now due)) 0)))))
+      (head "littoral_durable_jobs_database_up" "Whether each database's job queue could be read.")
+      (loop for (database . report) in reports
+            do (format out "littoral_durable_jobs_database_up{database=\"~A\"} ~D~%"
+                       (littoral:metric-label database) (if (eq report :down) 0 1)))
+      (head "littoral_job_runner_threads" "Job runner threads alive in this process.")
+      (format out "littoral_job_runner_threads ~D~%" (count-if #'sb-thread:thread-alive-p *runner-threads*)))))
+
+(littoral:add-metrics-source "durable-jobs" 'write-job-metrics)
+
 (defun purge-durable-jobs (&key (older-than (* 7 24 3600)) (statuses '("done" "cancelled")))
   "Delete jobs with one of STATUSES that finished more than OLDER-THAN
 seconds ago; how many."

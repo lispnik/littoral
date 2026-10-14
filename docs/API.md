@@ -891,6 +891,21 @@ A function of a plist describing each request (:`time` :`method` :`path` :`app` 
 
 Upper bounds, in seconds, of the request duration histogram's buckets.
 
+#### `add-metrics-source` `name function` — function
+
+Have /metrics also call `function` with the output stream, to write metrics
+of its own in Prometheus's text format (`metric-label` escapes label values).
+If it signals, what it wrote is dropped and littoral_metrics_source_up for
+`name` is 0.  Replaces any source called `name`.
+
+#### `remove-metrics-source` `name` — function
+
+Forget the metrics source `name`.
+
+#### `metric-label` `value` — function
+
+`value` escaped for a Prometheus label.
+
 ### Background jobs (the class JOB is not exported: the name is too common)
 
 #### `submit-job` `function &key (name "Job") (attempts 1) (backoff 2)` — function

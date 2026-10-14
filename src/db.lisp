@@ -27,6 +27,7 @@
   (:use #:cl #:littoral #:littoral.html)
   (:documentation "Keep described objects in a SQL database.")
   (:export #:connect-database #:disconnect-database #:database-connection #:*database*
+           #:*sqlite-busy-timeout* #:*sqlite-journal-mode* #:*sqlite-synchronous* #:database-label
            #:persistent #:object-id #:object-version
            #:define-table #:find-table #:table-name #:table-class #:create-table #:drop-table
            #:db-find #:db-select #:db-count #:db-insert #:db-update #:db-save #:db-delete
@@ -56,16 +57,89 @@ Each thread gets its own connection, made when first needed."
 unless the database spec gives :BUSY-TIMEOUT.  Threads (requests, mail
 delivery) each have a connection, and SQLite allows one writer at a time.")
 
+(defvar *sqlite-journal-mode* :wal
+  "The journal mode Littoral sets on a SQLite database file when it first
+connects, unless the database spec gives :JOURNAL-MODE: :WAL (write-ahead
+logging, so readers and the writer don't wait for each other), another of
+SQLite's modes such as :DELETE, or NIL to leave the file as it is.  The
+mode is kept in the file.")
+
+(defvar *sqlite-synchronous* :normal
+  "How hard SQLite connections make sure commits reach the disk, unless the
+database spec gives :SYNCHRONOUS: :NORMAL (with WAL, a power cut may lose
+the last commits but never corrupts the file), :FULL, or NIL for SQLite's
+default.")
+
+(defun sqlite-option (spec key default)
+  "SPEC's KEY, or DEFAULT when SPEC doesn't give it."
+  (let ((value (getf (rest spec) key '%none)))
+    (if (eq value '%none) default value)))
+
 (defun connection-arguments (spec)
-  (if (and (eq (first spec) :sqlite3) (not (getf (rest spec) :busy-timeout)) *sqlite-busy-timeout*)
-      (append spec (list :busy-timeout *sqlite-busy-timeout*))
+  "SPEC as DBI:CONNECT takes it: for SQLite, without Littoral's own options
+and with the busy timeout."
+  (if (eq (first spec) :sqlite3)
+      (let ((parameters (alexandria:remove-from-plist (rest spec) :journal-mode :synchronous)))
+        (cons :sqlite3 (if (and (not (getf parameters :busy-timeout)) *sqlite-busy-timeout*)
+                           (append parameters (list :busy-timeout *sqlite-busy-timeout*))
+                           parameters)))
       spec))
+
+(defun pragma-value (value allowed)
+  "VALUE, one of ALLOWED, as a pragma's argument."
+  (unless (member value allowed)
+    (error "~S is not one of ~{~S~^, ~}." value allowed))
+  (string-upcase (symbol-name value)))
+
+(defvar *journal-mode-lock* (sb-thread:make-mutex :name "littoral sqlite journal mode"))
+
+(defun prepare-sqlite-connection (connection spec)
+  "Set SPEC's journal mode and synchronous level on a new CONNECTION."
+  (flet ((pragma (sql)
+           (let ((query (dbi:prepare connection sql)))
+             (unwind-protect (second (first (dbi:fetch-all (dbi:execute query))))
+               (dbi:free-query-resources query)))))
+    (let ((mode (sqlite-option spec :journal-mode *sqlite-journal-mode*))
+          (synchronous (sqlite-option spec :synchronous *sqlite-synchronous*)))
+      (when mode
+        (let ((wanted (pragma-value mode '(:wal :delete :truncate :persist :memory :off))))
+          ;; Changing the mode needs the file to itself, and the mode is kept
+          ;; in the file, so only the first connection changes it; one that
+          ;; loses the race to another process finds it changed.
+          (sb-thread:with-mutex (*journal-mode-lock*)
+            (flet ((current () (princ-to-string (pragma "PRAGMA journal_mode"))))
+              (unless (or (string-equal (current) wanted)
+                          (string-equal "memory" (current)))
+                (handler-case (pragma (format nil "PRAGMA journal_mode = ~A" wanted))
+                  (error (e)
+                    (unless (string-equal (current) wanted)
+                      (warn "Couldn't set the SQLite journal mode to ~A: ~A" wanted e)))))))))
+      (when synchronous
+        (pragma (format nil "PRAGMA synchronous = ~A"
+                        (pragma-value synchronous '(:off :normal :full :extra))))))))
+
+(defvar *prepared-connections* (make-hash-table :test 'eq :weakness :key :synchronized t)
+  "SQLite connections whose pragmas are set.")
 
 (defun database-connection ()
   "This thread's connection to *DATABASE*."
   (unless *database*
     (error "No database: call CONNECT-DATABASE first."))
-  (apply #'dbi:connect-cached (connection-arguments *database*)))
+  (let ((connection (apply #'dbi:connect-cached (connection-arguments *database*))))
+    (when (and (eq (first *database*) :sqlite3)
+               (not (gethash connection *prepared-connections*)))
+      (prepare-sqlite-connection connection *database*)
+      (setf (gethash connection *prepared-connections*) t))
+    connection))
+
+(defun database-label (&optional (spec *database*))
+  "SPEC named for logs and metrics, without credentials: a SQLite file's
+name, or a PostgreSQL server's host, port and database."
+  (let ((parameters (rest spec)))
+    (if (eq (first spec) :sqlite3)
+        (princ-to-string (getf parameters :database-name))
+        (format nil "~(~A~)://~A~@[:~A~]/~A" (first spec) (or (getf parameters :host) "localhost")
+                (getf parameters :port) (getf parameters :database-name)))))
 
 (defun disconnect-database ()
   "Forget the database (connections close as their threads end)."

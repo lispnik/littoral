@@ -148,6 +148,36 @@ signals or returns NIL.  Replaces any check called NAME."
                                 (case (char match 0) (#\Newline "\\n") (t (format nil "\\~A" match))))
                               :simple-calls t))
 
+(defvar *metrics-sources* '()
+  "(NAME . FUNCTION) pairs: each FUNCTION writes more metrics to a stream.")
+
+(defun add-metrics-source (name function)
+  "Have /metrics also call FUNCTION with the output stream, to write metrics
+of its own in Prometheus's text format (METRIC-LABEL escapes label values).
+If it signals, what it wrote is dropped and littoral_metrics_source_up for
+NAME is 0.  Replaces any source called NAME."
+  (setf *metrics-sources* (append (remove name *metrics-sources* :key #'car :test #'string=)
+                                  (list (cons name function))))
+  name)
+
+(defun remove-metrics-source (name)
+  "Forget the metrics source NAME."
+  (setf *metrics-sources* (remove name *metrics-sources* :key #'car :test #'string=)))
+
+(defun write-metrics-sources (out)
+  "Write each source's metrics to OUT, and whether it could."
+  (let ((results (loop for (name . function) in *metrics-sources*
+                       collect (cons name (handler-case
+                                              (let ((text (with-output-to-string (s) (funcall function s))))
+                                                (write-string text out)
+                                                1)
+                                            (error () 0))))))
+    (when results
+      (format out "# HELP littoral_metrics_source_up Whether each metrics source could report.~%~
+# TYPE littoral_metrics_source_up gauge~%")
+      (loop for (name . up) in results
+            do (format out "littoral_metrics_source_up{source=\"~A\"} ~D~%" (metric-label name) up)))))
+
 (defun metrics-text ()
   "Every metric, in Prometheus's text exposition format."
   (with-output-to-string (out)
@@ -183,7 +213,8 @@ signals or returns NIL.  Replaces any check called NAME."
       (head "littoral_threads" "gauge" "Lisp threads.")
       (format out "littoral_threads ~D~%" (length (sb-thread:list-all-threads)))
       (head "littoral_uptime_seconds" "gauge" "Seconds since the process started.")
-      (format out "littoral_uptime_seconds ~D~%" (- (get-universal-time) *started*)))))
+      (format out "littoral_uptime_seconds ~D~%" (- (get-universal-time) *started*)))
+    (write-metrics-sources out)))
 
 (defun serve-metrics (&key (path "/metrics") (local-only t))
   "Serve metrics at PATH for Prometheus to scrape.  With LOCAL-ONLY (the

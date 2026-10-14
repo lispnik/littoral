@@ -14,9 +14,11 @@
 - **`purge-expired-auth-rows`** deletes old sign-in failures, expired sign-ins, and expired reset links and API tokens. Generated apps' nightly `tidy-up` job calls it, and also deletes audit events more than a year old.
 - **A job queue page in the admin.** It lists durable jobs by status, with their errors, and retries or cancels them; the audit log records both. It appears where the database has the job tables. `littoral.jobs:durable-jobs` takes `:offset`, and `job-tables-p` says whether the tables were made.
 - **API reference for `littoral.auth` and `littoral.admin`** in docs/API.md.
+- **Metrics for durable jobs and mail.** `/metrics` reports jobs by queue and status, how long the oldest due job has waited, runner threads, the outbox by status, and how long the oldest unsent mail has waited, for each database whose tables were made in the process. `add-metrics-source` lets other code add metrics. `littoral.db:database-label` names a database without its credentials.
 - **The demo server's** admin demo and `/config` are for the members demo's admins, who sign in to them from anywhere.
 
 ### Changed
+- **SQLite files use WAL mode**, so reads and writes no longer wait for each other, with `synchronous=NORMAL`. `*sqlite-journal-mode*` and `*sqlite-synchronous*`, or `:journal-mode` and `:synchronous` in the database spec, change this. Back up with `VACUUM INTO`: see "SQLite in production" in the deployment guide.
 - **Mail is sent by the job runner.** Each queued message has a `deliver-mail` durable job; the separate delivery thread is gone. `start-mail-delivery` starts a job runner unless one is running, and `create-mail-tables` creates the job tables too.
 - **Sign-in limits are kept in the database** (`auth_events`, migration 2 of `:littoral-auth`). Lockouts and reset-mail caps now survive restarts and are shared between processes.
 - **`littoral/mail` sends through [smtp](https://github.com/lispnik/smtp)**, which replaces Littoral's own SMTP client and MIME writer.

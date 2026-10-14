@@ -84,7 +84,17 @@ With the proxy setting `X-Forwarded-Proto: https`, Littoral marks its cookies `S
 
 ## 5. The database
 
-SQLite suits a single process: give it a file in the data directory (`ReadWritePaths` in the unit) and back the file up. For several processes, or for more than a little traffic, use PostgreSQL:
+SQLite suits a single process: give it a file in the data directory (`ReadWritePaths` in the unit). For several processes, or for more than a little traffic, use PostgreSQL (below).
+
+### SQLite in production
+
+- **WAL mode.** Littoral switches a SQLite file to write-ahead logging when it first connects (`*sqlite-journal-mode*`, `:wal`), so pages reading and the job runner writing don't wait for each other; writers still take turns. The mode is kept in the file. Connections also use `synchronous=NORMAL` (`*sqlite-synchronous*`): a power cut can lose the last few commits, but never damages the file. Use `:synchronous :full` in the database spec if every commit must survive a power cut. `:journal-mode nil` leaves the file as it is.
+- **Three files.** Beside `app.db` SQLite keeps `app.db-wal` and `app.db-shm`. Copying `app.db` alone while the server runs can miss recent commits. Back up with `sqlite3 app.db "VACUUM INTO '/backups/app.db'"`, or SQLite's `.backup` command, or stop the service first.
+- **One machine.** Every process using the file must run on the same host, and the file must be on a local disk, not NFS or another network filesystem.
+- **Going back.** To leave WAL mode, set `*sqlite-journal-mode*` to `:delete` and start with nothing else using the file, or run `sqlite3 app.db "PRAGMA journal_mode=DELETE"` while the service is stopped.
+
+### PostgreSQL
+
 
 ```lisp
 (littoral.db:connect-database :postgres :database-name "bookshop" :host "localhost"
@@ -117,7 +127,11 @@ The README's "Deployment and scale" section has measurements of both.
 ## 8. Health checks, metrics and logs
 
 - **Health.** Point the load balancer or uptime monitor at `/healthz`. It answers 200, or 503 when a check fails. Add checks with `(add-health-check "database" (lambda () (littoral.db:db-query "SELECT 1")))`, run inside a `using-database` binding when the application has its own database.
-- **Metrics.** `(serve-metrics)` serves Prometheus metrics at `/metrics` to the machine itself. Scrape from there, or expose the path only to your monitoring network.
+- **Metrics.** `(serve-metrics)` serves Prometheus metrics at `/metrics` to the machine itself. Scrape from there, or expose the path only to your monitoring network. Two are worth alerting on:
+  - `littoral_durable_jobs_oldest_due_seconds` rises when jobs are due but no runner takes them, or the runners can't keep up.
+  - `littoral_mail_oldest_unsent_seconds` rises when mail isn't going out, for example while the mail server refuses it.
+
+  Also `littoral_durable_jobs_database_up` and `littoral_mail_outbox_database_up`, which drop to 0 when the database can't be read.
 - **Logs.** `(log-requests-to *standard-output*)` sends a JSON line per request to the journal. It never includes the query string, which carries session keys.
 
 ## 9. Checklist

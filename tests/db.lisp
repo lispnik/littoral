@@ -234,3 +234,52 @@
                (is (search "<mark>hash</mark>" json))
                (is (search "gethash" json)))))
       (uiop:delete-file-if-exists file))))
+
+;;; SQLite's journal
+
+(defun commit-while-reading (file &rest options)
+  "Hold a read transaction on FILE open in another thread and commit
+meanwhile; true if the commit went through.  OPTIONS go into the spec."
+  (let ((spec (list* :sqlite3 :database-name (namestring file) options))
+        (reading (sb-thread:make-semaphore))
+        (done (sb-thread:make-semaphore)))
+    (let ((littoral.db:*database* spec))
+      (littoral.db:db-execute "CREATE TABLE IF NOT EXISTS counts (n INTEGER)"))
+    (let ((reader (sb-thread:make-thread
+                   (lambda ()
+                     (let ((littoral.db:*database* spec))
+                       (littoral.db:db-execute "BEGIN")
+                       (littoral.db:db-query "SELECT COUNT(*) AS n FROM counts")
+                       (sb-thread:signal-semaphore reading)
+                       (sb-thread:wait-on-semaphore done :timeout 10)
+                       (littoral.db:db-execute "COMMIT")))
+                   :name "reader")))
+      (sb-thread:wait-on-semaphore reading :timeout 10)
+      (unwind-protect
+           (let ((littoral.db:*sqlite-busy-timeout* 200)
+                 (littoral.db:*database* spec))
+             (handler-case (progn (littoral.db:with-transaction ()
+                                    (littoral.db:db-execute "INSERT INTO counts (n) VALUES (1)"))
+                                  t)
+               (error () nil)))
+        (sb-thread:signal-semaphore done)
+        (sb-thread:join-thread reader :default nil :timeout 10)))))
+
+(test sqlite-files-use-write-ahead-logging
+  (flet ((file (name) (merge-pathnames (format nil "littoral-~A-~36R.sqlite3" name (random (expt 36 8)))
+                                       (uiop:temporary-directory))))
+    (let ((wal (file "wal")) (rollback (file "rollback")))
+      (unwind-protect
+           (progn
+             (let ((littoral.db:*database* (list :sqlite3 :database-name (namestring wal))))
+               (is (string-equal "wal" (getf (first (littoral.db:db-query "PRAGMA journal_mode")) :|journal_mode|)))
+               (is (= 1 (getf (first (littoral.db:db-query "PRAGMA synchronous")) :|synchronous|)) "NORMAL"))
+             ;; With WAL a commit doesn't wait for a reader; in rollback mode it can't commit until the reader is done.
+             (is (commit-while-reading wal))
+             (is (not (commit-while-reading rollback :journal-mode :delete)))
+             (let ((littoral.db:*database* (list :sqlite3 :database-name (namestring rollback) :journal-mode :delete)))
+               (is (string-equal "delete" (getf (first (littoral.db:db-query "PRAGMA journal_mode"))
+                                                :|journal_mode|)))))
+        (dolist (file (list wal rollback))
+          (dolist (suffix '("" "-wal" "-shm" "-journal"))
+            (uiop:delete-file-if-exists (concatenate 'string (namestring file) suffix))))))))

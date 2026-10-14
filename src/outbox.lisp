@@ -50,14 +50,21 @@
 
 (littoral.db:define-migrations :littoral-mail (asdf:system-relative-pathname :littoral "migrations/mail/"))
 
+(defvar *mail-databases* '() "Database specs whose outbox was made in this process.")
+(defvar *mail-databases-lock* (sb-thread:make-mutex :name "littoral mail databases"))
+
 (defun create-mail-tables ()
   "Create or bring up to date the outbox table (migrations :LITTORAL-MAIL),
 and the job queue that sends it."
   (littoral.db:migrate :littoral-mail)
+  (sb-thread:with-mutex (*mail-databases-lock*)
+    (pushnew (copy-tree littoral.db:*database*) *mail-databases* :test #'equal))
   (littoral.jobs:create-job-tables))
 
 (defun drop-mail-tables ()
   "Drop the outbox table."
+  (sb-thread:with-mutex (*mail-databases-lock*)
+    (setf *mail-databases* (remove littoral.db:*database* *mail-databases* :test #'equal)))
   (littoral.db:drop-table 'outbox-mail)
   (littoral.db:forget-migrations :littoral-mail))
 
@@ -208,3 +215,44 @@ letting it finish the message it is sending."
   "Delete sent messages more than OLDER-THAN seconds old; returns how many."
   (littoral.db:db-execute "DELETE FROM mail_outbox WHERE status = 'sent' AND sent < ?"
                           (- (get-universal-time) older-than)))
+
+;;; Metrics: /metrics reports each database whose outbox was made here
+
+(defun write-mail-metrics (out)
+  "Write the outboxes' metrics to OUT, in Prometheus's format."
+  (let ((now (get-universal-time))
+        (reports '()))
+    (dolist (spec (sb-thread:with-mutex (*mail-databases-lock*) (copy-list *mail-databases*)))
+      (push (cons (littoral.db:database-label spec)
+                  (handler-case
+                      (let ((littoral.db:*database* spec))
+                        (list (littoral.db:db-query "SELECT status, COUNT(*) AS n FROM mail_outbox
+GROUP BY status ORDER BY status")
+                              (getf (first (littoral.db:db-query "SELECT MIN(created) AS oldest FROM mail_outbox
+WHERE status IN ('queued', 'sending')"))
+                                    :|oldest|)))
+                    (error () :down)))
+            reports))
+    (setf reports (nreverse reports))
+    (flet ((head (name help)
+             (format out "# HELP ~A ~A~%# TYPE ~A gauge~%" name help name)))
+      (head "littoral_mail_outbox" "Mail in the outbox, by database and status.")
+      (loop for (database . report) in reports
+            unless (eq report :down)
+              do (dolist (row (first report))
+                   (format out "littoral_mail_outbox{database=\"~A\",status=\"~A\"} ~D~%"
+                           (littoral:metric-label database) (littoral:metric-label (getf row :|status|))
+                           (getf row :|n|))))
+      (head "littoral_mail_oldest_unsent_seconds"
+            "How long the oldest mail still to be sent has waited, by database: 0 when there is none.")
+      (loop for (database . report) in reports
+            unless (eq report :down)
+              do (format out "littoral_mail_oldest_unsent_seconds{database=\"~A\"} ~D~%"
+                         (littoral:metric-label database)
+                         (if (second report) (max 0 (- now (second report))) 0)))
+      (head "littoral_mail_outbox_database_up" "Whether each database's outbox could be read.")
+      (loop for (database . report) in reports
+            do (format out "littoral_mail_outbox_database_up{database=\"~A\"} ~D~%"
+                       (littoral:metric-label database) (if (eq report :down) 0 1))))))
+
+(littoral:add-metrics-source "mail" 'write-mail-metrics)

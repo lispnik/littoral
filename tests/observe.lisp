@@ -80,3 +80,49 @@
       ;; Session keys ride in the query string: never logged.
       (is (not (search "_s=" text)))
       (is (not (search "_k=" text))))))
+
+(test metrics-report-job-queues-and-outboxes
+  (let* ((file (merge-pathnames (format nil "littoral-metrics-~36R.sqlite3" (random (expt 36 8)))
+                                (uiop:temporary-directory)))
+         (spec (list :sqlite3 :database-name (namestring file)))
+         (label (format nil "database=\"~A\"" (namestring file))))
+    (unwind-protect
+         (let ((littoral.db:*database* spec))
+           (littoral.mail:create-mail-tables)
+           (littoral.mail:queue-mail (littoral.mail:make-mail :to "ada@example.org" :subject "Hi" :text "x"))
+           (let ((late (littoral.jobs:enqueue-job (list 'record-job 1 2))))
+             (littoral.db:db-execute "UPDATE job_queue SET run_at = ? WHERE id = ?" (- (get-universal-time) 120) late))
+           (littoral.db:db-execute "UPDATE mail_outbox SET created = ?" (- (get-universal-time) 300))
+           (let ((text (metrics-text))
+                 (queued (cdr (assoc "queued" (littoral.jobs:durable-job-counts) :test #'string=))))
+             (is (search (format nil "littoral_durable_jobs{~A,queue=\"default\",status=\"queued\"} ~D" label queued)
+                         text))
+             (is (search (format nil "littoral_durable_jobs_database_up{~A} 1" label) text))
+             (let ((waited (cl-ppcre:register-groups-bind ((#'parse-integer seconds))
+                               ((format nil "littoral_durable_jobs_oldest_due_seconds\\{~A,queue=\"default\"\\} (\\d+)"
+                                        (cl-ppcre:quote-meta-chars label))
+                                text)
+                             seconds)))
+               (is (and waited (<= 120 waited 130))))
+             (is (search (format nil "littoral_mail_outbox{~A,status=\"queued\"} 1" label) text))
+             (is (cl-ppcre:scan (format nil "littoral_mail_oldest_unsent_seconds\\{~A\\} 3\\d\\d"
+                                        (cl-ppcre:quote-meta-chars label))
+                                text))
+             (is (search "littoral_metrics_source_up{source=\"durable-jobs\"} 1" text))
+             (is (search "littoral_job_runner_threads " text)))
+           ;; A source that fails reports 0, and none of its partial output.
+           (add-metrics-source "broken" (lambda (out) (write-string "half_written_metric" out) (error "no")))
+           (unwind-protect
+                (let ((text (metrics-text)))
+                  (is (search "littoral_metrics_source_up{source=\"broken\"} 0" text))
+                  (is (not (search "half_written_metric" text))))
+             (remove-metrics-source "broken"))
+           ;; A database that can't be read is reported down; one whose
+           ;; tables were dropped isn't reported at all.
+           (littoral.db:db-execute "DROP TABLE job_queue")
+           (is (search (format nil "littoral_durable_jobs_database_up{~A} 0" label) (metrics-text)))
+           (littoral.mail:drop-mail-tables)
+           (littoral.jobs:drop-job-tables)
+           (is (not (search label (metrics-text)))))
+      (dolist (suffix '("" "-wal" "-shm"))
+        (uiop:delete-file-if-exists (concatenate 'string (namestring file) suffix))))))

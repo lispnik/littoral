@@ -936,6 +936,8 @@ With cookie sessions, route on the cookie instead. Turning `proxy_buffering` off
 **Health, metrics and logs.**
 - `/healthz` answers `{"status":"ok"}` for load balancers. It answers 503 when a check you add with `add-health-check` fails, for example a database ping.
 - `(serve-metrics)` serves Prometheus metrics at `/metrics`, to this machine only by default: requests by application, kind and status, a latency histogram, sessions, push streams, jobs, heap and threads.
+  - With `littoral/jobs` and `littoral/mail`, it also reports each database whose tables were made in the process: durable jobs by queue and status, how long the oldest due job has waited, job runner threads, the outbox by status, and how long the oldest unsent mail has waited.
+  - `add-metrics-source` adds metrics of your own.
 - `(log-requests-to stream)` writes a JSON (or `:format :text`) line per request. Lines carry the path but never the query string, so session keys stay out of logs.
 
 **Restarts.** Sessions don't survive a restart. A session is a graph of live objects, the closures its pages' callbacks hold, and cl-cont continuations for flows in progress. None of these can be serialised, which is also true of Seaside outside image-based persistence. Configuration does survive (see `:configuration-file`). Keep data that must last in your own store, not in components. Use `:expired-notice` to tell people when their session is gone.
