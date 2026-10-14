@@ -356,6 +356,23 @@ and that URL."
           (visit b "/m")
           (is (has-text-p b "Signed in as ada")))))))
 
+(test sign-ins-are-counted
+  (with-auth (b)
+    (reset-metrics)
+    (sign-in-as b "ada" "wrong")
+    (flet ((again (name password)
+             (fill-in b "sign-in-name" name)
+             (fill-in b "sign-in-password" password)
+             (press b "Sign in")))
+      (again "nobody" "wrong")
+      (again "ada" "correct horse battery"))
+    (let ((text (metrics-text)))
+      (is (= 1 (metric-value "littoral_sign_ins_total{method=\"password\"}" text)))
+      (is (= 1 (metric-value "littoral_sign_in_failures_total{reason=\"wrong-password\"}" text)))
+      (is (= 1 (metric-value "littoral_sign_in_failures_total{reason=\"unknown-user\"}" text)))
+      (is (<= 1 (metric-value (format nil "littoral_active_sign_ins{database=\"~A\"}" (littoral.db:database-label))
+                              text))))))
+
 (test unknown-names-take-as-long-as-wrong-passwords
   (with-auth (b)
     ;; The fastest of several tries: a stall (a busy CI machine, the

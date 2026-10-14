@@ -131,7 +131,12 @@ The README's "Deployment and scale" section has measurements of both.
   - `littoral_durable_jobs_oldest_due_seconds` rises when jobs are due but no runner takes them, or the runners can't keep up.
   - `littoral_mail_oldest_unsent_seconds` rises when mail isn't going out, for example while the mail server refuses it.
 
-  Also `littoral_durable_jobs_database_up` and `littoral_mail_outbox_database_up`, which drop to 0 when the database can't be read.
+  Also `littoral_durable_jobs_database_up` and `littoral_mail_outbox_database_up`, which drop to 0 when the database can't be read. Others worth a dashboard or an alert:
+  - `rate(littoral_sign_in_failures_total[5m])`: a jump usually means someone is guessing passwords.
+  - `rate(littoral_mail_sends_total{result="transient"}[15m])`: the mail server is refusing mail for now.
+  - `littoral_migrations_pending > 0` after a deploy: the new version's migrations weren't run.
+  - `littoral_db_lock_timeouts_total` rising on SQLite: the database is busier than one SQLite file serves well.
+  - `littoral_smtp_pool_waiting > 0` for long: raise the mailer's `:pool-size`.
 - **Logs.** `(log-requests-to *standard-output*)` sends a JSON line per request to the journal. It never includes the query string, which carries session keys.
 
 ## 9. Checklist

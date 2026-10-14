@@ -123,7 +123,7 @@ One job waits per message, however often this is asked."
 may pass is scheduled to be tried again."
   (handler-case
       (progn
-        (send-message mailer (outbox-sender-address row)
+        (send-counted mailer (outbox-sender-address row)
                       (cl-ppcre:split " " (outbox-recipients row)) (outbox-message row))
         (littoral.db:db-execute "UPDATE mail_outbox SET status = 'sent', attempts = attempts + 1, sent = ?, last_error = ? WHERE id = ?"
                                 (get-universal-time) nil (outbox-id row))

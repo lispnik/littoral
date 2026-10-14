@@ -109,21 +109,77 @@ or smtp+insecure://… (neither).  OPTIONS go to MAKE-SMTP-MAILER."
         :connect-timeout (smtp-timeout mailer) :timeout (smtp-timeout mailer)
         :data-timeout (smtp-timeout mailer)))
 
+(defvar *pooled-mailers* '() "Weak pointers to the SMTP-MAILERs that made a pool, for /metrics.")
+(defvar *pooled-mailers-lock* (sb-thread:make-mutex :name "littoral pooled mailers"))
+
 (defun mailer-pool (mailer)
   "MAILER's connection pool, made when first needed."
   (sb-thread:with-mutex ((smtp-pool-lock mailer))
     (or (smtp-pool mailer)
-        (setf (smtp-pool mailer)
-              (apply #'smtp:make-connection-pool (smtp-host mailer)
-                     :max-connections (smtp-pool-size mailer)
-                     :wait-timeout (smtp-timeout mailer)
-                     (connection-options mailer))))))
+        (prog1 (setf (smtp-pool mailer)
+                     (apply #'smtp:make-connection-pool (smtp-host mailer)
+                            :max-connections (smtp-pool-size mailer)
+                            :wait-timeout (smtp-timeout mailer)
+                            (connection-options mailer)))
+          (sb-thread:with-mutex (*pooled-mailers-lock*)
+            (setf *pooled-mailers*
+                  (cons (sb-ext:make-weak-pointer mailer)
+                        (remove-if-not #'sb-ext:weak-pointer-value *pooled-mailers*))))))))
+
+(defun mailer-server (mailer)
+  "MAILER's server as host:port, for metrics."
+  (format nil "~A:~D" (smtp-host mailer) (smtp-port mailer)))
+
+(defun write-pool-metrics (out)
+  "Write the SMTP connection pools' metrics to OUT, summed by server."
+  (let ((servers (make-hash-table :test 'equal)))
+    (dolist (pointer (sb-thread:with-mutex (*pooled-mailers-lock*) (copy-list *pooled-mailers*)))
+      (let* ((mailer (sb-ext:weak-pointer-value pointer))
+             (pool (and mailer (sb-thread:with-mutex ((smtp-pool-lock mailer)) (smtp-pool mailer)))))
+        (when pool
+          (let ((statistics (smtp:connection-pool-statistics pool))
+                (totals (or (gethash (mailer-server mailer) servers)
+                            (setf (gethash (mailer-server mailer) servers) (list 0 0 0 0 0)))))
+            (loop for key in '(:idle :in-use :waiting :opened :reused)
+                  for cell on totals
+                  do (incf (car cell) (or (getf statistics key) 0)))))))
+    (let ((rows (sort (alexandria:hash-table-alist servers) #'string< :key #'car)))
+      (format out "# HELP littoral_smtp_pool_connections SMTP connections kept open, by server and state.~%~
+# TYPE littoral_smtp_pool_connections gauge~%")
+      (loop for (server idle in-use) in rows
+            do (format out "littoral_smtp_pool_connections{server=\"~A\",state=\"idle\"} ~D~%~
+littoral_smtp_pool_connections{server=\"~:*~A\",state=\"in_use\"} ~D~%"
+                       (littoral:metric-label server) idle in-use))
+      (format out "# HELP littoral_smtp_pool_waiting Threads waiting for a pooled SMTP connection, by server.~%~
+# TYPE littoral_smtp_pool_waiting gauge~%")
+      (loop for (server nil nil waiting) in rows
+            do (format out "littoral_smtp_pool_waiting{server=\"~A\"} ~D~%" (littoral:metric-label server) waiting))
+      (format out "# HELP littoral_smtp_pool_opened_total SMTP connections the pools opened, by server.~%~
+# TYPE littoral_smtp_pool_opened_total counter~%")
+      (loop for (server nil nil nil opened) in rows
+            do (format out "littoral_smtp_pool_opened_total{server=\"~A\"} ~D~%" (littoral:metric-label server) opened))
+      (format out "# HELP littoral_smtp_pool_reused_total Times the pools reused an open SMTP connection, by server.~%~
+# TYPE littoral_smtp_pool_reused_total counter~%")
+      (loop for (server nil nil nil nil reused) in rows
+            do (format out "littoral_smtp_pool_reused_total{server=\"~A\"} ~D~%"
+                       (littoral:metric-label server) reused)))))
+
+(littoral:add-metrics-source "smtp-pools" 'write-pool-metrics)
+
+(littoral:define-metric "littoral_smtp_send_seconds" :histogram
+  "How long sending a message to the SMTP server took, by server."
+  :labels '("server") :buckets '(0.05 0.1 0.25 0.5 1 2.5 5 10 30))
 
 (defun close-smtp-mailer (mailer)
   "Close the connections MAILER keeps open; it opens new ones when next used."
   (let ((pool (sb-thread:with-mutex ((smtp-pool-lock mailer))
                 (shiftf (smtp-pool mailer) nil))))
     (when pool (ignore-errors (smtp:close-connection-pool pool)))))
+
+(defmethod send-message :around ((mailer smtp-mailer) from recipients message)
+  (declare (ignore from recipients message))
+  (littoral:timing-metric ("littoral_smtp_send_seconds" (list (mailer-server mailer)))
+    (call-next-method)))
 
 (defmethod send-message ((mailer smtp-mailer) from recipients message)
   (let ((data (if (smtp-dkim mailer)

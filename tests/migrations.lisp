@@ -195,3 +195,16 @@ CREATE TRIGGER mig_trigger AFTER INSERT ON mig_notes BEGIN UPDATE mig_notes SET 
                            (littoral.db:db-query "SELECT component, version FROM schema_migrations"))
                    #'string<))
       "Each set's migrations, the later ones too, applied to the old tables"))
+
+(test pending-migrations-are-reported
+  (with-migrations (directory '(("001-notes.sql" . "CREATE TABLE mig_notes (id INTEGER);")))
+    (littoral.db:migrate :test-migrations)
+    (flet ((pending ()
+             (metric-value (format nil "littoral_migrations_pending{database=\"~A\",set=\"test-migrations\"}"
+                                   (littoral.db:database-label)))))
+      (is (eql 0 (pending)))
+      (write-migration-files directory '(("001-notes.sql" . "CREATE TABLE mig_notes (id INTEGER);")
+                                         ("002-tags.sql" . "CREATE TABLE mig_tags (id INTEGER);")))
+      (is (= 1 (pending)))
+      (littoral.db:migrate :test-migrations)
+      (is (eql 0 (pending))))))

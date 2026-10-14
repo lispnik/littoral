@@ -129,8 +129,40 @@ and with the busy timeout."
     (when (and (eq (first *database*) :sqlite3)
                (not (gethash connection *prepared-connections*)))
       (prepare-sqlite-connection connection *database*)
+      (note-sqlite-file *database*)
       (setf (gethash connection *prepared-connections*) t))
     connection))
+
+;;; SQLite files' sizes, for /metrics
+
+(defvar *sqlite-files* '() "The SQLite database files this process has connected to.")
+(defvar *sqlite-files-lock* (sb-thread:make-mutex :name "littoral sqlite files"))
+
+(defun note-sqlite-file (spec)
+  "Remember SPEC's file for /metrics, unless it's in memory."
+  (let ((name (getf (rest spec) :database-name)))
+    (when (and name (not (member (princ-to-string name) '(":memory:" "") :test #'string=)))
+      (sb-thread:with-mutex (*sqlite-files-lock*)
+        (pushnew (princ-to-string name) *sqlite-files* :test #'string=)))))
+
+(defun file-bytes (file)
+  "FILE's size in bytes, or NIL when it doesn't exist."
+  (ignore-errors (with-open-file (in file :element-type '(unsigned-byte 8) :if-does-not-exist nil)
+                   (and in (file-length in)))))
+
+(defun write-sqlite-metrics (out)
+  "Write the size of each SQLite database file, and of its write-ahead log, to OUT."
+  (format out "# HELP littoral_sqlite_bytes Size of each SQLite database's files: the database and its ~
+write-ahead log.~%~
+# TYPE littoral_sqlite_bytes gauge~%")
+  (dolist (name (sort (sb-thread:with-mutex (*sqlite-files-lock*) (copy-list *sqlite-files*)) #'string<))
+    (let ((database (file-bytes name)))
+      (when database
+        (format out "littoral_sqlite_bytes{database=\"~A\",file=\"database\"} ~D~%" (metric-label name) database)
+        (format out "littoral_sqlite_bytes{database=\"~A\",file=\"wal\"} ~D~%" (metric-label name)
+                (or (file-bytes (concatenate 'string name "-wal")) 0))))))
+
+(add-metrics-source "sqlite" 'write-sqlite-metrics)
 
 (defun database-label (&optional (spec *database*))
   "SPEC named for logs and metrics, without credentials: a SQLite file's
@@ -280,17 +312,37 @@ NIL becomes :NULL there; SQLite's driver binds NIL as NULL already."
 ;;; connection's read lock until the garbage collector finalizes it, and
 ;;; no other connection can commit meanwhile.
 
+(define-metric "littoral_db_lock_timeouts_total" :counter
+  "Statements that gave up waiting for another connection's lock (SQLite's \"database is locked\"), by database."
+  :labels '("database"))
+(define-metric "littoral_db_stale_objects_total" :counter
+  "Saves and deletes refused because someone else changed the row meanwhile (STALE-OBJECT), by table."
+  :labels '("table"))
+(define-metric "littoral_db_transaction_seconds" :histogram "How long transactions took, by database."
+  :labels '("database"))
+
+(defun lock-error-p (condition)
+  "True when CONDITION says a lock wasn't had in time."
+  (cl-ppcre:scan "(?i)database (table )?is locked|database is busy|deadlock detected" (princ-to-string condition)))
+
+(defmacro counting-lock-timeouts (&body body)
+  "Evaluate BODY, counting an error that says a lock wasn't had in time."
+  `(handler-bind ((error (lambda (e)
+                           (when (ignore-errors (lock-error-p e))
+                             (count-metric "littoral_db_lock_timeouts_total" (list (database-label)))))))
+     ,@body))
+
 (defun execute (sql &optional parameters)
   "Run SQL with PARAMETERS; the rows it returns, as plists."
   (let ((query (dbi:prepare (database-connection) sql)))
-    (unwind-protect (dbi:fetch-all (dbi:execute query (sql-parameters parameters)))
+    (unwind-protect (counting-lock-timeouts (dbi:fetch-all (dbi:execute query (sql-parameters parameters))))
       (dbi:free-query-resources query))))
 
 (defun execute-count (sql &optional parameters)
   "Run SQL with PARAMETERS; how many rows it changed."
   (let* ((connection (database-connection))
          (query (dbi:prepare connection sql)))
-    (unwind-protect (dbi:execute query (sql-parameters parameters))
+    (unwind-protect (counting-lock-timeouts (dbi:execute query (sql-parameters parameters)))
       (dbi:free-query-resources query))
     (if (eq (driver) :sqlite3)
         (row-value (first (execute "SELECT changes() AS n")) "n")
@@ -493,6 +545,7 @@ changed since OBJECT was read.  Returns OBJECT."
                    (append (field-parameters table object)
                            (list (object-id object) (object-version object))))))
     (when (zerop changed)
+      (count-metric "littoral_db_stale_objects_total" (list (table-name table)))
       (error 'stale-object :object object))
     (incf (object-version object))
     object))
@@ -508,6 +561,7 @@ OBJECT was read."
                                         (table-name (find-table object)))
                                 (list (object-id object) (object-version object)))))
     (when (zerop changed)
+      (count-metric "littoral_db_stale_objects_total" (list (table-name (find-table object))))
       (error 'stale-object :object object))
     (setf (object-id object) nil)
     object))
@@ -531,10 +585,11 @@ signals.  Inside another, just BODY."
   (if (equal *in-transaction* *database*)
       (funcall thunk)
       (let ((*in-transaction* *database*))
-        (if (eq (driver) :sqlite3)
-            (call-with-sqlite-transaction thunk)
-            (dbi:with-transaction (database-connection)
-              (funcall thunk))))))
+        (timing-metric ("littoral_db_transaction_seconds" (list (database-label)))
+          (if (eq (driver) :sqlite3)
+              (call-with-sqlite-transaction thunk)
+              (dbi:with-transaction (database-connection)
+                (funcall thunk)))))))
 
 (defun call-with-sqlite-transaction (thunk)
   "Call THUNK in a SQLite transaction that takes the write lock at once.  A
@@ -543,10 +598,10 @@ connection writes, and SQLite fails it at once rather than wait (it would
 deadlock); one begun IMMEDIATE waits its turn, up to *SQLITE-BUSY-TIMEOUT*."
   (let ((connection (database-connection))
         (committed nil))
-    (dbi:do-sql connection "BEGIN IMMEDIATE")
+    (counting-lock-timeouts (dbi:do-sql connection "BEGIN IMMEDIATE"))
     (unwind-protect
          (multiple-value-prog1 (funcall thunk)
-           (dbi:do-sql connection "COMMIT")
+           (counting-lock-timeouts (dbi:do-sql connection "COMMIT"))
            (setf committed t))
       (unless committed
         (ignore-errors (dbi:do-sql connection "ROLLBACK"))))))

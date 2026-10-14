@@ -127,8 +127,10 @@ already there.  Returns the APPLICATION."
                                                                (session-last-access best)))
                                          do (setf best s)
                                        finally (return best))))
-                     (remhash (session-key oldest) sessions))))
+                     (remhash (session-key oldest) sessions)
+                     (count-metric "littoral_sessions_ended_total" (list (application-path app) "evicted")))))
         (setf (gethash (session-key session) sessions) session)))
+    (count-metric "littoral_sessions_created_total" (list (application-path app)))
     session))
 
 (defun find-session (app key)
@@ -137,7 +139,10 @@ already there.  Returns the APPLICATION."
     (let ((session (sb-thread:with-mutex ((application-lock app))
                      (gethash key (application-sessions app)))))
       (cond ((null session) nil)
-            ((session-expired-p session) (expire-session session) nil)
+            ((session-expired-p session)
+             (expire-session session)
+             (count-metric "littoral_sessions_ended_total" (list (application-path app) "expired"))
+             nil)
             (t session)))))
 
 (defun expire-session (session)
@@ -152,7 +157,8 @@ already there.  Returns the APPLICATION."
     (sb-thread:with-mutex ((application-lock app))
       (loop for key being the hash-keys of (application-sessions app) using (hash-value session)
             when (session-expired-p session now)
-              do (remhash key (application-sessions app))))))
+              do (remhash key (application-sessions app))
+                 (count-metric "littoral_sessions_ended_total" (list (application-path app) "expired"))))))
 
 (defun list-sessions (app)
   "APP's sessions, most recently used first."

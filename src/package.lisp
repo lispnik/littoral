@@ -84,6 +84,7 @@
    #:add-health-check #:remove-health-check #:serve-metrics #:metrics-text #:metrics-summary
    #:reset-metrics #:log-requests-to #:*request-log* #:*latency-buckets*
    #:add-metrics-source #:remove-metrics-source #:metric-label
+   #:define-metric #:count-metric #:observe-metric #:timing-metric
    ;; Background jobs (the class JOB is not exported: the name is too common)
    #:submit-job #:job-progress #:cancel-job #:watch-job #:wait-for-job #:list-jobs
    #:job-view #:job-view-job #:job-cancelled #:*current-job* #:*job-workers* #:*jobs-channel*

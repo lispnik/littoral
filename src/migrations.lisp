@@ -201,13 +201,42 @@ name TEXT, checksum TEXT, applied BIGINT, PRIMARY KEY (component, version))"))
                  (execute (format nil "SELECT pg_advisory_xact_lock(~D)" +migration-lock+)))
                (run)))))))
 
+(defvar *migrated* '() "(DATABASE-SPEC . SET-NAMES) this process migrated, for /metrics.")
+(defvar *migrated-lock* (sb-thread:make-mutex :name "littoral migrated databases"))
+
+(defun note-migrated (names)
+  (sb-thread:with-mutex (*migrated-lock*)
+    (let ((entry (assoc *database* *migrated* :test #'equal)))
+      (if entry
+          (setf (cdr entry) (union (cdr entry) names))
+          (push (cons (copy-tree *database*) (copy-list names)) *migrated*)))))
+
+(defun write-migration-metrics (out)
+  "Write how many migrations each migrated database still lacks to OUT."
+  (format out "# HELP littoral_migrations_pending Migrations defined but not applied, by database and set.~%~
+# TYPE littoral_migrations_pending gauge~%")
+  (dolist (entry (sb-thread:with-mutex (*migrated-lock*) (copy-tree *migrated*)))
+    (let ((*database* (car entry)))
+      (dolist (name (sort (copy-list (cdr entry)) #'string< :key #'string))
+        (let ((pending (ignore-errors
+                        (let ((applied (applied-migrations name)))
+                          (count-if-not (lambda (migration) (gethash (migration-version migration) applied))
+                                        (set-migrations (find-migration-set name)))))))
+          (when pending
+            (format out "littoral_migrations_pending{database=\"~A\",set=\"~A\"} ~D~%"
+                    (metric-label (database-label)) (metric-label (component-name name)) pending)))))))
+
+(add-metrics-source "migrations" 'write-migration-metrics)
+
 (defun migrate (&rest names)
   "Apply the new migrations of each set NAMES (keywords given to
 DEFINE-MIGRATIONS) to the current database, in order; the (NAME VERSION
 FILE) of each applied.  Signals MIGRATION-ERROR when one fails, having
 rolled it back, and MIGRATION-CHANGED (a warning) for an applied file that
-has since changed."
+has since changed.  /metrics then reports how many of their migrations the
+database lacks."
   (ensure-migrations-table)
+  (note-migrated names)
   (loop for name in names
         for set = (find-migration-set name)
         for applied = (applied-migrations name)
@@ -247,5 +276,8 @@ applied without running them, for a database that already has their tables."
 
 (defun forget-migrations (name)
   "Forget which of NAME's migrations were applied, as when its tables are dropped."
+  (sb-thread:with-mutex (*migrated-lock*)
+    (let ((entry (assoc *database* *migrated* :test #'equal)))
+      (when entry (setf (cdr entry) (remove name (cdr entry))))))
   (ensure-migrations-table)
   (execute-count "DELETE FROM schema_migrations WHERE component = ?" (list (component-name name))))

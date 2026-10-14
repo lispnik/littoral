@@ -328,6 +328,9 @@ and is seen by every process: the browser holds its token in a cookie."))
 (define-migrations :littoral-users (asdf:system-relative-pathname :littoral "migrations/users/"))
 (define-migrations :littoral-auth (asdf:system-relative-pathname :littoral "migrations/auth/"))
 
+(defvar *auth-databases* '() "Database specs whose sign-in tables were made in this process, for /metrics.")
+(defvar *auth-databases-lock* (sb-thread:make-mutex :name "littoral auth databases"))
+
 (defun drop-auth-tables (&key (users t))
   "Drop the tables CREATE-AUTH-TABLES makes, the audit log too, for tests:
 everything is lost."
@@ -336,6 +339,8 @@ everything is lost."
                            "auth_events")))
     (db-execute (format nil "DROP TABLE IF EXISTS ~A" table)))
   (littoral.audit:drop-audit-tables)
+  (sb-thread:with-mutex (*auth-databases-lock*)
+    (setf *auth-databases* (remove *database* *auth-databases* :test #'equal)))
   (when users (forget-migrations :littoral-users))
   (forget-migrations :littoral-auth)
   (forget-cached-roles))
@@ -349,7 +354,35 @@ permissions tables, and the audit log."
   (when users (migrate :littoral-users))
   (migrate :littoral-auth)
   (littoral.audit:create-audit-tables)
+  (sb-thread:with-mutex (*auth-databases-lock*)
+    (pushnew (copy-tree *database*) *auth-databases* :test #'equal))
   (when users (migrate-role-column)))
+
+;;; Metrics
+
+(define-metric "littoral_sign_ins_total" :counter
+  "Sign-ins in this process, by how the user proved who they are (password, passkey, oauth:github…)."
+  :labels '("method"))
+(define-metric "littoral_sign_in_failures_total" :counter
+  "Failed sign-ins in this process, by reason: wrong-password, unknown-user, locked-out, wrong-totp-code…"
+  :labels '("reason"))
+(define-metric "littoral_password_reset_mails_total" :counter "Password reset links mailed by this process.")
+
+(defun write-auth-metrics (out)
+  "Write the sign-ins still standing in each sign-in database to OUT."
+  (let ((now (get-universal-time)))
+    (format out "# HELP littoral_active_sign_ins Sign-ins not yet expired, by database.~%~
+# TYPE littoral_active_sign_ins gauge~%")
+    (dolist (spec (sb-thread:with-mutex (*auth-databases-lock*) (copy-list *auth-databases*)))
+      (let ((count (ignore-errors
+                    (let ((*database* spec))
+                      (getf (first (db-query "SELECT COUNT(*) AS n FROM auth_sessions WHERE expires > ?" now))
+                            :|n|)))))
+        (when count
+          (format out "littoral_active_sign_ins{database=\"~A\"} ~D~%"
+                  (metric-label (database-label spec)) count))))))
+
+(add-metrics-source "auth" 'write-auth-metrics)
 
 ;;; The audit log (littoral/audit): events about a user name them as the
 ;;; subject "user:ID"; the actor is the signed-in user unless given.
@@ -514,6 +547,7 @@ Django's) or with fewer than *PBKDF2-ITERATIONS*, where the store can write.")
 
 (defun audit-failure (name user reason &optional (action "sign-in.failed"))
   "Record a failed sign-in as NAME (USER's, when there's such a user)."
+  (count-metric "littoral_sign_in_failures_total" (list reason))
   (littoral.audit:audit action :actor-id nil
                                :subject (and user (format nil "user:~A" (user-id user)))
                                :subject-label (if user (user-name user) (subseq name 0 (min 100 (length name))))
@@ -684,6 +718,7 @@ the browser closes.  The session gets a new key, so a link to it that
 someone else had beforehand no longer reaches it.  METHOD, how they proved
 who they are, goes in the audit log."
   (audit-by user "sign-in" :method method :remember (and remember t))
+  (count-metric "littoral_sign_ins_total" (list method))
   (when (session-property :auth-session) (close-auth-session))
   (setf (session-property :user-id) (user-id user))
   (when (and *session* *application*)
@@ -874,6 +909,7 @@ asked for too many: the form must not become a way to flood an inbox."
 
 (defun send-reset-link (user)
   "Email USER a link that lets them choose a new password."
+  (count-metric "littoral_password_reset_mails_total")
   (note-event :reset-mail (user-id user))
   (let ((address (limited-address)))
     (when address (note-event :reset-address address)))

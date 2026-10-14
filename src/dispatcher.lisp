@@ -581,6 +581,7 @@ request couldn't use.  NIL for other requests."
                   (session (and found (browser-matches-p found) found)))
              (cond ((and (null session) (gone-session-response)))
                    ((and (null session) (not (allow-new-session-p)))
+                    (count-metric "littoral_sessions_refused_total" (list (application-path app)))
                     (list 429 (list* :content-type "text/plain" :retry-after "60" *security-headers*)
                           (list "Too many new sessions from this address; try again in a minute.")))
                    ((null session)

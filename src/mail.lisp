@@ -213,10 +213,22 @@ won't succeed if tried again."))
 (defvar *mailer* (make-instance 'log-mailer)
   "What sends mail: an SMTP-MAILER, or by default a LOG-MAILER that prints it.")
 
+(littoral:define-metric "littoral_mail_sends_total" :counter
+  "Messages handed to a mailer, by result: sent, transient (it may pass) or permanent (refused for good)."
+  :labels '("result"))
+
+(defun send-counted (mailer from recipients message)
+  "SEND-MESSAGE, counted in littoral_mail_sends_total."
+  (handler-bind ((error (lambda (e)
+                          (littoral:count-metric "littoral_mail_sends_total"
+                                                 (list (if (smtp-error-permanent-p e) "permanent" "transient"))))))
+    (prog1 (send-message mailer from recipients message)
+      (littoral:count-metric "littoral_mail_sends_total" (list "sent")))))
+
 (defun send-mail (mail &key (mailer *mailer*))
   "Send MAIL now, waiting for the mailer.  QUEUE-MAIL sends it in the
 background instead, and tries again when it fails."
-  (send-message mailer (address-spec (mail-from mail)) (mail-recipients mail) (mail-string mail)))
+  (send-counted mailer (address-spec (mail-from mail)) (mail-recipients mail) (mail-string mail)))
 
 ;;; Templates
 

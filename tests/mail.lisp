@@ -258,6 +258,33 @@ MC4CAQAwBQYDK2VwBCIEIG4G5eGc2mREsIg1N36yblimKfWTN1E+60t720EqbQSN
       (is (= 2 (length (fake-data server))))
       (is (= 2 (fake-connections server))))))
 
+(test mail-sends-and-pools-are-counted
+  (reset-metrics)
+  (with-fake-smtp (server)
+    (let ((mailer (fake-mailer server :pool-size 2))
+          (server-label (format nil "server=\"127.0.0.1:~D\"" (fake-port server))))
+      (unwind-protect
+           (progn
+             (dotimes (i 2)
+               (littoral.mail:send-mail (littoral.mail:make-mail :to "ada@example.org" :text "x") :mailer mailer))
+             (let ((text (metrics-text)))
+               (is (= 2 (metric-value "littoral_mail_sends_total{result=\"sent\"}" text)))
+               (is (= 2 (metric-value (format nil "littoral_smtp_send_seconds_count{~A}" server-label) text)))
+               (is (= 1 (metric-value (format nil "littoral_smtp_pool_opened_total{~A}" server-label) text)))
+               (is (= 1 (metric-value (format nil "littoral_smtp_pool_reused_total{~A}" server-label) text)))
+               (is (= 1 (metric-value (format nil "littoral_smtp_pool_connections{~A,state=\"idle\"}" server-label)
+                                      text)))))
+        (littoral.mail::close-smtp-mailer mailer))
+      (is (null (metric-value (format nil "littoral_smtp_pool_opened_total{~A}" server-label))) "Closed pools go")))
+  (with-fake-smtp (server :replies '(("RCPT" . "550 5.1.1 No such user")))
+    (ignore-errors (littoral.mail:send-mail (littoral.mail:make-mail :to "nobody@example.org" :text "x")
+                                            :mailer (fake-mailer server))))
+  (with-fake-smtp (server :replies '(("DATA" . "451 4.3.0 Try again later")))
+    (ignore-errors (littoral.mail:send-mail (littoral.mail:make-mail :to "ada@example.org" :text "x")
+                                            :mailer (fake-mailer server))))
+  (is (= 1 (metric-value "littoral_mail_sends_total{result=\"permanent\"}")))
+  (is (= 1 (metric-value "littoral_mail_sends_total{result=\"transient\"}"))))
+
 (test smtp-urls
   (let ((m (littoral.mail:smtp-mailer-from-url "smtp://app%40example.org:p%3Ass@mail.example.org")))
     (is (equal '("mail.example.org" 587 :starttls "app@example.org" "p:ss")

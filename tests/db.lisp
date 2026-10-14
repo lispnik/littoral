@@ -283,3 +283,30 @@ meanwhile; true if the commit went through.  OPTIONS go into the spec."
         (dolist (file (list wal rollback))
           (dolist (suffix '("" "-wal" "-shm" "-journal"))
             (uiop:delete-file-if-exists (concatenate 'string (namestring file) suffix))))))))
+
+(test database-troubles-are-counted
+  (let ((file (merge-pathnames (format nil "littoral-db-metrics-~36R.sqlite3" (random (expt 36 8)))
+                               (uiop:temporary-directory))))
+    (unwind-protect
+         (progn
+           (reset-metrics)
+           ;; A commit that can't get the lock in time, in rollback mode.
+           (is (not (commit-while-reading file :journal-mode :delete)))
+           (let* ((spec (list :sqlite3 :database-name (namestring file) :journal-mode :delete))
+                  (label (littoral.db:database-label spec))
+                  (text (metrics-text)))
+             (is (<= 1 (metric-value (format nil "littoral_db_lock_timeouts_total{database=\"~A\"}" label) text)))
+             (is (<= 1 (metric-value (format nil "littoral_db_transaction_seconds_count{database=\"~A\"}" label) text)))
+             (is (< 0 (metric-value (format nil "littoral_sqlite_bytes{database=\"~A\",file=\"database\"}" label)
+                                    text)))))
+      (dolist (suffix '("" "-wal" "-shm" "-journal"))
+        (uiop:delete-file-if-exists (concatenate 'string (namestring file) suffix)))))
+  ;; Someone else's change.
+  (connect-test-database)
+  (littoral.db:drop-table 'project)
+  (littoral.db:create-table 'project)
+  (let* ((project (littoral.db:db-save (make-instance 'project :name "Littoral" :budget 1)))
+         (copy (littoral.db:db-find 'project (littoral.db:object-id project))))
+    (littoral.db:db-save project)
+    (signals littoral.db:stale-object (littoral.db:db-save copy))
+    (is (= 1 (metric-value "littoral_db_stale_objects_total{table=\"project\"}")))))

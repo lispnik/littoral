@@ -294,18 +294,42 @@ WHERE id = ? AND status = 'running' AND attempts = ?"
     (subseq text 0 (min 4000 (length text)))))
 
 (defun mark-failed (job definition condition backtrace)
+  "Record that JOB failed with CONDITION; how it ended, for the metrics:
+\"retried\", \"failed\" or \"abandoned\"."
   (let* ((attempts (durable-job-attempts job))
-         (give-up (or (typep condition 'job-abandoned) (>= attempts (definition-attempts definition))))
+         (abandoned (typep condition 'job-abandoned))
+         (give-up (or abandoned (>= attempts (definition-attempts definition))))
          (now (get-universal-time)))
     (littoral.db:db-execute "UPDATE job_queue SET status = ?, run_at = ?, finished = ?, last_error = ?
 WHERE id = ? AND status = 'running' AND attempts = ?"
                             (if give-up "failed" "queued")
                             (+ now (* (definition-retry-seconds definition) (expt 2 (1- attempts))))
                             (and give-up now) (failure-text condition backtrace)
-                            (durable-job-id job) attempts)))
+                            (durable-job-id job) attempts)
+    (cond (abandoned "abandoned") (give-up "failed") (t "retried"))))
+
+(littoral:define-metric "littoral_durable_job_runs_total" :counter
+  "Durable job runs in this process, by job and how they ended: done, retried, failed or abandoned."
+  :labels '("job" "result"))
+(littoral:define-metric "littoral_durable_job_seconds" :histogram
+  "How long durable job runs took, by job."
+  :labels '("job") :buckets '(0.01 0.05 0.1 0.5 1 5 10 30 60 300 600))
+
+(defun job-metric-name (definition)
+  "The job's name as metrics label it: record-job."
+  (string-downcase (princ-to-string (definition-name definition))))
 
 (defun run-claimed (job definition)
   "Run JOB, claimed, and record how it went; true when it succeeded."
+  (let ((name (job-metric-name definition))
+        (outcome "failed"))
+    (littoral:timing-metric ("littoral_durable_job_seconds" (list name))
+      (unwind-protect (eq t (setf outcome (run-claimed-job job definition)))
+        (littoral:count-metric "littoral_durable_job_runs_total"
+                               (list name (if (eq outcome t) "done" outcome)))))))
+
+(defun run-claimed-job (job definition)
+  "Run JOB; T when it succeeded, otherwise how it ended (see MARK-FAILED)."
   (let ((backtrace nil))
     (handler-case
         ;; The backtrace is taken where the error is signalled, and kept
@@ -327,8 +351,8 @@ WHERE id = ? AND status = 'running' AND attempts = ?"
                        (mark-done job))))
           t)
       (error (e)
-        (ignore-errors (mark-failed job definition e (and (eq (car backtrace) e) (cdr backtrace))))
-        nil))))
+        (or (ignore-errors (mark-failed job definition e (and (eq (car backtrace) e) (cdr backtrace))))
+            "failed")))))
 
 (defun due-jobs (queues limit)
   (let ((names (loop for text being the hash-keys of *definitions* using (hash-value definition)

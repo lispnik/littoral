@@ -875,7 +875,7 @@ A plist of headline numbers, for pages that show them: :`requests` :`errors`
 
 #### `reset-metrics` — function
 
-Start the request counts and timings again from zero.
+Start the request counts and timings, and `define-metric`'s metrics, again from zero.
 
 #### `log-requests-to` `stream &key (format :json)` — function
 
@@ -905,6 +905,26 @@ Forget the metrics source `name`.
 #### `metric-label` `value` — function
 
 `value` escaped for a Prometheus label.
+
+#### `define-metric` `name type help &key labels (buckets *latency-buckets*)` — function
+
+Make the metric `name` (a string such as "myapp_orders_total") that
+/metrics reports: `type` :`counter`, counted by `count-metric`, or :`histogram`, of
+values given to `observe-metric` and counted into `buckets`.  `labels` names its
+labels; keep their values few (a job's name, not its arguments).  Defining
+`name` again keeps its counts.
+
+#### `count-metric` `name &optional label-values (amount 1)` — function
+
+Add `amount` to the counter `name` for `label-values`, a list in the order of its labels.
+
+#### `observe-metric` `name value &optional label-values` — function
+
+Count `value`, such as seconds taken, into the histogram `name` for `label-values`.
+
+#### `timing-metric` `(name &optional label-values) &body body` — macro
+
+Evaluate `body`, observing the seconds it took in the histogram `name`, even when it fails.
 
 ### Background jobs (the class JOB is not exported: the name is too common)
 

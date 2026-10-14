@@ -234,6 +234,19 @@ VALUES ('SOMEONE-ELSES::JOB', 'NIL', 'default', 'queued', 0, 0, 0)")
         (littoral.jobs:drop-job-tables)
         (is (not (littoral.jobs:job-tables-p)))))))
 
+(test job-runs-are-counted-and-timed
+  (with-job-queue ()
+    (reset-metrics)
+    (littoral.jobs:enqueue-job (list 'record-job 1 2))
+    (littoral.jobs:enqueue-job (list 'hopeless-job 7))
+    (littoral.jobs:enqueue-job (list 'failing-job 1))
+    (littoral.jobs:run-due-jobs)
+    (let ((text (metrics-text)))
+      (is (= 1 (metric-value "littoral_durable_job_runs_total{job=\"record-job\",result=\"done\"}" text)))
+      (is (= 1 (metric-value "littoral_durable_job_runs_total{job=\"hopeless-job\",result=\"abandoned\"}" text)))
+      (is (= 1 (metric-value "littoral_durable_job_runs_total{job=\"failing-job\",result=\"retried\"}" text)))
+      (is (= 1 (metric-value "littoral_durable_job_seconds_count{job=\"record-job\"}" text))))))
+
 (test purging-finished-jobs
   (with-job-queue ()
     (let ((done (littoral.jobs:enqueue-job (list 'record-job 1 2)))

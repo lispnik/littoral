@@ -76,10 +76,103 @@ uptime isn't counted from when it was built."
                       :path path :app app :kind kind :status status
                       :milliseconds (float (* 1000 seconds)) :address (getf env :remote-addr)))))))
 
-(defun reset-metrics ()
-  "Start the request counts and timings again from zero."
+;;; Counters and histograms of the other systems: littoral/jobs counts job
+;;; runs, littoral/auth sign-ins, and so on.
+
+(defstruct (metric (:constructor make-metric (name type help labels buckets)))
+  "A metric DEFINE-METRIC made; VALUES maps label values to a count, or to
+#(SUM COUNT BUCKET-COUNTS…)."
+  name type help labels buckets
+  (values (make-hash-table :test 'equal)))
+
+(defvar *metrics* '() "The METRICs DEFINE-METRIC made, newest first.")
+
+(defun define-metric (name type help &key labels (buckets *latency-buckets*))
+  "Make the metric NAME (a string such as \"myapp_orders_total\") that
+/metrics reports: TYPE :COUNTER, counted by COUNT-METRIC, or :HISTOGRAM, of
+values given to OBSERVE-METRIC and counted into BUCKETS.  LABELS names its
+labels; keep their values few (a job's name, not its arguments).  Defining
+NAME again keeps its counts."
+  (check-type type (member :counter :histogram))
   (sb-thread:with-mutex (*metrics-lock*)
-    (clrhash *request-counts*) (clrhash *request-times*)))
+    (let ((old (find name *metrics* :key #'metric-name :test #'string=)))
+      (if old
+          (setf (metric-type old) type (metric-help old) help (metric-labels old) labels
+                (metric-buckets old) buckets)
+          (push (make-metric name type help labels buckets) *metrics*))))
+  name)
+
+(defun find-metric (name)
+  "The metric NAME; it must have been defined."
+  (or (find name *metrics* :key #'metric-name :test #'string=)
+      (error "No metric ~S: define it with DEFINE-METRIC." name)))
+
+(defun count-metric (name &optional label-values (amount 1))
+  "Add AMOUNT to the counter NAME for LABEL-VALUES, a list in the order of its labels."
+  (sb-thread:with-mutex (*metrics-lock*)
+    (incf (gethash (mapcar #'princ-to-string label-values) (metric-values (find-metric name)) 0) amount))
+  amount)
+
+(defun observe-metric (name value &optional label-values)
+  "Count VALUE, such as seconds taken, into the histogram NAME for LABEL-VALUES."
+  (sb-thread:with-mutex (*metrics-lock*)
+    (let* ((metric (find-metric name))
+           (key (mapcar #'princ-to-string label-values))
+           (cells (or (gethash key (metric-values metric))
+                      (setf (gethash key (metric-values metric))
+                            (make-array (+ 2 (length (metric-buckets metric))) :initial-element 0)))))
+      (incf (aref cells 0) value)
+      (incf (aref cells 1))
+      (loop for bound in (metric-buckets metric) for i from 2
+            when (<= value bound) do (incf (aref cells i)))))
+  value)
+
+(defmacro timing-metric ((name &optional label-values) &body body)
+  "Evaluate BODY, observing the seconds it took in the histogram NAME, even when it fails."
+  (let ((start (gensym "START")))
+    `(let ((,start (get-internal-real-time)))
+       (unwind-protect (progn ,@body)
+         (observe-metric ,name (/ (- (get-internal-real-time) ,start) internal-time-units-per-second)
+                         ,label-values)))))
+
+(defun write-defined-metrics (out)
+  "Write the metrics DEFINE-METRIC made to OUT.  Called with *METRICS-LOCK*."
+  (dolist (metric (reverse *metrics*))
+    (let ((name (metric-name metric)))
+      (format out "# HELP ~A ~A~%# TYPE ~A ~(~A~)~%" name (metric-help metric) name (metric-type metric))
+      (flet ((labels-text (values &optional extra)
+               (let ((pairs (append (mapcar (lambda (label value) (format nil "~A=\"~A\"" label (metric-label value)))
+                                            (metric-labels metric) values)
+                                    (and extra (list extra)))))
+                 (if pairs (format nil "{~{~A~^,~}}" pairs) ""))))
+        (let ((keys (sort (alexandria:hash-table-keys (metric-values metric))
+                          (lambda (a b) (string< (format nil "~{~A~^ ~}" a) (format nil "~{~A~^ ~}" b))))))
+          (dolist (key keys)
+            (let ((value (gethash key (metric-values metric))))
+              (cond
+                ((eq (metric-type metric) :counter)
+                 (format out "~A~A ~A~%" name (labels-text key) value))
+                (t
+                 (loop for bound in (metric-buckets metric) for i from 2
+                       do (format out "~A_bucket~A ~D~%" name (labels-text key (format nil "le=\"~A\"" bound))
+                                  (aref value i)))
+                 (format out "~A_bucket~A ~D~%" name (labels-text key "le=\"+Inf\"") (aref value 1))
+                 (format out "~A_sum~A ~,6F~%" name (labels-text key) (aref value 0))
+                 (format out "~A_count~A ~D~%" name (labels-text key) (aref value 1)))))))))))
+
+(defun reset-metrics ()
+  "Start the request counts and timings, and DEFINE-METRIC's metrics, again from zero."
+  (sb-thread:with-mutex (*metrics-lock*)
+    (clrhash *request-counts*) (clrhash *request-times*)
+    (dolist (metric *metrics*) (clrhash (metric-values metric)))))
+
+(define-metric "littoral_sessions_created_total" :counter "Sessions started, by application." :labels '("app"))
+(define-metric "littoral_sessions_ended_total" :counter
+  "Sessions forgotten, by application and why: expired (idle too long) or evicted (over :max-sessions)."
+  :labels '("app" "reason"))
+(define-metric "littoral_sessions_refused_total" :counter
+  "New sessions refused because the client started too many (*new-sessions-per-minute*), by application."
+  :labels '("app"))
 
 ;;; Request logs
 
@@ -213,7 +306,17 @@ NAME is 0.  Replaces any source called NAME."
       (head "littoral_threads" "gauge" "Lisp threads.")
       (format out "littoral_threads ~D~%" (length (sb-thread:list-all-threads)))
       (head "littoral_uptime_seconds" "gauge" "Seconds since the process started.")
-      (format out "littoral_uptime_seconds ~D~%" (- (get-universal-time) *started*)))
+      (format out "littoral_uptime_seconds ~D~%" (- (get-universal-time) *started*))
+      (head "littoral_build_info" "gauge" "Always 1, labelled with the versions running.")
+      (format out "littoral_build_info{littoral=\"~A\",sbcl=\"~A\"} 1~%"
+              (metric-label (or (asdf:component-version (asdf:find-system :littoral nil)) "unknown"))
+              (metric-label (lisp-implementation-version)))
+      (head "littoral_gc_seconds_total" "counter" "Time spent collecting garbage.")
+      (format out "littoral_gc_seconds_total ~,3F~%" (/ sb-ext:*gc-run-time* internal-time-units-per-second))
+      (head "littoral_allocated_bytes_total" "counter" "Bytes allocated since the process started.")
+      (format out "littoral_allocated_bytes_total ~D~%" (sb-ext:get-bytes-consed))
+      (sb-thread:with-mutex (*metrics-lock*)
+        (write-defined-metrics out)))
     (write-metrics-sources out)))
 
 (defun serve-metrics (&key (path "/metrics") (local-only t))
