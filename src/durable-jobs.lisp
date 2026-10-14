@@ -33,7 +33,7 @@
   (:use #:cl)
   (:documentation "Background jobs kept in the database: retried, scheduled, and run by any process.")
   (:export #:define-job #:enqueue-job #:daily-at
-           #:create-job-tables #:drop-job-tables
+           #:create-job-tables #:drop-job-tables #:job-tables-p
            #:run-due-jobs #:start-job-runner #:stop-job-runner #:job-runner-running-p
            #:*durable-job* #:note-job-progress #:abandon-job #:job-abandoned
            #:durable-job #:durable-job-id #:durable-job-name #:durable-job-arguments #:durable-job-queue
@@ -119,13 +119,28 @@ function NAME that runs BODY at once.  NAME-AND-OPTIONS is NAME or (NAME
 
 (littoral.db:define-migrations :littoral-jobs (asdf:system-relative-pathname :littoral "migrations/jobs/"))
 
+(defvar *job-databases* '() "Database specs whose job tables were made in this process.")
+(defvar *job-databases-lock* (sb-thread:make-mutex :name "littoral job databases"))
+
+(defun job-tables-p ()
+  "True when CREATE-JOB-TABLES ran for the current database in this process,
+as it does through CREATE-MAIL-TABLES: the admin then shows the job queue."
+  (and littoral.db:*database*
+       (sb-thread:with-mutex (*job-databases-lock*)
+         (member littoral.db:*database* *job-databases* :test #'equal))
+       t))
+
 (defun create-job-tables ()
   "Create or bring up to date the job_queue table (migrations :LITTORAL-JOBS)."
   (littoral.db:migrate :littoral-jobs)
+  (sb-thread:with-mutex (*job-databases-lock*)
+    (pushnew (copy-tree littoral.db:*database*) *job-databases* :test #'equal))
   t)
 
 (defun drop-job-tables ()
   "Drop the job_queue table."
+  (sb-thread:with-mutex (*job-databases-lock*)
+    (setf *job-databases* (remove littoral.db:*database* *job-databases* :test #'equal)))
   (littoral.db:db-execute "DROP TABLE IF EXISTS job_queue")
   (littoral.db:forget-migrations :littoral-jobs))
 
@@ -396,12 +411,15 @@ processes' jobs.  Stops any runner already started."
   "The job ID, or NIL."
   (first (select-jobs "WHERE id = ?" id)))
 
-(defun durable-jobs (&key status queue (limit 50))
-  "Jobs, newest first; only those with STATUS and in QUEUE (strings) if given."
+(defun durable-jobs (&key status queue (limit 50) (offset 0))
+  "Jobs, newest first; only those with STATUS and in QUEUE (strings) if
+given.  At most LIMIT, skipping the first OFFSET."
+  (check-type limit (integer 0))
+  (check-type offset (integer 0))
   (apply #'select-jobs
-         (format nil "~@[WHERE ~{~A~^ AND ~}~] ORDER BY id DESC LIMIT ~D"
+         (format nil "~@[WHERE ~{~A~^ AND ~}~] ORDER BY id DESC LIMIT ~D OFFSET ~D"
                  (remove nil (list (and status "status = ?") (and queue "queue = ?")))
-                 limit)
+                 limit offset)
          (remove nil (list status queue))))
 
 (defun durable-job-counts ()

@@ -221,6 +221,19 @@ VALUES ('SOMEONE-ELSES::JOB', 'NIL', 'default', 'queued', 0, 0, 0)")
     (is (= (encode-universal-time 0 0 3 11 10 2026) three) "Tomorrow at three")
     (is (= (encode-universal-time 0 30 15 10 10 2026) (funcall (littoral.jobs:daily-at 15 30) noon)) "Today")))
 
+(test listing-jobs-a-page-at-a-time
+  (with-job-queue ()
+    (let ((ids (loop for i below 5 collect (littoral.jobs:enqueue-job (list 'record-job i i)))))
+      (flet ((page (&rest options)
+               (mapcar #'littoral.jobs:durable-job-id (apply #'littoral.jobs:durable-jobs options))))
+        (is (equal (reverse ids) (page)))
+        (is (equal (subseq (reverse ids) 2 4) (page :limit 2 :offset 2)))
+        (is (null (page :offset 5)))
+        (is (= 5 (cdr (assoc "queued" (littoral.jobs:durable-job-counts) :test #'string=))))
+        (is (littoral.jobs:job-tables-p))
+        (littoral.jobs:drop-job-tables)
+        (is (not (littoral.jobs:job-tables-p)))))))
+
 (test purging-finished-jobs
   (with-job-queue ()
     (let ((done (littoral.jobs:enqueue-job (list 'record-job 1 2)))

@@ -12,6 +12,8 @@
 - **DKIM**: `make-smtp-mailer :dkim` signs mail with `smtp/dkim` signers. Generated apps read `DKIM_KEY_FILE`, `DKIM_DOMAIN` and `DKIM_SELECTOR`, and have a `dkim-record` command.
 - **SMTP connections are reused**, up to `:pool-size` (2) per mailer. A kept connection the server has dropped is replaced at once, through smtp 0.3.5's `retry-with-fresh-connection` restart.
 - **`purge-expired-auth-rows`** deletes old sign-in failures, expired sign-ins, and expired reset links and API tokens. Generated apps' nightly `tidy-up` job calls it, and also deletes audit events more than a year old.
+- **A job queue page in the admin.** It lists durable jobs by status, with their errors, and retries or cancels them; the audit log records both. It appears where the database has the job tables. `littoral.jobs:durable-jobs` takes `:offset`, and `job-tables-p` says whether the tables were made.
+- **API reference for `littoral.auth` and `littoral.admin`** in docs/API.md.
 - **The demo server's** admin demo and `/config` are for the members demo's admins, who sign in to them from anywhere.
 
 ### Changed

@@ -6,6 +6,12 @@
 (in-package #:littoral)
 
 (define-translations "fr"
+  ;; Job queue
+  ("Job queue" "File des tâches") ("Job" "Tâche") ("Queue" "File") ("Status" "État") ("Tries" "Essais")
+  ("Retry" "Relancer") ("Refresh" "Actualiser") ("No jobs." "Aucune tâche.") ("Jobs, newest first" "Tâches, les plus récentes d'abord")
+  ("All" "Toutes") ("Queued" "En attente") ("Running" "En cours") ("Done" "Terminée") ("Failed" "Échouée") ("Cancelled" "Annulée")
+  ("Job #~D will run again." "La tâche n° ~D sera relancée.") ("Cancelled job #~D." "Tâche n° ~D annulée.")
+  ("Job #~D has changed meanwhile; nothing was done." "La tâche n° ~D a changé entre-temps ; rien n'a été fait.")
   ;; Audit log
   ("Audit log" "Journal d'audit") ("Action" "Action") ("Who or what" "Qui ou quoi")
   ("Nothing has been recorded." "Rien n'a été enregistré.") ("Audit log, newest first" "Journal d'audit, le plus récent d'abord")
@@ -100,6 +106,12 @@ Le lien ne sert qu'une fois, pendant une heure.  Si ce n'était pas vous, ignore
    "Quelqu'un d'autre a modifié cet enregistrement entre-temps ; le voici tel qu'il l'a laissé."))
 
 (define-translations "de"
+  ;; Job queue
+  ("Job queue" "Auftragswarteschlange") ("Job" "Auftrag") ("Queue" "Warteschlange") ("Status" "Status") ("Tries" "Versuche")
+  ("Retry" "Wiederholen") ("Refresh" "Aktualisieren") ("No jobs." "Keine Aufträge.") ("Jobs, newest first" "Aufträge, neueste zuerst")
+  ("All" "Alle") ("Queued" "Wartend") ("Running" "Läuft") ("Done" "Erledigt") ("Failed" "Fehlgeschlagen") ("Cancelled" "Abgebrochen")
+  ("Job #~D will run again." "Auftrag Nr. ~D läuft erneut.") ("Cancelled job #~D." "Auftrag Nr. ~D abgebrochen.")
+  ("Job #~D has changed meanwhile; nothing was done." "Auftrag Nr. ~D hat sich inzwischen geändert; es wurde nichts getan.")
   ;; Audit log
   ("Audit log" "Audit-Protokoll") ("Action" "Aktion") ("Who or what" "Wer oder was")
   ("Nothing has been recorded." "Noch nichts aufgezeichnet.") ("Audit log, newest first" "Audit-Protokoll, neueste zuerst")
@@ -194,6 +206,12 @@ Der Link funktioniert einmal, eine Stunde lang.  Falls Sie das nicht waren, igno
    "Jemand anderes hat diesen Datensatz inzwischen geändert; hier ist er in dessen Fassung."))
 
 (define-translations "es"
+  ;; Job queue
+  ("Job queue" "Cola de tareas") ("Job" "Tarea") ("Queue" "Cola") ("Status" "Estado") ("Tries" "Intentos")
+  ("Retry" "Reintentar") ("Refresh" "Actualizar") ("No jobs." "No hay tareas.") ("Jobs, newest first" "Tareas, las más recientes primero")
+  ("All" "Todas") ("Queued" "En espera") ("Running" "En curso") ("Done" "Hecha") ("Failed" "Fallida") ("Cancelled" "Cancelada")
+  ("Job #~D will run again." "La tarea n.º ~D se ejecutará de nuevo.") ("Cancelled job #~D." "Tarea n.º ~D cancelada.")
+  ("Job #~D has changed meanwhile; nothing was done." "La tarea n.º ~D ha cambiado mientras tanto; no se ha hecho nada.")
   ;; Audit log
   ("Audit log" "Registro de auditoría") ("Action" "Acción") ("Who or what" "Quién o qué")
   ("Nothing has been recorded." "No se ha registrado nada.") ("Audit log, newest first" "Registro de auditoría, lo más reciente primero")

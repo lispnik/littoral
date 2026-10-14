@@ -23,33 +23,48 @@
 (defpackage #:littoral.auth
   (:use #:cl #:littoral #:littoral.html #:littoral.db)
   (:documentation "Users, signing in, roles and password reset for Littoral.")
-  (:export #:user #:user-id #:user-name #:user-email #:user-roles #:user-active-p #:user-password-hash
-           #:user-store #:users-table-store #:*user-store* #:using-user-store
-           #:store-find-user #:store-find-user-by-email #:store-find-user-by-id
-           #:store-set-password-hash #:store-create-user #:store-writable-p #:store-verify-password
-           #:sql-user-store #:make-sql-user-store #:sql-user
-           #:hash-password #:verify-password #:password-needs-rehash-p #:bcrypt-hash
-           #:*pbkdf2-iterations* #:*rehash-on-sign-in*
-           #:create-auth-tables #:drop-auth-tables #:add-user #:find-user #:find-user-by-email #:find-user-by-id
-           #:set-password #:check-password #:authenticate
-           #:current-user #:log-in #:log-out #:signed-in-p #:has-role-p #:require-role
-           #:user-sessions #:revoke-session #:log-out-everywhere
-           #:endpoint-user #:require-endpoint-user #:create-api-token #:revoke-api-tokens
-           #:security-settings #:second-factor-p #:user-factors #:*offer-passkeys*
-           #:hotp #:totp-code #:verify-totp #:new-totp-secret #:totp-uri #:base32-encode #:base32-decode
-           #:make-recovery-codes #:use-recovery-code #:recovery-codes-left
-           #:add-passkey #:verify-registration #:verify-assertion #:passkey-error #:cbor-decode #:qr-svg
-           #:*remember-days* #:*sign-in-idle-hours* #:*auth-session-check-seconds* #:*offer-remember-me*
-           #:grant-role #:revoke-role #:grant-permission #:revoke-permission
-           #:role-permissions #:user-permissions #:has-permission-p #:require-permission
-           #:restricted #:required-role #:required-permission #:permitted-p
-           #:sign-in #:sign-out-link #:password-reset-request #:password-reset
-           #:auth-root #:define-auth-path #:request-base-url
-           #:signed-in-root #:restrict-application #:application-role #:check-application-role
-           #:configure-signed-in-admin #:purge-expired-auth-rows
-           #:*send-mail* #:*last-mail* #:*lockout-failures* #:*lockout-seconds*
-           #:*failure-window-seconds* #:*failures-per-address* #:*reset-mails-per-address*
-           #:*public-url* #:*reset-link-seconds* #:*sign-in-extras*))
+  (:export
+   ;; Users
+   #:user #:user-id #:user-name #:user-email #:user-roles #:user-active-p #:user-password-hash
+   ;; User stores
+   #:user-store #:users-table-store #:*user-store* #:using-user-store
+   #:store-find-user #:store-find-user-by-email #:store-find-user-by-id
+   #:store-set-password-hash #:store-create-user #:store-writable-p #:store-verify-password
+   #:sql-user-store #:make-sql-user-store #:sql-user
+   ;; Passwords
+   #:hash-password #:verify-password #:password-needs-rehash-p #:bcrypt-hash
+   #:*pbkdf2-iterations* #:*rehash-on-sign-in*
+   ;; Tables and users
+   #:create-auth-tables #:drop-auth-tables #:purge-expired-auth-rows
+   #:add-user #:find-user #:find-user-by-email #:find-user-by-id
+   #:set-password #:check-password #:authenticate
+   ;; Signing in
+   #:current-user #:log-in #:log-out #:signed-in-p #:has-role-p #:require-role
+   #:*remember-days* #:*sign-in-idle-hours* #:*auth-session-check-seconds* #:*offer-remember-me*
+   #:user-sessions #:revoke-session #:log-out-everywhere
+   ;; Limits on signing in
+   #:*lockout-failures* #:*lockout-seconds* #:*failure-window-seconds* #:*failures-per-address*
+   #:*reset-mails-per-address*
+   ;; Password reset
+   #:*public-url* #:*reset-link-seconds* #:*send-mail* #:*last-mail*
+   ;; API tokens
+   #:endpoint-user #:require-endpoint-user #:create-api-token #:revoke-api-tokens
+   ;; Second factors
+   #:security-settings #:second-factor-p #:user-factors #:*offer-passkeys*
+   #:hotp #:totp-code #:verify-totp #:new-totp-secret #:totp-uri #:base32-encode #:base32-decode
+   #:make-recovery-codes #:use-recovery-code #:recovery-codes-left
+   #:add-passkey #:verify-registration #:verify-assertion #:passkey-error #:cbor-decode #:qr-svg
+   ;; Roles and permissions
+   #:grant-role #:revoke-role #:grant-permission #:revoke-permission
+   #:role-permissions #:user-permissions #:has-permission-p #:require-permission
+   ;; Restricted components
+   #:restricted #:required-role #:required-permission #:permitted-p
+   ;; Sign-in pages
+   #:sign-in #:sign-out-link #:password-reset-request #:password-reset
+   #:auth-root #:define-auth-path #:request-base-url #:*sign-in-extras*
+   ;; Applications for signed-in users
+   #:signed-in-root #:restrict-application #:application-role #:check-application-role
+   #:configure-signed-in-admin))
 
 (in-package #:littoral.auth)
 
@@ -659,6 +674,7 @@ looked at no more often than *AUTH-SESSION-CHECK-SECONDS*."
            (and user (user-active-p user) user)))))
 
 (defun signed-in-p ()
+  "True when someone is signed in to this session."
   (and (current-user) t))
 
 (defun log-in (user &key remember (method "password"))

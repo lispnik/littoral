@@ -44,6 +44,7 @@
 (defparameter +base32+ "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567")
 
 (defun base32-encode (octets)
+  "OCTETS in RFC 4648 base 32, without padding, as authenticator apps take secrets."
   (with-output-to-string (out)
     (let ((bits 0) (count 0))
       (loop for byte across octets
@@ -56,6 +57,7 @@
         (write-char (char +base32+ (ash bits (- 5 count))) out)))))
 
 (defun base32-decode (string)
+  "The octets STRING encodes in base 32, ignoring case, spaces, dashes and padding."
   (let ((bits 0) (count 0) (out (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0)))
     (loop for char across (remove-if (lambda (c) (member c '(#\Space #\- #\=))) (string-upcase string))
           for value = (position char +base32+)
@@ -105,6 +107,7 @@ later than AFTER (so a code works once), or NIL."
             return s)))
 
 (defun new-totp-secret ()
+  "A new random authenticator-app secret: 160 bits, in base 32."
   (base32-encode (ironclad:random-data 20)))
 
 (defun totp-uri (secret account issuer)
@@ -142,6 +145,7 @@ their hashes are kept, so show them once."
                   code)))
 
 (defun recovery-codes-left (user)
+  "How many of USER's recovery codes are still unused."
   (length (db-query "SELECT id FROM auth_tokens WHERE user_id = ? AND purpose = ?"
                     (princ-to-string (user-id user)) "recovery")))
 
@@ -202,7 +206,8 @@ alists, byte strings octet vectors."
 
 (define-condition passkey-error (error)
   ((reason :initarg :reason :reader passkey-error-reason))
-  (:report (lambda (c s) (format s "Passkey refused: ~A" (passkey-error-reason c)))))
+  (:report (lambda (c s) (format s "Passkey refused: ~A" (passkey-error-reason c))))
+  (:documentation "A passkey registration or assertion that fails a check, with the reason."))
 
 (defun refuse (reason &rest arguments)
   (error 'passkey-error :reason (apply #'format nil reason arguments)))

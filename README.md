@@ -391,7 +391,7 @@ Jobs live in memory, so a restart forgets them; for work that must not be lost, 
 - **Retries.** A job that signals is tried again after `:retry-seconds` (30), doubling each time, up to `:attempts` (5) tries. Then it's marked failed, with its error and backtrace. `abandon-job` fails it at once, for errors that trying again won't fix.
 - **Running.** A runner claims a job by updating its row, so each job runs in one process at a time. The runner holds the job for its `:timeout` (600 seconds), extended by each `note-job-progress`. If the process dies, another runner takes the job over once that time has passed, so jobs should be safe to repeat. With `:transaction t`, the job's database work and its being marked done commit together. Runners take jobs only from their `:queues` (`("default")`), and only jobs their process defines, so a rolling deploy doesn't fail jobs that only the new code knows.
 - **Recurring jobs.** `:every` takes seconds or a function from a time to the next one, such as `daily-at`. Runners keep exactly one run scheduled, however many processes there are.
-- **Looking after them.** `durable-jobs`, `find-durable-job`, `durable-job-counts`, `retry-durable-job`, `cancel-durable-job` and `purge-durable-jobs` cover inspecting and housekeeping. In tests, `run-due-jobs` runs what's due without a runner.
+- **Looking after them.** `durable-jobs` (with `:limit` and `:offset`), `find-durable-job`, `durable-job-counts`, `retry-durable-job`, `cancel-durable-job` and `purge-durable-jobs` cover inspecting and housekeeping. The admin shows the queue, with buttons to retry and cancel. In tests, `run-due-jobs` runs what's due without a runner.
 
 `/examples/jobs` has a report that shows its progress, a job that fails twice and then succeeds, one that always fails, and a job that sends mail ten seconds later through the mail demo's outbox. Generated apps start a runner and tidy up every night.
 
@@ -648,6 +648,10 @@ For each class it gives:
 - creation, and deletion after asking
 
 Each request's changes run in one transaction. `:database` gives the admin its own database (through the new `:around-request` hook).
+
+Beside the tables it has two pages of its own:
+- **Audit log**, when the audit log is on (the default), showing who did what.
+- **Job queue**, when the database has `littoral/jobs`' tables (`create-job-tables` or `create-mail-tables` ran in this process). It lists the durable jobs by status, newest first, with each job's tries, its error and backtrace, Retry for failed and cancelled jobs, and Cancel for waiting ones. Retries and cancellations go in the audit log. `job-queue-view` is the same page as a component.
 
 Who may use it:
 - **`:role`.** Users of `littoral/auth` with that role sign in to it from anywhere; `t` admits anyone signed in. Its database must hold the sign-in tables. A visitor without a sign-in is shown the form, a user without the role is refused, and saving, creating and deleting check the role again, so a page from before a sign-out or a revoked role can't change anything. The audit log names the user.

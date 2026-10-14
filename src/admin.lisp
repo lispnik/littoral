@@ -15,7 +15,7 @@
 (defpackage #:littoral.admin
   (:use #:cl #:littoral #:littoral.html #:littoral.db)
   (:documentation "An administration interface generated from descriptions.")
-  (:export #:register-admin #:admin))
+  (:export #:register-admin #:admin #:job-queue-view))
 
 (in-package #:littoral.admin)
 
@@ -212,6 +212,134 @@ classes, that point at CLASS."
         (p (:class "admin-count") (text (format nil "~D ~A" count (string-downcase (class-label class (/= count 1)))))))
       (render-component (list-report self)))))
 
+;;; The job queue
+
+(defparameter *job-page-size* 25)
+
+(defclass job-queue-view (component)
+  ((status :initform nil :accessor view-status :documentation "The status shown, or NIL for all.")
+   (offset :initform 0 :accessor view-offset)
+   (on-change :initarg :on-change :initform nil :reader view-on-change
+              :documentation "Called with a message after a job is retried or cancelled."))
+  (:documentation "The durable jobs of the current database, newest first, by
+status, with Retry for failed and cancelled jobs and Cancel for waiting ones.
+Shows everything: put it where only those who may see it can."))
+
+(defmethod states ((self job-queue-view)) (list self))
+
+(defun status-label (status)
+  (cond ((null status) (translate "All"))
+        ((string= status "queued") (translate "Queued"))
+        ((string= status "running") (translate "Running"))
+        ((string= status "done") (translate "Done"))
+        ((string= status "failed") (translate "Failed"))
+        ((string= status "cancelled") (translate "Cancelled"))
+        (t status)))
+
+(defun time-text (time)
+  (if time
+      (multiple-value-bind (s m h date month year) (decode-universal-time time)
+        (format nil "~D-~2,'0D-~2,'0D ~2,'0D:~2,'0D:~2,'0D" year month date h m s))
+      ""))
+
+(defun first-line (text)
+  (subseq text 0 (or (position #\Newline text) (length text))))
+
+(defun job-call-text (job)
+  "JOB's name and arguments, as a call: (send-digest 42)."
+  (let ((name (littoral.jobs:durable-job-name job))
+        (arguments (littoral.jobs:durable-job-arguments job)))
+    (with-standard-io-syntax
+      (let ((*print-readably* nil))
+        (format nil "(~(~A~)~{ ~S~})" (if (symbolp name) (symbol-name name) name)
+                (if (listp arguments) arguments (list arguments)))))))
+
+(defun job-action (view action job)
+  "Retry or cancel JOB (ACTION :RETRY or :CANCEL), record it, and tell VIEW's owner."
+  (littoral.auth:check-application-role)
+  (let* ((id (littoral.jobs:durable-job-id job))
+         (done (if (eq action :retry)
+                   (littoral.jobs:retry-durable-job id)
+                   (littoral.jobs:cancel-durable-job id))))
+    (when done
+      (multiple-value-bind (actor-id actor-name) (admin-actor)
+        (littoral.audit:audit (if (eq action :retry) "job.retried" "job.cancelled")
+                              :actor-id actor-id :actor-name actor-name
+                              :subject (format nil "job:~D" id)
+                              :subject-label (format nil "Job #~D ~A" id (job-call-text job)))))
+    (when (view-on-change view)
+      (funcall (view-on-change view)
+               (cond ((not done) (translate "Job #~D has changed meanwhile; nothing was done." id))
+                     ((eq action :retry) (translate "Job #~D will run again." id))
+                     (t (translate "Cancelled job #~D." id)))))))
+
+(defmethod render ((self job-queue-view))
+  (let* ((counts (littoral.jobs:durable-job-counts))
+         (jobs (littoral.jobs:durable-jobs :status (view-status self) :limit (1+ *job-page-size*)
+                                           :offset (view-offset self)))
+         (more (> (length jobs) *job-page-size*)))
+    (div (:class "lt-job-queue")
+      (nav (:class "lt-job-statuses" :aria-label (translate "Status"))
+        (dolist (status '(nil "queued" "running" "failed" "done" "cancelled"))
+          (let ((status status)
+                (count (if status
+                           (or (cdr (assoc status counts :test #'string=)) 0)
+                           (reduce #'+ counts :key #'cdr))))
+            (anchor (:aria-current (when (equal status (view-status self)) "page")
+                     :callback (lambda () (setf (view-status self) status (view-offset self) 0)))
+              (text (format nil "~A (~D)" (status-label status) count)))))
+        (anchor (:class "lt-job-refresh" :callback (lambda ())) (translate "Refresh")))
+      (if (null jobs)
+          (p () (translate "No jobs."))
+          (table (:class "lt-table lt-job-table")
+            (caption (:class "lt-visually-hidden") (translate "Jobs, newest first"))
+            (tr () (th () "#") (th () (translate "Job")) (th () (translate "Queue")) (th () (translate "Status"))
+                (th () (translate "Tries")) (th () (translate "When")) (th () (translate "Details")) (th () ""))
+            (dolist (job (subseq jobs 0 (min (length jobs) *job-page-size*)))
+              (let ((job job)
+                    (status (littoral.jobs:durable-job-status job))
+                    (error-text (littoral.jobs:durable-job-last-error job)))
+                (tr ()
+                  (td () (text (princ-to-string (littoral.jobs:durable-job-id job))))
+                  (td () (code () (text (job-call-text job))))
+                  (td () (text (littoral.jobs:durable-job-queue job)))
+                  (td (:class (format nil "lt-job-~A" status)) (text (status-label status)))
+                  (td () (text (princ-to-string (littoral.jobs:durable-job-attempts job))))
+                  (td (:class "lt-job-time")
+                    (text (time-text (if (member status '("queued" "running") :test #'string=)
+                                         (littoral.jobs:durable-job-run-at job)
+                                         (littoral.jobs:durable-job-finished job)))))
+                  (td ()
+                    (when (littoral.jobs:durable-job-progress job)
+                      (p () (text (littoral.jobs:durable-job-progress job))))
+                    (when (and error-text (plusp (length error-text)))
+                      (details ()
+                        (summary () (text (first-line error-text)))
+                        (pre () (text error-text)))))
+                  (td ()
+                    (cond ((member status '("failed" "cancelled") :test #'string=)
+                           (anchor (:callback (lambda () (job-action self :retry job))) (translate "Retry")))
+                          ((string= status "queued")
+                           (anchor (:callback (lambda () (job-action self :cancel job))) (translate "Cancel"))))))))))
+      (p (:class "lt-job-pages")
+        (when (plusp (view-offset self))
+          (anchor (:callback (lambda () (setf (view-offset self) (max 0 (- (view-offset self) *job-page-size*)))))
+            (translate "« Newer")))
+        " "
+        (when more
+          (anchor (:callback (lambda () (incf (view-offset self) *job-page-size*)))
+            (translate "Older »")))))))
+
+(defmethod style ((self job-queue-view))
+  ".lt-job-statuses { display: flex; flex-wrap: wrap; gap: .4rem 1rem; margin-bottom: .6rem; }
+.lt-job-statuses a[aria-current] { font-weight: 600; }
+.lt-job-refresh { margin-left: auto; }
+.lt-job-queue { overflow-x: auto; }
+.lt-job-table td { vertical-align: top; }
+.lt-job-table pre { white-space: pre-wrap; font-size: .8rem; max-width: 40rem; }
+.lt-job-time { white-space: nowrap; }
+.lt-job-failed { color: var(--lt-error, #b00020); font-weight: 600; }")
+
 ;;; The application
 
 (defclass admin (component)
@@ -219,6 +347,7 @@ classes, that point at CLASS."
    (selected :accessor admin-selected)
    (message :initform nil :accessor admin-message)
    (audit :initform (make-instance 'littoral.audit:audit-log-view) :reader admin-audit-view)
+   (jobs :reader admin-jobs-view)
    (main :reader admin-main))
   (:documentation "The root of an admin application: header, messages and
 menu stay; pages replace the main area."))
@@ -230,7 +359,9 @@ page shown in its place."))
 
 (defmethod initialize-instance :after ((self admin) &key)
   (setf (admin-selected self) (first (admin-classes))
-        (slot-value self 'main) (make-instance 'main-area :admin self)))
+        (slot-value self 'main) (make-instance 'main-area :admin self)
+        (slot-value self 'jobs) (make-instance 'job-queue-view
+                                               :on-change (lambda (message) (setf (admin-message self) message)))))
 
 (defmethod states ((self admin))
   (list self))
@@ -245,9 +376,10 @@ page shown in its place."))
 
 (defmethod children ((self main-area))
   (let ((admin (area-admin self)))
-    (if (eq (admin-selected admin) :audit-log)
-        (list (admin-audit-view admin))
-        (list (class-list-for admin (admin-selected admin))))))
+    (case (admin-selected admin)
+      (:audit-log (list (admin-audit-view admin)))
+      (:job-queue (list (admin-jobs-view admin)))
+      (t (list (class-list-for admin (admin-selected admin)))))))
 
 (defmethod render ((self main-area))
   (let* ((admin (area-admin self))
@@ -255,6 +387,9 @@ page shown in its place."))
     (cond ((eq class :audit-log)
            (h1 () (translate "Audit log"))
            (render-component (admin-audit-view admin)))
+          ((eq class :job-queue)
+           (h1 () (translate "Job queue"))
+           (render-component (admin-jobs-view admin)))
           (t
            (h1 () (text (class-label class t)))
            (p () (anchor (:callback (lambda () (create-object admin class)))
@@ -355,6 +490,17 @@ name → \"old → new\", passwords shown only as changed."
                                  "Someone else changed or deleted this record meanwhile; nothing was deleted.")))
                        (home (admin-main admin))))))
 
+(defun menu-entry (admin page label)
+  "A menu entry for one of ADMIN's own pages, such as the audit log."
+  (let ((current (eq (admin-selected admin) page)))
+    (li (:class (when current "lt-active"))
+      (anchor (:aria-current (when current "page")
+               :callback (lambda ()
+                           (home (admin-main admin))
+                           (setf (admin-selected admin) page
+                                 (admin-message admin) nil)))
+        (text label)))))
+
 (defmethod render ((self admin))
   (header (:class "admin-header")
     (strong () (text (or (application-title *application*) "Admin")))
@@ -376,14 +522,9 @@ name → \"old → new\", passwords shown only as changed."
                                          (admin-message self) nil)))
                 (text (class-label class t))))))
         (when (littoral.audit:audit-enabled-p)
-          (let ((current (eq (admin-selected self) :audit-log)))
-            (li (:class (when current "lt-active"))
-              (anchor (:aria-current (when current "page")
-                       :callback (lambda ()
-                                   (home (admin-main self))
-                                   (setf (admin-selected self) :audit-log
-                                         (admin-message self) nil)))
-                (translate "Audit log")))))))
+          (menu-entry self :audit-log (translate "Audit log")))
+        (when (littoral.jobs:job-tables-p)
+          (menu-entry self :job-queue (translate "Job queue")))))
     (section (:class "admin-main")
       (render-component (admin-main self)))))
 

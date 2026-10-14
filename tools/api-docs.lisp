@@ -89,13 +89,21 @@
                   (sb-introspect:function-lambda-list symbol))))
     (format nil "~{~A~^ ~}" (mapcar #'unqualified list))))
 
+(defparameter *acronyms*
+  '("HTTP" "HTTPS" "URL" "URLS" "URI" "SQL" "JSON" "HTML" "CSS" "JS" "API" "AJAX" "SSE" "TOTP" "HOTP"
+    "RFC" "QR" "SVG" "PNG" "CBOR" "IP" "SMTP" "TLS" "DKIM" "PBKDF2" "UTF-8" "OAUTH" "OIDC" "CSV"
+    "STARTTLS" "CSP" "CSRF" "DNS" "MX" "WAL" "OK" "WCAG" "MIME" "ASCII" "CPU" "GC" "UUID" "XML" "PDF" "JWT")
+  "Words in capitals that are written as words, not names.")
+
 (defun markdown-doc (doc)
   "DOC, a docstring, as Markdown: the paragraphs kept, NAMES in capitals as code."
   (cl-ppcre:regex-replace-all
    "(?<![\\w*-])([A-Z][A-Z0-9*+-]*[A-Z0-9*])(?![\\w-])" doc
    (lambda (match name)
      (declare (ignore match))
-     (if (> (length name) 1) (format nil "`~(~A~)`" name) name))
+     (if (and (> (length name) 1) (not (member name *acronyms* :test #'string=)))
+         (format nil "`~(~A~)`" name)
+         name))
    :simple-calls t))
 
 (defun write-entry (symbol out)
@@ -126,7 +134,9 @@ do not edit by hand.~%")
                        ("littoral.browser-test" "testing/chrome.lisp")
                        ("littoral.mail" "src/mail.lisp")
                        ("littoral.jobs" "src/durable-jobs.lisp")
-                       ("littoral.audit" "src/audit.lisp")))
+                       ("littoral.audit" "src/audit.lisp")
+                       ("littoral.auth" "src/auth.lisp")
+                       ("littoral.admin" "src/admin.lisp")))
         (destructuring-bind (package file) entry
         (format out "~%## Package `~A`~%~%~A~%" package
                 (or (documentation (find-package (string-upcase package)) t) ""))

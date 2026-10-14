@@ -101,6 +101,42 @@
     (is (has-text-p b "Deleted Project #3."))
     (is (= 2 (littoral.db:db-count 'project)))))
 
+(test admin-shows-the-job-queue
+  (with-admin (b)
+    (littoral.jobs:drop-job-tables)
+    (visit b "/admin")
+    (is (not (has-text-p b "Job queue")) "Only where the job tables are")
+    (littoral.jobs:create-job-tables)
+    (let ((waiting (littoral.jobs:enqueue-job (list 'record-job 1 2)))
+          (failed (littoral.jobs:enqueue-job (list 'record-job 3 4))))
+      (littoral.db:db-execute "UPDATE job_queue SET status = 'failed', attempts = 5, finished = ?, last_error = ?
+WHERE id = ?"
+                              (get-universal-time) (format nil "Boom~%a backtrace") failed)
+      (flet ((status (id) (littoral.jobs:durable-job-status (littoral.jobs:find-durable-job id))))
+        (visit b "/admin")
+        (click b "Job queue")
+        (is (has-text-p b "(record-job 1 2)"))
+        (is (has-text-p b "All (2)"))
+        (is (has-text-p b "Failed (1)"))
+        (is (has-text-p b "Boom"))
+        ;; Retry the failed job, then cancel it again.
+        (click b "Retry")
+        (is (has-text-p b (format nil "Job #~D will run again." failed)))
+        (is (string= "queued" (status failed)))
+        (is (zerop (littoral.jobs:durable-job-attempts (littoral.jobs:find-durable-job failed))))
+        (click-nth b "Cancel" 0)          ; the newest first
+        (is (has-text-p b (format nil "Cancelled job #~D." failed)))
+        (is (string= "cancelled" (status failed)))
+        (is (string= "queued" (status waiting)))
+        ;; Filter by status.
+        (click b "Cancelled (1)")
+        (is (has-text-p b "(record-job 3 4)"))
+        (is (not (has-text-p b "(record-job 1 2)")))
+        ;; The audit log names what was done.
+        (is (equal '("job.cancelled" "job.retried")
+                   (remove-if-not (lambda (a) (alexandria:starts-with-subseq "job." a))
+                                  (littoral.audit:audit-actions))))))))
+
 (test admin-is-local-only-without-credentials
   (with-admin (b)
     (let ((remote (make-env :get "/admin")))

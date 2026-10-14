@@ -211,7 +211,8 @@
 
 (asdf:defsystem #:littoral/docs
   :description "Writes docs/API.md from the docstrings: make docs."
-  :depends-on (#:littoral #:littoral/test #:littoral/browser-test #:littoral/mail #:littoral/jobs #:littoral/audit #:sb-introspect)
+  :depends-on (#:littoral #:littoral/test #:littoral/browser-test #:littoral/mail #:littoral/jobs #:littoral/audit
+               #:littoral/auth #:littoral/admin #:sb-introspect)
   :components ((:module "tools" :components ((:file "api-docs")))))
 
 (asdf:defsystem #:littoral/tracker
@@ -254,7 +255,7 @@
   :description "An administration interface generated from descriptions and tables."
   :author "Matthew Kennedy"
   :license "MIT"
-  :depends-on (#:littoral #:littoral/db #:littoral/audit #:littoral/auth)
+  :depends-on (#:littoral #:littoral/db #:littoral/audit #:littoral/auth #:littoral/jobs)
   :components ((:module "src" :components ((:file "admin")))))
 
 (asdf:defsystem #:littoral/admin-demo

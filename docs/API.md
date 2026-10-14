@@ -40,7 +40,7 @@ The path of `request` below the mount point.
 #### `redirect-to` `url` — function
 
 From a callback: when the request's callbacks are done, send the browser
-to `url` (another site, say) instead of the next page.
+to URL (another site, say) instead of the next page.
 
 #### `forbidden` — condition
 
@@ -63,11 +63,11 @@ specialise `render`.
 
 #### `component-id` `object` — generic function
 
-Reads the id of a component.  Unique and stable: the `dom` id `ajax` updates target.
+Reads the id of a component.  Unique and stable: the `dom` id AJAX updates target.
 
 #### `render` `component` — generic function
 
-Write `component`'s `html` to *CANVAS*.  Embedded components
+Write `component`'s HTML to *CANVAS*.  Embedded components
 are written with `render-component`, never by calling `render` on them.
 
 #### `render-component` `component` — generic function
@@ -78,7 +78,7 @@ decorations, inside a halo when halos are on.
 #### `children` `component` — generic function
 
 The components `component` renders.  Halos, update-root,
-backtracking and `ajax` lookups find components through this.
+backtracking and AJAX lookups find components through this.
 
 #### `states` `component` — generic function
 
@@ -93,7 +93,7 @@ the `html-root` of the page.  Call `call-next-method` to keep `style` and `scrip
 
 #### `style` `component` — generic function
 
-`css` text this component adds to the page head, or `nil`.
+CSS text this component adds to the page head, or `nil`.
 
 #### `script` `component` — generic function
 
@@ -102,7 +102,7 @@ JavaScript text this component adds to the page, or `nil`.
 #### `initial-request` `component request` — generic function
 
 Called on the root component when its session starts,
-with the request that started it.  A bookmarked `url` is read back here with
+with the request that started it.  A bookmarked URL is read back here with
 `request-extra-path` and `request-parameter`.
 
 #### `updatable-wrapper` `component` — generic function
@@ -114,27 +114,27 @@ returns "li"; a region whose updates should be announced adds
 
 #### `update-url` `component url` — generic function
 
-Add to `url`, a `page-url`, whatever would let a bookmark of
+Add to URL, a `page-url`, whatever would let a bookmark of
 this page come back to it.  Called on every visible component, parents
 first; read it back in `initial-request` with `request-extra-path` and
 `request-parameter`.
 
 #### `page-url` — class
 
-What `update-url` methods add to the `url` of a page.
+What `update-url` methods add to the URL of a page.
 
 #### `page-url` `session continuation` — function
 
-The `url` of `continuation`: the application's path, what `update-url` methods
+The URL of `continuation`: the application's path, what `update-url` methods
 add, then the session and page keys.
 
 #### `add-to-path` `url &rest segments` — function
 
-Append `segments` (strings, or anything `princ` prints) to `url`'s path.
+Append `segments` (strings, or anything `princ` prints) to URL's path.
 
 #### `add-parameter` `url key &optional value` — function
 
-Add the query parameter `key` (with `value`, unless `nil`) to `url`.
+Add the query parameter `key` (with `value`, unless `nil`) to URL.
 
 #### `url-path` `object` — generic function
 
@@ -191,15 +191,15 @@ Reads the title of a html-root.
 
 #### `add-stylesheet` `root url` — function
 
-Link the stylesheet at `url` from the page.
+Link the stylesheet at URL from the page.
 
 #### `add-script` `root url` — function
 
-Load the script at `url` in the page.
+Load the script at URL in the page.
 
 #### `add-style` `root css` — function
 
-Add the `css` text `css` to the page head.
+Add the CSS text CSS to the page head.
 
 #### `add-head-meta` `root key content` — function
 
@@ -284,7 +284,7 @@ modal dialog, say).
 
 #### `updatable` — class
 
-Mixin for components `ajax` can re-render: each is written
+Mixin for components AJAX can re-render: each is written
 inside an element carrying its `component-id`.
 
 #### `show-modal` `other &key on-answer (closable t) title` — function
@@ -306,7 +306,7 @@ behind it but cannot be used until the dialog answers.
 #### `toast` `message &key (kind :info) (session *session*)` — function
 
 Show `message` briefly at the corner of `session`'s page: on its next page or
-`ajax` response, or at once on pages with a push stream.  `kind` is :`info`,
+AJAX response, or at once on pages with a push stream.  `kind` is :`info`,
 :`success` or :`error`.
 
 ### Dialogs
@@ -529,7 +529,7 @@ An email address.
 
 #### `url-field` — class
 
-An http or https `url`.
+An http or https URL.
 
 #### `integer-field` — class
 
@@ -696,8 +696,8 @@ For a :`periodical` attribute: every `seconds`, run `callback` and re-render `up
 
 #### `execute-script` `javascript` — function
 
-Run `javascript` in the browser once the current `ajax` request's updates are
-in place.  Outside an `ajax` request it does nothing and returns `nil`.
+Run `javascript` in the browser once the current AJAX request's updates are
+in place.  Outside an AJAX request it does nothing and returns `nil`.
 
 #### `channel` — class
 
@@ -768,12 +768,12 @@ own inputs and validation.
 
 #### `bar-chart` `data &key (title "") (width 480) (height 220) (format-value (function princ-to-string))` — function
 
-Write a bar chart of `data`, a list of (`label` . `value`), as accessible `svg`.
+Write a bar chart of `data`, a list of (`label` . `value`), as accessible SVG.
 
 #### `line-chart` `series &key (title "") (width 480) (height 220) x-labels (format-value (function princ-to-string))` — function
 
 Write a line chart of `series`, a list of (`name` . `values`), the values all
-the same length, as accessible `svg`.  `x-labels` name the points.
+the same length, as accessible SVG.  `x-labels` name the points.
 
 #### `sparkline` `values &key (label "") (width 120) (height 28)` — function
 
@@ -807,20 +807,20 @@ Move the card at `from-index` of `from-column` to `to-index` of `to-column`; `ni
 
 #### `markdown-html` `markdown` — function
 
-`markdown` as `html`: paragraphs, # headings, - and 1. lists, > quotes, ```
+`markdown` as HTML: paragraphs, # headings, - and 1. lists, > quotes, ```
 code blocks, `code`, **strong**, *emphasis* and [links](https://…).  All
-of `markdown`'s own `html` is escaped, and links go only to http(s), mailto or
+of `markdown`'s own HTML is escaped, and links go only to http(s), mailto or
 this site, so the result is safe to show whoever wrote it.
 
 #### `markdown-field` — class
 
-Text written in Markdown, shown as safe `html`.
+Text written in Markdown, shown as safe HTML.
 
 ### JSON endpoints
 
 #### `define-endpoint` `application-path method pattern (&rest parameters) &body body` — macro
 
-Serve `body` as `json` for `method` (:`get`, :`post`, :`put`, :`patch`, :`delete`)
+Serve `body` as JSON for `method` (:`get`, :`post`, :`put`, :`patch`, :`delete`)
 requests to `pattern`, such as "/api/items/:id", under the application at
 `application-path`.  `parameters` are bound to `pattern`'s :`name` segments, in order.
 
@@ -839,8 +839,8 @@ Answer the current endpoint request with `status` and {"error": `message`}.
 
 #### `endpoint-body` — function
 
-The request's `json` body, parsed (objects as hash tables), or `nil` when empty.
-Signals `endpoint-error` 400 when it isn't `json`.
+The request's JSON body, parsed (objects as hash tables), or `nil` when empty.
+Signals `endpoint-error` 400 when it isn't JSON.
 
 #### `*endpoint-authenticator*` — variable
 
@@ -879,7 +879,7 @@ Start the request counts and timings again from zero.
 
 #### `log-requests-to` `stream &key (format :json)` — function
 
-Write a line to `stream` for every request: `json` (`format` :`json`, for log
+Write a line to `stream` for every request: JSON (`format` :JSON, for log
 collectors) or text (:`text`).  `nil` for `stream` stops logging.
 
 #### `*request-log*` — variable
@@ -1045,8 +1045,8 @@ kept in a cookie keep their key: another site cannot plant that cookie.
 
 Have the browser keep the cookie `name`=`value`, sent with this application's
 requests (or `path`'s).  `max-age` in seconds keeps it that long, 0 deletes it,
-`nil` keeps it until the browser closes.  Secure over `https`.  The cookie goes
-out with `session`'s next `http` response: this one, or the next page load when
+`nil` keeps it until the browser closes.  Secure over HTTPS.  The cookie goes
+out with `session`'s next HTTP response: this one, or the next page load when
 called while answering a WebSocket message.
 
 #### `request-cookie` `name` — function
@@ -1097,7 +1097,7 @@ Reads the max-continuations of an application.  Pages per session the back butto
 
 #### `application-cookie-sessions-p` `object` — generic function
 
-Reads the cookie-sessions-p of an application.  Track the session in a cookie instead of the `url`.
+Reads the cookie-sessions-p of an application.  Track the session in a cookie instead of the URL.
 
 #### `application-sessions` `object` — generic function
 
@@ -1109,7 +1109,7 @@ Reads the max-sessions of an application.  Most live sessions; the least recentl
 
 #### `application-error-handler` `object` — generic function
 
-Reads the error-handler of an application.  Function of a condition returning a component or an `html`
+Reads the error-handler of an application.  Function of a condition returning a component or an HTML
 string for the error page, or `nil` for the standard one.
 
 #### `application-expired-notice` `object` — generic function
@@ -1127,7 +1127,7 @@ Reads the scripts of an application.
 
 #### `application-credentials` `object` — generic function
 
-Reads the credentials of an application.  (`user` . `password`) required by `http` basic auth, or `nil`.
+Reads the credentials of an application.  (`user` . `password`) required by HTTP basic auth, or `nil`.
 
 #### `reap-all-sessions` — function
 
@@ -1199,7 +1199,7 @@ application's database.
 
 #### `application-websockets-p` `object` — generic function
 
-Reads the websockets-p of an application.  Carry `ajax` and server push over one WebSocket per page
+Reads the websockets-p of an application.  Carry AJAX and server push over one WebSocket per page
 (with littoral/websocket loaded), on pages that have push.
 
 #### `application-content-security-policy` `object` — generic function
@@ -1277,17 +1277,17 @@ rendering an error page.
 
 #### `url-for` `path` — function
 
-`path`, absolute within this littoral, as a `url` the browser can follow.
+`path`, absolute within this littoral, as a URL the browser can follow.
 
 #### `*base-path*` — variable
 
-Prepended to every `url` littoral writes: the mount prefix given to
+Prepended to every URL littoral writes: the mount prefix given to
 `make-lack-app` plus the request's script-name.  No trailing slash.
 
 #### `configure-admin` `&key user password (path "/config")` — function
 
 Serve the configuration application at `path`.  With `user` and `password` it
-is behind `http` basic auth; without, it answers only requests from this
+is behind HTTP basic auth; without, it answers only requests from this
 machine.
 
 ### Languages
@@ -1386,7 +1386,7 @@ Tags and brushes for writing HTML in RENDER methods.
 
 #### `*canvas*` — variable
 
-The stream render methods write `html` to.
+The stream render methods write HTML to.
 
 #### `text` `thing` — function
 
@@ -1402,7 +1402,7 @@ Evaluate `body` with *CANVAS* collecting into a string, which is returned.
 
 #### `html-escape` `thing` — function
 
-Return the printed representation of `thing` with `html` metacharacters escaped.
+Return the printed representation of `thing` with HTML metacharacters escaped.
 
 ### Plain tags
 
@@ -1650,7 +1650,7 @@ Write an element whose `name` (a string) is computed.
 
 #### `anchor` `&rest arguments` — macro
 
-A link.  :`callback` is a thunk run when it is followed; :`href` a plain `url`.
+A link.  :`callback` is a thunk run when it is followed; :`href` a plain URL.
 
 #### `form` `&rest arguments` — macro
 
@@ -1703,7 +1703,7 @@ fields are not applied.
 
 #### `button` `&rest arguments` — macro
 
-A button that submits nothing; give it an `ajax` :`on-click`.
+A button that submits nothing; give it an AJAX :`on-click`.
 
 #### `file-input` `&optional attributes` — macro
 
@@ -1720,7 +1720,7 @@ Reads the filename of an uploaded-file.  The name the browser gave, without dire
 
 #### `file-content-type` `object` — generic function
 
-Reads the content-type of an uploaded-file.  The `mime` type the browser gave.
+Reads the content-type of an uploaded-file.  The MIME type the browser gave.
 
 #### `file-contents` `object` — generic function
 
@@ -1773,7 +1773,7 @@ Reads the files of a browser.  Alist of field name → (`filename` `content-type
 
 #### `visit` `browser url &key (method :get) body content-type` — function
 
-Request `url`, following redirects, and make the result the current page.
+Request URL, following redirects, and make the result the current page.
 
 #### `back-to` `browser url` — function
 
@@ -1785,7 +1785,7 @@ One request, no redirects followed.  Returns status, headers, body string.
 
 #### `make-env` `method url &key body cookies extra-headers (content-type "application/x-www-form-urlencoded")` — function
 
-A Lack environment for a `method` request to `url`, with `extra-headers` (an
+A Lack environment for a `method` request to URL, with `extra-headers` (an
 alist of lower-case names to values).
 
 #### `response-header` `headers name` — function
@@ -1816,11 +1816,11 @@ The name of the field with `dom` id `id`.
 
 #### `form-action` `browser` — function
 
-The action `url` of the first form on the page.
+The action URL of the first form on the page.
 
 #### `attributes` `tag` — function
 
-The attributes in `tag`, the inside of an `html` start tag, as an alist.
+The attributes in `tag`, the inside of an HTML start tag, as an alist.
 
 #### `attr` `attributes name` — function
 
@@ -1828,11 +1828,11 @@ The value of attribute `name` in `attributes`.
 
 #### `unescape` `string` — function
 
-`string` with the `html` escapes littoral writes undone.
+`string` with the HTML escapes littoral writes undone.
 
 #### `strip-tags` `html` — function
 
-`html` with its tags removed and escapes undone.  Scripts and style sheets
+HTML with its tags removed and escapes undone.  Scripts and style sheets
 go whole, as they aren't text (and a < in them isn't a tag).
 
 ### Acting on it
@@ -1874,7 +1874,7 @@ Submit the form with the button whose label contains `text`.
 
 #### `ajax-request` `browser callback targets &key fields` — function
 
-Post an `ajax` request the way littoral.js does; returns the `json` text.
+Post an AJAX request the way littoral.js does; returns the JSON text.
 
 #### `ajax-specs` `browser attribute` — function
 
@@ -1922,7 +1922,7 @@ A Chrome tab, driven over the DevTools protocol.
 
 #### `visit` `page path` — function
 
-Open `path` (relative to the page's base `url`, or absolute).
+Open `path` (relative to the page's base URL, or absolute).
 
 #### `evaluate` `page javascript` — function
 
@@ -1959,7 +1959,7 @@ Wait until `javascript` is true in `page`; signals `browser-error` after `timeou
 
 #### `screenshot` `page pathname` — function
 
-Save `page` as a `png` at `pathname`.
+Save `page` as a PNG at `pathname`.
 
 #### `add-virtual-authenticator` `page` — function
 
@@ -1982,8 +1982,8 @@ A mail to send: `make-mail` makes one.
 #### `make-mail` `&key to cc bcc (from *mail-from*) reply-to (subject "") text html attachments headers` — function
 
 A mail.  `to`, `cc` and `bcc` are addresses ("ada@example.org" or "Ada <ada@example.org>")
-or lists of them; `text` and `html` its plain and `html` bodies (one is enough: the
-plain one is made from the `html` when missing); `attachments` (`file-name`
+or lists of them; `text` and HTML its plain and HTML bodies (one is enough: the
+plain one is made from the HTML when missing); `attachments` (`file-name`
 `content-type` `data`) lists, `data` octets or a string; `headers` (`name` . `value`) pairs.
 A bad address, or a line break in a header, is refused here.
 
@@ -2029,7 +2029,7 @@ Reads the headers of a mail.  Extra headers, as (`name` . `value`) pairs.
 
 #### `mail-string` `mail &key (date (get-universal-time))` — function
 
-`mail` as a `mime` message, with `crlf` line breaks; Bcc isn't written.
+`mail` as a MIME message, with `crlf` line breaks; Bcc isn't written.
 
 #### `mail-recipients` `mail` — function
 
@@ -2047,15 +2047,15 @@ The bare address in `address`: "Ada <ada@example.org>" → "ada@example.org".
 
 #### `message-header` `message name` — function
 
-The header `name` of `message` (a `mime` string), decoded, or `nil`.
+The header `name` of `message` (a MIME string), decoded, or `nil`.
 
 #### `message-text` `message` — function
 
-The plain text of `message` (a `mime` string), with plain newlines.
+The plain text of `message` (a MIME string), with plain newlines.
 
 #### `message-html` `message` — function
 
-The `html` part of `message` (a `mime` string), or `nil`.
+The HTML part of `message` (a MIME string), or `nil`.
 
 ### Mailers
 
@@ -2065,7 +2065,7 @@ What sends mail: an `smtp-mailer`, or by default a `log-mailer` that prints it.
 
 #### `send-message` `mailer from recipients message` — generic function
 
-Send `message`, a `mime` string, from the address `from` to the addresses
+Send `message`, a MIME string, from the address `from` to the addresses
 `recipients`.  Signals on failure; an `smtp-error` that is `smtp-error-permanent-p`
 won't succeed if tried again.
 
@@ -2076,24 +2076,24 @@ background instead, and tries again when it fails.
 
 #### `smtp-mailer` — class
 
-Sends mail through an `smtp` server: `make-smtp-mailer` makes one.
+Sends mail through an SMTP server: `make-smtp-mailer` makes one.
 
 #### `make-smtp-mailer` `&key (host "localhost") port (security :starttls) username password (helo (machine-instance)) (verify t) ca-file (timeout 30) allow-insecure-auth dkim (pool-size 2)` — function
 
-A mailer sending through the `smtp` server at `host`.  `security` is :`starttls`
-(port 587 by default), :`tls` (465) or :`none` (25, for a relay on this machine).
+A mailer sending through the SMTP server at `host`.  `security` is :STARTTLS
+(port 587 by default), :TLS (465) or :`none` (25, for a relay on this machine).
 With `username`, signs in with the strongest `auth` method the server offers;
-without `tls` only when `allow-insecure-auth` is true.  The server's certificate
+without TLS only when `allow-insecure-auth` is true.  The server's certificate
 is checked against the system's authorities, or `ca-file`'s, unless `verify` is `nil`.
 `timeout`, in seconds, bounds connecting and each step of the conversation.
-`dkim`, a signer from `smtp`/`dkim`:`make-dkim-signer` or a list of them (`rsa` and
+DKIM, a signer from SMTP/DKIM:`make-dkim-signer` or a list of them (`rsa` and
 Ed25519, say), signs each message as it is sent.  Up to `pool-size`
 connections are kept open and reused, so a batch of mail doesn't connect
 for each message; `nil` connects for each one.
 
 #### `smtp-mailer-from-url` `url &rest options` — function
 
-A mailer from `url`: smtp://user:password@host:port (`starttls`), smtps://… (`tls`)
+A mailer from URL: smtp://user:password@host:port (STARTTLS), smtps://… (TLS)
 or smtp+insecure://… (neither).  `options` go to `make-smtp-mailer`.
 
 #### `smtp-error` — condition
@@ -2145,7 +2145,7 @@ Reads the recipients of a sent-message.
 
 #### `sent-message-text` `object` — generic function
 
-Reads the text of a sent-message.  The `mime` message.
+Reads the text of a sent-message.  The MIME message.
 
 #### `sent-message-time` `object` — generic function
 
@@ -2156,22 +2156,22 @@ Reads the time of a sent-message.
 #### `define-mail` `name lambda-list &key to cc bcc from reply-to subject text html attachments headers` — macro
 
 Define `name`, a function of `lambda-list` making a mail.  The keyword forms are
-evaluated each time, with `lambda-list`'s variables bound; `html` is a list of
-forms written with Littoral's `html` tags (as in `render`), inside *MAIL-LAYOUT*.
-Without `text`, the plain text is made from the `html`.
+evaluated each time, with `lambda-list`'s variables bound; HTML is a list of
+forms written with Littoral's HTML tags (as in `render`), inside *MAIL-LAYOUT*.
+Without `text`, the plain text is made from the HTML.
 
 #### `*mail-layout*` — variable
 
-A function of (`subject` `body-thunk`) that writes the `html` around a template's content.
+A function of (`subject` `body-thunk`) that writes the HTML around a template's content.
 
 #### `default-mail-layout` `subject body` — function
 
-Write an `html` mail around `body`, a thunk writing its content: a plain,
+Write an HTML mail around `body`, a thunk writing its content: a plain,
 readable page that mail programs show well.
 
 #### `html-to-text` `html` — function
 
-A plain-text version of `html`: paragraphs and line breaks kept, links
+A plain-text version of HTML: paragraphs and line breaks kept, links
 written out after their text, tags dropped, entities decoded.
 
 ### The outbox
@@ -2260,7 +2260,7 @@ Reads the subject of an outbox-mail.
 
 #### `outbox-message` `object` — generic function
 
-Reads the message of an outbox-mail.  The `mime` message.
+Reads the message of an outbox-mail.  The MIME message.
 
 #### `outbox-status` `object` — generic function
 
@@ -2324,6 +2324,11 @@ Create or bring up to date the job_queue table (migrations :`littoral-jobs`).
 #### `drop-job-tables` — function
 
 Drop the job_queue table.
+
+#### `job-tables-p` — function
+
+True when `create-job-tables` ran for the current database in this process,
+as it does through `create-mail-tables`: the admin then shows the job queue.
 
 #### `run-due-jobs` `&key (queues (quote ("default"))) (limit 100)` — function
 
@@ -2419,9 +2424,10 @@ Reads the finished of a durable-job.
 
 The job `id`, or `nil`.
 
-#### `durable-jobs` `&key status queue (limit 50)` — function
+#### `durable-jobs` `&key status queue (limit 50) (offset 0)` — function
 
-Jobs, newest first; only those with `status` and in `queue` (strings) if given.
+Jobs, newest first; only those with `status` and in `queue` (strings) if
+given.  At most `limit`, skipping the first `offset`.
 
 #### `durable-job-counts` — function
 
@@ -2538,3 +2544,554 @@ Reads the address of an audit-event.
 
 The audit log, newest first, filtered by action and by
 who or what.  Shows everything: put it where only those who may see it can.
+
+## Package `littoral.auth`
+
+Users, signing in, roles and password reset for Littoral.
+
+### Users
+
+#### `user` — class
+
+Someone who can sign in, in the built-in users table.
+
+#### `user-id` `user` — generic function
+
+`user`'s key in its store, kept in the session while they are signed in.
+
+#### `user-name` `user` — generic function
+
+The name `user` signs in with.
+
+#### `user-email` `user` — generic function
+
+`user`'s email address, or `nil`.
+
+#### `user-roles` `user` — generic function
+
+`user`'s roles, as keywords.
+
+#### `user-active-p` `user` — generic function
+
+True when `user` may sign in.
+
+#### `user-password-hash` `user` — generic function
+
+`user`'s stored password hash, or `nil` when they have none.
+
+### User stores
+
+#### `user-store` — class
+
+Where users are found.  Specialise the STORE- generic functions.
+
+#### `users-table-store` — class
+
+The built-in users table, through littoral/db.
+
+#### `*user-store*` — variable
+
+Where users come from.  Bind it per application with `using-user-store`.
+
+#### `using-user-store` `store &optional around` — function
+
+An :`around-request` function binding *USER-STORE* to `store`, then calling
+`around` (another such function, such as `using-database`'s) if given.
+
+#### `store-find-user` `store name` — generic function
+
+The user `store` knows by `name`, or `nil`.
+
+#### `store-find-user-by-email` `store email` — generic function
+
+The user `store` knows by `email`, or `nil`.
+
+#### `store-find-user-by-id` `store id` — generic function
+
+The user whose `user-id` is `id`, or its printed form; `nil` if none.
+
+#### `store-set-password-hash` `store user hash` — generic function
+
+Keep `hash` as `user`'s password hash.
+
+#### `store-create-user` `store &key name email password-hash roles` — generic function
+
+A new user in `store`, or `nil` when `store` doesn't create users
+(OAuth then signs in only users it already has).
+
+#### `store-writable-p` `store` — generic function
+
+True when `store-set-password-hash` works.
+
+#### `store-verify-password` `store password hash` — generic function
+
+True when `password` matches `hash` as `store` keeps them.
+
+#### `sql-user-store` — class
+
+Users kept in an application's own table, described by its column names.
+
+#### `sql-user-store` `object` — generic function
+
+Reads the store of a sql-user.
+
+#### `make-sql-user-store` `&key table (id "id") (name "name") email (password "password_hash") active roles-column roles-query writable create (case-insensitive t) verify` — function
+
+A user store over `table`, whose columns are `id`, `name`, `email` (optional),
+`password` (the hash) and `active` (optional: a boolean or 0/1 column).  Roles
+come from `roles-column` (comma-separated names) or `roles-query` (SQL with one
+?, the user's id, returning role names in its first column).  `name` and
+`email` match regardless of case unless `case-insensitive` is `nil`.  `verify`, a
+function of (`password` `hash`), replaces the built-in hash formats.
+
+#### `sql-user` — class
+
+A user read from a `sql-user-store`'s table.
+
+### Passwords
+
+#### `hash-password` `password` — function
+
+A new hash of `password`: salted `pbkdf2-sha256`, as one string.
+
+#### `verify-password` `password hash` — function
+
+True when `password` matches `hash`, in Littoral's own format, bcrypt, or
+Django's or Werkzeug's PBKDF2.  False for anything else, never an error.
+
+#### `password-needs-rehash-p` `hash` — function
+
+True unless `hash` is Littoral's `pbkdf2-sha256` with at least *PBKDF2-ITERATIONS*.
+
+#### `bcrypt-hash` `password &key (cost 12) (salt (random-data 16))` — function
+
+A $2b$ bcrypt hash of `password`, for seeding a table that expects them.
+
+#### `*pbkdf2-iterations*` — variable
+
+`pbkdf2-sha256` iterations for new password hashes (`owasp`'s 2023 advice).
+Hashes with fewer are upgraded when their owner next signs in.
+
+#### `*rehash-on-sign-in*` — variable
+
+When true, signing in re-hashes a password kept in another format (bcrypt,
+Django's) or with fewer than *PBKDF2-ITERATIONS*, where the store can write.
+
+### Tables and users
+
+#### `create-auth-tables` `&key (users t)` — function
+
+Create or bring up to date the tables signing in needs, by their
+migrations (:`littoral-users`, :`littoral-auth`): the users table (names and
+emails unique whatever their case) unless `users` is `nil`, as when users come
+from an application's own table, the tokens, sign-ins, roles and
+permissions tables, and the audit log.
+
+#### `drop-auth-tables` `&key (users t)` — function
+
+Drop the tables `create-auth-tables` makes, the audit log too, for tests:
+everything is lost.
+
+#### `purge-expired-auth-rows` — function
+
+Delete sign-in failures and reset mails too old to count, expired
+sign-ins, and expired reset links and API tokens; how many rows.  Run it
+from a nightly job: signing in tidies up only now and then.
+
+#### `add-user` `name email password &key roles` — function
+
+Store a new user; `roles` are keywords.  Signals when `name` is taken or the
+store doesn't create users.
+
+#### `find-user` `name` — function
+
+The user called `name` (case aside, in the built-in store), or `nil`.
+
+#### `find-user-by-email` `email` — function
+
+The user whose email is `email`, or `nil`.
+
+#### `find-user-by-id` `id` — function
+
+The user whose `user-id` is `id`, or `nil`.
+
+#### `set-password` `user password` — function
+
+Give `user` the new `password`, and void their outstanding reset links.
+
+#### `check-password` `user password` — function
+
+True when `password` is `user`'s.
+
+#### `authenticate` `name password` — function
+
+The active user `name` if `password` is theirs and neither the name nor the
+client's address is locked out; otherwise `nil` and, as a second value, why.
+
+### Signing in
+
+#### `current-user` — function
+
+The user signed in to this session, or `nil`.
+
+#### `log-in` `user &key remember (method "password")` — function
+
+Sign `user` in to this session, recording the sign-in in the database so
+it survives restarts; with `remember`, for *REMEMBER-DAYS* rather than until
+the browser closes.  The session gets a new key, so a link to it that
+someone else had beforehand no longer reaches it.  `method`, how they proved
+who they are, goes in the audit log.
+
+#### `log-out` — function
+
+Sign the session's user out, end its sign-in, and give the session a new key.
+
+#### `signed-in-p` — function
+
+True when someone is signed in to this session.
+
+#### `has-role-p` `role &optional (user (current-user))` — function
+
+True when `user` has `role` (a keyword); with `role` `nil`, when there is a user.
+
+#### `require-role` `role` — function
+
+Refuse the request (403) unless the current user has `role`; with `role`
+`nil`, unless someone is signed in.
+
+#### `*remember-days*` — variable
+
+How long "Keep me signed in" lasts, renewed by use.
+
+#### `*sign-in-idle-hours*` — variable
+
+How long an unremembered sign-in lasts unused.
+
+#### `*auth-session-check-seconds*` — variable
+
+How often a signed-in session checks that its sign-in still stands.
+
+#### `*offer-remember-me*` — variable
+
+Whether the sign-in form offers "Keep me signed in".
+
+#### `user-sessions` `user` — function
+
+`user`'s standing sign-ins, newest first, as plists of :`id` :`created`
+:`last-seen` :`remember` :`user-agent` :`address` and :`current` (this session's).
+
+#### `revoke-session` `id &optional (user (current-user))` — function
+
+End `user`'s sign-in `id` wherever it is; that browser is signed out within
+*AUTH-SESSION-CHECK-SECONDS*, this one at once.
+
+#### `log-out-everywhere` `&optional (user (current-user))` — function
+
+End all of `user`'s sign-ins, this one too.
+
+### Limits on signing in
+
+#### `*lockout-failures*` — variable
+
+Failed attempts on one name, within *FAILURE-WINDOW-SECONDS*, before it is locked.
+
+#### `*lockout-seconds*` — variable
+
+How long a name stays locked after its latest failure.
+
+#### `*failure-window-seconds*` — variable
+
+How long a failed attempt counts against a name or an address.
+
+#### `*failures-per-address*` — variable
+
+Failed sign-ins from one public client address, within
+*FAILURE-WINDOW-SECONDS*, before it may try no more names for
+*LOCKOUT-SECONDS*.  Stops one address guessing a common password across
+many names.  Loopback and private addresses, usually a proxy's, are not
+limited: behind a proxy, set *TRUST-FORWARDED-FOR* so the limit sees clients.
+
+#### `*reset-mails-per-address*` — variable
+
+Reset mails one client address may have sent, within *FAILURE-WINDOW-SECONDS*.
+
+### Password reset
+
+#### `*public-url*` — variable
+
+This site's address as its users reach it, such as "https://example.org",
+for links in mail and OAuth redirects.  Required in deployment mode: the
+request's Host header is the client's to choose, and a reset link built
+from a forged one would send its token to someone else's site.
+
+#### `*reset-link-seconds*` — variable
+
+How long a password reset link works.
+
+#### `*send-mail*` — variable
+
+A function of (`to` `subject` `body`) that sends mail.  The default prints it;
+plug in your mailer.
+
+#### `*last-mail*` — variable
+
+The last mail sent, as (`to` `subject` `body`), for development and tests.
+
+### API tokens
+
+#### `endpoint-user` — function
+
+In a JSON endpoint: the user the request comes from, or `nil`.
+
+#### `require-endpoint-user` `&optional role` — function
+
+In a JSON endpoint: the user the request comes from, answering 401 when
+there is none and 403 when they lack `role`.
+
+#### `create-api-token` `user &key (days 365)` — function
+
+A new API token for `user`, valid `days` days: send it as
+"Authorization: Bearer `token`".  Only its hash is kept, so show it once.
+
+#### `revoke-api-tokens` `user` — function
+
+Void all of `user`'s API tokens.
+
+### Second factors
+
+#### `security-settings` — class
+
+Second factors for the signed-in user: an authenticator app,
+passkeys and recovery codes.
+
+#### `second-factor-p` `user` — function
+
+True when signing in as `user` with a password needs a second step.
+
+#### `user-factors` `user &optional kind` — function
+
+`user`'s second factors, oldest first, of `kind` ("totp", "passkey") if given.
+
+#### `*offer-passkeys*` — variable
+
+Whether the sign-in form offers signing in with a passkey.
+
+#### `hotp` `key counter &key (digits 6)` — function
+
+The HOTP code (RFC 4226) of `key` (octets) for `counter`, as a string of `digits`.
+
+#### `totp-code` `secret &optional (universal-time (get-universal-time))` — function
+
+The six-digit code `secret` (base 32) gives now.
+
+#### `verify-totp` `secret code &key (after -1) (universal-time (get-universal-time))` — function
+
+The time step at which `code` is `secret`'s, within one step either way and
+later than `after` (so a code works once), or `nil`.
+
+#### `new-totp-secret` — function
+
+A new random authenticator-app secret: 160 bits, in base 32.
+
+#### `totp-uri` `secret account issuer` — function
+
+The otpauth:// address an authenticator app reads, from a QR code or a link.
+
+#### `base32-encode` `octets` — function
+
+`octets` in RFC 4648 base 32, without padding, as authenticator apps take secrets.
+
+#### `base32-decode` `string` — function
+
+The octets `string` encodes in base 32, ignoring case, spaces, dashes and padding.
+
+#### `make-recovery-codes` `user &key (count 10)` — function
+
+Ten new single-use recovery codes for `user`, replacing any others; only
+their hashes are kept, so show them once.
+
+#### `use-recovery-code` `user code` — function
+
+True, using it up, when `code` is one of `user`'s recovery codes.
+
+#### `recovery-codes-left` `user` — function
+
+How many of `user`'s recovery codes are still unused.
+
+#### `add-passkey` `user challenge response-json &key (name "Passkey")` — function
+
+Keep the passkey a navigator.credentials.create response (JSON) made for `user`.
+
+#### `verify-registration` `challenge client-data-b64 attestation-b64` — function
+
+Check a navigator.credentials.create response: (`values` `credential-id` X Y `count`).
+
+#### `verify-assertion` `challenge response &optional user` — function
+
+Check a navigator.credentials.get `response` (a parsed JSON hash table); the
+user it signs in, its passkey's signature count advanced.
+
+#### `passkey-error` — condition
+
+A passkey registration or assertion that fails a check, with the reason.
+
+#### `cbor-decode` `octets &optional (start 0)` — function
+
+The CBOR item at `start` in `octets`, and where the next begins.  Maps become
+alists, byte strings octet vectors.
+
+#### `qr-svg` `text &key (module 4) (label "QR code")` — function
+
+`text` as a QR code, inline SVG.
+
+### Roles and permissions
+
+#### `grant-role` `user role` — function
+
+Give `user` the `role` (a keyword), whatever their store.
+
+#### `revoke-role` `user role` — function
+
+Take `role` from `user` (only a role granted here: a store's own roles stay).
+
+#### `grant-permission` `role permission` — function
+
+Let users with `role` do `permission` (both keywords).
+
+#### `revoke-permission` `role permission` — function
+
+Stop letting users with `role` do `permission`.
+
+#### `role-permissions` `role` — function
+
+What users with `role` may do, as keywords.
+
+#### `user-permissions` `user` — function
+
+What `user` may do through all their roles, as keywords.
+
+#### `has-permission-p` `permission &optional (user (current-user))` — function
+
+True when `user` may do `permission` (a keyword) through one of their roles.
+
+#### `require-permission` `permission` — function
+
+Refuse the request (403) unless the current user may do `permission`.
+
+### Restricted components
+
+#### `restricted` — class
+
+Mixin for components only some users may see.  Specialise
+`required-role`; the default lets anyone signed in see it.
+
+#### `required-role` `component` — generic function
+
+The role needed to see `component`, or `nil` for any signed-in user.
+
+#### `required-permission` `component` — generic function
+
+The permission needed to see `component`, or `nil` for none beyond its role.
+
+#### `permitted-p` `component` — function
+
+True when the current user may see `component`: has its role, and its permission.
+
+### Sign-in pages
+
+#### `sign-in` — class
+
+Asks for a name and password; signs the user in and answers them.
+
+#### `sign-out-link` `&key (label "Sign out") then` — function
+
+Write a link that signs the user out, then calls `then`, a thunk.
+
+#### `password-reset-request` — class
+
+Asks for an email address and sends a reset link to it.
+
+#### `password-reset` — class
+
+Lets the holder of a reset link choose a new password; answers the user.
+
+#### `auth-root` — class
+
+Mixin for an application's root component: it answers
+password reset links and, with littoral/oauth, sign-in callbacks.
+
+#### `define-auth-path` `segment (root rest request) &body body` — macro
+
+Run `body` when a session of an `auth-root` application starts at
+/`segment`/…, with `rest` the remaining segments.
+
+#### `request-base-url` `&optional (request *request*)` — function
+
+This site's address, such as https://example.org: *PUBLIC-URL*, or in
+development mode the request's own host.
+
+#### `*sign-in-extras*` — variable
+
+Functions of the `sign-in` component writing more ways to sign in (OAuth
+buttons, from littoral/oauth).
+
+### Applications for signed-in users
+
+#### `signed-in-root` — class
+
+Mixin for the root of an application only signed-in users
+may use, with the role `restrict-application` gave it.  A new visitor is shown
+the sign-in form.
+
+#### `restrict-application` `path role` — function
+
+Let only signed-in users with `role` (anyone signed in, when `role` is T)
+use the application at `path`, whose root is a `signed-in-root`; with `role` `nil`,
+forget the restriction.
+
+#### `application-role` `&optional (application *application*)` — function
+
+The role `application`'s users need, `nil` for anyone signed in; and, second,
+whether `restrict-application` restricted it.
+
+#### `check-application-role` — function
+
+Refuse the request (403) unless the current user may use this
+application, when `restrict-application` restricted it.  Call it in actions
+that change things: a page from before a sign-out, or before a role was
+revoked, keeps its links.
+
+#### `configure-signed-in-admin` `&key (path "/config") (role :admin) database` — function
+
+Serve the configuration application at `path` to signed-in users with `role`,
+from wherever they are, instead of only to this machine as `configure-admin`
+does.  `database` (as `connect-database` takes it) holds the users, unless the
+current one does.
+
+## Package `littoral.admin`
+
+An administration interface generated from descriptions.
+
+### General
+
+#### `register-admin` `path classes &key (title "Admin") database role credentials (mode :deployment) (audit t)` — function
+
+Serve an admin for `classes` (stored classes, see `define-table`) at `path`.
+`database` (a driver and parameters, as `connect-database` takes them) gives
+it its own database; otherwise it uses the current one.  With `role`, users
+with that role (any signed-in user, for T) sign in to it, from anywhere: the
+database must hold littoral/auth's tables.  With `credentials` instead, it asks
+for HTTP basic auth.  With neither, it answers only requests from this machine.  With `audit` (the
+default), it records what it creates, changes and deletes in the audit log
+(creating its table) and shows the log.
+
+#### `admin` — class
+
+The root of an admin application: header, messages and
+menu stay; pages replace the main area.
+
+#### `job-queue-view` — class
+
+The durable jobs of the current database, newest first, by
+status, with Retry for failed and cancelled jobs and Cancel for waiting ones.
+Shows everything: put it where only those who may see it can.
