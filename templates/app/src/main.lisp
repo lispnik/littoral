@@ -64,8 +64,9 @@ migrations.  Safe at every start, and from several processes at once."
                                               (funcall use-database thunk))))
                         ;; Each request's callbacks in one transaction.
                         :around-actions (littoral.db:transactional))
-  ;; The admin answers only this machine unless given :CREDENTIALS.
-  (littoral.admin:register-admin "/admin" '(note) :title "{{title}} admin" :database database))
+  ;; Users with the admin role sign in to it (create-user … admin).
+  (littoral.admin:register-admin "/admin" '(note) :title "{{title}} admin" :database database
+                                                  :role :admin))
 
 (defun mailer ()
   "What sends mail: the SMTP server $SMTP_URL names (smtp://user:password@host:587

@@ -73,3 +73,18 @@
       (sign-in other "bob" "bob's long passphrase")
       (is (has-text-p other "No notes yet."))
       (is (not (has-text-p other "Ada's secret"))))))
+
+(test the-admin-is-for-admins
+  (with-app (b)
+    (visit b "/admin")
+    (fill-in b "sign-in-name" "bob")
+    (fill-in b "sign-in-password" "bob's long passphrase")
+    (press b "Sign in")
+    (is (has-text-p b "You don't have permission to see this."))
+    (let ((ada (make-instance 'browser)))
+      (visit ada "/admin")
+      (fill-in ada "sign-in-name" "ada")
+      (fill-in ada "sign-in-password" "ada's long passphrase")
+      (press ada "Sign in")
+      (is (has-text-p ada "Audit log"))
+      (is (has-text-p ada "Sign out")))))

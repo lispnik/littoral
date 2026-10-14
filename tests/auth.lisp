@@ -43,7 +43,7 @@
      (littoral.auth:create-auth-tables)
      (littoral.auth:add-user "ada" "ada@example.org" "correct horse battery" :roles '(:admin))
      (littoral.auth:add-user "bob" "bob@example.org" "another passphrase")
-     (clrhash littoral.auth::*failures*)
+     (littoral.auth::forget-all-events)
      (let ((littoral.auth:*public-url* "http://localhost")
            (,b (make-instance 'browser)))
        (visit ,b "/m")
@@ -263,6 +263,22 @@ and that URL."
         (when littoral.auth:*last-mail* (incf sent)))
       (is (= 1 sent)))))
 
+(test lockouts-are-kept-in-the-database
+  ;; Another process, or this one after a restart, sees the same failures.
+  (let ((littoral.auth:*lockout-failures* 3))
+    (with-auth (b)
+      (dotimes (i 3) (littoral.auth:authenticate "bob" "wrong"))
+      (is (= 3 (getf (first (littoral.db:db-query "SELECT COUNT(*) AS n FROM auth_events WHERE kind = 'name' AND event_key = 'bob'")) :|n|)))
+      (multiple-value-bind (user why) (littoral.auth:authenticate "bob" "another passphrase")
+        (is (null user))
+        (is (search "Too many" why)))
+      ;; Forgetting the rows lifts the lock; a success forgets the name's failures.
+      (littoral.auth::forget-all-events)
+      (is (littoral.auth:authenticate "bob" "another passphrase"))
+      (littoral.auth:authenticate "bob" "wrong")
+      (is (littoral.auth:authenticate "bob" "another passphrase"))
+      (is (null (littoral.db:db-query "SELECT happened FROM auth_events WHERE kind = 'name' AND event_key = 'bob'"))))))
+
 (test failures-decay-and-addresses-are-limited
   (let ((littoral.auth:*lockout-failures* 3) (littoral.auth:*failures-per-address* 4)
         (littoral.auth:*lockout-seconds* 60))
@@ -274,8 +290,7 @@ and that URL."
         ;; Old failures don't count.
         (let ((littoral.auth:*failure-window-seconds* 900))
           (dotimes (i 2) (littoral.auth:authenticate "ada" "wrong")))
-        (setf (gethash (cons :name "ada") littoral.auth::*events*)
-              (mapcar (lambda (time) (- time 1000)) (gethash (cons :name "ada") littoral.auth::*events*)))
+        (littoral.db:db-execute "UPDATE auth_events SET happened = happened - 1000 WHERE kind = 'name' AND event_key = 'ada'")
         (littoral.auth:authenticate "ada" "wrong")
         (is (littoral.auth:authenticate "ada" "correct horse battery"))
         ;; One address trying many names is stopped, even for names it hasn't tried.
@@ -292,13 +307,13 @@ and that URL."
     (flet ((time-of (name)
              (loop repeat 7
                    ;; Never the lockout's quick refusal.
-                   do (clrhash littoral.auth::*failures*)
+                   do (littoral.auth::forget-all-events)
                    minimize (let ((start (get-internal-real-time)))
                               (littoral.auth:authenticate name "wrong password")
                               (- (get-internal-real-time) start)))))
-      (clrhash littoral.auth::*failures*)
+      (littoral.auth::forget-all-events)
       (let ((known (time-of "bob")) (unknown (time-of "nobody-at-all")))
-        (clrhash littoral.auth::*failures*)
+        (littoral.auth::forget-all-events)
         (is (> unknown (* known 1/3)))))))
 
 (test oauth-refuses-unverified-email

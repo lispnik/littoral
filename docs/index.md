@@ -508,7 +508,7 @@ The toolbar reports the last action's callback time, snapshot time and size, and
 
 An AJAX or WebSocket request that fails shows the same page in place of the one you were on. Deployment mode shows a plain error page with no detail. Set `*debug-errors*` to `t` to have errors land in the Lisp debugger instead, restarts and all.
 
-`/config` lists the registered applications. From there you can add, remove and configure them and browse their sessions. The configurable settings are title, root class, mode, session timeout, pages kept, session limit, cookie sessions, the expiry notice, stylesheets, scripts and basic-auth credentials. Use `(configure-admin :user "u" :password "p")` to put it behind HTTP basic auth.
+`/config` lists the registered applications. From there you can add, remove and configure them and browse their sessions. The configurable settings are title, root class, mode, session timeout, pages kept, session limit, cookie sessions, the expiry notice, stylesheets, scripts and basic-auth credentials. Use `(configure-admin :user "u" :password "p")` to put it behind HTTP basic auth, or, with `littoral/auth` loaded, `(littoral.auth:configure-signed-in-admin :role :admin)` to let users with a role sign in to it.
 
 ### Configuration
 
@@ -638,7 +638,7 @@ Give `define-table` the fields to index, and `db-search` finds objects by their 
 ```lisp
 (littoral.admin:register-admin "/admin" '(project task)
   :database '(:sqlite3 :database-name "app.db")
-  :credentials '("admin" . "a long passphrase"))
+  :role :admin)                     ; users with the admin role sign in
 ```
 
 For each class it gives:
@@ -648,7 +648,12 @@ For each class it gives:
 - editing with validation, which notices when someone else changed the record meanwhile
 - creation, and deletion after asking
 
-Each request's changes run in one transaction. `:database` gives the admin its own database (through the new `:around-request` hook). Without credentials it only answers requests from the machine it runs on. To try it, load `littoral/admin-demo`, call `(littoral-admin-demo:register)`, and open `/examples/admin`.
+Each request's changes run in one transaction. `:database` gives the admin its own database (through the new `:around-request` hook).
+
+Who may use it:
+- **`:role`.** Users of `littoral/auth` with that role sign in to it from anywhere; `t` admits anyone signed in. Its database must hold the sign-in tables. A visitor without a sign-in is shown the form, a user without the role is refused, and saving, creating and deleting check the role again, so a page from before a sign-out or a revoked role can't change anything. The audit log names the user.
+- **`:credentials`** instead, a `(user . password)` pair, puts it behind HTTP basic auth.
+- **Neither:** it only answers requests from the machine it runs on. To try it, load `littoral/admin-demo`, call `(littoral-admin-demo:register)`, and open `/examples/admin`.
 
 ## Users and signing in
 
@@ -675,6 +680,7 @@ Each request's changes run in one transaction. `:database` gives the admin its o
   - After `*lockout-failures*` wrong passwords within `*failure-window-seconds*`, a name is locked for `*lockout-seconds*`.
   - One client address may fail `*failures-per-address*` times across all names, which stops one address trying a common password against many accounts. This and the reset-mail cap apply only to public addresses. A loopback or private address is usually a proxy shared by every visitor, and limiting it would let one person lock everyone out. Behind a proxy, set `*trust-forwarded-for*` so the limits see real clients.
   - An unknown name takes as long to refuse as a wrong password, so timing doesn't reveal which names exist.
+  - Failures and reset mails are counted in the `auth_events` table, so the limits hold across restarts and are shared by every process.
 - **Sign-ins are kept in the database** (`auth_sessions`). The browser holds a token in an HttpOnly cookie. A new session of an `auth-root` application finds the sign-in through the cookie and restores it, so sign-ins survive a restart and are shared by several processes behind a load balancer.
   - "Keep me signed in" on the sign-in form makes the sign-in last `*remember-days*` (30), renewed by use. Without it, the sign-in lasts until the browser closes, or `*sign-in-idle-hours*` (12) unused.
   - `user-sessions` lists a user's sign-ins, `revoke-session` ends one, and `log-out-everywhere` ends them all. An ended sign-in signs that browser out within `*auth-session-check-seconds*` (60).
@@ -828,7 +834,8 @@ The fake browser doesn't run JavaScript. For drag and drop, the back button with
   - Each client address may start `*new-sessions-per-minute*` sessions a minute (default 120); beyond that it gets 429.
   - Open event streams are capped in total (`*max-event-streams*`) and per session (`*max-event-streams-per-session*`); beyond that, 503.
   - Behind a proxy, set `*trust-forwarded-for*` so the client address comes from `X-Forwarded-For`.
-- **`/config`.** Without credentials, it only answers requests from the machine it runs on. A request forwarded by a proxy doesn't count as local unless you trust the proxy. Give it credentials with `(configure-admin :user … :password …)`, which are checked in constant time.
+- **`/config`.** Without credentials, it only answers requests from the machine it runs on. A request forwarded by a proxy doesn't count as local unless you trust the proxy. Give it credentials with `(configure-admin :user … :password …)`, which are checked in constant time, or serve it to signed-in users with a role with `littoral.auth:configure-signed-in-admin`.
+- **Whole applications behind sign-in.** Make an application's root a `signed-in-root` and call `(restrict-application path role)`: new visitors get the sign-in form, and only users with the role see the application. Call `check-application-role` in actions that change things. The admin's `:role` is built on this.
 - **Development mode.** Halos can inspect and change component state, so `start` warns when an application in development mode is served on a public address. Deploy with `:mode :deployment`.
 - **New pieces.** Sign-in, reset links and WebSockets have protections of their own, described in their sections.
 - **Translations** are FORMAT control strings, so catalogues may not contain the `~/…/` directive, which would call a function named in the text. `define-translations` and `load-translations` refuse it.

@@ -4,7 +4,7 @@ A [Littoral](https://github.com/lispnik/littoral) application with a database an
 
 ```sh
 make user NAME=ada EMAIL=ada@example.org PASSWORD='a long passphrase' ADMIN=1
-make run     # http://127.0.0.1:{{port}}/ in development mode; /admin from this machine
+make run     # http://127.0.0.1:{{port}}/ in development mode; /admin for users with the admin role
 make test    # FiveAM tests through Littoral's fake browser, each on its own database
 make migrate # bring the database up to date (serving does this too) and list the migrations
 make build   # bin/{{name}}, a standalone executable

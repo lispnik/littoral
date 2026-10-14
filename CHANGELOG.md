@@ -2,7 +2,15 @@
 
 ## Unreleased
 
+### Added
+- **Admins and `/config` behind sign-in.**
+  - `register-admin` takes `:role`: users with that role sign in to the admin from anywhere, and the audit log names them.
+  - `littoral.auth:configure-signed-in-admin` does the same for `/config`.
+  - Any application can do it, with `signed-in-root`, `restrict-application` and `check-application-role`.
+  - Generated apps' `/admin` is now for users with the admin role, rather than for this machine only.
+
 ### Changed
+- **Sign-in limits are kept in the database** (`auth_events`, migration 2 of `:littoral-auth`). Lockouts and reset-mail caps now survive restarts and are shared between processes.
 - **`littoral/mail` sends through [smtp](https://github.com/lispnik/smtp)**, which replaces Littoral's own SMTP client and MIME writer.
   - The mailer gains XOAUTH2 and OAUTHBEARER, PIPELINING, SIZE checks and internationalized addresses.
   - `make-mail` now checks addresses when the mail is made.

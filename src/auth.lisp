@@ -45,6 +45,8 @@
            #:restricted #:required-role #:required-permission #:permitted-p
            #:sign-in #:sign-out-link #:password-reset-request #:password-reset
            #:auth-root #:define-auth-path #:request-base-url
+           #:signed-in-root #:restrict-application #:application-role #:check-application-role
+           #:configure-signed-in-admin
            #:*send-mail* #:*last-mail* #:*lockout-failures* #:*lockout-seconds*
            #:*failure-window-seconds* #:*failures-per-address* #:*reset-mails-per-address*
            #:*public-url* #:*reset-link-seconds* #:*sign-in-extras*))
@@ -315,7 +317,8 @@ and is seen by every process: the browser holds its token in a cookie."))
   "Drop the tables CREATE-AUTH-TABLES makes, the audit log too, for tests:
 everything is lost."
   (dolist (table (append (when users '("users"))
-                         '("auth_tokens" "auth_sessions" "auth_factors" "user_roles" "role_permissions")))
+                         '("auth_tokens" "auth_sessions" "auth_factors" "user_roles" "role_permissions"
+                           "auth_events")))
     (db-execute (format nil "DROP TABLE IF EXISTS ~A" table)))
   (littoral.audit:drop-audit-tables)
   (when users (forget-migrations :littoral-users))
@@ -409,37 +412,33 @@ store doesn't create users."
 many names.  Loopback and private addresses, usually a proxy's, are not
 limited: behind a proxy, set *TRUST-FORWARDED-FOR* so the limit sees clients.")
 
-;;; Recent events by key, such as failed sign-ins by name
-
-(defvar *events* (make-hash-table :test 'equal)
-  "(KIND . KEY) → times of recent events, newest first.")
-(defvar *failures* *events* "The table of recent failures and mails (for tests to clear).")
-(defvar *events-lock* (sb-thread:make-mutex :name "littoral auth events"))
+;;; Recent events by key, such as failed sign-ins by name, kept in the
+;;; auth_events table: every process sees them, and a restart forgets none.
 
 (defun recent-events (kind key &optional (seconds *failure-window-seconds*))
   "Times of KIND events for KEY in the last SECONDS, newest first."
-  (let ((since (- (get-universal-time) seconds)))
-    (sb-thread:with-mutex (*events-lock*)
-      (remove-if (lambda (time) (< time since)) (gethash (cons kind key) *events*)))))
+  (mapcar (lambda (row) (getf row :|happened|))
+          (db-query "SELECT happened FROM auth_events WHERE kind = ? AND event_key = ? AND happened >= ?
+                     ORDER BY happened DESC"
+                    (string-downcase kind) (princ-to-string key) (- (get-universal-time) seconds))))
 
 (defun note-event (kind key)
   "Record a KIND event for KEY now, forgetting events too old to matter."
-  (let* ((now (get-universal-time))
-         (since (- now (max *failure-window-seconds* 3600))))
-    (sb-thread:with-mutex (*events-lock*)
-      (let ((k (cons kind key)))
-        (setf (gethash k *events*)
-              (cons now (remove-if (lambda (time) (< time since)) (gethash k *events*)))))
-      ;; Now and then, drop keys with nothing recent, so names tried once
-      ;; don't pile up.
-      (when (zerop (random 64))
-        (loop for k being the hash-keys of *events* using (hash-value times)
-              unless (and times (>= (first times) since))
-                do (remhash k *events*))))))
+  (let ((now (get-universal-time)))
+    (db-execute "INSERT INTO auth_events (kind, event_key, happened) VALUES (?, ?, ?)"
+                (string-downcase kind) (princ-to-string key) now)
+    ;; Now and then, drop what's too old to count, so names tried once don't pile up.
+    (when (zerop (random 64))
+      (db-execute "DELETE FROM auth_events WHERE happened < ?"
+                  (- now (max *failure-window-seconds* 3600))))))
 
 (defun forget-events (kind key)
-  (sb-thread:with-mutex (*events-lock*)
-    (remhash (cons kind key) *events*)))
+  (db-execute "DELETE FROM auth_events WHERE kind = ? AND event_key = ?"
+              (string-downcase kind) (princ-to-string key)))
+
+(defun forget-all-events ()
+  "Forget every recent failure and mail, for tests."
+  (db-execute "DELETE FROM auth_events"))
 
 (defun locked-out-p (kind key limit)
   "True when KEY has LIMIT or more KIND failures in the window, the latest
@@ -969,6 +968,60 @@ password reset links and, with littoral/oauth, sign-in callbacks."))
         (show root (make-instance 'password-reset :user-id (user-id user)))
         (show root (make-instance 'message-dialog
                                   :message (translate "That link has expired or been used. Ask for a new one."))))))
+
+;;; Whole applications behind sign-in, such as an admin
+
+(defvar *application-roles* (make-hash-table :test 'equal)
+  "Application path → the role its users need, T for anyone signed in.")
+
+(defun restrict-application (path role)
+  "Let only signed-in users with ROLE (anyone signed in, when ROLE is T)
+use the application at PATH, whose root is a SIGNED-IN-ROOT; with ROLE NIL,
+forget the restriction."
+  (let ((path (littoral::normalize-path path)))
+    (if role
+        (setf (gethash path *application-roles*) role)
+        (remhash path *application-roles*))))
+
+(defun application-role (&optional (application *application*))
+  "The role APPLICATION's users need, NIL for anyone signed in; and, second,
+whether RESTRICT-APPLICATION restricted it."
+  (multiple-value-bind (role found) (gethash (application-path application) *application-roles*)
+    (values (if (eq role t) nil role) found)))
+
+(defun check-application-role ()
+  "Refuse the request (403) unless the current user may use this
+application, when RESTRICT-APPLICATION restricted it.  Call it in actions
+that change things: a page from before a sign-out, or before a role was
+revoked, keeps its links."
+  (multiple-value-bind (role restricted) (application-role)
+    (when restricted (require-role role))))
+
+(defclass signed-in-root (auth-root restricted) ()
+  (:documentation "Mixin for the root of an application only signed-in users
+may use, with the role RESTRICT-APPLICATION gave it.  A new visitor is shown
+the sign-in form."))
+
+(defmethod required-role ((root signed-in-root))
+  (application-role))
+
+(defmethod initial-request :after ((root signed-in-root) request)
+  (unless (or (permitted-p root) (littoral::find-decoration root 'delegation))
+    (show root (make-instance 'sign-in))))
+
+(defclass signed-in-config (signed-in-root littoral::config-root) ()
+  (:documentation "The configuration application, for signed-in users with a role."))
+
+(defun configure-signed-in-admin (&key (path "/config") (role :admin) database)
+  "Serve the configuration application at PATH to signed-in users with ROLE,
+from wherever they are, instead of only to this machine as CONFIGURE-ADMIN
+does.  DATABASE (as CONNECT-DATABASE takes it) holds the users, unless the
+current one does."
+  (restrict-application path role)
+  (register-application path 'signed-in-config
+                        :title "Littoral Configuration"
+                        :mode :deployment
+                        :around-request (and database (apply #'using-database database))))
 
 ;;; Who a JSON endpoint request comes from: an API token, or the sign-in cookie
 

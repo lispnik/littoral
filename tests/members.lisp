@@ -19,7 +19,6 @@
             (with-fresh-applications ()
               (littoral-members-demo:register :file ,file)
               (littoral.mail:clear-mailer littoral-mail-demo:*mailbox*)
-              (clrhash littoral.auth::*failures*)
               (let ((,b (make-instance 'browser)))
                 (visit ,b "/examples/members")
                 ,@body))

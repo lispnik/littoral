@@ -254,7 +254,7 @@
   :description "An administration interface generated from descriptions and tables."
   :author "Matthew Kennedy"
   :license "MIT"
-  :depends-on (#:littoral #:littoral/db #:littoral/audit)
+  :depends-on (#:littoral #:littoral/db #:littoral/audit #:littoral/auth)
   :components ((:module "src" :components ((:file "admin")))))
 
 (asdf:defsystem #:littoral/admin-demo

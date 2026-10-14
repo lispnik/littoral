@@ -2,13 +2,15 @@
 ;;;;
 ;;;;   (register-admin "/admin" '(project job)
 ;;;;                   :database '(:sqlite3 :database-name "app.db")
-;;;;                   :credentials '("admin" . "secret"))
+;;;;                   :role :admin)                ; users with the admin role sign in
 ;;;;
 ;;;; For each stored class (see littoral/db): a searchable, filterable,
 ;;;; sortable list; a page per object with its fields, links to the objects
 ;;;; it refers to and lists of those referring to it; editing that notices
 ;;;; someone else's concurrent change; creation; deletion after asking.
-;;;; Without credentials the admin answers only requests from this machine.
+;;;; With :ROLE, users of littoral/auth with that role sign in to it; with
+;;;; :CREDENTIALS, it asks for HTTP basic auth; with neither, it answers only
+;;;; requests from this machine.
 
 (defpackage #:littoral.admin
   (:use #:cl #:littoral #:littoral.html #:littoral.db)
@@ -269,18 +271,22 @@ page shown in its place."))
   (show-page admin (make-instance 'object-page :class class :object-id id :admin admin)))
 
 (defun admin-actor ()
-  "Who is using the admin, for the audit log: the name in its credentials,
-or else someone on this machine."
-  (let ((credentials (application-credentials *application*)))
-    (if credentials (first credentials) "local admin")))
+  "Who is using the admin, for the audit log, as an id and a name: the
+signed-in user, the name in its credentials, or else someone on this machine."
+  (let ((user (littoral.auth:current-user))
+        (credentials (application-credentials *application*)))
+    (cond (user (values (princ-to-string (littoral.auth:user-id user)) (littoral.auth:user-name user)))
+          (credentials (values nil (first credentials)))
+          (t (values nil "local admin")))))
 
 (defun audit-record (action class id title &rest details)
   "Record ACTION, done through the admin to the object of CLASS numbered ID,
 called TITLE."
-  (littoral.audit:audit action :actor-id nil :actor-name (admin-actor)
-                               :subject (format nil "~(~A~):~A" (table-name (find-table class)) id)
-                               :subject-label (format nil "~A #~A ~A" (class-label class) id title)
-                               :details details))
+  (multiple-value-bind (actor-id actor-name) (admin-actor)
+    (littoral.audit:audit action :actor-id actor-id :actor-name actor-name
+                                 :subject (format nil "~(~A~):~A" (table-name (find-table class)) id)
+                                 :subject-label (format nil "~A #~A ~A" (class-label class) id title)
+                                 :details details)))
 
 (defun changed-fields (class old new)
   "The fields whose values differ between OLD and NEW: a plist of field
@@ -294,6 +300,7 @@ name → \"old → new\", passwords shown only as changed."
 
 (defun save-edited (admin class edited)
   "Save EDITED; on someone else's change, say so and show theirs."
+  (littoral.auth:check-application-role)
   (handler-case (let ((old (db-find class (object-id edited))))
                   (db-save edited)
                   (apply #'audit-record "record.updated" class (object-id edited) (object-title edited)
@@ -320,6 +327,7 @@ name → \"old → new\", passwords shown only as changed."
                                                   :save-label "Create")
         :on-answer (lambda (object)
                      (when object
+                       (littoral.auth:check-application-role)
                        (db-insert object)
                        (apply #'audit-record "record.created" class (object-id object) (object-title object)
                               (changed-fields class nil object))
@@ -334,6 +342,7 @@ name → \"old → new\", passwords shown only as changed."
                                              (object-id object) (object-title object)))
         :on-answer (lambda (yes)
                      (when yes
+                       (littoral.auth:check-application-role)
                        (handler-case
                            (let ((id (object-id object)) (title (object-title object)))
                              (db-delete object)
@@ -348,7 +357,10 @@ name → \"old → new\", passwords shown only as changed."
 
 (defmethod render ((self admin))
   (header (:class "admin-header")
-    (strong () (text (or (application-title *application*) "Admin"))))
+    (strong () (text (or (application-title *application*) "Admin")))
+    (let ((user (littoral.auth:current-user)))
+      (when user
+        (span (:class "admin-user") (text (littoral.auth:user-name user)) " · " (littoral.auth:sign-out-link)))))
   (when (admin-message self)
     (p (:class "lt-message notice" :role "status") (text (admin-message self))))
   (div (:class "admin-body")
@@ -376,7 +388,7 @@ name → \"old → new\", passwords shown only as changed."
       (render-component (admin-main self)))))
 
 (defmethod style ((self admin))
-  ".admin-header { border-bottom: 1px solid var(--lt-border); padding-bottom: .4rem; margin-bottom: .8rem; }
+  ".admin-header { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap; border-bottom: 1px solid var(--lt-border); padding-bottom: .4rem; margin-bottom: .8rem; }
 .admin-body { display: grid; grid-template-columns: 11rem minmax(0, 1fr); gap: 1.5rem; }
 @media (max-width: 40rem) { .admin-body { grid-template-columns: minmax(0, 1fr); } }
 .admin-menu ul { list-style: none; padding: 0; margin: 0; }
@@ -387,20 +399,28 @@ name → \"old → new\", passwords shown only as changed."
 .admin-main { overflow-x: auto; }
 a.action { margin-right: .8rem; }")
 
-(defun register-admin (path classes &key (title "Admin") database credentials (mode :deployment) (audit t))
+(defclass signed-in-admin (littoral.auth:signed-in-root admin) ()
+  (:documentation "An admin that users with its role sign in to."))
+
+(defun register-admin (path classes &key (title "Admin") database role credentials (mode :deployment) (audit t))
   "Serve an admin for CLASSES (stored classes, see DEFINE-TABLE) at PATH.
 DATABASE (a driver and parameters, as CONNECT-DATABASE takes them) gives
-it its own database; otherwise it uses the current one.  Without
-CREDENTIALS it answers only requests from this machine.  With AUDIT (the
+it its own database; otherwise it uses the current one.  With ROLE, users
+with that role (any signed-in user, for T) sign in to it, from anywhere: the
+database must hold littoral/auth's tables.  With CREDENTIALS instead, it asks
+for HTTP basic auth.  With neither, it answers only requests from this machine.  With AUDIT (the
 default), it records what it creates, changes and deletes in the audit log
 (creating its table) and shows the log."
+  (when (and role credentials)
+    (error "REGISTER-ADMIN takes :ROLE or :CREDENTIALS, not both."))
   (setf (gethash (littoral::normalize-path path) *admins*) classes)
+  (littoral.auth:restrict-application path role)
   (let ((*database* (or database *database*)))
     (when (and audit *database*)
       (littoral.audit:create-audit-tables)))
-  (register-application path 'admin
+  (register-application path (if role 'signed-in-admin 'admin)
                         :title title :mode mode
                         :credentials credentials
-                        :local-only (null credentials)
+                        :local-only (not (or role credentials))
                         :around-request (and database (apply #'using-database database))
                         :around-actions (transactional)))

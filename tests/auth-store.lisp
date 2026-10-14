@@ -41,7 +41,7 @@ and roles in a table of their own."
      (make-accounts)
      (littoral.auth:drop-auth-tables :users nil)
      (littoral.auth:create-auth-tables :users nil)
-     (clrhash littoral.auth::*failures*)
+     (littoral.auth::forget-all-events)
      (with-fresh-applications (("/m" 'members-app :mode :deployment
                                      :around-request (littoral.auth:using-user-store ,store)))
        (let ((littoral.auth:*public-url* "http://localhost")

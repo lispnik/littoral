@@ -107,6 +107,83 @@
       (setf (getf remote :remote-addr) "203.0.113.9")
       (is (= 403 (first (funcall (make-lack-app) remote)))))))
 
+(defmacro with-signed-in-admin ((b) &body body)
+  "WITH-ADMIN's admin, for users with the admin role: ada has it, bob doesn't."
+  `(with-fresh-applications ()
+     (connect-test-database)
+     (littoral.auth:drop-auth-tables)
+     (littoral.auth:create-auth-tables)
+     (littoral.auth:add-user "ada" "ada@example.org" "correct horse battery" :roles '(:admin))
+     (littoral.auth:add-user "bob" "bob@example.org" "another passphrase")
+     (littoral.auth::forget-all-events)
+     (littoral.db:drop-table 'job)
+     (littoral.db:drop-table 'project)
+     (littoral.db:create-table 'project)
+     (littoral.db:create-table 'job)
+     (littoral.db:db-save (make-instance 'project :name "Littoral" :budget 100))
+     (littoral.admin:register-admin "/admin" '(project job) :database (admin-database) :title "Test admin"
+                                                            :role :admin)
+     (let ((,b (make-instance 'browser)))
+       (visit ,b "/admin")
+       ,@body)))
+
+(defun admin-sign-in (b name password)
+  (fill-in b "sign-in-name" name)
+  (fill-in b "sign-in-password" password)
+  (press b "Sign in"))
+
+(test admin-signs-in-users-with-its-role
+  (with-signed-in-admin (b)
+    ;; From anywhere: the sign-in form, not a refusal.
+    (let ((remote (make-env :get "/admin")))
+      (setf (getf remote :remote-addr) "203.0.113.9")
+      (is (member (first (funcall (make-lack-app) remote)) (quote (200 302)))))
+    (is (search "sign-in-name" (browser-html b)))
+    (is (not (has-text-p b "Projects")))
+    (admin-sign-in b "bob" "another passphrase")
+    (is (has-text-p b "You don't have permission to see this."))
+    (is (not (has-text-p b "Projects")))
+    (let ((ada (make-instance 'browser)))
+      (visit ada "/admin")
+      (admin-sign-in ada "ada" "correct horse battery")
+      (is (has-text-p ada "Projects"))
+      (is (has-text-p ada "Sign out"))
+      (click-nth ada "1" 0)
+      (click ada "Edit")
+      (fill-in ada "budget" "250")
+      (press ada "Save")
+      (is (has-text-p ada "Saved Project #1."))
+      ;; The audit log names her.
+      (let ((event (first (littoral.audit:audit-events :action "record.updated"))))
+        (is (string= "ada" (littoral.audit:audit-event-actor-name event)))
+        (is (equal (princ-to-string (littoral.auth:user-id (littoral.auth:find-user "ada")))
+                   (littoral.audit:audit-event-actor-id event))))
+      ;; With her role gone, a page she already has can't change anything.
+      (click ada "Edit")
+      (littoral.auth:revoke-role (littoral.auth:find-user "ada") :admin)
+      (littoral.auth::forget-cached-roles)
+      (fill-in ada "budget" "300")
+      (press ada "Save")
+      (is (= 403 (browser-status ada)))
+      (is (= 250 (slot-value (littoral.db:db-find 'project 1) 'budget))))))
+
+(test config-signs-in-users-with-its-role
+  (with-signed-in-admin (b)
+    (littoral.auth:configure-signed-in-admin :path "/cfg" :role :admin)
+    (unwind-protect
+         (let ((ada (make-instance 'browser)) (bob (make-instance 'browser)))
+           (visit bob "/cfg")
+           (admin-sign-in bob "bob" "another passphrase")
+           (is (not (has-text-p bob "Applications")))
+           (visit ada "/cfg")
+           (is (not (has-text-p ada "Applications")))
+           (admin-sign-in ada "ada" "correct horse battery")
+           (is (has-text-p ada "Applications")))
+      (littoral.auth:restrict-application "/cfg" nil))))
+
+(test admin-takes-a-role-or-credentials
+  (signals error (littoral.admin:register-admin "/nowhere" '(project) :role :admin :credentials '("a" . "b"))))
+
 (test admin-demo-leaves-littoral-classes-alone
   ;; The demo's own TASK class must not replace LITTORAL:TASK.
   (is (subtypep 'littoral:task 'littoral:component))
