@@ -76,6 +76,7 @@
    (replies :initarg :replies :initform '() :reader fake-replies :documentation "(VERB . REPLY) overrides.")
    (commands :initform '() :accessor fake-commands)
    (connections :initform 0 :accessor fake-connections)
+   (stopping :initform nil :accessor fake-stopping)
    (data :initform '() :accessor fake-data)))
 
 (defun fake-port (server) (usocket:get-local-port (fake-socket server)))
@@ -114,17 +115,30 @@
           (fake-thread server)
           (sb-thread:make-thread
            (lambda ()
-             (loop (let ((connection (handler-case (usocket:socket-accept (fake-socket server))
-                                       (error () (return)))))
-                     (incf (fake-connections server))
-                     (unwind-protect (ignore-errors (serve-fake-smtp server connection))
-                       (usocket:socket-close connection)))))
+             ;; The thread closes its own listener: on Linux, closing it from
+             ;; another thread doesn't wake the accept, and a thread left
+             ;; polling its descriptor number can take a later test's
+             ;; connections once a new listener reuses the number.
+             (unwind-protect
+                  (loop (let ((connection (handler-case (usocket:socket-accept (fake-socket server))
+                                            (error () (return)))))
+                          (when (fake-stopping server)
+                            (usocket:socket-close connection)
+                            (return))
+                          (incf (fake-connections server))
+                          (unwind-protect (ignore-errors (serve-fake-smtp server connection))
+                            (usocket:socket-close connection))))
+               (ignore-errors (usocket:socket-close (fake-socket server))))
+             :stopped)
            :name "fake smtp"))
     server))
 
 (defun stop-fake-smtp (server)
-  (ignore-errors (usocket:socket-close (fake-socket server)))
-  (ignore-errors (sb-thread:join-thread (fake-thread server) :default nil :timeout 5)))
+  "Wake the server's thread with a connection it closes, then wait for it."
+  (setf (fake-stopping server) t)
+  (ignore-errors (usocket:socket-close (usocket:socket-connect "127.0.0.1" (fake-port server))))
+  (unless (eq :stopped (sb-thread:join-thread (fake-thread server) :default nil :timeout 5))
+    (ignore-errors (usocket:socket-close (fake-socket server)))))
 
 (defmacro with-fake-smtp ((server &rest options) &body body)
   `(let ((,server (start-fake-smtp ,@options)))
