@@ -74,6 +74,8 @@
    (thread :accessor fake-thread)
    (capabilities :initarg :capabilities :initform '("PIPELINING" "AUTH PLAIN LOGIN") :reader fake-capabilities)
    (replies :initarg :replies :initform '() :reader fake-replies :documentation "(VERB . REPLY) overrides.")
+   (mails-per-connection :initarg :mails-per-connection :initform nil :reader fake-mails-per-connection
+                         :documentation "After this many MAIL commands on one connection, answer 421 and hang up.")
    (commands :initform '() :accessor fake-commands)
    (connections :initform 0 :accessor fake-connections)
    (stopping :initform nil :accessor fake-stopping)
@@ -86,12 +88,17 @@
     (flet ((say (line) (write-string line stream) (write-char #\Return stream) (write-char #\Newline stream) (force-output stream))
            (hear () (let ((line (read-line stream nil))) (and line (string-right-trim '(#\Return) line)))))
       (say "220 fake.example ESMTP")
-      (loop for line = (hear)
+      (loop with mails = 0
+            for line = (hear)
             while line
             do (push line (fake-commands server))
                (let* ((verb (string-upcase (subseq line 0 (or (position-if-not #'alpha-char-p line) (length line)))))
                       (override (cdr (assoc verb (fake-replies server) :test #'string=))))
-                 (cond (override (say override))
+                 (cond ((and (string= verb "MAIL") (fake-mails-per-connection server)
+                             (>= mails (fake-mails-per-connection server)))
+                        (say "421 4.4.2 fake.example closing idle connection")
+                        (return))
+                       (override (say override))
                        ((string= verb "EHLO")
                         (say "250-fake.example")
                         (loop for (c . more) on (fake-capabilities server)
@@ -107,6 +114,7 @@
                               (fake-data server))
                         (say "250 2.0.0 Queued"))
                        ((string= verb "QUIT") (say "221 Bye") (return))
+                       ((string= verb "MAIL") (incf mails) (say "250 OK"))
                        (t (say "250 OK"))))))))
 
 (defun start-fake-smtp (&rest options)
@@ -236,6 +244,19 @@ MC4CAQAwBQYDK2VwBCIEIG4G5eGc2mREsIg1N36yblimKfWTN1E+60t720EqbQSN
       (is (= 3 (length (fake-data server))))
       (is (= 1 (fake-connections server)) "One connection for all three")
       (is (= 1 (count-if (lambda (c) (alexandria:starts-with-subseq "EHLO" c)) (fake-commands server)))))))
+
+(test smtp-replaces-dropped-connections
+  ;; The server hangs up on the pooled connection at the second message,
+  ;; before accepting it: that message goes again over a new connection.
+  (with-fake-smtp (server :mails-per-connection 1)
+    (let ((mailer (fake-mailer server :pool-size 2)))
+      (unwind-protect
+           (dotimes (i 2)
+             (littoral.mail:send-mail (littoral.mail:make-mail :to "ada@example.org" :subject (format nil "No. ~D" i) :text "x")
+                                      :mailer mailer))
+        (littoral.mail::close-smtp-mailer mailer))
+      (is (= 2 (length (fake-data server))))
+      (is (= 2 (fake-connections server))))))
 
 (test smtp-urls
   (let ((m (littoral.mail:smtp-mailer-from-url "smtp://app%40example.org:p%3Ass@mail.example.org")))

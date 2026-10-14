@@ -431,7 +431,7 @@ Jobs live in memory, so a restart forgets them; for work that must not be lost, 
   - With STARTTLS, a server that doesn't offer it is refused rather than used in the clear, and the certificate must match the host. Pass `:ca-file` for a private authority.
   - It signs in with the strongest method the server offers (PLAIN, LOGIN, XOAUTH2 or OAUTHBEARER). With `:security :none` it won't send a password unless you pass `:allow-insecure-auth t`. Errors never include the password.
   - `smtp-mailer-from-url` reads `smtp://`, `smtps://` and `smtp+insecure://` URLs.
-  - Connections are kept and reused, up to `:pool-size` (2), so a batch of mail doesn't connect for each message. `:pool-size nil` connects each time.
+  - Connections are kept and reused, up to `:pool-size` (2), so a batch of mail doesn't connect for each message. `:pool-size nil` connects each time. A kept connection the server has dropped is replaced, and the message sent again over a new one, when the server hadn't accepted it.
   - `:dkim` signs each message as it's sent: a signer from `smtp/dkim:make-dkim-signer` (RSA or Ed25519), or a list of them. `smtp/dkim:dkim-dns-record` gives the TXT record to publish. Generated apps read `DKIM_KEY_FILE`, `DKIM_DOMAIN` and `DKIM_SELECTOR`, and `myapp dkim-record` prints the record.
   - Failures are the library's conditions, all under `smtp-error`. `smtp-error-code` gives the reply code, and `smtp-error-permanent-p` says whether trying again could help.
 - **Messages.**

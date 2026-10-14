@@ -132,10 +132,11 @@ or smtp+insecure://… (neither).  OPTIONS go to MAKE-SMTP-MAILER."
     (flet ((send (connection)
              (smtp:send-raw-message connection data :envelope-from from :recipients recipients)))
       (if (smtp-pool-size mailer)
-          ;; A connection the server dropped meanwhile fails this send; the
-          ;; outbox tries again, over a new one.
-          (smtp:with-pooled-connection (connection (mailer-pool mailer))
-            (send connection))
+          ;; A reused connection the server dropped meanwhile is replaced,
+          ;; and the message sent again, when nothing was accepted on it.
+          (handler-bind ((smtp:smtp-error #'smtp:retry-with-fresh-connection))
+            (smtp:with-pooled-connection (connection (mailer-pool mailer))
+              (send connection)))
           (let ((connection (apply #'smtp:open-connection (smtp-host mailer) (connection-options mailer))))
             (unwind-protect (send connection)
               ;; A connection that failed partway can't always say QUIT; the first error is the one to report.

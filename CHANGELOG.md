@@ -10,7 +10,7 @@
   - Generated apps' `/admin` is now for users with the admin role, rather than for this machine only.
 - **Pages come back after a restart.** A page's AJAX requests, event stream, WebSocket and live checks are told to reload when its session is gone, instead of being given a session they can't use. Signed-in users stay signed in.
 - **DKIM**: `make-smtp-mailer :dkim` signs mail with `smtp/dkim` signers. Generated apps read `DKIM_KEY_FILE`, `DKIM_DOMAIN` and `DKIM_SELECTOR`, and have a `dkim-record` command.
-- **SMTP connections are reused**, up to `:pool-size` (2) per mailer.
+- **SMTP connections are reused**, up to `:pool-size` (2) per mailer. A kept connection the server has dropped is replaced at once, through smtp 0.3.5's `retry-with-fresh-connection` restart.
 - **`purge-expired-auth-rows`** deletes old sign-in failures, expired sign-ins, and expired reset links and API tokens. Generated apps' nightly `tidy-up` job calls it, and also deletes audit events more than a year old.
 - **The demo server's** admin demo and `/config` are for the members demo's admins, who sign in to them from anywhere.
 
