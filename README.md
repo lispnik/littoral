@@ -684,6 +684,7 @@ Who may use it:
   - "Keep me signed in" on the sign-in form makes the sign-in last `*remember-days*` (30), renewed by use. Without it, the sign-in lasts until the browser closes, or `*sign-in-idle-hours*` (12) unused.
   - `user-sessions` lists a user's sign-ins, `revoke-session` ends one, and `log-out-everywhere` ends them all. An ended sign-in signs that browser out within `*auth-session-check-seconds*` (60).
   - Callbacks can set cookies of their own with `(set-cookie name value :max-age seconds)`. Read them with `request-cookie`.
+- **Old rows.** Signing in deletes expired sign-ins and old failures only now and then. Call `purge-expired-auth-rows` from a nightly job: it deletes failures and reset mails too old to count, expired sign-ins, and expired reset links and API tokens.
 - **Second factors.** `security-settings` is a component where users add them:
   - **An authenticator app (TOTP, RFC 6238).** Setup shows a QR code; afterwards, signing in with a password asks for the app's code, and each code works once.
   - **Passkeys (WebAuthn).** A passkey signs a user in on its own ("Sign in with a passkey", no name or password), or serves as the second step. Littoral checks the browser's response itself: challenge, origin, relying party, and the ES256 signature with a signature count that must go up.
@@ -756,7 +757,7 @@ Applications record their own events:
 - **Who did it.** The actor is the signed-in user unless `:actor-id` and `:actor-name` are given. In the admin, it's the name in its credentials.
 - **Transactions.** An event is written in the current transaction, so an event whose action rolls back disappears with it.
 - **Without the table.** Events are recorded only where `create-audit-tables` (or `create-auth-tables`) has run in the process, so an application without the table works as before. `*audit-hook*` sees every event either way, if you also want to send them to a log.
-- **Looking through it.** `audit-events` filters by action (`"sign-in"` also matches `"sign-in.failed"`), actor, subject, text and time. The admin gets an "Audit log" page, and `audit-log-view` is a component you can put on an admins-only page of your own. `purge-audit-log` deletes old events.
+- **Looking through it.** `audit-events` filters by action (`"sign-in"` also matches `"sign-in.failed"`), actor, subject, text and time. The admin gets an "Audit log" page, and `audit-log-view` is a component you can put on an admins-only page of your own. `purge-audit-log` deletes old events, by default those more than a year old (`:older-than` takes seconds). Nothing calls it for you, except the nightly job of generated apps.
 
 The members demo shows the log to ada, under Admins.
 

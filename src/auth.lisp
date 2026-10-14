@@ -46,7 +46,7 @@
            #:sign-in #:sign-out-link #:password-reset-request #:password-reset
            #:auth-root #:define-auth-path #:request-base-url
            #:signed-in-root #:restrict-application #:application-role #:check-application-role
-           #:configure-signed-in-admin
+           #:configure-signed-in-admin #:purge-expired-auth-rows
            #:*send-mail* #:*last-mail* #:*lockout-failures* #:*lockout-seconds*
            #:*failure-window-seconds* #:*failures-per-address* #:*reset-mails-per-address*
            #:*public-url* #:*reset-link-seconds* #:*sign-in-extras*))
@@ -429,8 +429,11 @@ limited: behind a proxy, set *TRUST-FORWARDED-FOR* so the limit sees clients.")
                 (string-downcase kind) (princ-to-string key) now)
     ;; Now and then, drop what's too old to count, so names tried once don't pile up.
     (when (zerop (random 64))
-      (db-execute "DELETE FROM auth_events WHERE happened < ?"
-                  (- now (max *failure-window-seconds* 3600))))))
+      (db-execute "DELETE FROM auth_events WHERE happened < ?" (- now (event-horizon))))))
+
+(defun event-horizon ()
+  "Seconds after which no limit counts an event any more."
+  (max *failure-window-seconds* *lockout-seconds* 3600))
 
 (defun forget-events (kind key)
   (db-execute "DELETE FROM auth_events WHERE kind = ? AND event_key = ?"
@@ -439,6 +442,15 @@ limited: behind a proxy, set *TRUST-FORWARDED-FOR* so the limit sees clients.")
 (defun forget-all-events ()
   "Forget every recent failure and mail, for tests."
   (db-execute "DELETE FROM auth_events"))
+
+(defun purge-expired-auth-rows ()
+  "Delete sign-in failures and reset mails too old to count, expired
+sign-ins, and expired reset links and API tokens; how many rows.  Run it
+from a nightly job: signing in tidies up only now and then."
+  (let ((now (get-universal-time)))
+    (+ (db-execute "DELETE FROM auth_events WHERE happened < ?" (- now (event-horizon)))
+       (db-execute "DELETE FROM auth_sessions WHERE expires < ?" now)
+       (db-execute "DELETE FROM auth_tokens WHERE expires IS NOT NULL AND expires < ?" now))))
 
 (defun locked-out-p (kind key limit)
   "True when KEY has LIMIT or more KIND failures in the window, the latest

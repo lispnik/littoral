@@ -94,9 +94,13 @@ set, or else one that prints mail to the log."
 ;; Background jobs: (enqueue-job (list 'some-job 42)) inside a request queues
 ;; one, in the request's transaction, for the runner SERVE starts.
 (littoral.jobs:define-job (tidy-up :every (littoral.jobs:daily-at 3)) ()
-  "Every night, forget sent mail and finished jobs more than a week old."
+  "Every night, forget sent mail and finished jobs more than a week old,
+expired sign-ins and tokens, and audit events more than a year old."
   (littoral.mail:purge-sent-mail)
-  (littoral.jobs:purge-durable-jobs))
+  (littoral.jobs:purge-durable-jobs)
+  (littoral.auth:purge-expired-auth-rows)
+  ;; Keep the audit log longer, or drop this line, if you must keep it.
+  (littoral.audit:purge-audit-log :older-than (* 365 24 3600)))
 
 (defun serve (&key (port {{port}}) (address "127.0.0.1") (mode :development) (database (database-spec)))
   "Register the application, start sending its mail and running its jobs, and

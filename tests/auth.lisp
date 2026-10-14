@@ -323,6 +323,39 @@ and that URL."
           (is (null user))
           (is (search "Too many" why)))))))
 
+(test old-auth-rows-are-purged
+  (with-auth (b)
+    (let ((bob (littoral.auth:find-user "bob")))
+      (flet ((count-of (table)
+               (getf (first (littoral.db:db-query (format nil "SELECT COUNT(*) AS n FROM ~A" table))) :|n|)))
+        ;; Two failures, one long past; two API tokens, one expired; a reset
+        ;; link; two sign-ins, one expired.
+        (littoral.auth:create-api-token bob)
+        (littoral.auth:create-api-token bob :days 1)
+        (littoral.db:db-execute "INSERT INTO auth_tokens (token_hash, user_id, purpose, expires) VALUES ('x', ?, 'reset', ?)"
+                                (princ-to-string (littoral.auth:user-id bob)) (+ (get-universal-time) 3600))
+        (sign-in-as b "ada" "correct horse battery")
+        (let ((other (make-instance 'browser)))
+          (visit other "/m")
+          (sign-in-as other "bob" "another passphrase"))
+        ;; After bob's sign-in, which forgets his failures.
+        (littoral.auth:authenticate "bob" "wrong")
+        (littoral.auth:authenticate "carol" "wrong")
+        (littoral.db:db-execute "UPDATE auth_events SET happened = happened - 7200 WHERE event_key = 'carol'")
+        (littoral.db:db-execute "UPDATE auth_tokens SET expires = expires - 172800 WHERE expires < ? AND purpose = 'api'"
+                                (+ (get-universal-time) (* 2 86400)))
+        (littoral.db:db-execute "UPDATE auth_sessions SET expires = 1 WHERE user_id = ?"
+                                (princ-to-string (littoral.auth:user-id bob)))
+        (let ((events (count-of "auth_events")) (tokens (count-of "auth_tokens")) (sessions (count-of "auth_sessions")))
+          (is (= 3 (littoral.auth:purge-expired-auth-rows)))
+          (is (= (1- events) (count-of "auth_events")))
+          (is (= (1- tokens) (count-of "auth_tokens")))
+          (is (= (1- sessions) (count-of "auth_sessions")))
+          (is (= 0 (littoral.auth:purge-expired-auth-rows)))
+          ;; Ada is still signed in.
+          (visit b "/m")
+          (is (has-text-p b "Signed in as ada")))))))
+
 (test unknown-names-take-as-long-as-wrong-passwords
   (with-auth (b)
     ;; The fastest of several tries: a stall (a busy CI machine, the

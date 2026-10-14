@@ -22,7 +22,7 @@ Data lives in SQLite under `data/` (or `$DATA_DIR`). Set `DATABASE_URL=postgres:
 - `tests/app.lisp`: signing in, editing notes, and checking they stay private.
 - `deploy/`: a systemd unit and a Caddyfile.
 
-Sign-ins are kept in the database, so they survive restarts; the sign-in form offers "Keep me signed in". "Forgot your password?" mails a reset link. Mail goes into an outbox table and the job runner sends it, trying again if the mail server is down: set `SMTP_URL` to send it, or it's printed to the log. Background jobs (`define-job` and `enqueue-job`, in `src/main.lisp`) are kept in the database too, so they survive restarts; a nightly one tidies up sent mail and finished jobs. An audit log records sign-ins, failures, password and role changes, and the admin's edits; the admin shows it under "Audit log".
+Sign-ins are kept in the database, so they survive restarts; the sign-in form offers "Keep me signed in". "Forgot your password?" mails a reset link. Mail goes into an outbox table and the job runner sends it, trying again if the mail server is down: set `SMTP_URL` to send it, or it's printed to the log. Background jobs (`define-job` and `enqueue-job`, in `src/main.lisp`) are kept in the database too, so they survive restarts; a nightly one, `tidy-up`, deletes sent mail and finished jobs, expired sign-ins and tokens, and audit events more than a year old. Change or remove its `purge-audit-log` line if you must keep the audit log longer. An audit log records sign-ins, failures, password and role changes, and the admin's edits; the admin shows it under "Audit log".
 
 ## Deploying
 

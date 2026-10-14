@@ -6,5 +6,5 @@
 ;;; with their prefixes.
 (defpackage #:{{name}}
   (:use #:cl #:littoral #:littoral.html)
-  (:export #:app-root #:note #:register-app #:serve #:toplevel #:create-user #:database-spec)
+  (:export #:app-root #:note #:register-app #:serve #:toplevel #:create-user #:database-spec #:tidy-up)
   (:documentation "{{title}}, a Littoral application with a database and signing in."))

@@ -88,3 +88,10 @@
       (press ada "Sign in")
       (is (has-text-p ada "Audit log"))
       (is (has-text-p ada "Sign out")))))
+
+(test the-nightly-job-keeps-current-sign-ins
+  (with-app (b)
+    (sign-in b "ada" "ada's long passphrase")
+    (funcall (apply #'littoral.db:using-database database) #'tidy-up)
+    (visit b "/")
+    (is (has-text-p b "Signed in as ada"))))
