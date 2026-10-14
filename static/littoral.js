@@ -153,6 +153,8 @@
   // SENT: the focused field as the request left (NIL for pushes).
   function apply(data, sent) {
     if (data.redirect) { window.location.href = data.redirect; return; }
+    // The session is gone (a restart): load the page afresh.
+    if (data.reload) { window.location.reload(); return; }
     // Code the new fragments use, defined before they arrive.
     (data.code || []).forEach(function (c) { window.__ltCode[c[0]] = makeFunction(c[1], c[2]); });
     showToasts(data.toasts);

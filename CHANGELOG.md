@@ -8,8 +8,13 @@
   - `littoral.auth:configure-signed-in-admin` does the same for `/config`.
   - Any application can do it, with `signed-in-root`, `restrict-application` and `check-application-role`.
   - Generated apps' `/admin` is now for users with the admin role, rather than for this machine only.
+- **Pages come back after a restart.** A page's AJAX requests, event stream, WebSocket and live checks are told to reload when its session is gone, instead of being given a session they can't use. Signed-in users stay signed in.
+- **DKIM**: `make-smtp-mailer :dkim` signs mail with `smtp/dkim` signers. Generated apps read `DKIM_KEY_FILE`, `DKIM_DOMAIN` and `DKIM_SELECTOR`, and have a `dkim-record` command.
+- **SMTP connections are reused**, up to `:pool-size` (2) per mailer.
+- **The demo server's** admin demo and `/config` are for the members demo's admins, who sign in to them from anywhere.
 
 ### Changed
+- **Mail is sent by the job runner.** Each queued message has a `deliver-mail` durable job; the separate delivery thread is gone. `start-mail-delivery` starts a job runner unless one is running, and `create-mail-tables` creates the job tables too.
 - **Sign-in limits are kept in the database** (`auth_events`, migration 2 of `:littoral-auth`). Lockouts and reset-mail caps now survive restarts and are shared between processes.
 - **`littoral/mail` sends through [smtp](https://github.com/lispnik/smtp)**, which replaces Littoral's own SMTP client and MIME writer.
   - The mailer gains XOAUTH2 and OAUTHBEARER, PIPELINING, SIZE checks and internationalized addresses.

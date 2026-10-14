@@ -414,14 +414,15 @@ Jobs live in memory, so a restart forgets them; for work that must not be lost, 
          (p () (anchor (:href (tracking-url order)) "Track it"))))
 
 (littoral.mail:create-mail-tables)
-(littoral.mail:start-mail-delivery :database spec)   ; a background thread sends the outbox
+(littoral.mail:start-mail-delivery :database spec)   ; the job runner sends the outbox
 ;; …and in an action:
 (littoral.mail:queue-mail (order-shipped order))
 ```
 
 - **The outbox.**
   - `queue-mail` writes the message to the `mail_outbox` table in the request's transaction, so mail goes only if the action that sent it commits. The page never waits for the mail server.
-  - The delivery thread sends at once, then tries again after `*mail-retry-seconds*` (60), doubling each time, up to `*mail-attempts*` (8). A refusal (an SMTP 5xx) fails at once.
+  - Each message has a durable job, `deliver-mail`, so the job runner (`littoral/jobs`) sends mail along with your other jobs; there's no separate delivery thread. `start-mail-delivery` sets the mailer and starts a runner unless one is running. The jobs appear in the jobs list, and the outbox table keeps each message and how sending it went.
+  - The job sends at once, then tries again after `*mail-retry-seconds*` (60), doubling each time, up to `*mail-attempts*` (8). A refusal (an SMTP 5xx) fails at once.
   - Several processes can share the table: each one claims a message before sending it.
   - `outbox-messages`, `retry-mail` and `purge-sent-mail` look after it. `deliver-queued-mail` sends what's due right away, which tests find handy.
 - **SMTP.**
@@ -430,6 +431,8 @@ Jobs live in memory, so a restart forgets them; for work that must not be lost, 
   - With STARTTLS, a server that doesn't offer it is refused rather than used in the clear, and the certificate must match the host. Pass `:ca-file` for a private authority.
   - It signs in with the strongest method the server offers (PLAIN, LOGIN, XOAUTH2 or OAUTHBEARER). With `:security :none` it won't send a password unless you pass `:allow-insecure-auth t`. Errors never include the password.
   - `smtp-mailer-from-url` reads `smtp://`, `smtps://` and `smtp+insecure://` URLs.
+  - Connections are kept and reused, up to `:pool-size` (2), so a batch of mail doesn't connect for each message. `:pool-size nil` connects each time.
+  - `:dkim` signs each message as it's sent: a signer from `smtp/dkim:make-dkim-signer` (RSA or Ed25519), or a list of them. `smtp/dkim:dkim-dns-record` gives the TXT record to publish. Generated apps read `DKIM_KEY_FILE`, `DKIM_DOMAIN` and `DKIM_SELECTOR`, and `myapp dkim-record` prints the record.
   - Failures are the library's conditions, all under `smtp-error`. `smtp-error-code` gives the reply code, and `smtp-error-permanent-p` says whether trying again could help.
 - **Messages.**
   - `make-mail` takes To, Cc, Bcc, Reply-To, a text body, an HTML body or both, attachments and extra headers.
@@ -931,6 +934,8 @@ With cookie sessions, route on the cookie instead. Turning `proxy_buffering` off
 - `(log-requests-to stream)` writes a JSON (or `:format :text`) line per request. Lines carry the path but never the query string, so session keys stay out of logs.
 
 **Restarts.** Sessions don't survive a restart. A session is a graph of live objects, the closures its pages' callbacks hold, and cl-cont continuations for flows in progress. None of these can be serialised, which is also true of Seaside outside image-based persistence. Configuration does survive (see `:configuration-file`). Keep data that must last in your own store, not in components. Use `:expired-notice` to tell people when their session is gone.
+
+What a restart costs is small. A page whose session is gone starts a new one when it's next loaded. Its AJAX requests, event stream, WebSocket and live-redefinition checks are told to reload the page rather than being given a new session they can't use. Sign-ins are kept in the database, so an `auth-root` application signs the user straight back in.
 
 ## License
 

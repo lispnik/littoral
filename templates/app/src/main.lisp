@@ -68,12 +68,27 @@ migrations.  Safe at every start, and from several processes at once."
   (littoral.admin:register-admin "/admin" '(note) :title "{{title}} admin" :database database
                                                   :role :admin))
 
+(defun env (name)
+  "The environment variable NAME, or NIL when it's unset or empty."
+  (let ((value (uiop:getenv name)))
+    (and value (plusp (length value)) value)))
+
+(defun dkim-signer ()
+  "A DKIM signer when $DKIM_KEY_FILE names a PEM private key: for the domain
+$DKIM_DOMAIN, with the selector $DKIM_SELECTOR (default \"mail\")."
+  (let ((key (env "DKIM_KEY_FILE")))
+    (when key
+      (smtp/dkim:make-dkim-signer :domain (or (env "DKIM_DOMAIN") (error "Set DKIM_DOMAIN too."))
+                                  :selector (or (env "DKIM_SELECTOR") "mail")
+                                  :private-key (pathname key)))))
+
 (defun mailer ()
   "What sends mail: the SMTP server $SMTP_URL names (smtp://user:password@host:587
-for STARTTLS, smtps://… for TLS), or else one that prints mail to the log."
-  (let ((url (uiop:getenv "SMTP_URL")))
-    (if (and url (plusp (length url)))
-        (littoral.mail:smtp-mailer-from-url url)
+for STARTTLS, smtps://… for TLS), signing with DKIM when $DKIM_KEY_FILE is
+set, or else one that prints mail to the log."
+  (let ((url (env "SMTP_URL")))
+    (if url
+        (littoral.mail:smtp-mailer-from-url url :dkim (dkim-signer))
         littoral.mail:*mailer*)))
 
 ;; Background jobs: (enqueue-job (list 'some-job 42)) inside a request queues
@@ -99,8 +114,9 @@ start the web server.  Mail comes from $MAIL_FROM."
 mode on $PORT (default {{port}}) and $ADDRESS, with $PUBLIC_URL as the address
 mail links use, and $TRUST_PROXY set when behind a reverse proxy.  With the
 argument migrate, brings the database up to date and stops; with
-migrations, lists the migrations; with create-user NAME EMAIL PASSWORD
-[admin], adds that user instead."
+migrations, lists the migrations; with dkim-record, prints the DNS record
+for $DKIM_KEY_FILE; with create-user NAME EMAIL PASSWORD [admin], adds that
+user instead."
   (let ((arguments (uiop:command-line-arguments)))
     (when (equal (first arguments) "migrate")
       (setup-database (database-spec))
@@ -109,6 +125,13 @@ migrations, lists the migrations; with create-user NAME EMAIL PASSWORD
     (when (equal (first arguments) "migrations")
       (migration-report)
       (uiop:quit 0))
+    (when (equal (first arguments) "dkim-record")
+      (let ((signer (dkim-signer)))
+        (if signer
+            (format t "~A._domainkey.~A TXT \"~A\"~%" (smtp/dkim:dkim-signer-selector signer)
+                    (smtp/dkim:dkim-signer-domain signer) (smtp/dkim:dkim-dns-record signer))
+            (format t "Set DKIM_KEY_FILE and DKIM_DOMAIN first.~%"))
+        (uiop:quit 0)))
     (when (equal (first arguments) "create-user")
       (destructuring-bind (name email password &optional admin) (rest arguments)
         (setup-database (database-spec))

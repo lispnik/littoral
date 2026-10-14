@@ -57,11 +57,16 @@
           (db-save (make-instance 'task :title title :project project :due due :done done)))))))
 
 (defun register (&key (path "/examples/admin")
-                   (file (merge-pathnames "littoral-admin-demo.sqlite3" (uiop:temporary-directory))))
-  "Serve the demo admin at PATH, keeping its data in FILE."
+                   (file (merge-pathnames "littoral-admin-demo.sqlite3" (uiop:temporary-directory)))
+                   role)
+  "Serve the demo admin at PATH, keeping its data in FILE.  With ROLE, users
+in FILE with that role (such as the members demo's, sharing its file) sign
+in to it; without, it answers only this machine."
   (let ((database (list :sqlite3 :database-name (namestring file))))
     (let ((*database* database))
       (create-table 'project)
       (create-table 'task)
-      (seed))
-    (littoral.admin:register-admin path '(project task) :title "Littoral admin demo" :database database)))
+      (seed)
+      (when role (littoral.auth:create-auth-tables)))
+    (littoral.admin:register-admin path '(project task) :title "Littoral admin demo" :database database
+                                                        :role role)))

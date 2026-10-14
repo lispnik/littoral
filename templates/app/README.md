@@ -22,7 +22,7 @@ Data lives in SQLite under `data/` (or `$DATA_DIR`). Set `DATABASE_URL=postgres:
 - `tests/app.lisp`: signing in, editing notes, and checking they stay private.
 - `deploy/`: a systemd unit and a Caddyfile.
 
-Sign-ins are kept in the database, so they survive restarts; the sign-in form offers "Keep me signed in". "Forgot your password?" mails a reset link. Mail goes into an outbox table and a background thread sends it, trying again if the mail server is down: set `SMTP_URL` to send it, or it's printed to the log. Background jobs (`define-job` and `enqueue-job`, in `src/main.lisp`) are kept in the database too, so they survive restarts; a nightly one tidies up sent mail and finished jobs. An audit log records sign-ins, failures, password and role changes, and the admin's edits; the admin shows it under "Audit log".
+Sign-ins are kept in the database, so they survive restarts; the sign-in form offers "Keep me signed in". "Forgot your password?" mails a reset link. Mail goes into an outbox table and the job runner sends it, trying again if the mail server is down: set `SMTP_URL` to send it, or it's printed to the log. Background jobs (`define-job` and `enqueue-job`, in `src/main.lisp`) are kept in the database too, so they survive restarts; a nightly one tidies up sent mail and finished jobs. An audit log records sign-ins, failures, password and role changes, and the admin's edits; the admin shows it under "Audit log".
 
 ## Deploying
 
@@ -36,6 +36,8 @@ Sign-ins are kept in the database, so they survive restarts; the sign-in form of
 | `DATABASE_URL` or `DATA_DIR` | PostgreSQL, or where the SQLite file goes |
 | `SMTP_URL` | the mail server: `smtp://user:password@host:587` (STARTTLS) or `smtps://…:465` (TLS); without it, mail is printed to the log |
 | `MAIL_FROM` | the From address, such as `Bookshop <hello@example.org>` |
+| `DKIM_KEY_FILE` | a PEM private key (RSA or Ed25519) to sign mail with DKIM; `{{name}} dkim-record` prints the DNS record to publish |
+| `DKIM_DOMAIN`, `DKIM_SELECTOR` | the signing domain (the d= tag) and the selector (default `mail`) |
 
 Or run it in a container: `make docker` builds the image `{{name}}` (Littoral comes from your checkout), and
 

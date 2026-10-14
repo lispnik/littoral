@@ -2078,7 +2078,7 @@ background instead, and tries again when it fails.
 
 Sends mail through an `smtp` server: `make-smtp-mailer` makes one.
 
-#### `make-smtp-mailer` `&key (host "localhost") port (security :starttls) username password (helo (machine-instance)) (verify t) ca-file (timeout 30) allow-insecure-auth` — function
+#### `make-smtp-mailer` `&key (host "localhost") port (security :starttls) username password (helo (machine-instance)) (verify t) ca-file (timeout 30) allow-insecure-auth dkim (pool-size 2)` — function
 
 A mailer sending through the `smtp` server at `host`.  `security` is :`starttls`
 (port 587 by default), :`tls` (465) or :`none` (25, for a relay on this machine).
@@ -2086,6 +2086,10 @@ With `username`, signs in with the strongest `auth` method the server offers;
 without `tls` only when `allow-insecure-auth` is true.  The server's certificate
 is checked against the system's authorities, or `ca-file`'s, unless `verify` is `nil`.
 `timeout`, in seconds, bounds connecting and each step of the conversation.
+`dkim`, a signer from `smtp`/`dkim`:`make-dkim-signer` or a list of them (`rsa` and
+Ed25519, say), signs each message as it is sent.  Up to `pool-size`
+connections are kept open and reused, so a batch of mail doesn't connect
+for each message; `nil` connects for each one.
 
 #### `smtp-mailer-from-url` `url &rest options` — function
 
@@ -2178,7 +2182,8 @@ A message in the outbox, and how sending it has gone.
 
 #### `create-mail-tables` — function
 
-Create or bring up to date the outbox table (migrations :`littoral-mail`).
+Create or bring up to date the outbox table (migrations :`littoral-mail`),
+and the job queue that sends it.
 
 #### `drop-mail-tables` — function
 
@@ -2186,34 +2191,36 @@ Drop the outbox table.
 
 #### `queue-mail` `mail` — function
 
-Put `mail` in the outbox, in the current database, for the delivery thread
-to send; returns its `outbox-mail`.
+Put `mail` in the outbox, in the current database, with a job to send it;
+returns its `outbox-mail`.
 
 #### `outbox-sender` `&key (from *mail-from*)` — function
 
 A function of (`to` `subject` `body`) that queues a plain-text mail, for
 `littoral`.`auth`:*SEND-MAIL*.
 
-#### `deliver-queued-mail` `&key (mailer *mailer*) (limit 50)` — function
+#### `deliver-queued-mail` `&key (mailer (delivery-mailer)) (limit 50)` — function
 
 Send the messages in the current database's outbox that are due, with
-`mailer`; returns how many were sent.  The delivery thread calls this; so can
-a test, to send what's queued without waiting.
+`mailer`; returns how many were sent.  Their jobs do this one at a time; a
+test can call it to send what's queued without waiting.
 
 #### `start-mail-delivery` `&key (database *database*) (mailer *mailer*) (interval 10) (attempts *mail-attempts*) (retry-seconds *mail-retry-seconds*)` — function
 
 Send the outbox of `database` (a spec, as `littoral`.`db`:*DATABASE* holds) with
-`mailer` from a background thread: at once when mail is queued in this process,
-and every `interval` seconds for retries and other processes' mail.  `attempts`
-and `retry-seconds` stand for *MAIL-ATTEMPTS* and *MAIL-RETRY-SECONDS* there.
+`mailer`.  The job runner (`littoral`.`jobs`) sends it, at once when mail is queued
+in this process, and within `interval` seconds for retries and other processes'
+mail; this starts one for `database` unless one is running.  `attempts` and
+`retry-seconds` set *MAIL-ATTEMPTS* and *MAIL-RETRY-SECONDS*.
 
 #### `stop-mail-delivery` — function
 
-Stop the delivery thread, letting it finish the message it is sending.
+Stop sending mail: the job runner too, if `start-mail-delivery` started it,
+letting it finish the message it is sending.
 
 #### `mail-delivery-running-p` — function
 
-True while the delivery thread runs.
+True while `start-mail-delivery`'s mailer is set and a job runner runs.
 
 #### `outbox-messages` `&key status (limit 50)` — function
 

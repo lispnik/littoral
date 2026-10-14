@@ -536,6 +536,25 @@ the handler falls back to the standard page."
                        (sb-ext:string-to-octets given :external-format :utf-8)
                        (sb-ext:string-to-octets expected :external-format :utf-8)))))))))
 
+(defun gone-session-response ()
+  "The answer to a page's background request (AJAX, its event stream, its
+WebSocket, the live check) when the page's session is gone, as after a
+restart: have the page reload, which starts a new session (an AUTH-ROOT
+application signs its user back in), rather than start one here that the
+request couldn't use.  NIL for other requests."
+  (flet ((json (text)
+           (list 200 (list* :content-type "application/json; charset=utf-8" :cache-control "no-store"
+                            *security-headers*)
+                 (list text))))
+    (cond ((request-parameter "_lt_ajax") (json "{\"reload\":true}"))
+          ((request-parameter "_lt_live") (json "{\"reload\":true}"))
+          ((request-parameter "_lt_events")
+           (list 200 (list* :content-type "text/event-stream" :cache-control "no-store" *security-headers*)
+                 (list (format nil "event: reload~%data: {}~%~%"))))
+          ;; A refused WebSocket falls back to the event stream, which reloads.
+          ((request-parameter "_lt_ws")
+           (list 410 (list* :content-type "text/plain" *security-headers*) (list "This page's session is gone."))))))
+
 (defun handle-application (app)
   "Answer a request for APP: authorise it, then find or start its session."
   (let ((*application* app))
@@ -560,7 +579,8 @@ the handler falls back to the standard page."
                   ;; Someone else's session, reached by a shared link: start
                   ;; this browser its own instead (no session fixation).
                   (session (and found (browser-matches-p found) found)))
-             (cond ((and (null session) (not (allow-new-session-p)))
+             (cond ((and (null session) (gone-session-response)))
+                   ((and (null session) (not (allow-new-session-p)))
                     (list 429 (list* :content-type "text/plain" :retry-after "60" *security-headers*)
                           (list "Too many new sessions from this address; try again in a minute.")))
                    ((null session)

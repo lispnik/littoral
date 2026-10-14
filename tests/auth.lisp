@@ -91,6 +91,29 @@
     (click b "Sign out")
     (is (has-text-p b "Not signed in"))))
 
+(test pages-come-back-after-a-restart
+  (with-auth (b)
+    (sign-in-as b "ada" "correct horse battery")
+    (is (has-text-p b "Signed in as ada"))
+    (let ((sessions (littoral::application-sessions (find-application "/m")))
+          (page (browser-url b)))
+      ;; A restart: every session is gone, the sign-in isn't.
+      (clrhash sessions)
+      (multiple-value-bind (json status) (ajax-request b "" "x")
+        (is (= 200 status))
+        (is (search "\"reload\":true" json)))
+      (multiple-value-bind (status headers body)
+          (littoral.test::raw-request b :get (concatenate 'string page "&_lt_events=1"))
+        (declare (ignore headers))
+        (is (= 200 status))
+        (is (search "event: reload" body)))
+      (is (= 0 (hash-table-count sessions)) "Neither started a session")
+      ;; The page reloads: a new session, still signed in.
+      (visit b page)
+      (is (= 200 (browser-status b)))
+      (is (has-text-p b "Signed in as ada"))
+      (is (= 1 (hash-table-count sessions))))))
+
 (test lockout-after-failures
   (let ((littoral.auth:*lockout-failures* 3) (littoral.auth:*lockout-seconds* 2))
     (with-auth (b)

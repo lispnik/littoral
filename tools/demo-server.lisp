@@ -6,7 +6,8 @@
 ;;;; The executable serves on $PORT (default 8080) and $ADDRESS (default
 ;;;; 127.0.0.1), keeping the demos' files under $DATA_DIR (default the
 ;;;; temporary directory).  The examples run in development mode, halos and
-;;;; all, so publish its port only to this machine.
+;;;; all, so publish its port only to this machine.  The admin demo and
+;;;; /config are for the members demo's admins, who sign in to them.
 
 (dolist (system '(:littoral/examples :littoral/tracker :littoral/tutorial :littoral/admin-demo
                   :littoral/members-demo :littoral/storage-demo :littoral/search-demo
@@ -24,11 +25,16 @@
 
 (defun register-demos ()
   "The demos that keep data register at startup, so their files are opened where they run."
-  (let ((data (data-directory)))
+  (let* ((data (data-directory))
+         (members (merge-pathnames "littoral-members-demo.sqlite3" data)))
     (littoral-tracker:register-tracker)
     (reading-list:register)
-    (littoral-admin-demo:register :file (merge-pathnames "littoral-admin-demo.sqlite3" data))
-    (littoral-members-demo:register :file (merge-pathnames "littoral-members-demo.sqlite3" data))
+    (littoral-members-demo:register :file members)
+    ;; The admin demo and /config are for the members demo's admins (ada),
+    ;; who sign in to them from anywhere: they share its database.
+    (littoral-admin-demo:register :file members :role :admin)
+    (littoral.auth:configure-signed-in-admin
+     :role :admin :database (list :sqlite3 :database-name (namestring members)))
     (littoral-gallery:register :directory (merge-pathnames "littoral-gallery/" data))
     (littoral-search-demo:register :file (merge-pathnames "littoral-search-demo.sqlite3" data))
     (littoral-parenscript-demo:register)))

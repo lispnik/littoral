@@ -4,14 +4,15 @@
 ;;;;   (start-mail-delivery :database spec :mailer (make-smtp-mailer …))
 ;;;;   (queue-mail (welcome-mail user))
 ;;;;
-;;;; QUEUE-MAIL writes the message to the mail_outbox table, inside the
-;;;; request's transaction when there is one, so mail goes only if the
-;;;; action that sent it commits.  The request doesn't wait for SMTP, and a
-;;;; slow mail server can't show who has an account by how long the reset
-;;;; form takes.  A delivery thread sends what's due; a failure is tried
-;;;; again after *MAIL-RETRY-SECONDS*, doubling, up to *MAIL-ATTEMPTS* times,
-;;;; and a refusal (an SMTP 5xx) fails at once.  Several processes may share
-;;;; the table: each message is claimed by one before it is sent.
+;;;; QUEUE-MAIL writes the message to the mail_outbox table, with a durable
+;;;; job (littoral/jobs) to send it, inside the request's transaction when
+;;;; there is one, so mail goes only if the action that sent it commits.
+;;;; The request doesn't wait for SMTP, and a slow mail server can't show who
+;;;; has an account by how long the reset form takes.  The job runner sends
+;;;; it; a failure is tried again after *MAIL-RETRY-SECONDS*, doubling, up to
+;;;; *MAIL-ATTEMPTS* times, and a refusal (an SMTP 5xx) fails at once.  The
+;;;; table keeps each message and how sending it went.  Several processes may
+;;;; share it: each message is claimed by one before it is sent.
 
 (in-package #:littoral.mail)
 
@@ -50,8 +51,10 @@
 (littoral.db:define-migrations :littoral-mail (asdf:system-relative-pathname :littoral "migrations/mail/"))
 
 (defun create-mail-tables ()
-  "Create or bring up to date the outbox table (migrations :LITTORAL-MAIL)."
-  (littoral.db:migrate :littoral-mail))
+  "Create or bring up to date the outbox table (migrations :LITTORAL-MAIL),
+and the job queue that sends it."
+  (littoral.db:migrate :littoral-mail)
+  (littoral.jobs:create-job-tables))
 
 (defun drop-mail-tables ()
   "Drop the outbox table."
@@ -60,18 +63,9 @@
 
 ;;; Queueing
 
-(defvar *delivery-lock* (sb-thread:make-mutex :name "mail delivery"))
-(defvar *delivery-wanted* (sb-thread:make-waitqueue))
-(defvar *delivery-pending* nil "True when mail was queued since the delivery thread last looked.")
-
-(defun wake-delivery ()
-  (sb-thread:with-mutex (*delivery-lock*)
-    (setf *delivery-pending* t)
-    (sb-thread:condition-broadcast *delivery-wanted*)))
-
 (defun queue-mail (mail)
-  "Put MAIL in the outbox, in the current database, for the delivery thread
-to send; returns its OUTBOX-MAIL."
+  "Put MAIL in the outbox, in the current database, with a job to send it;
+returns its OUTBOX-MAIL."
   (let ((row (make-instance 'outbox-mail
                             :sender (address-spec (mail-from mail))
                             :recipients (format nil "~{~A~^ ~}" (mail-recipients mail))
@@ -79,7 +73,7 @@ to send; returns its OUTBOX-MAIL."
                             :message (mail-string mail)
                             :created (get-universal-time) :next-attempt (get-universal-time))))
     (littoral.db:db-insert row)
-    (wake-delivery)
+    (schedule-delivery (outbox-id row) (get-universal-time))
     row))
 
 (defun outbox-sender (&key (from *mail-from*))
@@ -88,7 +82,23 @@ LITTORAL.AUTH:*SEND-MAIL*."
   (lambda (to subject body)
     (queue-mail (make-mail :to to :from from :subject subject :text body))))
 
-;;; Delivering
+;;; Delivering: each message has a job, DELIVER-MAIL, that tries it once and
+;;; schedules the next try when that fails.
+
+(defvar *delivery-mailer* nil
+  "What START-MAIL-DELIVERY was told to send with; NIL for *MAILER*.")
+
+(defun delivery-mailer () (or *delivery-mailer* *mailer*))
+
+(defun schedule-delivery (id at)
+  "Have the job runner try the outbox message ID at AT, a universal time.
+One job waits per message, however often this is asked."
+  (let ((key (format nil "mail:~D" id)))
+    (unless (littoral.jobs:enqueue-job (list 'deliver-mail id) :at at :key key)
+      ;; One already waits: bring it forward if it waits longer.
+      (when (plusp (littoral.db:db-execute "UPDATE job_queue SET run_at = ? WHERE unique_key = ? AND status = 'queued' AND attempts = 0 AND run_at > ?"
+                                           at key at))
+        (littoral.jobs::wake-runner)))))
 
 (defun claim (row)
   "Take ROW for this process; true unless another got there first."
@@ -102,7 +112,8 @@ LITTORAL.AUTH:*SEND-MAIL*."
     (subseq text 0 (min 500 (length text)))))
 
 (defun deliver-one (row mailer)
-  "Send ROW, and record how it went; true when it was sent."
+  "Send ROW, and record how it went; true when it was sent.  A failure that
+may pass is scheduled to be tried again."
   (handler-case
       (progn
         (send-message mailer (outbox-sender-address row)
@@ -112,68 +123,72 @@ LITTORAL.AUTH:*SEND-MAIL*."
         t)
     (error (e)
       (let* ((attempts (1+ (or (outbox-attempts row) 0)))
-             (give-up (or (smtp-error-permanent-p e) (>= attempts *mail-attempts*))))
+             (give-up (or (smtp-error-permanent-p e) (>= attempts *mail-attempts*)))
+             (next (+ (get-universal-time) (* *mail-retry-seconds* (expt 2 (1- attempts))))))
         (littoral.db:db-execute "UPDATE mail_outbox SET status = ?, attempts = ?, next_attempt = ?, last_error = ? WHERE id = ?"
-                                (if give-up "failed" "queued") attempts
-                                (+ (get-universal-time) (* *mail-retry-seconds* (expt 2 (1- attempts))))
-                                (error-text e) (outbox-id row))
+                                (if give-up "failed" "queued") attempts next (error-text e) (outbox-id row))
+        (unless give-up (schedule-delivery (outbox-id row) next))
         nil))))
 
-(defun deliver-queued-mail (&key (mailer *mailer*) (limit 50))
+(defun due-p (row)
+  (and (member (outbox-status row) '("queued" "sending") :test #'string=)
+       (<= (outbox-next-attempt row) (get-universal-time))))
+
+(littoral.jobs:define-job (deliver-mail :attempts 3) (id)
+  "Send the outbox message ID with the delivery mailer, if it's due."
+  (let ((row (littoral.db:db-find 'outbox-mail id)))
+    (cond ((null row))
+          ((due-p row) (and (claim row) (deliver-one row (delivery-mailer))))
+          ;; Not yet (it was retried by hand, or another process has it): come back then.
+          ((member (outbox-status row) '("queued" "sending") :test #'string=)
+           (schedule-delivery id (outbox-next-attempt row))))))
+
+(littoral.jobs:define-job deliver-due-mail ()
+  "Send whatever in the outbox is due, such as mail queued before its jobs were."
+  (deliver-queued-mail))
+
+(defun deliver-queued-mail (&key (mailer (delivery-mailer)) (limit 50))
   "Send the messages in the current database's outbox that are due, with
-MAILER; returns how many were sent.  The delivery thread calls this; so can
-a test, to send what's queued without waiting."
+MAILER; returns how many were sent.  Their jobs do this one at a time; a
+test can call it to send what's queued without waiting."
   (let ((due (littoral.db:db-select 'outbox-mail
                                     :where "status IN ('queued', 'sending') AND next_attempt <= ?"
                                     :params (list (get-universal-time)) :order-by "id" :limit limit)))
     (count-if (lambda (row) (and (claim row) (deliver-one row mailer))) due)))
 
-(defvar *delivery-thread* nil)
-(defvar *delivery-stop* nil)
+(defvar *delivery-runner* nil "The job runner threads START-MAIL-DELIVERY started, if it did.")
 
 (defun mail-delivery-running-p ()
-  "True while the delivery thread runs."
-  (and *delivery-thread* (sb-thread:thread-alive-p *delivery-thread*)))
+  "True while START-MAIL-DELIVERY's mailer is set and a job runner runs."
+  (and *delivery-mailer* (littoral.jobs:job-runner-running-p)))
 
 (defun start-mail-delivery (&key (database littoral.db:*database*) (mailer *mailer*) (interval 10)
                               (attempts *mail-attempts*) (retry-seconds *mail-retry-seconds*))
   "Send the outbox of DATABASE (a spec, as LITTORAL.DB:*DATABASE* holds) with
-MAILER from a background thread: at once when mail is queued in this process,
-and every INTERVAL seconds for retries and other processes' mail.  ATTEMPTS
-and RETRY-SECONDS stand for *MAIL-ATTEMPTS* and *MAIL-RETRY-SECONDS* there."
-  (stop-mail-delivery)
+MAILER.  The job runner (LITTORAL.JOBS) sends it, at once when mail is queued
+in this process, and within INTERVAL seconds for retries and other processes'
+mail; this starts one for DATABASE unless one is running.  ATTEMPTS and
+RETRY-SECONDS set *MAIL-ATTEMPTS* and *MAIL-RETRY-SECONDS*."
   (unless database (error "START-MAIL-DELIVERY needs a database."))
-  (setf *delivery-stop* nil
-        *delivery-thread*
-        (sb-thread:make-thread
-         (lambda ()
-           (let ((littoral.db:*database* database)
-                 (*mail-attempts* attempts)
-                 (*mail-retry-seconds* retry-seconds))
-             (loop until *delivery-stop*
-                   do (handler-case (littoral::with-sane-printing () (deliver-queued-mail :mailer mailer))
-                        ;; A busy or vanished database: try again next time.
-                        (error () nil))
-                      (sb-thread:with-mutex (*delivery-lock*)
-                        (unless (or *delivery-pending* *delivery-stop*)
-                          (littoral::wait-on *delivery-wanted* *delivery-lock* interval))
-                        (when *delivery-pending*
-                          (setf *delivery-pending* nil)
-                          ;; QUEUE-MAIL runs inside the request's transaction:
-                          ;; give it a moment to commit before looking.
-                          (sb-thread:release-mutex *delivery-lock*)
-                          (unwind-protect (sleep 0.2)
-                            (sb-thread:grab-mutex *delivery-lock*)))))))
-         :name "littoral mail delivery"))
-  *delivery-thread*)
+  (setf *delivery-mailer* mailer
+        *mail-attempts* attempts
+        *mail-retry-seconds* retry-seconds)
+  (unless (littoral.jobs:job-runner-running-p)
+    (littoral.jobs:start-job-runner :database database :interval interval)
+    (setf *delivery-runner* littoral.jobs::*runner-threads*))
+  ;; Mail queued before now, or whose job was lost, goes too.
+  (let ((littoral.db:*database* database))
+    (littoral.jobs:enqueue-job (list 'deliver-due-mail) :key "deliver-due-mail"))
+  t)
 
 (defun stop-mail-delivery ()
-  "Stop the delivery thread, letting it finish the message it is sending."
-  (when (mail-delivery-running-p)
-    (setf *delivery-stop* t)
-    (wake-delivery)
-    (sb-thread:join-thread *delivery-thread* :default nil :timeout 30))
-  (setf *delivery-thread* nil))
+  "Stop sending mail: the job runner too, if START-MAIL-DELIVERY started it,
+letting it finish the message it is sending."
+  (when (and *delivery-runner* (eq *delivery-runner* littoral.jobs::*runner-threads*))
+    (littoral.jobs:stop-job-runner))
+  (let ((mailer (shiftf *delivery-mailer* nil)))
+    (when (typep mailer 'smtp-mailer) (close-smtp-mailer mailer)))
+  (setf *delivery-runner* nil))
 
 ;;; Looking at the outbox
 
@@ -185,9 +200,9 @@ and RETRY-SECONDS stand for *MAIL-ATTEMPTS* and *MAIL-RETRY-SECONDS* there."
 
 (defun retry-mail (id)
   "Send the message ID again now, with its attempts counted afresh."
-  (littoral.db:db-execute "UPDATE mail_outbox SET status = 'queued', attempts = 0, next_attempt = ? WHERE id = ? AND status <> 'sent'"
-                          (get-universal-time) id)
-  (wake-delivery))
+  (when (plusp (littoral.db:db-execute "UPDATE mail_outbox SET status = 'queued', attempts = 0, next_attempt = ? WHERE id = ? AND status <> 'sent'"
+                                       (get-universal-time) id))
+    (schedule-delivery id (get-universal-time))))
 
 (defun purge-sent-mail (&key (older-than (* 7 24 3600)))
   "Delete sent messages more than OLDER-THAN seconds old; returns how many."

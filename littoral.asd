@@ -281,7 +281,7 @@
   :description "Sending mail: MIME messages, SMTP with TLS, templates and an outbox that retries."
   :author "Matthew Kennedy"
   :license "MIT"
-  :depends-on (#:littoral #:littoral/db #:smtp #:quri #:cl-ppcre #:alexandria)
+  :depends-on (#:littoral #:littoral/db #:littoral/jobs #:smtp #:smtp/dkim #:quri #:cl-ppcre #:alexandria)
   :components ((:module "src" :serial t
                 :components ((:file "mail") (:file "smtp") (:file "outbox")))))
 

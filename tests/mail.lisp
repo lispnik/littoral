@@ -75,6 +75,7 @@
    (capabilities :initarg :capabilities :initform '("PIPELINING" "AUTH PLAIN LOGIN") :reader fake-capabilities)
    (replies :initarg :replies :initform '() :reader fake-replies :documentation "(VERB . REPLY) overrides.")
    (commands :initform '() :accessor fake-commands)
+   (connections :initform 0 :accessor fake-connections)
    (data :initform '() :accessor fake-data)))
 
 (defun fake-port (server) (usocket:get-local-port (fake-socket server)))
@@ -115,6 +116,7 @@
            (lambda ()
              (loop (let ((connection (handler-case (usocket:socket-accept (fake-socket server))
                                        (error () (return)))))
+                     (incf (fake-connections server))
                      (unwind-protect (ignore-errors (serve-fake-smtp server connection))
                        (usocket:socket-close connection)))))
            :name "fake smtp"))
@@ -132,7 +134,7 @@
   ;; OPTIONS first: the first of repeated keywords wins.
   (apply #'littoral.mail:make-smtp-mailer (append options (list :host "127.0.0.1" :port (fake-port server)
                                                                 :security :none :timeout 5
-                                                                :allow-insecure-auth t))))
+                                                                :allow-insecure-auth t :pool-size nil))))
 
 (test smtp-delivery
   (with-fake-smtp (server)
@@ -186,6 +188,40 @@
       (is (search "Bad credentials" (princ-to-string condition)))
       (is (null (search (cl-base64:string-to-base64-string (format nil "~Cshop~Chunter2" (code-char 0) (code-char 0)))
                         (princ-to-string condition)))))))
+
+;; A key made for these tests only: openssl genpkey -algorithm ed25519
+(defparameter *test-dkim-key*
+  "-----BEGIN PRIVATE KEY-----
+MC4CAQAwBQYDK2VwBCIEIG4G5eGc2mREsIg1N36yblimKfWTN1E+60t720EqbQSN
+-----END PRIVATE KEY-----
+")
+
+(test smtp-signs-with-dkim
+  (with-fake-smtp (server)
+    (let ((signer (smtp/dkim:make-dkim-signer :domain "example.org" :selector "mail"
+                                               :private-key *test-dkim-key*)))
+      (littoral.mail:send-mail (littoral.mail:make-mail :from "Shop <shop@example.org>" :to "ada@example.org"
+                                                        :subject "Signed" :text "Hello")
+                               :mailer (fake-mailer server :dkim signer))
+      (let* ((received (first (fake-data server)))
+             (signature (littoral.mail:message-header received "DKIM-Signature")))
+        (is (stringp signature))
+        (is (search "a=ed25519-sha256" signature))
+        (is (search "d=example.org" signature))
+        (is (search "s=mail" signature))
+        (is (string= "Signed" (littoral.mail:message-header received "Subject")))))))
+
+(test smtp-reuses-connections
+  (with-fake-smtp (server)
+    (let ((mailer (fake-mailer server :pool-size 2)))
+      (unwind-protect
+           (dotimes (i 3)
+             (littoral.mail:send-mail (littoral.mail:make-mail :to "ada@example.org" :subject (format nil "No. ~D" i) :text "x")
+                                      :mailer mailer))
+        (littoral.mail::close-smtp-mailer mailer))
+      (is (= 3 (length (fake-data server))))
+      (is (= 1 (fake-connections server)) "One connection for all three")
+      (is (= 1 (count-if (lambda (c) (alexandria:starts-with-subseq "EHLO" c)) (fake-commands server)))))))
 
 (test smtp-urls
   (let ((m (littoral.mail:smtp-mailer-from-url "smtp://app%40example.org:p%3Ass@mail.example.org")))
@@ -330,8 +366,48 @@
         (is (string= "bob@example.org" (littoral.mail:message-header message "To")))
         (is (search "/reset?token=" (littoral.mail:message-text message)))))))
 
-(test delivery-thread
-  ;; The thread has its own connection, so this uses a file, not :memory:.
+(defmacro with-mail-jobs (() &body body)
+  "BODY with the mail jobs the only ones this process knows, so RUN-DUE-JOBS runs only them."
+  `(let ((littoral.jobs::*definitions*
+           (let ((mail (make-hash-table :test 'equal)))
+             (maphash (lambda (name definition)
+                        (when (search "LITTORAL.MAIL::DELIVER" name)
+                          (setf (gethash name mail) definition)))
+                      littoral.jobs::*definitions*)
+             mail)))
+     ,@body))
+
+(defun mail-jobs ()
+  (remove-if-not (lambda (job) (string-equal "deliver-mail" (string (littoral.jobs:durable-job-name job))))
+                 (littoral.jobs:durable-jobs :status "queued")))
+
+(test the-job-runner-sends-the-outbox
+  (with-outbox ()
+    (littoral.jobs:drop-job-tables)
+    (littoral.jobs:create-job-tables)
+    (with-mail-jobs ()
+      (let* ((mailer (make-instance 'flaky-mailer :condition (smtp-refusal 421 "Busy")))
+             (littoral.mail::*delivery-mailer* mailer))
+        (littoral.mail:queue-mail (littoral.mail:make-mail :to "ada@example.org" :subject "Hello" :text "Hi"))
+        (is (= 1 (length (mail-jobs))) "Queueing it queues its job")
+        ;; Busy: tried, and its next try is a job at the outbox's next attempt.
+        (is (= 1 (littoral.jobs:run-due-jobs)))
+        (let ((row (outbox-row)) (jobs (mail-jobs)))
+          (is (string= "queued" (littoral.mail:outbox-status row)))
+          (is (= 1 (length jobs)))
+          (is (= (littoral.mail:outbox-next-attempt row) (littoral.jobs:durable-job-run-at (first jobs)))))
+        (is (= 0 (littoral.jobs:run-due-jobs)) "Not due yet")
+        ;; Retrying it by hand brings its job forward.
+        (setf (flaky-condition mailer) nil)
+        (littoral.mail:retry-mail (littoral.mail:outbox-id (outbox-row)))
+        (is (= 1 (length (mail-jobs))))
+        (is (= 1 (littoral.jobs:run-due-jobs)))
+        (is (string= "sent" (littoral.mail:outbox-status (outbox-row))))
+        (is (null (mail-jobs)))
+        (is (= 1 (length (littoral.mail:mailer-messages (flaky-inner mailer)))))))))
+
+(test delivery-in-the-background
+  ;; The job runner has its own connection, so this uses a file, not :memory:.
   (let* ((file (merge-pathnames (format nil "littoral-outbox-~36R.sqlite3" (random (expt 36 8)))
                                 (uiop:temporary-directory)))
          (spec (list :sqlite3 :database-name (namestring file)))
