@@ -16,7 +16,11 @@
 - **API reference for `littoral.auth` and `littoral.admin`** in docs/API.md.
 - **Metrics for durable jobs and mail.** `/metrics` reports jobs by queue and status, how long the oldest due job has waited, runner threads, the outbox by status, and how long the oldest unsent mail has waited, for each database whose tables were made in the process. `add-metrics-source` lets other code add metrics. `littoral.db:database-label` names a database without its credentials.
 - **More metrics**: job runs by job and result, with durations; mail sends by result, SMTP send times and connection pools; sign-ins by method, failures by reason, reset mails and active sign-ins; database lock timeouts, conflicting saves, transaction times, SQLite file sizes and pending migrations; sessions started, ended and refused; GC time, bytes allocated and build info. Applications add their own with `define-metric`, `count-metric`, `observe-metric` and `timing-metric`.
+- **A comparison with Seaside.** `bench/compare.sh seaside` measures Seaside on Pharo, from an image `bench/seaside/setup.sh` builds, and the README gives the results. `compare.sh` also measures one user clicking, and `WORKERS` sets Woo's event loops.
 - **The demo server's** admin demo and `/config` are for the members demo's admins, who sign in to them from anywhere.
+
+### Fixed
+- **The load server's push test publishes again.** Its push page lost its channel when the progress example changed, so `/_publish` failed and no page was updated; it has a page and channel of its own now.
 
 ### Changed
 - **SQLite files use WAL mode**, so reads and writes no longer wait for each other, with `synchronous=NORMAL`. `*sqlite-journal-mode*` and `*sqlite-synchronous*`, or `:journal-mode` and `:synchronous` in the database spec, change this. Back up with `VACUUM INTO`: see "SQLite in production" in the deployment guide.

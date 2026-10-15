@@ -22,7 +22,7 @@ class User {
     throw new Error("too many redirects");
   }
   link(text) {
-    const m = this.html.match(new RegExp(`<a href="([^"]*)"[^>]*>${text}</a>`));
+    const m = this.html.match(new RegExp(`<a\\b[^>]*\\bhref="([^"]*)"[^>]*>${text}</a>`));
     if (!m) throw new Error(`no link ${text} on ${this.url} (${this.status})`);
     return m[1].replaceAll("&amp;", "&");
   }
