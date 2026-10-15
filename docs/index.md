@@ -876,6 +876,11 @@ The fake browser doesn't run JavaScript. For drag and drop, the back button with
 
 `make bench` measures the same cycle in-process, without the network: about 60 µs per click on the counter.
 
+Against Seaside on Pharo 12, measured the same way (see "Littoral and Seaside compared" below):
+- **Per core:** littoral renders pages about twice as fast and handles about 2.7× the clicks. This compares Woo on one event loop with a Pharo image, which runs on one thread.
+- **Whole machine:** littoral spreads over all the cores, for about 4× Seaside's clicks.
+- **Latency and memory:** with 64 users, littoral's p99 latency is a quarter of Seaside's, and a session takes half the memory.
+
 Requests in one session are serialised by its lock, and requests in different sessions run in parallel. The test suite runs concurrent sessions, many requests against one page, and concurrent AJAX.
 
 **Threads.** Hunchentoot gives every connection its own thread, and `start` allows 100 by default. Both idle keep-alive connections and open pages that use server push occupy a thread, and a push page holds its thread, about 1.5 MB of memory, for as long as it stays open. So capacity is counted in connections, not requests:
