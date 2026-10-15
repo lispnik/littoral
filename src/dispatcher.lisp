@@ -18,27 +18,44 @@
   '(("js" . "text/javascript; charset=utf-8")
     ("css" . "text/css; charset=utf-8")))
 
-(defvar *static-cache* (make-hash-table :test 'equal)
-  "Static file name → (WRITE-DATE CONTENTS FINGERPRINT).")
+(defvar *static-cache* (make-hash-table :test 'equal :synchronized t)
+  "Static file name → (CHECKED WRITE-DATE CONTENTS FINGERPRINT), replaced
+whole, never mutated, so threads can read it without a lock.")
+
+(defparameter *static-check-interval* 1
+  "Seconds between looks at a static file on disk.  Every page names
+littoral.js by its fingerprint, and looking on every render took over a
+third of the server's time.")
 
 (defun static-file (name)
   "The contents and fingerprint of static file NAME, or NIL.  Re-read when
-the file changes on disk; served from memory when it isn't on disk, as in
-an executable built on another machine (see EMBED-STATIC-FILES)."
+the file changes on disk (looking at most every *STATIC-CHECK-INTERVAL*
+seconds); served from memory when it isn't on disk, as in an executable
+built on another machine (see EMBED-STATIC-FILES)."
   (unless (search ".." name)
-    (let ((path (merge-pathnames name *static-directory*))
-          (cached (gethash name *static-cache*)))
-      (when (probe-file path)
-        (let ((date (file-write-date path)))
-          (unless (eql date (first cached))
-            (let ((contents (alexandria:read-file-into-string path :external-format :utf-8)))
-              (setf cached (list date contents
-                                 (subseq (ironclad:byte-array-to-hex-string
-                                          (ironclad:digest-sequence
-                                           :sha1 (sb-ext:string-to-octets contents :external-format :utf-8)))
-                                         0 10))
-                    (gethash name *static-cache*) cached)))))
-      (and cached (values (second cached) (third cached))))))
+    (let ((cached (gethash name *static-cache*))
+          (now (get-internal-real-time)))
+      (when (or (null cached)
+                ;; An image saved and started again has a new clock.
+                (not (< -1 (- now (first cached))
+                        (* *static-check-interval* internal-time-units-per-second))))
+        (let* ((path (merge-pathnames name *static-directory*))
+               (date (and (probe-file path) (file-write-date path))))
+          (cond ((null date)
+                 (when cached
+                   (setf (gethash name *static-cache*) (cons now (rest cached)))))
+                ((eql date (second cached))
+                 (setf (gethash name *static-cache*) (cons now (rest cached))))
+                (t
+                 (let ((contents (alexandria:read-file-into-string path :external-format :utf-8)))
+                   (setf (gethash name *static-cache*)
+                         (list now date contents
+                               (subseq (ironclad:byte-array-to-hex-string
+                                        (ironclad:digest-sequence
+                                         :sha1 (sb-ext:string-to-octets contents :external-format :utf-8)))
+                                       0 10))))))
+          (setf cached (gethash name *static-cache*))))
+      (and cached (values (third cached) (fourth cached))))))
 
 (defun embed-static-files ()
   "Read littoral's static files into memory, so an image saved now serves
@@ -698,6 +715,28 @@ parsing, and whatever reads the body (an endpoint) answers it."
           ((string= path "/") (index-page))
           (t (simple-page 404 "Not Found")))))
 
+(defun utf-8-length (string)
+  "How many octets STRING takes in UTF-8."
+  (loop for c across string
+        for code = (char-code c)
+        sum (cond ((< code #x80) 1) ((< code #x800) 2) ((< code #x10000) 3) (t 4))))
+
+(defun with-content-length (response)
+  "RESPONSE, with a Content-Length header when its body is a list of
+strings and it has none.  Without one, Hunchentoot chunks the body and
+flushes the headers on their own, which took a third of its time."
+  (if (and (consp response)
+           (consp (cddr response))
+           (listp (third response))
+           (not (member (first response) '(204 304)))
+           (not (getf (second response) :content-length))
+           (every #'stringp (third response)))
+      (list (first response)
+            (append (second response)
+                    (list :content-length (reduce #'+ (third response) :key #'utf-8-length)))
+            (third response))
+      response))
+
 (defun make-lack-app (&key (prefix ""))
   "A Lack application serving every registered littoral application.
 PREFIX is the path it is mounted under when the mounting middleware does
@@ -706,7 +745,7 @@ not set :SCRIPT-NAME (lack's mount middleware does not)."
     (lambda (env)
       (with-sane-printing ()
         (let* ((start (get-internal-real-time))
-               (response (handle-request env prefix)))
+               (response (with-content-length (handle-request env prefix))))
           (observe-request env response start)
           response)))))
 

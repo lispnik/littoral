@@ -423,6 +423,29 @@
     (is (search "littoral" (littoral::static-file "littoral.js")))
     (is (search "?v=" (littoral::static-url "littoral.css")))))
 
+(test static-files-are-looked-at-now-and-then
+  ;; Renders don't touch the disk, but an edited file still shows up.
+  (let* ((dir (uiop:ensure-directory-pathname
+               (merge-pathnames (format nil "littoral-static-~36R" (random (expt 36 8)))
+                                (uiop:temporary-directory))))
+         (file (merge-pathnames "probe.js" dir))
+         (littoral::*static-directory* dir))
+    (ensure-directories-exist dir)
+    (unwind-protect
+         (flet ((write-js (text unix-time)
+                  (alexandria:write-string-into-file text file :if-exists :supersede)
+                  ;; File dates have one-second resolution: set them apart.
+                  (sb-posix:utime (namestring file) unix-time unix-time)))
+           (write-js "one" 1000000000)
+           (is (string= "one" (littoral::static-file "probe.js")))
+           (write-js "two" 1000000100)
+           (let ((littoral::*static-check-interval* 3600))
+             (is (string= "one" (littoral::static-file "probe.js"))))
+           (let ((littoral::*static-check-interval* 0))
+             (is (string= "two" (littoral::static-file "probe.js")))))
+      (remhash "probe.js" littoral::*static-cache*)
+      (uiop:delete-directory-tree dir :validate t))))
+
 ;;; Meta tags and links in the head
 
 (defclass head-test-page (component) ())
@@ -460,3 +483,17 @@
 (test head-link-attribute-names-are-checked
   (signals error (add-head-link (make-instance 'html-root) "icon" "/x" :|on"load| "y"))
   (signals error (add-head-link (make-instance 'html-root) "icon" "/x" "type" "y")))
+
+(test responses-say-how-long-they-are
+  ;; Otherwise Hunchentoot chunks them, which is slow.
+  (with-fresh-applications (("/counter" 'littoral-examples:counter :mode :deployment))
+    (let ((b (make-instance 'browser)))
+      (visit b "/counter")
+      (multiple-value-bind (status headers body) (raw-request b :get (browser-url b))
+        (is (= 200 status))
+        (is (= (length (sb-ext:string-to-octets body :external-format :utf-8))
+               (getf headers :content-length))))))
+  (is (= 10 (littoral::utf-8-length "aé€😀")))
+  (is (equal '(304 (:etag "x") nil) (littoral::with-content-length '(304 (:etag "x") nil))))
+  (is (equal '(200 (:content-length 1) ("ab")) (littoral::with-content-length '(200 (:content-length 1) ("ab")))))
+  (is (functionp (littoral::with-content-length (lambda (responder) responder)))))

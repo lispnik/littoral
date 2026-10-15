@@ -168,3 +168,9 @@
     (let ((text (metrics-text)))
       (is (= 2 (metric-value "littoral_sessions_created_total{app=\"/counted-sessions\"}" text)))
       (is (= 1 (metric-value "littoral_sessions_ended_total{app=\"/counted-sessions\",reason=\"evicted\"}" text))))))
+
+(test query-parameters-are-found-by-name
+  (dolist (query '("_k=1" "a=b&_k=2" "_k" "a&_k&b" "_k=" "x=1&_k=&y"))
+    (is (littoral::query-has-p query "_k") "~S has _k" query))
+  (dolist (query '(nil "" "_kx=1" "a=_k" "x_k=1" "a=b&_kk" "_" "&"))
+    (is (not (littoral::query-has-p query "_k")) "~S has no _k" query)))

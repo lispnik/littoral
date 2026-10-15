@@ -37,7 +37,14 @@ uptime isn't counted from when it was built."
 
 (defun query-has-p (query name)
   "True when the query string QUERY has the parameter NAME."
-  (and query (cl-ppcre:scan (format nil "(?:^|&)~A(?:=|&|$)" (cl-ppcre:quote-meta-chars name)) query)))
+  (and query
+       (loop with n = (length name)
+             for start = 0 then (1+ end)
+             for end = (or (position #\& query :start start) (length query))
+             thereis (and (<= (+ start n) end)
+                          (string= name query :start2 start :end2 (+ start n))
+                          (or (= (+ start n) end) (char= #\= (char query (+ start n)))))
+             while (< end (length query)))))
 
 (defun request-kind (env status)
   (let ((path (getf env :path-info "")) (query (getf env :query-string)))
