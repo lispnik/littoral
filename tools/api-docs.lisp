@@ -18,9 +18,11 @@
          (start (cl-ppcre:scan (format nil "\\(defpackage #:~(~A~)\\s" (cl-ppcre:quote-meta-chars package-name))
                                text))
          (export (search "(:export" text :start2 start))
-         (end (search "))" text :start2 export))
+         (end (and export (search "))" text :start2 export)))
          (sections '())
          (current (list "General")))
+    (unless export
+      (return-from export-sections '()))
     (dolist (line (cl-ppcre:split "\\n" (subseq text export end)))
       (let ((heading (cl-ppcre:register-groups-bind (h) ("^\\s*;;\\s*(.+)$" line) h)))
         (if heading
@@ -98,13 +100,28 @@
 (defun markdown-doc (doc)
   "DOC, a docstring, as Markdown: the paragraphs kept, NAMES in capitals as code."
   (cl-ppcre:regex-replace-all
-   "(?<![\\w*-])([A-Z][A-Z0-9*+-]*[A-Z0-9*])(?![\\w-])" doc
+   "(?<![\\w*-])(\\*?[A-Z][A-Z0-9*+-]*[A-Z0-9*])(?![\\w-])" doc
    (lambda (match name)
      (declare (ignore match))
      (if (and (> (length name) 1) (not (member name *acronyms* :test #'string=)))
          (format nil "`~(~A~)`" name)
          name))
    :simple-calls t))
+
+(defvar *examples* (make-hash-table :test 'equal)
+  "\"PACKAGE:NAME\" → that symbol's examples, while WRITE-API-DOCS runs.")
+
+(defun symbol-key (symbol)
+  "SYMBOL as \"package:name\", the way example headers name it."
+  (format nil "~(~A:~A~)" (package-name (symbol-package symbol)) (symbol-name symbol)))
+
+(defun write-examples (symbol out)
+  "Write SYMBOL's examples to OUT."
+  (dolist (example (gethash (symbol-key symbol) *examples*))
+    (format out "~%~@[~A~%~%~]```lisp~%~A~%```~%"
+            (let ((prose (littoral-doc-examples:example-prose example)))
+              (and prose (format nil "*Example:* ~A" prose)))
+            (littoral-doc-examples:example-code example))))
 
 (defun write-entry (symbol out)
   "Write SYMBOL's reference entries to OUT; true when it is undocumented."
@@ -120,15 +137,23 @@
         (if doc
             (format out "~A~%" (markdown-doc doc))
             (format out "*Undocumented.*~%"))))
+    (write-examples symbol out)
     (null (remove nil (mapcar #'cdr kinds)))))
 
 (defun write-api-docs (&key (root (asdf:system-source-directory :littoral))
                          (output (merge-pathnames "docs/API.md" root)))
-  "Write the API reference; return the exported symbols that lack documentation."
-  (let ((undocumented '()))
+  "Write the API reference.  Return the exported symbols that lack
+documentation, and the functions, macros and classes that lack examples."
+  (let ((undocumented '()) (without-examples '())
+        (*examples* (make-hash-table :test 'equal)))
+    (dolist (example (reverse (littoral-doc-examples:all-examples)))
+      (dolist (name (littoral-doc-examples:example-symbols example))
+        (push example (gethash (string-downcase name) *examples*))))
     (with-open-file (out output :direction :output :if-exists :supersede :external-format :utf-8)
-      (format out "# Littoral API reference~%~%Generated from the docstrings by `make docs`; ~
-do not edit by hand.~%")
+      (format out "# Littoral API reference~%~%Generated from the docstrings and docs/examples/ by ~
+`make docs`; do not edit by hand.~%~%~A~%"
+              (alexandria:read-file-into-string (merge-pathnames "docs/examples/README.md" root)
+                                                :external-format :utf-8))
       (dolist (entry '(("littoral" "src/package.lisp") ("littoral.html" "src/package.lisp")
                        ("littoral.test" "testing/package.lisp")
                        ("littoral.browser-test" "testing/chrome.lisp")
@@ -136,7 +161,14 @@ do not edit by hand.~%")
                        ("littoral.jobs" "src/durable-jobs.lisp")
                        ("littoral.audit" "src/audit.lisp")
                        ("littoral.auth" "src/auth.lisp")
-                       ("littoral.admin" "src/admin.lisp")))
+                       ("littoral.admin" "src/admin.lisp")
+                       ("littoral.db" "src/db.lisp")
+                       ("littoral.storage" "src/storage.lisp")
+                       ("littoral.oauth" "src/oauth.lisp")
+                       ("littoral.websocket" "src/websocket.lisp")
+                       ("littoral.parenscript" "src/parenscript.lisp")
+                       ("littoral.woo" "src/woo.lisp")
+                       ("littoral.generator" "src/generator.lisp")))
         (destructuring-bind (package file) entry
         (format out "~%## Package `~A`~%~%~A~%" package
                 (or (documentation (find-package (string-upcase package)) t) ""))
@@ -145,5 +177,8 @@ do not edit by hand.~%")
           (dolist (name (rest section))
             (let ((symbol (find-symbol name (string-upcase package))))
               (when (and symbol (write-entry symbol out))
-                (push symbol undocumented))))))))
-    (nreverse undocumented)))
+                (push symbol undocumented))
+              (when (and symbol (or (fboundp symbol) (find-class symbol nil))
+                         (null (gethash (symbol-key symbol) *examples*)))
+                (push symbol without-examples))))))))
+    (values (nreverse undocumented) (nreverse without-examples))))

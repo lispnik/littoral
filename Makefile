@@ -1,7 +1,7 @@
 SBCL ?= sbcl
 PORT ?= 8080
 
-.PHONY: new tour build docker test test-chrome test-postgres e2e a11y bench load docs clean-check run tracker lint clean
+.PHONY: new tour build docker test examples test-chrome test-postgres e2e a11y bench load docs clean-check run tracker lint clean
 
 test:
 	$(SBCL) --non-interactive --eval '(asdf:test-system :littoral)'
@@ -58,8 +58,13 @@ docs:
 	  sed -e 's#](docs/#](#g' -e 's#](LICENSE)#](https://github.com/lispnik/littoral/blob/master/LICENSE)#g' \
 	      -e 's#](\(examples\|apps\|src\|tests\|bench\)/#](https://github.com/lispnik/littoral/tree/master/\1/#g' README.md; } > docs/index.md
 	$(SBCL) --non-interactive --eval '(asdf:load-system :littoral/docs)' \
-	  --eval '(let ((missing (littoral-api-docs:write-api-docs))) (when missing (format t "~&Undocumented: ~{~(~A~)~^, ~}~%" missing)))' \
+	  --eval '(multiple-value-bind (missing bare) (littoral-api-docs:write-api-docs) (when missing (format t "~&Undocumented: ~{~(~A~)~^, ~}~%" missing)) (when bare (format t "~&Without examples (~D): ~{~(~A~)~^, ~}~%" (length bare) bare)))' \
 	  2>&1 | grep -v '^;' | grep -v '^$$'
+
+# The API reference's examples (docs/examples/); EXAMPLES=FILE runs one file.
+examples:
+	@out=$$(mktemp); EXAMPLES=$(EXAMPLES) $(SBCL) --non-interactive --load tools/check-examples.lisp >$$out 2>&1; \
+	  status=$$?; grep -E '^FAIL|^  \| |examples,' $$out || tail -30 $$out; rm -f $$out; exit $$status
 
 bench:
 	$(SBCL) --non-interactive --eval '(asdf:load-system :littoral/bench)' \

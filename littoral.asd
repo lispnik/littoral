@@ -146,6 +146,7 @@
                #:littoral/parenscript-demo
                #:littoral/websocket
                #:littoral/generator
+               #:littoral/doc-examples
                #:littoral/storage
                #:littoral/storage-demo
                #:littoral/search-demo
@@ -176,6 +177,7 @@
                              (:file "widgets-more")
                              (:file "tracker")
                              (:file "tutorial")
+                             (:file "doc-examples")
                              (:file "live")
                              (:file "db")
                              (:file "admin")
@@ -212,8 +214,15 @@
 (asdf:defsystem #:littoral/docs
   :description "Writes docs/API.md from the docstrings: make docs."
   :depends-on (#:littoral #:littoral/test #:littoral/browser-test #:littoral/mail #:littoral/jobs #:littoral/audit
-               #:littoral/auth #:littoral/admin #:sb-introspect)
+               #:littoral/auth #:littoral/admin #:littoral/db #:littoral/storage #:littoral/oauth
+               #:littoral/websocket #:littoral/parenscript #:littoral/woo #:littoral/generator
+               #:littoral/doc-examples #:sb-introspect)
   :components ((:module "tools" :components ((:file "api-docs")))))
+
+(asdf:defsystem #:littoral/doc-examples
+  :description "Reads and runs the API reference's examples in docs/examples/."
+  :depends-on (#:littoral #:littoral/test #:alexandria)
+  :components ((:module "tools" :components ((:file "doc-examples")))))
 
 (asdf:defsystem #:littoral/tracker
   :description "Tracker: an issue tracker built with Littoral."

@@ -140,6 +140,14 @@ go whole, as they aren't text (and a < in them isn't a tag)."
   "The current page's text without markup."
   (strip-tags (browser-html browser)))
 
+(defun body-text (browser)
+  "The text of the current page's body without markup, each run of
+whitespace made one space, as a reader sees it."
+  (let* ((html (browser-html browser))
+         (start (cl-ppcre:scan "<body[\\s>]" html))
+         (body (if start (subseq html start) html)))
+    (string-trim " " (cl-ppcre:regex-replace-all "\\s+" (strip-tags body) " "))))
+
 (defun has-text-p (browser text)
   "True when the current page's text contains TEXT."
   (search text (page-text browser)))

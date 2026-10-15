@@ -10,7 +10,7 @@
    ;; Requests
    #:visit #:back-to #:raw-request #:make-env #:response-header
    ;; Reading the page
-   #:page-text #:has-text-p #:find-link #:find-links #:element-name #:form-action
+   #:page-text #:body-text #:has-text-p #:find-link #:find-links #:element-name #:form-action
    #:attributes #:attr #:unescape #:strip-tags
    ;; Acting on it
    #:click #:click-nth #:fill-in #:set-checkbox #:select-option #:attach-file #:press

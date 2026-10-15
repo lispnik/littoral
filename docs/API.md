@@ -1,6 +1,19 @@
 # Littoral API reference
 
-Generated from the docstrings by `make docs`; do not edit by hand.
+Generated from the docstrings and docs/examples/ by `make docs`; do not edit by hand.
+
+## Running the examples
+
+The examples are tested: the suite runs every one on its own and checks each result shown after `;; ⇒`, which is what the REPL prints. To try them, load Littoral and its fake browser, and make a package that uses the same packages they do:
+
+```lisp
+(asdf:load-system :littoral/test)
+(defpackage #:try-littoral (:use #:cl #:littoral #:littoral.html #:littoral.test))
+(in-package #:try-littoral)
+```
+
+Then paste any example. Most render pages in the fake browser (`visit`, `click`, `page-text`; see `littoral.test`), so they need no server. Examples for another package write its names in full, such as `littoral.db:db-save`, and need its system loaded first, such as `(asdf:load-system :littoral/db)`; each package's section says which.
+
 
 ## Package `littoral`
 
@@ -67,8 +80,21 @@ Reads the id of a component.  Unique and stable: the `dom` id AJAX updates targe
 
 #### `render` `component` — generic function
 
-Write `component`'s HTML to *CANVAS*.  Embedded components
+Write `component`'s HTML to `*canvas*`.  Embedded components
 are written with `render-component`, never by calling `render` on them.
+
+*Example:* A component draws itself in its render method.  Visiting an application serves its root component.
+
+```lisp
+(defclass greeting (component) ())
+(defmethod render ((self greeting))
+  (h1 () "Hello"))
+(with-fresh-applications (("/greeting" 'greeting :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/greeting")
+    (body-text b)))
+;; ⇒ "Hello"
+```
 
 #### `render-component` `component` — generic function
 
@@ -469,7 +495,7 @@ Move the item at `from` to position `to` in `list`.
 #### `define-description` `name fields &key validate` — macro
 
 Describe the objects of class `name`: each of `fields` is (`property` &rest
-options), options being :`type` (see *FIELD-KINDS*), :`label`, :`required`,
+options), options being :`type` (see `*field-kinds*`), :`label`, :`required`,
 :`default`, :`help`, :`validate`, :`read-only`, :`in-report`, :`accessor` or :`reader` and
 :`writer`, and those of the field's kind (:`max-length`, :`pattern`, :`min`, :`max`,
 :`choices`, :`labels`).  `validate` checks the values together.
@@ -719,7 +745,7 @@ Safe to call from any thread.  Returns the number of pages told.
 #### `notify` `component &optional (session *session*)` — function
 
 Re-render `component` on `session`'s open pages.  Safe to call from any
-thread, given the session (capture *SESSION* in the callback that starts
+thread, given the session (capture `*session*` in the callback that starts
 the work).
 
 #### `close-event-streams` — function
@@ -728,7 +754,7 @@ End every open stream; browsers reconnect when their page is current.
 
 #### `with-session` `(session) &body body` — macro
 
-Run `body` as `session`'s requests do: holding its lock, with *SESSION* bound.
+Run `body` as `session`'s requests do: holding its lock, with `*session*` bound.
 For other threads that change a session's components.
 
 #### `*source-editor*` — variable
@@ -862,7 +888,7 @@ Forget the health check `name`.
 
 Serve metrics at `path` for Prometheus to scrape.  With `local-only` (the
 default) only requests from this machine get them: put the scraper there,
-or behind the proxy with *TRUST-FORWARDED-FOR* and an allow list.
+or behind the proxy with `*trust-forwarded-for*` and an allow list.
 
 #### `metrics-text` — function
 
@@ -949,7 +975,7 @@ at its next `job-progress`.
 
 Re-render `component` on `session`'s pages whenever `job` changes.  The page
 must listen for pushes: a `job-view` does; another component can subscribe
-to *JOBS-CHANNEL*.
+to `*jobs-channel*`.
 
 #### `wait-for-job` `job &optional (timeout 60)` — function
 
@@ -1211,7 +1237,7 @@ Most event streams one session may hold open.
 
 #### `application-max-request-size` `object` — generic function
 
-Reads the max-request-size of an application.  Largest request body in bytes, or `nil` for *MAX-REQUEST-SIZE*.
+Reads the max-request-size of an application.  Largest request body in bytes, or `nil` for `*max-request-size*`.
 
 #### `application-local-only-p` `object` — generic function
 
@@ -1362,7 +1388,7 @@ details are English's.
 
 #### `current-language` — function
 
-The language this request is answered in: *LANGUAGE*, else the
+The language this request is answered in: `*language*`, else the
 session's, else the application's.
 
 #### `set-language` `code &optional (session *session*)` — function
@@ -1433,7 +1459,14 @@ Write `string` verbatim.
 
 #### `with-canvas-to-string` `() &body body` — macro
 
-Evaluate `body` with *CANVAS* collecting into a string, which is returned.
+Evaluate `body` with `*canvas*` collecting into a string, which is returned.
+
+*Example:* The HTML that rendering code writes, as a string.
+
+```lisp
+(with-canvas-to-string () (p (:class "note") "Fish & chips"))
+;; ⇒ "<p class=\"note\">Fish &amp; chips</p>"
+```
 
 #### `html-escape` `thing` — function
 
@@ -1833,6 +1866,11 @@ The header `name` from a Lack response's `headers` plist.
 
 The current page's text without markup.
 
+#### `body-text` `browser` — function
+
+The text of the current page's body without markup, each run of
+whitespace made one space, as a reader sees it.
+
 #### `has-text-p` `browser text` — function
 
 True when the current page's text contains `text`.
@@ -2192,7 +2230,7 @@ Reads the time of a sent-message.
 
 Define `name`, a function of `lambda-list` making a mail.  The keyword forms are
 evaluated each time, with `lambda-list`'s variables bound; HTML is a list of
-forms written with Littoral's HTML tags (as in `render`), inside *MAIL-LAYOUT*.
+forms written with Littoral's HTML tags (as in `render`), inside `*mail-layout*`.
 Without `text`, the plain text is made from the HTML.
 
 #### `*mail-layout*` — variable
@@ -2232,7 +2270,7 @@ returns its `outbox-mail`.
 #### `outbox-sender` `&key (from *mail-from*)` — function
 
 A function of (`to` `subject` `body`) that queues a plain-text mail, for
-`littoral`.`auth`:*SEND-MAIL*.
+`littoral`.`auth`:`*send-mail*`.
 
 #### `deliver-queued-mail` `&key (mailer (delivery-mailer)) (limit 50)` — function
 
@@ -2242,11 +2280,11 @@ test can call it to send what's queued without waiting.
 
 #### `start-mail-delivery` `&key (database *database*) (mailer *mailer*) (interval 10) (attempts *mail-attempts*) (retry-seconds *mail-retry-seconds*)` — function
 
-Send the outbox of `database` (a spec, as `littoral`.`db`:*DATABASE* holds) with
+Send the outbox of `database` (a spec, as `littoral`.`db`:`*database*` holds) with
 `mailer`.  The job runner (`littoral`.`jobs`) sends it, at once when mail is queued
 in this process, and within `interval` seconds for retries and other processes'
 mail; this starts one for `database` unless one is running.  `attempts` and
-`retry-seconds` set *MAIL-ATTEMPTS* and *MAIL-RETRY-SECONDS*.
+`retry-seconds` set `*mail-attempts*` and `*mail-retry-seconds*`.
 
 #### `stop-mail-delivery` — function
 
@@ -2372,7 +2410,7 @@ at most `limit` of them; how many ran.  Runners call this; so can a test.
 
 #### `start-job-runner` `&key (database *database*) (threads 1) (queues (quote ("default"))) (interval 5)` — function
 
-Run the jobs in `queues` of `database` (a spec, as `littoral`.`db`:*DATABASE* holds)
+Run the jobs in `queues` of `database` (a spec, as `littoral`.`db`:`*database*` holds)
 on `threads` background threads: at once when a job is enqueued in this
 process, and every `interval` seconds for scheduled jobs, retries and other
 processes' jobs.  Stops any runner already started.
@@ -2493,7 +2531,7 @@ An audit log: who did what, and when, kept in the database.
 Record that `action` (a string such as "invoice.sent") happened to `subject`
 (a string such as "invoice:42", named `subject-label` for people), with
 `details`, a plist of short values.  The actor is `actor-id` and `actor-name` when
-given, or else whoever *AUDIT-ACTOR* finds.
+given, or else whoever `*audit-actor*` finds.
 
 #### `create-audit-tables` — function
 
@@ -2630,7 +2668,7 @@ Where users come from.  Bind it per application with `using-user-store`.
 
 #### `using-user-store` `store &optional around` — function
 
-An :`around-request` function binding *USER-STORE* to `store`, then calling
+An :`around-request` function binding `*user-store*` to `store`, then calling
 `around` (another such function, such as `using-database`'s) if given.
 
 #### `store-find-user` `store name` — generic function
@@ -2696,7 +2734,7 @@ Django's or Werkzeug's PBKDF2.  False for anything else, never an error.
 
 #### `password-needs-rehash-p` `hash` — function
 
-True unless `hash` is Littoral's `pbkdf2-sha256` with at least *PBKDF2-ITERATIONS*.
+True unless `hash` is Littoral's `pbkdf2-sha256` with at least `*pbkdf2-iterations*`.
 
 #### `bcrypt-hash` `password &key (cost 12) (salt (random-data 16))` — function
 
@@ -2710,7 +2748,7 @@ Hashes with fewer are upgraded when their owner next signs in.
 #### `*rehash-on-sign-in*` — variable
 
 When true, signing in re-hashes a password kept in another format (bcrypt,
-Django's) or with fewer than *PBKDF2-ITERATIONS*, where the store can write.
+Django's) or with fewer than `*pbkdf2-iterations*`, where the store can write.
 
 ### Tables and users
 
@@ -2772,7 +2810,7 @@ The user signed in to this session, or `nil`.
 #### `log-in` `user &key remember (method "password")` — function
 
 Sign `user` in to this session, recording the sign-in in the database so
-it survives restarts; with `remember`, for *REMEMBER-DAYS* rather than until
+it survives restarts; with `remember`, for `*remember-days*` rather than until
 the browser closes.  The session gets a new key, so a link to it that
 someone else had beforehand no longer reaches it.  `method`, how they proved
 who they are, goes in the audit log.
@@ -2818,7 +2856,7 @@ Whether the sign-in form offers "Keep me signed in".
 #### `revoke-session` `id &optional (user (current-user))` — function
 
 End `user`'s sign-in `id` wherever it is; that browser is signed out within
-*AUTH-SESSION-CHECK-SECONDS*, this one at once.
+`*auth-session-check-seconds*`, this one at once.
 
 #### `log-out-everywhere` `&optional (user (current-user))` — function
 
@@ -2828,7 +2866,7 @@ End all of `user`'s sign-ins, this one too.
 
 #### `*lockout-failures*` — variable
 
-Failed attempts on one name, within *FAILURE-WINDOW-SECONDS*, before it is locked.
+Failed attempts on one name, within `*failure-window-seconds*`, before it is locked.
 
 #### `*lockout-seconds*` — variable
 
@@ -2841,14 +2879,14 @@ How long a failed attempt counts against a name or an address.
 #### `*failures-per-address*` — variable
 
 Failed sign-ins from one public client address, within
-*FAILURE-WINDOW-SECONDS*, before it may try no more names for
-*LOCKOUT-SECONDS*.  Stops one address guessing a common password across
+`*failure-window-seconds*`, before it may try no more names for
+`*lockout-seconds*`.  Stops one address guessing a common password across
 many names.  Loopback and private addresses, usually a proxy's, are not
-limited: behind a proxy, set *TRUST-FORWARDED-FOR* so the limit sees clients.
+limited: behind a proxy, set `*trust-forwarded-for*` so the limit sees clients.
 
 #### `*reset-mails-per-address*` — variable
 
-Reset mails one client address may have sent, within *FAILURE-WINDOW-SECONDS*.
+Reset mails one client address may have sent, within `*failure-window-seconds*`.
 
 ### Password reset
 
@@ -3062,7 +3100,7 @@ Run `body` when a session of an `auth-root` application starts at
 
 #### `request-base-url` `&optional (request *request*)` — function
 
-This site's address, such as https://example.org: *PUBLIC-URL*, or in
+This site's address, such as https://example.org: `*public-url*`, or in
 development mode the request's own host.
 
 #### `*sign-in-extras*` — variable
@@ -3130,3 +3168,441 @@ menu stay; pages replace the main area.
 The durable jobs of the current database, newest first, by
 status, with Retry for failed and cancelled jobs and Cancel for waiting ones.
 Shows everything: put it where only those who may see it can.
+
+## Package `littoral.db`
+
+Keep described objects in a SQL database.
+
+### General
+
+#### `connect-database` `driver &rest parameters` — function
+
+Use the database `driver` (:sqlite3, :postgres) reaches with `parameters`.
+Each thread gets its own connection, made when first needed.
+
+#### `disconnect-database` — function
+
+Forget the database (connections close as their threads end).
+
+#### `database-connection` — function
+
+This thread's connection to `*database*`.
+
+#### `*database*` — variable
+
+The arguments of the last `connect-database`: a driver keyword and its
+connection parameters, as `dbi`:`connect` takes them.
+
+#### `*sqlite-busy-timeout*` — variable
+
+Milliseconds a SQLite connection waits for another's lock before giving up,
+unless the database spec gives :`busy-timeout`.  Threads (requests, mail
+delivery) each have a connection, and SQLite allows one writer at a time.
+
+#### `*sqlite-journal-mode*` — variable
+
+The journal mode Littoral sets on a SQLite database file when it first
+connects, unless the database spec gives :`journal-mode`: :WAL (write-ahead
+logging, so readers and the writer don't wait for each other), another of
+SQLite's modes such as :`delete`, or `nil` to leave the file as it is.  The
+mode is kept in the file.
+
+#### `*sqlite-synchronous*` — variable
+
+How hard SQLite connections make sure commits reach the disk, unless the
+database spec gives :`synchronous`: :`normal` (with WAL, a power cut may lose
+the last commits but never corrupts the file), :`full`, or `nil` for SQLite's
+default.
+
+#### `database-label` `&optional (spec *database*)` — function
+
+`spec` named for logs and metrics, without credentials: a SQLite file's
+name, or a PostgreSQL server's host, port and database.
+
+#### `persistent` — class
+
+Mixin for objects kept in a table.
+
+#### `object-id` `object` — generic function
+
+Reads the id of a persistent.  The row's key, or `nil` until the object is first saved.
+
+#### `object-version` `object` — generic function
+
+Reads the version of a persistent.  Incremented by every update; how conflicting saves are noticed.
+
+#### `define-table` `class &key name description search` — macro
+
+Keep objects of `class` (a `persistent` class with a description) in the
+table `name` (default: the class name), with `description`'s fields as columns.
+`search` names text fields to keep in a full-text index, for `db-search`.
+
+#### `find-table` `designator` — function
+
+The table of `designator`, a class name or an object.
+
+#### `table-name` `object` — generic function
+
+Reads the name of a table.
+
+#### `table-class` `object` — generic function
+
+Reads the class of a table.
+
+#### `create-table` `class` — function
+
+Create `class`'s table unless it exists.
+
+#### `drop-table` `class` — function
+
+Drop `class`'s table if it exists, with its full-text index.
+
+#### `db-find` `class id` — function
+
+The object of `class` whose id is `id`, or `nil`.
+
+#### `db-select` `class &key where params order-by limit offset` — function
+
+Objects of `class`: those `where` (SQL with ? for `params`) holds, in `order-by`
+order (SQL, default by id), at most `limit` of them after skipping `offset`.
+
+#### `db-count` `class &key where params` — function
+
+How many objects of `class` `where` holds.
+
+#### `db-insert` `object` — function
+
+Store `object` as a new row; it gets its id.  Returns `object`.
+
+#### `db-update` `object` — function
+
+Write `object`'s fields to its row.  Signals `stale-object` when the row
+changed since `object` was read.  Returns `object`.
+
+#### `db-save` `object` — function
+
+Insert `object` if it is new, else update it.
+
+#### `db-delete` `object` — function
+
+Delete `object`'s row.  Signals `stale-object` when the row changed since
+`object` was read.
+
+#### `db-reload` `object` — function
+
+`object` as its row now holds it, or `nil` when the row has gone.
+
+#### `db-query` `sql &rest parameters` — function
+
+Run SQL, with ? for each of `parameters`; the rows, as plists keyed by
+column name ("login" → :|login|), `null` as `nil`.
+
+#### `db-execute` `sql &rest parameters` — function
+
+Run SQL, with ? for each of `parameters`; how many rows it changed.
+
+#### `db-search` `class query &key limit offset` — function
+
+`class`'s objects that `query` finds in its search fields, the best first.
+
+#### `search-condition` `class query` — function
+
+A `where` clause matching `class`'s objects that `query` finds, and its
+parameters, for `db-select`; `nil` when `query` has no words.
+
+#### `highlight-matches` `text query` — function
+
+`text` as HTML, escaped, with the words `query` finds marked <mark>: words of
+`text` that start with one of `query`'s words.
+
+#### `with-transaction` `() &body body` — macro
+
+Run `body` in a transaction: committed if it returns, rolled back if it
+signals.  Inside another, just `body`.
+
+#### `transactional` — function
+
+An :`around-actions` function running each request's callbacks in one
+transaction, for `register-application`.
+
+#### `using-database` `driver &rest parameters` — function
+
+An :`around-request` function giving an application its own database,
+whatever else the process connects to: `driver` and `parameters` as for
+`connect-database`.
+
+#### `stale-object` — condition
+
+Signalled when saving or deleting an object whose row has
+changed (or gone) since the object was read.
+
+#### `stale-object-object` `condition` — generic function
+
+*Undocumented.*
+
+#### `reference-field` — class
+
+Another stored object, chosen from its table; kept as its id.
+
+#### `reference-class` `object` — generic function
+
+Reads the to of a reference-field.  The class of the objects referred to.
+
+#### `object-label` `object` — function
+
+How `object` is named in choices and links: its first string field.
+
+#### `sql-type` `field` — generic function
+
+The column type that holds `field`'s values.
+
+#### `to-sql` `field value` — generic function
+
+`value` as it is written to `field`'s column.
+
+#### `from-sql` `field value` — generic function
+
+The value `field` holds, from what its column held.
+
+### Migrations
+
+#### `define-migrations` `name directory` — function
+
+Define the migrations `name` (a keyword) as the .sql files in `directory`,
+read now so that an executable saved later carries them.
+
+#### `migrate` `&rest names` — function
+
+Apply the new migrations of each set `names` (keywords given to
+`define-migrations`) to the current database, in order; the (`name` `version`
+`file`) of each applied.  Signals `migration-error` when one fails, having
+rolled it back, and `migration-changed` (a warning) for an applied file that
+has since changed.  /metrics then reports how many of their migrations the
+database lacks.
+
+#### `migration-status` `&rest names` — function
+
+Each migration of the sets `names`, as plists of :`set` :`version` :`name` :`file`
+and :`applied` (a universal time, or `nil` while it waits).
+
+#### `baseline-migrations` `name &key through` — function
+
+Record `name`'s migrations up to version `through` (all, by default) as
+applied without running them, for a database that already has their tables.
+
+#### `forget-migrations` `name` — function
+
+Forget which of `name`'s migrations were applied, as when its tables are dropped.
+
+#### `migration-error` — condition
+
+A migration's statement failed; it was rolled back, and later ones weren't tried.
+
+#### `migration-changed` — condition
+
+An applied migration's file is no longer what was applied.
+
+## Package `littoral.storage`
+
+Store uploaded files on disk or in S3, with thumbnails and description fields.
+
+### General
+
+#### `storage` — class
+
+Somewhere to keep files.  Specialise the STORAGE- generic functions.
+
+#### `*storage*` — variable
+
+Where description file fields keep their files, unless a field names its own.
+
+#### `disk-storage` — class
+
+Files in a directory, served by Littoral under `prefix`.
+
+#### `make-disk-storage` `directory &key (prefix "/files/") private` — function
+
+Keep files under `directory` and serve them at `prefix`.  With `private`, only
+signed URLs (`storage-url`) serve them, until they expire.
+
+#### `s3-storage` — class
+
+Files in an `s3` bucket, addressed path-style, signed with `aws` Signature `v4`.
+Unless the bucket is public, browsers fetch them through presigned URLs.
+
+#### `make-s3-storage` `&key bucket (region "us-east-1") endpoint access-key secret-key (key-prefix "") (private t) (path-style t)` — function
+
+Keep files in `bucket`.  `endpoint` defaults to `aws`'s for `region`; give it for
+MinIO or another service.  With `private` (the default), URLs are presigned
+and expire; otherwise they point straight at the bucket.
+
+#### `storage-put` `storage key octets content-type` — generic function
+
+Keep `octets` under `key`, with `content-type`.
+
+#### `storage-get` `storage key` — generic function
+
+The octets kept under `key` and their content type, or `nil`.
+
+#### `storage-delete` `storage key` — generic function
+
+Forget what is kept under `key`.
+
+#### `storage-url` `storage key &key filename expires` — generic function
+
+A URL the browser can fetch `key`'s file from.  `filename`
+names the download; `expires` (seconds) limits how long a private URL works.
+
+#### `ensure-bucket` `storage` — function
+
+Create `storage`'s bucket unless it exists (for tests and first runs).
+
+#### `store-upload` `upload &rest options &key storage thumbnail` — function
+
+Keep `upload`, an `uploaded-file` from a `file-input`; the `stored-file`.
+
+#### `store-octets` `octets name &key (storage *storage*) thumbnail` — function
+
+Keep `octets`, uploaded as `name`, in `storage`; the `stored-file`.  With
+`thumbnail`, an image gets a thumbnail too.
+
+#### `delete-stored-file` `file &optional (storage *storage*)` — function
+
+*Undocumented.*
+
+#### `stored-file` — class
+
+A file kept in storage: `key`, the `name` it was uploaded with, its `type` (as
+sniffed), its `size` in bytes, and its `thumbnail`'s key or `nil`.
+
+#### `stored-file-key` `instance` — function
+
+*Undocumented.*
+
+#### `stored-file-name` `instance` — function
+
+*Undocumented.*
+
+#### `stored-file-type` `instance` — function
+
+*Undocumented.*
+
+#### `stored-file-size` `instance` — function
+
+*Undocumented.*
+
+#### `stored-file-thumbnail` `instance` — function
+
+*Undocumented.*
+
+#### `stored-file-url` `file &key (storage *storage*) (expires 3600)` — function
+
+*Undocumented.*
+
+#### `stored-file-thumbnail-url` `file &key (storage *storage*) (expires 3600)` — function
+
+*Undocumented.*
+
+#### `file-field` — class
+
+An uploaded file, kept in storage; the value is a `stored-file`.
+
+#### `image-field` — class
+
+An uploaded image, kept with a thumbnail.
+
+#### `*thumbnail-size*` — variable
+
+The longest side of a thumbnail, in pixels.
+
+#### `*max-image-pixels*` — variable
+
+Images with more pixels than this get no thumbnail: decoding one could
+take all the memory (a small file can claim enormous dimensions).
+
+#### `sniff-type` `octets` — function
+
+The type the bytes say they are, whatever the browser said.
+
+## Package `littoral.oauth`
+
+Sign in with OAuth 2 / OpenID Connect providers.
+
+### General
+
+#### `define-oauth-provider` `name &key (label (string-capitalize name)) authorize-url token-url userinfo-url client-id client-secret (scopes (quote ("openid" "email" "profile")))` — function
+
+Offer signing in with the provider `name` (a keyword).  Redefining replaces it.
+
+#### `find-oauth-provider` `name` — function
+
+*Undocumented.*
+
+#### `oauth-providers` — function
+
+*Undocumented.*
+
+#### `*http-post*` — variable
+
+A function of (URL `parameters`) posting a form and returning the body.
+
+#### `*http-get*` — variable
+
+A function of (URL `access-token`) returning the body.
+
+## Package `littoral.websocket`
+
+Carry Littoral's AJAX and server push over WebSockets.
+
+### General
+
+#### `*max-message-size*` — variable
+
+The largest message, in bytes, a page may send over its socket.
+
+#### `*allowed-origins*` — variable
+
+Origins (such as "https://app.example.org") allowed to open sockets
+besides the server's own host, for pages served from another name.
+
+## Package `littoral.parenscript`
+
+Write Littoral components' browser behaviour in Parenscript.
+
+### General
+
+#### `in-browser` `code` — function
+
+*Undocumented.*
+
+#### `client-callback` `function &key update` — function
+
+Register `function`, of the string the browser sends, for littoral.call;
+returns the spec to pass it.  The components in `update` are re-rendered
+after it runs; its result becomes the promise's value.
+
+#### `define-script` `class (self) &body body` — macro
+
+Give `class`'s pages the JavaScript `body`, written in Parenscript, with
+`self` the component (use (`lisp` …) for its values).
+
+## Package `littoral.woo`
+
+Serve Littoral's server push from Woo's event loops.
+
+## Package `littoral.generator`
+
+Generate the skeleton of a new Littoral application.
+
+### General
+
+#### `make-project` `name &key directory (title (title-from-name name)) (author (git-user-name)) (license "MIT") (port 8080) (template "basic")` — function
+
+Write a new Littoral application called `name` (lower-case letters, digits
+and dashes) into `directory`, by default ./`name`/, from `template`.  Refuses to
+replace existing files.  The `license` file is written for the `mit` license
+only.  Returns the directory.
+
+#### `project-templates` — function
+
+The names of the templates `make-project` can start from.
