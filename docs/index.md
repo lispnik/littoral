@@ -15,7 +15,7 @@ Littoral is a Common Lisp port of Smalltalk's [Seaside](https://seaside.st) web 
 
 It runs on SBCL and serves through Clack (Hunchentoot by default). Dependencies are managed with ocicl.
 
-Version 0.2.0 adds a database with migrations, users and signing in, an admin, mail, durable jobs and an audit log: see the [changelog](https://github.com/lispnik/littoral/blob/master/CHANGELOG.md).
+Version 0.3.0 puts the admin and `/config` behind sign-in, adds metrics for jobs, mail, sign-ins and the database, switches SQLite to WAL mode, and sends mail through the smtp library, with DKIM and pooled connections. Version 0.2.0 added a database with migrations, users and signing in, an admin, mail, durable jobs and an audit log. See the [changelog](https://github.com/lispnik/littoral/blob/master/CHANGELOG.md).
 
 ```lisp
 (defpackage #:hello (:use #:cl #:littoral #:littoral.html))
@@ -877,9 +877,9 @@ The fake browser doesn't run JavaScript. For drag and drop, the back button with
 `make bench` measures the same cycle in-process, without the network: about 60 µs per click on the counter.
 
 Against Seaside on Pharo 12, measured the same way (see "Littoral and Seaside compared" below):
-- **Per core:** littoral renders pages about twice as fast and handles about 2.7× the clicks. This compares Woo on one event loop with a Pharo image, which runs on one thread.
-- **Whole machine:** littoral spreads over all the cores, for about 4× Seaside's clicks.
-- **Latency and memory:** with 64 users, littoral's p99 latency is a quarter of Seaside's, and a session takes half the memory.
+- **Per core:** littoral renders pages about twice as fast and handles 2.5–2.7× the clicks. This compares Woo on one event loop with a Pharo image, which runs on one thread.
+- **Whole machine:** littoral spreads over all the cores, for nearly 4× Seaside's clicks.
+- **Latency and memory:** with 64 users, littoral's p99 latency is a quarter of Seaside's, and a session takes less than half the memory.
 
 Requests in one session are serialised by its lock, and requests in different sessions run in parallel. The test suite runs concurrent sessions, many requests against one page, and concurrent AJAX.
 
@@ -894,23 +894,24 @@ A closed page frees its thread within about two keep-alive intervals (`*keepaliv
 
 | | Hunchentoot | Woo | Woo vs Hunchentoot |
 |---|---|---|---|
-| static files, keep-alive (`ab`, 64 connections) | 15,200 req/s | 44,600 req/s | 2.9× |
-| page render, keep-alive | 14,200 req/s | 22,800 req/s | 1.6× |
-| page render, a new connection per request | 14,300 req/s | 21,000 req/s | 1.5× |
-| counter clicks, 64 users from 4 clients | 12,500 /s | 17,900 /s | 1.4× |
-| store clicks, same setup | 9,000 /s | 13,800 /s | 1.5× |
-| p99 click latency, 64 users | 17.8 ms | 11.5 ms | 35% lower |
-| memory per session (counter / store) | 9.6 KB / 25 KB | 8.1 KB / 23 KB | about the same |
-| idle server memory | 91 MB | 91 MB | same |
-| 600 open push pages: threads | 623 | 7 | |
-| 600 open push pages: memory | 1,420 MB | 179 MB | 8× less |
+| static files, keep-alive (`ab`, 64 connections) | 10,400 req/s | 29,000 req/s | 2.8× |
+| page render, keep-alive | 8,000 req/s | 18,000 req/s | 2.2× |
+| page render, a new connection per request | 9,700 req/s | 19,300 req/s | 2.0× |
+| counter clicks, 64 users from 4 clients | 6,700 /s | 10,200 /s | 1.5× |
+| store clicks, same setup | 5,200 /s | 6,500 /s | 1.2× |
+| p99 click latency, 64 users | 27 ms | 22 ms | 20% lower |
+| one user clicking | 3,070 /s | 3,940 /s | 1.3× |
+| memory per session (counter / store) | 10 KB / 25 KB | 8.5 KB / 24 KB | about the same |
+| idle server memory | 90 MB | 87 MB | about the same |
+| 600 open push pages: threads | 621 | 7 | |
+| 600 open push pages: memory | 1,355 MB | 99 MB | 14× less |
 | 600 open push pages: updates delivered | 600 of 600 | 600 of 600 | |
-| most push pages tried | 600 (with 1,000 threads) | 6,000, at about 100 MB | |
+| most push pages tried (in an earlier run) | 600 (with 1,000 threads) | 6,000, at about 100 MB | |
 
-- **Ordinary pages:** Woo is 1.4–1.6× faster. The gap is bigger on static files, but on littoral pages littoral's own work (callbacks, snapshots, rendering) dominates.
+- **Ordinary pages:** Woo is 1.2–2.2× faster: most on rendering and static files, least on clicks, where littoral's own work (callbacks, snapshots, rendering) dominates.
 - **Hunchentoot and new connections:** it didn't slow down when every request opened a new connection, so creating threads isn't its bottleneck.
 - **Server push:** this is where the servers really differ. On Hunchentoot a push page costs a thread and about 2 MB of memory. On Woo it costs almost nothing, so memory and thread count stay nearly flat as pages are added.
-- **Caveats:** the load clients ran on the same machine and competed with the server for CPU, and repeated runs varied by around ±10%. The ratios are more reliable than the absolute numbers.
+- **Caveats:** the load clients ran on the same machine and competed with the server for CPU, and other applications kept one or two cores busy. The figures are medians of six runs over two days, and runs varied by up to ±30%. The ratios are more reliable than the absolute numbers.
 
 To run on Woo, install the libev C library (`brew install libev`, or your system's package), then:
 
@@ -928,27 +929,27 @@ CI runs the browser checks on both servers.
 
 Seaside runs with Zinc's limits raised: 1,000 connections, a backlog of 128, and Pharo's socket semaphore table at its maximum. Without that, it refuses connections at 64 concurrent users.
 
-A Pharo image runs Smalltalk on one OS thread, so the first column of littoral is Woo with a single event loop, which is the per-core comparison. The setup was an Apple M3 with 8 cores, SBCL 2.6.8, Seaside master (0c52094) on Pharo 12.0, and the median of three runs:
+A Pharo image runs Smalltalk on one OS thread, so the first column of littoral is Woo with a single event loop, which is the per-core comparison. The setup was an Apple M3 with 8 cores, SBCL 2.6.8, Seaside master (0c52094) on Pharo 12.0, and the median of six runs over two days:
 
 | | Seaside | littoral, Woo, 1 loop | littoral, Hunchentoot | littoral, Woo, 4 loops |
 |---|---|---|---|---|
-| static file, keep-alive (`ab`, 64 connections) | 540 req/s | 12,000 req/s | 8,900 req/s | 28,000 req/s |
-| page render, keep-alive | 7,600 req/s | 14,300 req/s | 8,100 req/s | 18,100 req/s |
-| page render, a new connection per request | 7,000 req/s | 14,100 req/s | 7,500 req/s | 19,200 req/s |
-| counter clicks, 64 users from 4 clients | 2,850 /s | 7,550 /s | 5,700 /s | 11,000 /s |
-| store clicks, same setup | 1,750 /s | 4,800 /s | 4,560 /s | 6,600 /s |
-| p99 click latency, 64 users | 85 ms | 20 ms | 28 ms | 19 ms |
-| one user clicking (rate, median latency) | 2,260 /s, 0.4 ms | 4,110 /s, 0.2 ms | 3,070 /s, 0.3 ms | 3,890 /s, 0.2 ms |
+| static file, keep-alive (`ab`, 64 connections) | 540 req/s | 11,800 req/s | 10,400 req/s | 29,000 req/s |
+| page render, keep-alive | 7,600 req/s | 14,200 req/s | 8,000 req/s | 18,000 req/s |
+| page render, a new connection per request | 7,000 req/s | 14,000 req/s | 9,700 req/s | 19,300 req/s |
+| counter clicks, 64 users from 4 clients | 2,770 /s | 7,000 /s | 6,700 /s | 10,200 /s |
+| store clicks, same setup | 1,750 /s | 4,760 /s | 5,200 /s | 6,500 /s |
+| p99 click latency, 64 users | 83 ms | 20 ms | 27 ms | 22 ms |
+| one user clicking (rate, median latency) | 2,330 /s, 0.4 ms | 4,120 /s, 0.2 ms | 3,070 /s, 0.3 ms | 3,940 /s, 0.2 ms |
 | memory per session (counter / store) | 20 KB / 55 KB | 8.5 KB / 24 KB | 10 KB / 25 KB | 8.5 KB / 24 KB |
-| idle server memory | 92 MB | 72 MB | 90 MB | 93 MB |
+| idle server memory | 92 MB | 72 MB | 90 MB | 87 MB |
 
-- **Per core:** on one thread each, littoral renders pages about twice as fast and handles 2.6–2.7× the clicks. Seaside does about 2,850 counter clicks a second whatever the number of users, so 64 users wait longer: its p99 latency is four times littoral's.
-- **Whole machine:** one image can't use more cores, while littoral on Woo spreads over them, which gives about 4× Seaside's clicks. Seaside sites scale by running several images behind a load balancer with sticky sessions, as littoral can (see "Several processes" below).
-- **Memory:** a Seaside session takes about twice the memory. Both keep 20 pages for the back button.
-- **Single requests:** both answer in well under a millisecond. Seaside is closest on page renders against Hunchentoot.
+- **Per core:** on one thread each, littoral renders pages about twice as fast and handles 2.5–2.7× the clicks. Seaside does about 2,770 counter clicks a second whatever the number of users, so 64 users wait longer: its p99 latency is four times littoral's.
+- **Whole machine:** one image can't use more cores, while littoral on Woo spreads over them, which gives nearly 4× Seaside's clicks. Seaside sites scale by running several images behind a load balancer with sticky sessions, as littoral can (see "Several processes" below).
+- **Memory:** a Seaside session takes more than twice the memory. Both keep 20 pages for the back button.
+- **Single requests:** both answer in well under a millisecond. Seaside is closest on keep-alive page renders against Hunchentoot.
 - **Static files:** Seaside's file library spends about 2 ms on each request, even over one connection. Seaside deployments usually serve files from the web server in front, so this row says little about Seaside pages.
 - **Not compared:** server push. Seaside's WebSocket and Comet packages work differently from littoral's event streams.
-- **Caveats:** other applications kept about one core busy during these runs. The runs that used several cores varied by up to ±30%; those on one thread (Seaside, and Woo with one loop) varied by under 10%. The per-core column is the steadiest comparison.
+- **Caveats:** other applications kept one or two cores busy during these runs. The littoral runs varied by up to ±30%, Seaside's by under 10%: one thread is less disturbed by others. Seaside's ratios to littoral are therefore conservative, if anything.
 
 **State that the back button sees.** Snapshots copy the slots of the objects `states` names, but share the slots' values. A list changed in place therefore changes in every snapshot. Either replace such values (`(setf (items self) (append …))`) or name the object as `(deep object)` in `states`. A deep entry copies the object's lists, vectors, strings and hash tables. Other instances are still shared, and cycles are kept.
 

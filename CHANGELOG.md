@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 (2026-10-15)
+
+This release is about running Littoral in production: admins who sign in from anywhere, metrics for every subsystem, SQLite in WAL mode, mail through the smtp library with DKIM and pooled connections, and a job queue page.
 
 ### Added
 - **Admins and `/config` behind sign-in.**
