@@ -21,7 +21,11 @@
 
 (defpackage #:littoral.parenscript
   (:use #:cl #:littoral #:littoral.html)
-  (:documentation "Write Littoral components' browser behaviour in Parenscript.")
+  (:documentation "Load with `(asdf:load-system :littoral/parenscript)`.  Writes Littoral
+components' browser behaviour in Parenscript.  A package using both this and
+parenscript must shadow one CALL and one LABEL, as the parenscript demo does
+with (:shadowing-import-from #:littoral #:call) and
+(:shadowing-import-from #:littoral.html #:label).")
   (:export #:in-browser #:client-callback #:define-script))
 
 (in-package #:littoral.parenscript)
@@ -30,6 +34,13 @@
   "JavaScript to run in the browser when an event happens on an element."
   code)
 
+(setf (documentation 'in-browser 'function)
+      "CODE, a string of JavaScript (as PARENSCRIPT:PS makes it), as the value of
+an :ON-CLICK, :ON-CHANGE, :ON-INPUT or :ON-SUBMIT attribute: the browser runs
+it when that event happens, with THIS the element and EVENT the event, and
+sends no request.  The page's own script defines the code and the attribute
+only names it, so use it while rendering.")
+
 (defmethod littoral::emit-attribute (key (value client-handler) stream)
   ;; data-lt-on-click-js="@ID": littoral.js runs the code the page defined
   ;; under ID, with THIS and EVENT.
@@ -37,9 +48,11 @@
           (html-escape (littoral::client-code (client-handler-code value) '("event")))))
 
 (defun client-callback (function &key update)
-  "Register FUNCTION, of the string the browser sends, for littoral.call;
-returns the spec to pass it.  The components in UPDATE are re-rendered
-after it runs; its result becomes the promise's value."
+  "Register FUNCTION, of the string the browser sends (\"\" when it sends
+none), for littoral.call(spec, value) in the browser; returns the spec, a
+string.  Call it while rendering.  UPDATE, a component or a list of them,
+is drawn again after FUNCTION runs; FUNCTION's result, sent as JSON, is the
+value of littoral.call's promise."
   (let ((id (littoral::register :action
                                 (littoral::ajax-action
                                  (littoral::%make-ajax-spec :callback function :value t)))))
@@ -47,6 +60,6 @@ after it runs; its result becomes the promise's value."
 
 (defmacro define-script (class (self) &body body)
   "Give CLASS's pages the JavaScript BODY, written in Parenscript, with
-SELF the component (use (LISP …) for its values)."
+SELF the component (use (LISP …) for its values): a SCRIPT method."
   `(defmethod script ((,self ,class))
      (parenscript:ps ,@body)))

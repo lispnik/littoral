@@ -14,7 +14,10 @@
 
 (defpackage #:littoral.woo
   (:use #:cl)
-  (:documentation "Serve Littoral's server push from Woo's event loops."))
+  (:documentation "Load with `(asdf:load-system :littoral/woo)`, then serve with
+`(start :server :woo)` (and `:workers`, 4 by default): Woo's event loops
+answer every request, and each open page with server push costs two libev
+watchers on its loop instead of a thread.  Exports nothing."))
 
 (in-package #:littoral.woo)
 

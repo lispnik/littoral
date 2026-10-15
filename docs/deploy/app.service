@@ -15,6 +15,8 @@ ExecStart=/opt/bookshop/bookshop
 Environment=PORT=8080
 Environment=ADDRESS=127.0.0.1
 Environment=PUBLIC_URL=https://bookshop.example.org
+Environment=TRUST_PROXY=1
+Environment=DATA_DIR=/opt/bookshop/data
 EnvironmentFile=-/etc/bookshop.env
 Restart=on-failure
 RestartSec=2

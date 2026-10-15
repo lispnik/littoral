@@ -100,7 +100,8 @@
 (defun markdown-doc (doc)
   "DOC, a docstring, as Markdown: the paragraphs kept, NAMES in capitals as code."
   (cl-ppcre:regex-replace-all
-   "(?<![\\w*-])(\\*?[A-Z][A-Z0-9*+-]*[A-Z0-9*])(?![\\w-])" doc
+   ;; A name may be a keyword (:HOST) or have a package (LITTORAL.DB:*DATABASE*).
+   "(?<![\\w*:.-])((?:[A-Z][A-Z0-9.-]*:)?:?\\*?[A-Z][A-Z0-9*+-]*[A-Z0-9*])(?![\\w-])" doc
    (lambda (match name)
      (declare (ignore match))
      (if (and (> (length name) 1) (not (member name *acronyms* :test #'string=)))
@@ -111,16 +112,21 @@
 (defvar *examples* (make-hash-table :test 'equal)
   "\"PACKAGE:NAME\" → that symbol's examples, while WRITE-API-DOCS runs.")
 
+(defvar *package-documented* nil
+  "The name of the package WRITE-API-DOCS is writing about.")
+
 (defun symbol-key (symbol)
-  "SYMBOL as \"package:name\", the way example headers name it."
-  (format nil "~(~A:~A~)" (package-name (symbol-package symbol)) (symbol-name symbol)))
+  "SYMBOL as \"package:name\", the way example headers name it: in the
+package being documented, which may export a symbol from another (as
+littoral.mail does smtp's SMTP-ERROR)."
+  (format nil "~(~A:~A~)" (or *package-documented* (package-name (symbol-package symbol))) (symbol-name symbol)))
 
 (defun write-examples (symbol out)
   "Write SYMBOL's examples to OUT."
   (dolist (example (gethash (symbol-key symbol) *examples*))
     (format out "~%~@[~A~%~%~]```lisp~%~A~%```~%"
             (let ((prose (littoral-doc-examples:example-prose example)))
-              (and prose (format nil "*Example:* ~A" prose)))
+              (and prose (format nil "*Example:* ~A" (markdown-doc prose))))
             (littoral-doc-examples:example-code example))))
 
 (defun write-entry (symbol out)
@@ -170,6 +176,7 @@ documentation, and the functions, macros and classes that lack examples."
                        ("littoral.woo" "src/woo.lisp")
                        ("littoral.generator" "src/generator.lisp")))
         (destructuring-bind (package file) entry
+         (let ((*package-documented* package))
         (format out "~%## Package `~A`~%~%~A~%" package
                 (or (documentation (find-package (string-upcase package)) t) ""))
         (dolist (section (export-sections (merge-pathnames file root) package))
@@ -180,5 +187,5 @@ documentation, and the functions, macros and classes that lack examples."
                 (push symbol undocumented))
               (when (and symbol (or (fboundp symbol) (find-class symbol nil))
                          (null (gethash (symbol-key symbol) *examples*)))
-                (push symbol without-examples))))))))
+                (push symbol without-examples)))))))))
     (values (nreverse undocumented) (nreverse without-examples))))

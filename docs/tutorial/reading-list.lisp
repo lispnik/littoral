@@ -1,7 +1,10 @@
-;;;; reading-list.lisp — the application docs/tutorial.md builds
+;;;; reading-list.lisp — the application docs/tutorial.md builds, steps 1 to 11
 ;;;;
-;;;; The tutorial quotes this file section by section (the ";;; Step"
-;;;; comments), and the test suite runs it, so the two cannot drift apart.
+;;;; The tutorial shows every form in this file, and the test suite runs it,
+;;;; so the two cannot drift apart: tests/tutorial.lisp checks that each
+;;;; form here is in the tutorial and each definition there is here, and
+;;;; pastes the tutorial's blocks, in order, into a fresh package.  The
+;;;; ";;; Step" comments say where each part is explained.
 
 ;;; Step 1: a package and a component
 
@@ -33,7 +36,7 @@
   (text " ")
   (anchor (:callback (lambda () (decf (count-of self)))) "--"))
 
-;;; Step 3: the model and a form
+;;; Step 3: the model and a form (the list's first version is only in the tutorial)
 
 (defclass book ()
   ((title :initarg :title :initform nil :accessor book-title)
@@ -41,11 +44,12 @@
    (finished :initarg :finished :initform nil :accessor book-finished-p))
   (:documentation "A book on the list."))
 
-(defvar *finished-channel* (make-channel "finished books")
-  "Published whenever anyone finishes a book (step 9).")
-
-(defvar *recently-finished* '()
-  "The last few books anyone finished, newest first, shared by every session.")
+(defun add-quickly (list)
+  "Add the typed title to LIST."
+  (let ((title (string-trim " " (new-title list))))
+    (unless (string= title "")
+      (setf (books list) (append (books list) (list (make-instance 'book :title title)))
+            (new-title list) ""))))
 
 ;;; Step 4: components inside components
 
@@ -73,7 +77,37 @@
     (text " ")
     (anchor (:callback (lambda () (remove-book (row-list self) book))) "remove")))
 
-;;; Step 5: call and answer (and step 6: descriptions)
+(defclass shelf (component updatable)
+  ((owner :initarg :owner :reader shelf-list))
+  (:documentation "The books that match the search."))
+
+(defun row-for (list book)
+  "The BOOK-ROW showing BOOK, made once and kept."
+  (or (gethash book (rows list))
+      (setf (gethash book (rows list)) (make-instance 'book-row :book book :owner list))))
+
+(defmethod children ((self shelf))
+  (mapcar (lambda (book) (row-for (shelf-list self) book)) (matching-books (shelf-list self))))
+
+(defmethod render ((self shelf))
+  (let ((books (matching-books (shelf-list self))))
+    (if books
+        (ul (:class "books")
+          (dolist (book books)
+            (render-component (row-for (shelf-list self) book))))
+        (p () (em () "Nothing matches.")))))
+
+;;; Step 5: call and answer
+
+(defun remove-book (list book)
+  "Ask, then take BOOK off LIST."
+  (show list (make-instance 'confirm-dialog
+                            :message (format nil "Remove ~A?" (book-title book)))
+        :on-answer (lambda (yes)
+                     (when yes
+                       (setf (books list) (remove book (books list)))))))
+
+;;; Step 6: descriptions
 
 (define-description book
   ((title :required t :max-length 100)
@@ -83,14 +117,6 @@
 (defun edit-book (list book)
   "Edit BOOK in place of LIST."
   (show list (make-editor book :title "Edit book")))
-
-(defun remove-book (list book)
-  "Ask, then take BOOK off LIST."
-  (show list (make-instance 'confirm-dialog
-                            :message (format nil "Remove ~A?" (book-title book)))
-        :on-answer (lambda (yes)
-                     (when yes
-                       (setf (books list) (remove book (books list)))))))
 
 ;;; Step 7: a task
 
@@ -106,35 +132,14 @@
                                :author (let ((a (string-trim " " author)))
                                          (if (string= a "") nil a))))))))
 
+(defun add-with-questions (list)
+  "Run the add-a-book task, adding what it answers."
+  (show list (make-instance 'add-book-task)
+        :on-answer (lambda (book)
+                     (when book
+                       (setf (books list) (append (books list) (list book)))))))
+
 ;;; Step 8: AJAX (search as you type)
-
-(defclass reading-list (component)
-  ((books :initform (list (make-instance 'book :title "Structure and Interpretation of Computer Programs"
-                                               :author "Abelson and Sussman")
-                          (make-instance 'book :title "Paradigms of Artificial Intelligence Programming"
-                                               :author "Peter Norvig"))
-          :accessor books)
-   (new-title :initform "" :accessor new-title)
-   (query :initform "" :accessor query)
-   (rows :initform (make-hash-table :test 'eq) :reader rows)
-   (shelf :reader shelf)
-   (ticker :initform (make-instance 'recently-finished) :reader ticker))
-  (:documentation "The reading list."))
-
-(defclass shelf (component updatable)
-  ((owner :initarg :owner :reader shelf-list))
-  (:documentation "The books that match the search."))
-
-(defmethod initialize-instance :after ((self reading-list) &key)
-  (setf (slot-value self 'shelf) (make-instance 'shelf :owner self)))
-
-(defmethod states ((self reading-list))
-  (list self))
-
-(defun row-for (list book)
-  "The BOOK-ROW showing BOOK, made once and kept."
-  (or (gethash book (rows list))
-      (setf (gethash book (rows list)) (make-instance 'book-row :book book :owner list))))
 
 (defun matching-books (list)
   "LIST's books that match its search."
@@ -145,35 +150,13 @@
                          (and (book-author book) (search q (book-author book) :test #'char-equal))))
                    (books list))))
 
-(defmethod children ((self reading-list))
-  (list (ticker self) (shelf self)))
-
-(defmethod children ((self shelf))
-  (mapcar (lambda (book) (row-for (shelf-list self) book)) (matching-books (shelf-list self))))
-
-(defmethod render ((self shelf))
-  (let ((books (matching-books (shelf-list self))))
-    (if books
-        (ul (:class "books")
-          (dolist (book books)
-            (render-component (row-for (shelf-list self) book))))
-        (p () (em () "Nothing matches.")))))
-
-(defun add-quickly (list)
-  "Add the typed title to LIST."
-  (let ((title (string-trim " " (new-title list))))
-    (unless (string= title "")
-      (setf (books list) (append (books list) (list (make-instance 'book :title title)))
-            (new-title list) ""))))
-
-(defun add-with-questions (list)
-  "Run the add-a-book task, adding what it answers."
-  (show list (make-instance 'add-book-task)
-        :on-answer (lambda (book)
-                     (when book
-                       (setf (books list) (append (books list) (list book)))))))
-
 ;;; Step 9: server push
+
+(defvar *finished-channel* (make-channel "finished books")
+  "Published whenever anyone finishes a book.")
+
+(defvar *recently-finished* '()
+  "The last few books anyone finished, newest first, shared by every session.")
 
 (defun book-changed (book)
   "Note BOOK's new state; tell everyone when it was just finished."
@@ -192,6 +175,30 @@
   (when *recently-finished*
     (p (:class "recent") "Recently finished by readers here: "
       (text (format nil "~{~A~^; ~}" *recently-finished*)))))
+
+;;; Step 10: the whole list
+
+(defclass reading-list (component)
+  ((books :initform (list (make-instance 'book :title "Structure and Interpretation of Computer Programs"
+                                               :author "Abelson and Sussman")
+                          (make-instance 'book :title "Paradigms of Artificial Intelligence Programming"
+                                               :author "Peter Norvig"))
+          :accessor books)
+   (new-title :initform "" :accessor new-title)
+   (query :initform "" :accessor query)
+   (rows :initform (make-hash-table :test 'eq) :reader rows)
+   (shelf :reader shelf)
+   (ticker :initform (make-instance 'recently-finished) :reader ticker))
+  (:documentation "The reading list."))
+
+(defmethod initialize-instance :after ((self reading-list) &key)
+  (setf (slot-value self 'shelf) (make-instance 'shelf :owner self)))
+
+(defmethod states ((self reading-list))
+  (list self))
+
+(defmethod children ((self reading-list))
+  (list (ticker self) (shelf self)))
 
 (defmethod render ((self reading-list))
   (h1 () "Reading list")
@@ -212,7 +219,7 @@
 .books li.finished strong { text-decoration: line-through; color: var(--lt-muted); }
 .recent { font-size: .9rem; color: var(--lt-muted); }")
 
-;;; Step 10: shipping
+;;; Step 11: shipping
 
 (defun register (&key (mode :development))
   "Serve the tutorial's applications under /tutorial."

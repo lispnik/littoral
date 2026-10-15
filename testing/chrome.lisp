@@ -13,7 +13,12 @@
 
 (defpackage #:littoral.browser-test
   (:use #:cl)
-  (:documentation "Drive headless Chrome from Lisp tests.")
+  (:documentation "Load with `(asdf:load-system :littoral/browser-test)`.  Drives headless
+Chrome (or Chromium) from Lisp tests, so that pages run their JavaScript:
+AJAX, server push, dialogs and passkeys.  The application must be served
+(START) where WITH-CHROME's :base points.  VISIT, TEXT and PAGE-URL are also
+names in littoral.test, littoral.html and littoral, so write this package's
+with its prefix, as in `(littoral.browser-test:visit page \"/\")`.")
   (:export #:with-chrome #:chrome-path #:page #:visit #:evaluate #:click-text #:click-css #:type-into
            #:text #:page-url #:back #:wait-until #:screenshot #:add-virtual-authenticator #:browser-error))
 
@@ -28,7 +33,9 @@
   (error 'browser-error :message (apply #'format nil control arguments)))
 
 (defun chrome-path ()
-  "Chrome or Chromium: $CHROME, $LITTORAL_TEST_CHROME, or the usual places."
+  "The path of Chrome or Chromium: $CHROME, $LITTORAL_TEST_CHROME, or the
+first of the usual places on macOS and Linux that exists.  Signals
+BROWSER-ERROR when there is none."
   (or (uiop:getenv "CHROME") (uiop:getenv "LITTORAL_TEST_CHROME")
       (find-if #'probe-file '("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
                               "/Applications/Chromium.app/Contents/MacOS/Chromium"
@@ -69,7 +76,10 @@
     table))
 
 (defun evaluate (page javascript)
-  "The value of JAVASCRIPT in PAGE (promises awaited), as JSON-able Lisp data."
+  "The value of the JavaScript expression JAVASCRIPT in PAGE (promises
+awaited), as com.inuoe.jzon parses its JSON: strings, numbers, T and NIL
+for true and false, the symbol NULL for null, vectors and hash tables; NIL
+for undefined.  Signals BROWSER-ERROR when it throws."
   (let* ((result (send page "Runtime.evaluate"
                        (params "expression" javascript "awaitPromise" t "returnByValue" t)))
          (exception (gethash "exceptionDetails" result)))
@@ -79,7 +89,9 @@
     (gethash "value" (gethash "result" result))))
 
 (defun wait-until (page javascript &key (timeout 10))
-  "Wait until JAVASCRIPT is true in PAGE; signals BROWSER-ERROR after TIMEOUT seconds."
+  "Wait until the JavaScript expression JAVASCRIPT is true in PAGE, checking
+ten times a second; returns T.  Signals BROWSER-ERROR after TIMEOUT
+seconds."
   (loop repeat (* timeout 10)
         when (ignore-errors (evaluate page javascript)) return t
         do (sleep 0.1)
@@ -91,33 +103,37 @@
   (wait-until page "document.readyState === 'complete'"))
 
 (defun visit (page path)
-  "Open PATH (relative to the page's base URL, or absolute)."
+  "Open PATH in PAGE: relative to WITH-CHROME's :base, or a whole URL
+starting with http.  Returns when the page has loaded."
   (send page "Page.navigate" (params "url" (if (alexandria:starts-with-subseq "http" path)
                                                path
                                                (concatenate 'string (page-base page) path))))
   (settle page))
 
 (defun page-url (page)
-  "Where PAGE is."
+  "Where PAGE is: its whole URL, as a string."
   (evaluate page "location.href"))
 
 (defun back (page)
-  "The browser's back button."
+  "Go back in PAGE's history, as the browser's back button does, and wait
+for the page to load."
   (evaluate page "history.back()")
   (settle page))
 
 (defun js-string (string) (com.inuoe.jzon:stringify string))
 
 (defun click-css (page selector)
-  "Click the first element SELECTOR matches, as a user would."
+  "Click the first element the CSS SELECTOR matches, and wait for any page
+it loads.  Signals BROWSER-ERROR when nothing matches."
   (unless (evaluate page (format nil "(() => { const e = document.querySelector(~A); if (!e) return false; e.click(); return true; })()"
                                  (js-string selector)))
     (fail "Nothing matches ~A" selector))
   (settle page))
 
 (defun click-text (page text &key (among "a, button"))
-  "Click the first link or button (or what AMONG selects) whose text is TEXT,
-or failing that contains it."
+  "Click the first link or button (or element the CSS selector AMONG
+selects) whose text is TEXT, or failing that contains it, and wait for any
+page it loads.  Signals BROWSER-ERROR when there is none."
   (unless (evaluate page (format nil "(() => { const all = [...document.querySelectorAll(~A)];
   const e = all.find(e => e.textContent.trim() === ~A) || all.find(e => e.textContent.includes(~:*~A));
   if (!e) return false; e.click(); return true; })()" (js-string among) (js-string text)))
@@ -125,7 +141,10 @@ or failing that contains it."
   (settle page))
 
 (defun type-into (page selector string)
-  "Type STRING into the field SELECTOR matches, key by key."
+  "Put STRING in the field the CSS SELECTOR matches, replacing its text: the
+field is clicked and focused, its text selected, and STRING inserted as
+typing does (an input event, but no key events).  Signals BROWSER-ERROR
+when nothing matches."
   (click-css page selector)
   (evaluate page (format nil "(() => { const e = document.querySelector(~A); e.focus(); e.select && e.select(); })()"
                          (js-string selector)))
@@ -133,18 +152,21 @@ or failing that contains it."
   (sleep 0.2))
 
 (defun text (page &optional (selector "body"))
-  "The visible text of what SELECTOR matches."
+  "The visible text of the first element the CSS SELECTOR matches (the
+whole body by default), or \"\" when nothing matches."
   (or (evaluate page (format nil "(document.querySelector(~A) || {}).innerText || ''" (js-string selector))) ""))
 
 (defun screenshot (page pathname)
-  "Save PAGE as a PNG at PATHNAME."
+  "Save what PAGE shows as a PNG at PATHNAME, replacing any file there;
+returns PATHNAME."
   (let ((data (gethash "data" (send page "Page.captureScreenshot" (params "format" "png")))))
     (with-open-file (out pathname :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
       (write-sequence (cl-base64:base64-string-to-usb8-array data) out))
     pathname))
 
 (defun add-virtual-authenticator (page)
-  "Give PAGE a platform authenticator that always says yes, for passkey tests."
+  "Give PAGE a platform authenticator (CTAP2, with resident keys and user
+verification) that always says yes, for passkey tests."
   (send page "WebAuthn.enable")
   (send page "WebAuthn.addVirtualAuthenticator"
         (params "options" (params "protocol" "ctap2" "transport" "internal" "hasResidentKey" t
@@ -192,6 +214,10 @@ or failing that contains it."
       (ignore-errors (uiop:delete-directory-tree profile :validate t :if-does-not-exist :ignore)))))
 
 (defmacro with-chrome ((page &rest options &key base width height) &body body)
-  "Run BODY with PAGE a headless Chrome tab, its paths relative to BASE."
+  "Run BODY with PAGE a tab of a new headless Chrome, with a fresh profile,
+its paths relative to BASE (\"http://127.0.0.1:8080\" by default) and its
+window WIDTH by HEIGHT pixels (1280 by 800).  Chrome is killed and its
+profile deleted afterwards.  Returns BODY's value; signals BROWSER-ERROR
+when Chrome can't be found or doesn't start."
   (declare (ignore base width height))
   `(call-with-chrome (lambda (,page) ,@body) ,@options))

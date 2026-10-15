@@ -17,7 +17,8 @@
 
 (defpackage #:littoral.oauth
   (:use #:cl #:littoral #:littoral.html #:littoral.db #:littoral.auth)
-  (:documentation "Sign in with OAuth 2 / OpenID Connect providers.")
+  (:documentation "Sign in with OAuth 2 / OpenID Connect providers.  Load it with
+`(asdf:load-system :littoral/oauth)`.")
   (:export #:define-oauth-provider #:find-oauth-provider #:oauth-providers
            #:*http-post* #:*http-get*))
 
@@ -33,7 +34,13 @@
 (defun define-oauth-provider (name &key (label (string-capitalize name)) authorize-url token-url
                                      userinfo-url client-id client-secret
                                      (scopes '("openid" "email" "profile")))
-  "Offer signing in with the provider NAME (a keyword).  Redefining replaces it."
+  "Offer signing in with the provider NAME (a keyword) on every sign-in form,
+as a button labelled \"Sign in with LABEL\".  AUTHORIZE-URL, TOKEN-URL and
+USERINFO-URL are the provider's; CLIENT-ID and CLIENT-SECRET this
+application's registration with it; SCOPES what to ask for (by default
+openid, email and profile).  Register /oauth/NAME under the application's
+address (from *PUBLIC-URL*), lower case, as the redirect address.  Redefining
+replaces it.  Returns NAME."
   (setf *providers* (append (remove name *providers* :key #'provider-name)
                             (list (make-provider :name name :label label :authorize-url authorize-url
                                                  :token-url token-url :userinfo-url userinfo-url
@@ -41,9 +48,12 @@
                                                  :scopes scopes))))
   name)
 
-(defun oauth-providers () *providers*)
+(defun oauth-providers ()
+  "The providers DEFINE-OAUTH-PROVIDER defined, in the order first defined."
+  *providers*)
 
 (defun find-oauth-provider (name)
+  "The provider defined as NAME (a keyword or string, case aside), or NIL."
   (find name *providers* :key #'provider-name :test #'string-equal))
 
 ;;; HTTP, replaceable for tests

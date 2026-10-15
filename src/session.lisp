@@ -23,9 +23,12 @@ that holds it.  NIL for none.")
       (random-key 20)))
 
 (defclass session ()
-  ((key :initform (new-session-key) :reader session-key)
+  ((key :initform (new-session-key) :reader session-key
+        :documentation "The random string naming the session in its pages' URLs (as _s) or
+in its cookie; ROTATE-SESSION-KEY changes it.")
    (application :initarg :application :reader session-application)
-   (root :initarg :root :accessor session-root)
+   (root :initarg :root :accessor session-root
+         :documentation "The session's instance of its application's root component class.")
    (lock :initform (sb-thread:make-mutex :name "littoral session") :reader session-lock)
    (continuations :initform (make-hash-table :test 'equal) :reader session-continuations)
    (continuation-order :initform '() :accessor session-continuation-order
@@ -44,11 +47,14 @@ only works with it.  Every session one browser starts shares it.")
    (profiling-p :initform nil :accessor session-profiling-p)
    (last-action :initform nil :accessor session-last-action
                 :documentation "Plist of the last action's :ACTIONS and :SNAPSHOT seconds and :OBJECTS.")
-   (properties :initform (make-hash-table :test 'equal) :reader session-properties))
+   (properties :initform (make-hash-table :test 'equal) :reader session-properties
+               :documentation "The EQUAL hash table behind SESSION-PROPERTY."))
   (:documentation "One user's component tree, the pages it has shown, and its lock."))
 
 (defun session-property (key &optional (session *session*))
-  "The value stored under KEY in SESSION, for application use."
+  "The value stored under KEY (compared with EQUAL) in SESSION, for
+application use, or NIL.  SETF stores one.  Not part of the snapshot: the
+back button does not undo it."
   (gethash key (session-properties session)))
 
 (defun (setf session-property) (value key &optional (session *session*))
@@ -89,7 +95,8 @@ it across CALLs."
 (defun end-isolation (token &optional (session *session*))
   "Forget every page made since BEGIN-ISOLATION returned TOKEN, so the back
 button cannot return into them (to place an order twice, say).  Going back
-to one of them shows the session as it is now."
+to one of them shows the session as it is now.  Returns how many pages it
+forgot."
   (let ((doomed (loop for key in (session-continuation-order session)
                       for continuation = (gethash key (session-continuations session))
                       when (and continuation (> (continuation-serial continuation) token))

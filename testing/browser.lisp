@@ -9,19 +9,28 @@
 (in-package #:littoral.test)
 
 (defclass browser ()
-  ((app :initarg :app :initform (make-lack-app) :reader browser-app)
-   (url :initform nil :accessor browser-url)
-   (status :initform nil :accessor browser-status)
-   (html :initform "" :accessor browser-html)
-   (cookies :initform '() :accessor browser-cookies)
+  ((app :initarg :app :initform (make-lack-app) :reader browser-app
+        :documentation "The Lack application requests go to; by default MAKE-LACK-APP's,
+which serves every registered application.")
+   (url :initform nil :accessor browser-url
+        :documentation "The current page's URL, after redirects, or NIL before the first visit.")
+   (status :initform nil :accessor browser-status
+           :documentation "The current page's HTTP status, or NIL before the first visit.")
+   (html :initform "" :accessor browser-html
+         :documentation "The current page's body, as served.")
+   (cookies :initform '() :accessor browser-cookies
+            :documentation "Alist of cookie name → value, sent with every request.")
    (headers :initarg :headers :initform '() :accessor browser-headers
             :documentation "Alist of header name → value sent with every request,
 such as (\"accept-language\" . \"fr\").")
    (fields :initform '() :accessor browser-fields
-           :documentation "Alist of field name → value typed into the current page.")
+           :documentation "Alist of field name → value that PRESS submits: the current
+page's fields as served, changed by FILL-IN, SET-CHECKBOX and SELECT-OPTION.")
    (files :initform '() :accessor browser-files
           :documentation "Alist of field name → (FILENAME CONTENT-TYPE OCTETS)."))
-  (:documentation "A fake browser driving the Lack app in-process."))
+  (:documentation "A fake browser driving a Lack application in-process.  :APP
+is the application (by default every registered one); :HEADERS are sent with
+every request."))
 
 (defun split-url (url)
   "URL's path and query string."
@@ -29,8 +38,9 @@ such as (\"accept-language\" . \"fr\").")
     (if q (values (subseq url 0 q) (subseq url (1+ q))) (values url nil))))
 
 (defun make-env (method url &key body cookies extra-headers (content-type "application/x-www-form-urlencoded"))
-  "A Lack environment for a METHOD request to URL, with EXTRA-HEADERS (an
-alist of lower-case names to values)."
+  "A Lack environment for a METHOD request to URL.  BODY, a string or
+octets, is sent as CONTENT-TYPE (form-encoded by default); COOKIES is an
+alist of name → value, and EXTRA-HEADERS an alist of header name → value."
   (multiple-value-bind (path query) (split-url url)
     (let ((headers (make-hash-table :test 'equal))
           (octets (if (stringp body)
@@ -79,18 +89,34 @@ only the one server, so http://localhost/a?b is /a?b."
   (let ((match (nth-value 1 (cl-ppcre:scan-to-strings "^https?://[^/]+(/.*)?$" url))))
     (if match (or (aref match 0) "/") url)))
 
+(defun body-string (body)
+  "A Lack response BODY as a string: a list of strings joined, octets (such
+as a stored file) decoded as UTF-8, or as Latin-1, byte for byte, when they
+aren't UTF-8, and a file read the same way."
+  (flet ((decode (octets)
+           (handler-case (sb-ext:octets-to-string octets :external-format :utf-8)
+             (error () (sb-ext:octets-to-string octets :external-format :latin-1)))))
+    (etypecase body
+      (list (apply #'concatenate 'string body))
+      ((vector (unsigned-byte 8)) (decode (coerce body '(simple-array (unsigned-byte 8) (*)))))
+      (pathname (decode (alexandria:read-file-into-byte-vector body))))))
+
 (defun raw-request (browser method url &key body content-type)
-  "One request, no redirects followed.  Returns status, headers, body string."
+  "One METHOD request to URL, sending BODY as CONTENT-TYPE, with no redirect
+followed.  Keeps the cookies it sets.  Returns the status, the header plist
+and the body as a string."
   (setf url (local-url url))
   (destructuring-bind (status headers body-parts)
       (funcall (browser-app browser)
                (apply #'make-env method url :body body :cookies (browser-cookies browser) :extra-headers (browser-headers browser)
                       (when content-type (list :content-type content-type))))
     (store-cookies browser headers)
-    (values status headers (apply #'concatenate 'string body-parts))))
+    (values status headers (body-string body-parts))))
 
 (defun visit (browser url &key (method :get) body content-type)
-  "Request URL, following redirects, and make the result the current page."
+  "Request URL (by METHOD, sending BODY as CONTENT-TYPE), following redirects
+with GETs, and make the result the current page.  Returns BROWSER; signals
+an error after ten redirects."
   (loop repeat 10
         do (multiple-value-bind (status headers html)
                (raw-request browser method url :body body :content-type content-type)
@@ -108,7 +134,8 @@ only the one server, so http://localhost/a?b is /a?b."
 ;;; Reading the page
 
 (defun attributes (tag)
-  "The attributes in TAG, the inside of an HTML start tag, as an alist."
+  "The attributes in TAG, the part of an HTML start tag after its name, as an
+alist of lower-cased name → unescaped value, NIL for a bare attribute."
   (let ((result '()))
     (cl-ppcre:do-register-groups (name value) ("([a-zA-Z_:-]+)(?:=\"([^\"]*)\")?" tag)
       (push (cons (string-downcase name) (and value (unescape value))) result))
@@ -140,13 +167,27 @@ go whole, as they aren't text (and a < in them isn't a tag)."
   "The current page's text without markup."
   (strip-tags (browser-html browser)))
 
+(defparameter *separate-tags*
+  '("address" "article" "aside" "blockquote" "br" "button" "caption" "dd" "details" "div" "dl" "dt"
+    "fieldset" "figcaption" "figure" "footer" "form" "h1" "h2" "h3" "h4" "h5" "h6" "header" "hr"
+    "input" "label" "legend" "li" "main" "nav" "ol" "option" "p" "pre" "section" "select" "summary"
+    "table" "tbody" "td" "textarea" "tfoot" "th" "thead" "tr" "ul")
+  "Tags a browser shows apart from the text around them: BODY-TEXT puts a
+space where one opens or closes.")
+
 (defun body-text (browser)
-  "The text of the current page's body without markup, each run of
-whitespace made one space, as a reader sees it."
+  "The text of the current page's body without markup, as a reader sees
+it: a space where a block, cell or form control begins or ends, and each
+run of whitespace made one space."
   (let* ((html (browser-html browser))
          (start (cl-ppcre:scan "<body[\\s>]" html))
-         (body (if start (subseq html start) html)))
-    (string-trim " " (cl-ppcre:regex-replace-all "\\s+" (strip-tags body) " "))))
+         (body (if start (subseq html start) html))
+         (spaced (cl-ppcre:regex-replace-all
+                  (format nil "(?i)</?(?:~{~A~^|~})(?=[\\s/>])[^>]*>" *separate-tags*)
+                  ;; Scripts and styles go first, whole, as STRIP-TAGS does.
+                  (cl-ppcre:regex-replace-all "(?is)<(script|style)\\b[^>]*>.*?</\\1>" body "")
+                  " \\& ")))
+    (string-trim " " (cl-ppcre:regex-replace-all "\\s+" (strip-tags spaced) " "))))
 
 (defun has-text-p (browser text)
   "True when the current page's text contains TEXT."
@@ -186,7 +227,7 @@ whitespace made one space, as a reader sees it."
   nil)
 
 (defun click (browser text)
-  "Follow the link whose text contains TEXT."
+  "Follow the first link whose text contains TEXT; an error when there is none."
   (let ((href (find-link browser text)))
     (unless href (error "No link ~S on the page:~%~A" text (page-text browser)))
     (visit browser href)))
@@ -206,22 +247,29 @@ whitespace made one space, as a reader sees it."
     (visit browser href)))
 
 (defun element-name (browser id)
-  "The name of the field with DOM id ID."
-  (cl-ppcre:do-register-groups (tag) ("<(?:input|textarea|select)\\b([^>]*)>" (browser-html browser))
-    (let ((a (attributes tag)))
-      (when (equal (attr a "id") id)
-        (return-from element-name (attr a "name")))))
-  (error "No field with id ~S" id))
+  "The name of the field with DOM id ID or, failing that, the field whose
+aria-label is ID (a brush's :LABEL); an error when there is none."
+  (let ((labelled nil))
+    (cl-ppcre:do-register-groups (tag) ("<(?:input|textarea|select)\\b([^>]*)>" (browser-html browser))
+      (let ((a (attributes tag)))
+        (when (equal (attr a "id") id)
+          (return-from element-name (attr a "name")))
+        (when (and (null labelled) (equal (unescape (or (attr a "aria-label") "")) id))
+          (setf labelled (attr a "name")))))
+    (or labelled (error "No field with id or label ~S" id))))
 
 (defun fill-in (browser id value)
-  "Type VALUE into the field with DOM id ID."
+  "Type VALUE into the field with DOM id ID, or else with label ID (see
+ELEMENT-NAME); an error when there is none.
+Returns BROWSER."
   (let ((name (element-name browser id)))
     (setf (browser-fields browser)
           (acons name value (remove name (browser-fields browser) :key #'car :test #'string=)))
     browser))
 
 (defun set-checkbox (browser index checked)
-  "Check or uncheck the INDEXth checkbox on the page."
+  "Check (CHECKED true) or uncheck the INDEXth checkbox on the page,
+counting from 0."
   (let ((names '()))
     (cl-ppcre:do-register-groups (tag) ("<input\\b([^>]*)>" (browser-html browser))
       (let ((a (attributes tag)))
@@ -235,14 +283,38 @@ whitespace made one space, as a reader sees it."
       browser)))
 
 (defun select-option (browser id label)
-  "Choose the option labelled LABEL in the select with DOM id ID."
-  (cl-ppcre:do-register-groups (tag options) ("(?s)<select\\b([^>]*)>(.*?)</select>" (browser-html browser))
-    (when (equal (attr (attributes tag) "id") id)
-      (cl-ppcre:do-register-groups (otag text) ("<option\\b([^>]*)>(.*?)</option>" options)
-        (when (string= (strip-tags text) label)
-          (return-from select-option
-            (fill-in browser id (attr (attributes otag) "value")))))))
+  "Choose the option labelled exactly LABEL in the select with DOM id ID,
+or else with label ID (see ELEMENT-NAME); an error when there is none.
+Returns BROWSER."
+  (let ((labelled nil))
+    (cl-ppcre:do-register-groups (tag options) ("(?s)<select\\b([^>]*)>(.*?)</select>" (browser-html browser))
+      (let ((a (attributes tag)))
+        (cond ((equal (attr a "id") id) (setf labelled (cons a options)) (return))
+              ((and (null labelled) (equal (unescape (or (attr a "aria-label") "")) id))
+               (setf labelled (cons a options))))))
+    (when labelled
+      (destructuring-bind (a . options) labelled
+        (cl-ppcre:do-register-groups (otag text) ("<option\\b([^>]*)>(.*?)</option>" options)
+          (when (string= (strip-tags text) label)
+            (let ((name (attr a "name")))
+              (setf (browser-fields browser)
+                    (acons name (attr (attributes otag) "value")
+                           (remove name (browser-fields browser) :key #'car :test #'string=)))
+              (return-from select-option browser)))))))
   (error "No option ~S in ~S" label id))
+
+(defun choose-radio (browser label)
+  "Choose the radio button labelled exactly LABEL (the text of its
+<label>), as clicking it would.  An error when there is none.  Returns
+BROWSER."
+  (cl-ppcre:do-register-groups (tag text)
+      ("(?s)<label\\b[^>]*>\\s*<input\\b([^>]*\\btype=\"radio\"[^>]*)>(.*?)</label>" (browser-html browser))
+    (when (string= (string-trim " " (strip-tags text)) label)
+      (let* ((a (attributes tag)) (name (attr a "name")))
+        (setf (browser-fields browser)
+              (acons name (attr a "value") (remove name (browser-fields browser) :key #'car :test #'string=)))
+        (return-from choose-radio browser))))
+  (error "No radio button labelled ~S" label))
 
 (defun form-action (browser)
   "The action URL of the first form on the page."
@@ -287,7 +359,9 @@ filename=\"~A\"~C~CContent-Type: ~A~C~C~C~C"
     (flexi-streams:get-output-stream-sequence out)))
 
 (defun press (browser text)
-  "Submit the form with the button whose label contains TEXT."
+  "Submit the form with the first button whose label contains TEXT, sending
+BROWSER-FIELDS, and BROWSER-FILES as multipart when there are any; an error
+when there is no such button."
   (let ((name nil))
     (cl-ppcre:do-register-groups (tag content) ("(?s)<button\\b([^>]*)>(.*?)</button>" (browser-html browser))
       (when (and (null name) (search text (strip-tags content)))
@@ -308,7 +382,10 @@ filename=\"~A\"~C~CContent-Type: ~A~C~C~C~C"
   (visit browser url))
 
 (defun ajax-request (browser callback targets &key fields)
-  "Post an AJAX request the way littoral.js does; returns the JSON text."
+  "Post an AJAX request the way littoral.js does, running the callback with
+id CALLBACK (none when NIL or \"\") and re-rendering TARGETS, a string of
+component ids, as AJAX-SPECS gives them.  FIELDS, an alist, is posted too.
+Returns the JSON text and the status."
   (let ((action (cl-ppcre:register-groups-bind (url) ("data-lt-action=\"([^\"]*)\"" (browser-html browser))
                   (unescape url))))
     (multiple-value-bind (status headers body)
@@ -322,7 +399,8 @@ filename=\"~A\"~C~CContent-Type: ~A~C~C~C~C"
       (values body status))))
 
 (defun ajax-specs (browser attribute)
-  "The (CALLBACK . TARGETS) of each element with data-lt-ATTRIBUTE."
+  "The (CALLBACK . TARGETS) of each element with data-lt-ATTRIBUTE, in page
+order, for AJAX-REQUEST.  ATTRIBUTE is the event, such as \"on-click\"."
   (let ((result '()))
     (cl-ppcre:do-register-groups (spec) ((format nil "data-lt-~A=\"([^\"]*)\"" attribute) (browser-html browser))
       (let* ((spec (unescape spec)) (semi (position #\; spec)))
@@ -330,7 +408,8 @@ filename=\"~A\"~C~CContent-Type: ~A~C~C~C~C"
     (nreverse result)))
 
 (defmacro with-fresh-applications ((&rest registrations) &body body)
-  "Run BODY with only the given applications registered."
+  "Run BODY with only the applications REGISTRATIONS names registered, each
+registration a list of REGISTER-APPLICATION's arguments."
   `(let ((littoral::*applications* (make-hash-table :test 'equal)))
      ,@(mapcar (lambda (r) `(register-application ,@r)) registrations)
      ,@body))
@@ -348,22 +427,30 @@ filename=\"~A\"~C~CContent-Type: ~A~C~C~C~C"
     (format nil "~{~A~}" (reverse (sink-chunks sink)))))
 
 (defun open-stream (browser sink)
-  "Open the current page's event stream in a thread, writing into SINK."
+  "Open the current page's event stream in a thread, writing into SINK, and
+wait (up to 10 seconds) until it is open: its first line, retry:, written.
+From then on it is among the open streams, so PUBLISH reaches it and
+CLOSE-EVENT-STREAMS closes it.  Returns the thread; an error when the page
+has no stream."
   (let* ((url (cl-ppcre:register-groups-bind (u) ("data-lt-events=\"([^\"]*)\"" (browser-html browser))
                 (unescape u)))
          (response (funcall (browser-app browser)
                             (make-env :get url :cookies (browser-cookies browser) :extra-headers (browser-headers browser)))))
     (unless (functionp response)
       (error "~A did not open an event stream (status ~A)." url (first response)))
-    (sb-thread:make-thread
-     (lambda ()
-       (funcall response
-                (lambda (head)
-                  (declare (ignore head))
-                  (lambda (chunk &key close)
-                    (declare (ignore close))
-                    (when chunk
-                      (sb-thread:with-mutex ((sink-lock sink)) (push chunk (sink-chunks sink)))))))))))
+    (let ((thread (sb-thread:make-thread
+                   (lambda ()
+                     (funcall response
+                              (lambda (head)
+                                (declare (ignore head))
+                                (lambda (chunk &key close)
+                                  (declare (ignore close))
+                                  (when chunk
+                                    (sb-thread:with-mutex ((sink-lock sink))
+                                      (push chunk (sink-chunks sink))))))))
+                   :name "littoral.test event stream")))
+      (wait-for (lambda () (search "retry:" (sink-text sink))))
+      thread)))
 
 (defun wait-for (predicate &optional (seconds 10))
   "Poll PREDICATE for up to SECONDS; true when it came true."

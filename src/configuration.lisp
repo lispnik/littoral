@@ -45,17 +45,22 @@ names, or NIL."
         :stylesheets (application-stylesheets app)
         :scripts (application-scripts app)
         :credentials (application-credentials app)
+        ;; Saved so a reloaded /config stays this machine's alone.
+        :local-only (application-local-only-p app)
         :max-sessions (application-max-sessions app)
         :expired-notice (class-designator (application-expired-notice app))))
 
 (defun configure-application (path &rest settings
                               &key root-class title language languages mode session-timeout max-continuations
-                                cookie-sessions stylesheets scripts credentials max-sessions
+                                cookie-sessions stylesheets scripts credentials local-only max-sessions
                                 expired-notice)
   "Change the settings given for the application at PATH, registering it
-when there is none.  Sessions, and settings not given, are kept."
+(with ROOT-CLASS) when there is none.  Sessions, and settings not given,
+are kept.  It takes the settings APPLICATION-SETTINGS lists; others, such as
+ERROR-HANDLER, are set with REGISTER-APPLICATION or the readers' SETF.
+Returns the APPLICATION."
   (declare (ignore root-class title language languages mode session-timeout max-continuations cookie-sessions
-                   stylesheets scripts credentials max-sessions expired-notice))
+                   stylesheets scripts credentials local-only max-sessions expired-notice))
   (let ((app (find-application path)))
     (if (null app)
         (apply #'register-application path (getf settings :root-class)
@@ -73,6 +78,7 @@ when there is none.  Sessions, and settings not given, are kept."
                    (:stylesheets (setf (application-stylesheets app) value))
                    (:scripts (setf (application-scripts app) value))
                    (:credentials (setf (application-credentials app) value))
+                   (:local-only (setf (application-local-only-p app) value))
                    (:max-sessions (setf (application-max-sessions app) value))
                    (:expired-notice (setf (application-expired-notice app) value)))
               finally (return app)))))
@@ -108,8 +114,9 @@ is none."
               collect form)))))
 
 (defun load-configuration (&optional (file *configuration-file*))
-  "Configure applications from FILE.  Applications whose classes are not
-loaded are skipped with a warning.  Returns the applications configured."
+  "Configure applications from FILE, with CONFIGURE-APPLICATION.  Applications
+whose classes are not loaded are skipped with a warning.  Returns the
+applications configured; NIL when FILE is NIL or does not exist."
   (when (and file (probe-file file))
     (loop for settings in (read-configuration file)
           for path = (getf settings :path)

@@ -31,15 +31,18 @@
   (:documentation "Signalled by ENDPOINT-ERROR: answered as {\"error\": message} with its status."))
 
 (defun endpoint-error (status message &rest arguments)
-  "Answer the current endpoint request with STATUS and {\"error\": MESSAGE}."
+  "Answer the current endpoint request with STATUS and {\"error\": MESSAGE},
+MESSAGE being a FORMAT control string for ARGUMENTS.  Signals ENDPOINT-ERROR."
   (error 'endpoint-error :status status :message (apply #'format nil message arguments)))
 
 (defun path-segments (path)
   (remove "" (cl-ppcre:split "/" path) :test #'string=))
 
 (defun register-endpoint (application-path method pattern function)
-  "Serve FUNCTION for METHOD requests to PATTERN under APPLICATION-PATH.
-PATTERN's :NAME segments become FUNCTION's arguments, as strings."
+  "Serve FUNCTION for METHOD requests to PATTERN under APPLICATION-PATH,
+replacing any endpoint with the same method and pattern.  PATTERN's :NAME
+segments become FUNCTION's arguments, URL-decoded strings, in order.
+Returns (METHOD PATTERN)."
   (let ((application-path (normalize-path application-path))
         (segments (path-segments pattern))
         (method (intern (string-upcase method) :keyword)))
@@ -52,7 +55,13 @@ PATTERN's :NAME segments become FUNCTION's arguments, as strings."
 (defmacro define-endpoint (application-path method pattern (&rest parameters) &body body)
   "Serve BODY as JSON for METHOD (:GET, :POST, :PUT, :PATCH, :DELETE)
 requests to PATTERN, such as \"/api/items/:id\", under the application at
-APPLICATION-PATH.  PARAMETERS are bound to PATTERN's :NAME segments, in order."
+APPLICATION-PATH; a :GET endpoint answers HEAD too.  PARAMETERS are bound to
+PATTERN's :NAME segments, in order, as strings.  BODY's value is the
+response: hash tables and keyword plists are objects, other lists and
+vectors arrays (#() for an empty one: NIL is null, as :NULL is), T true,
+:FALSE false.  A second value is the status (200 by default), a third a
+plist of extra headers.  ENDPOINT-ERROR answers with its status, another
+error with 500, and a method PATTERN doesn't serve with 405."
   `(register-endpoint ,application-path ,method ,pattern
                       (lambda (,@parameters) ,@body)))
 
@@ -86,7 +95,9 @@ APPLICATION-PATH.  PARAMETERS are bound to PATTERN's :NAME segments, in order."
 
 (defvar *endpoint-authenticator* nil
   "A function of no arguments answering who an endpoint request comes from,
-and how (:TOKEN or :COOKIE); littoral/auth sets it.")
+and how (:TOKEN or :COOKIE), or NIL for nobody; littoral/auth sets it.  A
+write (any method but GET, HEAD and OPTIONS) that comes :COOKIE must send
+Content-Type application/json, or gets 415: a cross-site form can't.")
 
 (defun endpoint-body ()
   "The request's JSON body, parsed (objects as hash tables), or NIL when empty.

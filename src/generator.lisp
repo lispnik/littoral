@@ -11,7 +11,9 @@
 
 (defpackage #:littoral.generator
   (:use #:cl)
-  (:documentation "Generate the skeleton of a new Littoral application.")
+  (:documentation "Load with `(asdf:load-system :littoral/generator)`.  Generates the skeleton
+of a new Littoral application; `make new NAME=…` in Littoral's checkout
+calls it.")
   (:export #:make-project #:project-templates))
 
 (in-package #:littoral.generator)
@@ -65,9 +67,13 @@
 (defun make-project (name &key directory (title (title-from-name name)) (author (git-user-name))
                             (license "MIT") (port 8080) (template "basic"))
   "Write a new Littoral application called NAME (lower-case letters, digits
-and dashes) into DIRECTORY, by default ./NAME/, from TEMPLATE.  Refuses to
-replace existing files.  The LICENSE file is written for the MIT license
-only.  Returns the directory."
+and dashes, starting with a letter, and not starting with \"littoral\") into
+DIRECTORY, by default ./NAME/, from TEMPLATE (one of PROJECT-TEMPLATES,
+\"basic\" by default).  TITLE defaults to NAME's words capitalised, AUTHOR to
+git's user.name, LICENSE to \"MIT\" and PORT (where the project's make run serves it) to
+8080.  The LICENSE file is written for the MIT license only.  Signals an
+error for a bad NAME or TEMPLATE, and rather than replace existing files.
+Prints how to test and run the project; returns the directory."
   (unless (valid-name-p name)
     (error "~S won't do as a project name: use lower-case letters, digits and dashes, ~
 starting with a letter (and not \"littoral\")." name))

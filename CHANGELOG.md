@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+### Added
+- **Examples for the whole API, all tested.** docs/API.md has 813 examples, over every exported function, macro and class but those needing Chrome or an S3 server. They live in `docs/examples/`; the test suite runs each on its own, in a fresh package set up as the reference tells readers to, and checks every result shown (`;; ⇒`). `make examples` runs them alone. Docstrings were checked against the code throughout, and many corrected.
+- **The reference covers every package**: `littoral.db`, `littoral.storage`, `littoral.oauth`, `littoral.websocket`, `littoral.parenscript`, `littoral.woo` and `littoral.generator` too. Each package's section says which system to load.
+- **The tutorial goes further**: testing the reading list with the fake browser, keeping it in a database, signing readers in, and a second language (steps 12 to 15). A test pastes the tutorial's code blocks in order into fresh packages and checks each step does what the text says; another checks every block matches the code in `docs/tutorial/`.
+- **The fake browser** (`littoral.test`) gains `body-text`, a page's text as a reader sees it, and `choose-radio`. `fill-in` and `select-option` also find a field by its label, and responses whose body is octets or a file (such as stored files) can be read.
+- `*keepalive-seconds*` and `littoral.storage:*signing-key*` are exported, as the docs already said.
+
+### Fixed
+- **A saved configuration keeps `/config` local.** `:local-only` wasn't saved, so after `/config` was unregistered, loading an older configuration file brought it back open to any address.
+- **Editing an object with a password field no longer wipes the password.** The field starts empty, so Save wrote NIL, or refused when it was required. A blank password field now keeps the stored value, in editors and wizards.
+- **A wizard's whole-object check sees every field**, with the stored value for those its steps leave out, as an editor's does.
+- **Refused uploads aren't stored.** A file too large, or not an image for an image field, was kept in storage with nothing pointing at it.
+- **Cached roles belong to their database**, so applications with databases of their own no longer briefly see each other's roles for users with the same id.
+- **Inputs and buttons write one `type`.** `(text-input (:type "search"))` wrote two, and browsers took the first.
+- `db-select` and `db-search` honour `:offset` without `:limit`.
+- Changing `*latency-buckets*` after requests were counted made every later request fail; the request histogram now starts again.
+- `current-user`, `signed-in-p`, `has-role-p` and `has-permission-p` answer NIL outside a request rather than signalling.
+- The second sign-in step's code field had an empty label; the tree's toggle labels, the suggestion count and "Sign out" are translated.
+- Basic auth compares digests, so the time taken says nothing about the credentials' length.
+- Generated apps start one job runner, not two, and read `TRUST_PROXY=0` as off.
+- Sparklines are inset by a pixel on both sides.
+- README and deployment guide: every code block now runs as written, and claims that didn't match the code were corrected.
+
 ### Changed
 - **Clicks are 45–70% faster.** Profiling store and counter clicks under load found three costs, now gone:
   - Every page render looked at `littoral.js` on disk to fingerprint it, which took over a third of the server's time. Static files are now looked at once a second at most (`*static-check-interval*`), so an edited file still shows up.

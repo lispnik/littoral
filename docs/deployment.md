@@ -12,7 +12,7 @@ make build          # bin/bookshop: SBCL, your code and its dependencies in one 
 
 The executable starts the application in deployment mode (no toolbar or halos) on `$PORT` (default 8080) and `$ADDRESS` (default 127.0.0.1), and runs until killed. Littoral's own JavaScript and CSS are saved inside it, so the server needs neither the source nor Lisp installed. Build on the same operating system and CPU architecture as the server, for example in a container or on CI.
 
-For an application of your own, the essentials are:
+For an application of your own, the essentials are these, with `bookshop:register-app` standing for whatever registers your applications:
 
 ```lisp
 (asdf:load-system :bookshop)
@@ -32,8 +32,8 @@ Don't connect to the database, start threads or open files before saving. Do it 
 | `:mode :deployment` on every application | Development mode shows halos, which let anyone inspect and change component state. `start` warns if a development-mode application is served on a public address. |
 | `littoral.auth:*public-url*` | Reset links and OAuth redirects use it. Deployment mode requires it, because the Host header is the client's to choose. |
 | `littoral:*trust-forwarded-for*` | Set it to `t` behind a proxy that sets `X-Forwarded-For`, so rate limits, lockouts and logs see real client addresses rather than the proxy's. Leave it off when clients reach Littoral directly, or they could claim any address. |
-| `*max-request-size*` | Default 10 MB. Keep the proxy's limit (`client_max_body_size`) at least as large. |
-| `:session-timeout`, `:max-sessions` | How long idle sessions last (default 30 minutes) and how many to keep. |
+| `littoral:*max-request-size*` | Default 10 MB. Keep the proxy's limit (`client_max_body_size`) at least as large. |
+| `:session-timeout`, `:max-sessions` | How long idle sessions last (default 30 minutes) and how many to keep (no limit by default). |
 | `littoral:*new-sessions-per-minute*` | Sessions one address may start a minute (120). |
 | `littoral.auth:*send-mail*` | By default reset mail is only printed. Plug in your mailer. |
 
@@ -88,7 +88,7 @@ SQLite suits a single process: give it a file in the data directory (`ReadWriteP
 
 ### SQLite in production
 
-- **WAL mode.** Littoral switches a SQLite file to write-ahead logging when it first connects (`*sqlite-journal-mode*`, `:wal`), so pages reading and the job runner writing don't wait for each other; writers still take turns. The mode is kept in the file. Connections also use `synchronous=NORMAL` (`*sqlite-synchronous*`): a power cut can lose the last few commits, but never damages the file. Use `:synchronous :full` in the database spec if every commit must survive a power cut. `:journal-mode nil` leaves the file as it is.
+- **WAL mode.** Littoral switches a SQLite file to write-ahead logging when it first connects (`littoral.db:*sqlite-journal-mode*`, `:wal`), so pages reading and the job runner writing don't wait for each other; writers still take turns. The mode is kept in the file. Connections also use `synchronous=NORMAL` (`littoral.db:*sqlite-synchronous*`): a power cut can lose the last few commits, but never damages the file. Use `:synchronous :full` in the database spec if every commit must survive a power cut. `:journal-mode nil` leaves the file as it is.
 - **Three files.** Beside `app.db` SQLite keeps `app.db-wal` and `app.db-shm`. Copying `app.db` alone while the server runs can miss recent commits. Back up with `sqlite3 app.db "VACUUM INTO '/backups/app.db'"`, or SQLite's `.backup` command, or stop the service first.
 - **One machine.** Every process using the file must run on the same host, and the file must be on a local disk, not NFS or another network filesystem.
 - **Going back.** To leave WAL mode, set `*sqlite-journal-mode*` to `:delete` and start with nothing else using the file, or run `sqlite3 app.db "PRAGMA journal_mode=DELETE"` while the service is stopped.
@@ -126,7 +126,7 @@ The README's "Deployment and scale" section has measurements of both.
 
 ## 8. Health checks, metrics and logs
 
-- **Health.** Point the load balancer or uptime monitor at `/healthz`. It answers 200, or 503 when a check fails. Add checks with `(add-health-check "database" (lambda () (littoral.db:db-query "SELECT 1")))`, run inside a `using-database` binding when the application has its own database.
+- **Health.** Point the load balancer or uptime monitor at `/healthz`. It answers 200, or 503 when a check fails. Add checks with `(add-health-check "database" (lambda () (littoral.db:db-query "SELECT 1")))`. Checks run outside any application, so when an application gets its database from `using-database` rather than `connect-database`, bind `littoral.db:*database*` to its spec inside the check.
 - **Metrics.** `(serve-metrics)` serves Prometheus metrics at `/metrics` to the machine itself. Scrape from there, or expose the path only to your monitoring network. Two are worth alerting on:
   - `littoral_durable_jobs_oldest_due_seconds` rises when jobs are due but no runner takes them, or the runners can't keep up.
   - `littoral_mail_oldest_unsent_seconds` rises when mail isn't going out, for example while the mail server refuses it.
@@ -147,5 +147,5 @@ The README's "Deployment and scale" section has measurements of both.
 - [ ] Proxy passes WebSocket upgrades and doesn't buffer streams
 - [ ] Mail sending plugged in (`*send-mail*`)
 - [ ] Database backed up; secrets read from the environment
-- [ ] `/config` either unregistered, or protected with `configure-admin`
+- [ ] `/config` either unregistered (`(unregister-application "/config")`), or protected with `configure-admin` or `littoral.auth:configure-signed-in-admin`
 - [ ] The service restarts on failure; logs go to the journal

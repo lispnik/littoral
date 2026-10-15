@@ -24,8 +24,10 @@
 ;;; Fields
 
 (defclass field ()
-  ((name :initarg :name :reader field-name)
-   (label :initarg :label :reader field-label)
+  ((name :initarg :name :reader field-name
+         :documentation "The property described, a symbol.")
+   (label :initarg :label :reader field-label
+          :documentation "The text naming the field on the page, translated when shown.")
    (reader :initarg :reader :reader field-reader)
    (writer :initarg :writer :reader field-writer)
    (required :initarg :required :initform nil :reader field-required-p)
@@ -39,7 +41,8 @@
    (hidden :initarg :hidden :initform nil :reader field-hidden-p
            :documentation "Stored and validated, but never shown: not in editors, viewers or reports."))
   (:documentation "One described property of an object.  Subclasses say how
-its values are entered, parsed, shown and checked."))
+its values are entered, parsed, shown and checked.  DEFINE-DESCRIPTION makes
+them from the options it is given."))
 
 (define-condition field-error (error)
   ((message :initarg :message :reader field-error-message))
@@ -47,7 +50,8 @@ its values are entered, parsed, shown and checked."))
   (:documentation "Signalled by PARSE-FIELD when input is not a value of the field's kind."))
 
 (defun field-problem (format-control &rest arguments)
-  "Signal a FIELD-ERROR with the message FORMAT-CONTROL, translated, formats."
+  "Signal a FIELD-ERROR whose message is FORMAT-CONTROL, translated, applied
+to ARGUMENTS.  For PARSE-FIELD methods rejecting what was typed."
   (error 'field-error :message (apply #'translate format-control arguments)))
 
 (defgeneric parse-field (field string)
@@ -77,8 +81,9 @@ Methods should call CALL-NEXT-METHOD to keep the general checks.")
   (:method ((field field)) nil))
 
 (defgeneric render-field-input (field id text callback)
-  (:documentation "Write the input for FIELD, with DOM id ID, showing TEXT;
-CALLBACK receives what is submitted.")
+  (:documentation "Write the input for FIELD, with the element id ID, showing
+TEXT; CALLBACK receives what is submitted.  Editors, wizards and data grids
+call it.")
   (:method ((field field) id text callback)
     (text-input (:id id :value text :callback callback
                  :required (field-required-p field)))))
@@ -95,7 +100,9 @@ CALLBACK receives what is submitted.")
    (pattern :initarg :pattern :initform nil :reader field-pattern
             :documentation "A regular expression the whole value must match.")
    (pattern-message :initarg :pattern-message :initform nil :reader field-pattern-message))
-  (:documentation "A line of text."))
+  (:documentation "A line of text, at most :MAX-LENGTH characters when given.
+:PATTERN is a regular expression the whole value must match, and
+:PATTERN-MESSAGE the sentence shown when it does not."))
 
 (defun not-in-form-message (field)
   (translate "~A is not in the expected form." (translate (field-label field))))
@@ -113,7 +120,8 @@ CALLBACK receives what is submitted.")
             (t nil))))
 
 (defclass text-field (string-field) ()
-  (:documentation "Several lines of text."))
+  (:documentation "Several lines of text, entered in a text area and shown with
+a line break after each."))
 
 (defmethod parse-field ((field text-field) string)
   (if (string= (string-trim '(#\Space #\Newline #\Return #\Tab) string) "")
@@ -129,7 +137,10 @@ CALLBACK receives what is submitted.")
       (text line) (br))))
 
 (defclass password-field (string-field) ()
-  (:documentation "Text that is never shown."))
+  (:documentation "Text that is never shown: its input starts empty, its value
+is written as dots, and viewers, report columns and data grids leave it out.
+Left blank in an editor or wizard for an object that has a value, it keeps
+that value."))
 
 (defmethod render-field-input ((field password-field) id text callback)
   (declare (ignore text))
@@ -140,7 +151,7 @@ CALLBACK receives what is submitted.")
 
 (defclass email-field (string-field) ()
   (:default-initargs :pattern "[^@\\s]+@[^@\\s]+\\.[^@\\s]+")
-  (:documentation "An email address."))
+  (:documentation "An email address: text with one @ and a dot after it."))
 
 (defmethod check-field ((field email-field) value)
   (let ((problem (call-next-method)))
@@ -156,7 +167,7 @@ CALLBACK receives what is submitted.")
 
 (defclass url-field (string-field) ()
   (:default-initargs :pattern "https?://\\S+")
-  (:documentation "An http or https URL."))
+  (:documentation "An http or https URL, shown as a link."))
 
 (defmethod check-field ((field url-field) value)
   (let ((problem (call-next-method)))
@@ -171,7 +182,7 @@ CALLBACK receives what is submitted.")
 (defclass integer-field (field)
   ((min :initarg :min :initform nil :reader field-min)
    (max :initarg :max :initform nil :reader field-max))
-  (:documentation "A whole number, optionally between MIN and MAX."))
+  (:documentation "A whole number, between :MIN and :MAX when given."))
 
 (defmethod parse-field ((field integer-field) string)
   (let ((trimmed (string-trim " " string)))
@@ -194,7 +205,8 @@ CALLBACK receives what is submitted.")
             nil))
 
 (defclass boolean-field (field) ()
-  (:documentation "Yes or no.  Never required: unchecked is an answer."))
+  (:documentation "Yes or no, entered as a checkbox.  Never required: unchecked
+is an answer."))
 
 (defmethod parse-field ((field boolean-field) string)
   (and (member string '("on" "true" "t" "yes") :test #'string-equal) t))
@@ -216,10 +228,13 @@ CALLBACK receives what is submitted.")
   ((choices :initarg :choices :initform '() :reader choices-designator
             :documentation "A list, or a function returning one each time it is needed.")
    (label-function :initarg :labels :initform #'princ-to-string :reader field-labels))
-  (:documentation "One of CHOICES, shown through LABELS."))
+  (:documentation "One of :CHOICES (a list, or a function returning one each
+time it is needed), shown through :LABELS (a function of a choice;
+PRINC-TO-STRING by default) and entered with a select.  Unless the field is
+required, the select offers a blank option too."))
 
 (defun field-choices (field)
-  "FIELD's choices now."
+  "FIELD's choices now, calling its choices function when it has one."
   (let ((choices (choices-designator field)))
     (if (functionp choices) (funcall choices) choices)))
 
@@ -253,7 +268,8 @@ CALLBACK receives what is submitted.")
                                      (lambda () (text (format-field field choice))))))))))
 
 (defclass date-field (field) ()
-  (:documentation "A calendar date, held as (YEAR MONTH DAY)."))
+  (:documentation "A calendar date, held as (YEAR MONTH DAY) and written like
+2026-10-06."))
 
 (defmethod parse-field ((field date-field) string)
   (let ((trimmed (string-trim " " string)))
@@ -284,7 +300,8 @@ CALLBACK receives what is submitted.")
   '((:string . string-field) (:text . text-field) (:password . password-field)
     (:email . email-field) (:url . url-field) (:integer . integer-field)
     (:boolean . boolean-field) (:choice . choice-field) (:date . date-field))
-  "Keyword → field class, for :TYPE in DEFINE-DESCRIPTION.  Push your own.")
+  "Alist of keyword → field class name, for :TYPE in DEFINE-DESCRIPTION.
+Push your own (KEYWORD . CLASS-NAME).")
 
 ;;; Descriptions
 
@@ -293,13 +310,16 @@ CALLBACK receives what is submitted.")
    (fields :initarg :fields :reader description-fields)
    (validator :initarg :validate :initform nil :reader description-validator
               :documentation "Function of a plist of field values: NIL, or what is wrong with them together."))
-  (:documentation "The fields of a kind of object, in order."))
+  (:documentation "The fields of a kind of object, in order, as
+DEFINE-DESCRIPTION makes them."))
 
 (defvar *descriptions* (make-hash-table :test 'eq)
   "Name → DESCRIPTION.")
 
 (defun find-description (designator)
-  "The description DESIGNATOR names, or that of DESIGNATOR's class."
+  "The description DESIGNATOR names: DESIGNATOR itself when it is a
+DESCRIPTION, the one defined under it when it is a symbol, or else that of
+its class.  Signals an error when there is none."
   (cond ((typep designator 'description) designator)
         ((symbolp designator) (or (gethash designator *descriptions*)
                                   (error "No description named ~S." designator)))
@@ -331,11 +351,24 @@ CALLBACK receives what is submitted.")
                      ,@(alexandria:remove-from-plist options :accessor))))))
 
 (defmacro define-description (name fields &key validate)
-  "Describe the objects of class NAME: each of FIELDS is (PROPERTY &rest
-options), options being :TYPE (see *FIELD-KINDS*), :LABEL, :REQUIRED,
-:DEFAULT, :HELP, :VALIDATE, :READ-ONLY, :IN-REPORT, :ACCESSOR or :READER and
-:WRITER, and those of the field's kind (:MAX-LENGTH, :PATTERN, :MIN, :MAX,
-:CHOICES, :LABELS).  VALIDATE checks the values together."
+  "Describe the objects of class NAME, replacing any description of that
+name, and return the DESCRIPTION.  Each of FIELDS is (PROPERTY &rest
+options).  :TYPE is the field's kind, a keyword in *FIELD-KINDS* (:STRING by
+default), and :LABEL its name on the page (by default PROPERTY,
+capitalised).  :REQUIRED makes a value necessary; :DEFAULT is the value an
+editor starts from when the object has none; :HELP is a line shown under
+the input; :VALIDATE is a function of the value returning NIL, or what is
+wrong.  :READ-ONLY fields are shown but not edited; :HIDDEN ones are
+checked by VALIDATE but never shown; :IN-REPORT NIL leaves a field out of
+DESCRIPTION-COLUMNS and data grids.  A field reads and writes the slot named
+PROPERTY, unless given :ACCESSOR (the name of a SETF-able function) or
+:READER and :WRITER (functions of OBJECT, and of VALUE and OBJECT).  The
+field's kind may take more: :MAX-LENGTH, :PATTERN and :PATTERN-MESSAGE for
+text, :MIN and :MAX for integers, :CHOICES and :LABELS for choices.  The
+options are evaluated, except :ACCESSOR.
+
+VALIDATE, a function of a plist of the values keyed by keywords, checks
+them together: it returns NIL, or what is wrong."
   `(setf (gethash ',name *descriptions*)
          (make-instance 'description
                         :name ',name
@@ -345,7 +378,8 @@ options), options being :TYPE (see *FIELD-KINDS*), :LABEL, :REQUIRED,
                                                 fields)))))
 
 (defun field-value (field object)
-  "FIELD's value in OBJECT."
+  "FIELD's value in OBJECT, through the field's reader.  SETF writes it
+through the field's writer."
   (funcall (field-reader field) object))
 
 (defun (setf field-value) (value field object)
@@ -353,12 +387,15 @@ options), options being :TYPE (see *FIELD-KINDS*), :LABEL, :REQUIRED,
   value)
 
 (defun find-field (description name)
-  "The field of DESCRIPTION for the property NAME."
+  "The field of DESCRIPTION (anything FIND-DESCRIPTION takes) for the
+property NAME, or NIL."
   (find name (description-fields (find-description description)) :key #'field-name))
 
 (defun validate (object &optional (description object))
-  "Alist of (FIELD-NAME . PROBLEM) for the fields of OBJECT that fail their
-checks, then (NIL . PROBLEM) when the values fail the description's own."
+  "What is wrong with OBJECT's stored values, by DESCRIPTION (by default its
+class's): an alist of (FIELD-NAME . PROBLEM) for the fields that fail
+CHECK-FIELD.  When they all pass but the description's own :VALIDATE does
+not, ((NIL . PROBLEM)).  NIL when all is well."
   (let* ((description (find-description description))
          (problems (loop for field in (description-fields description)
                          for problem = (check-field field (field-value field object))
@@ -388,7 +425,8 @@ checks, then (NIL . PROBLEM) when the values fail the description's own."
           :documentation "Field name → the text entered, the editor's memento.")
    (problems :initform '() :accessor editor-problems))
   (:documentation "Edits an object through its description; answers the
-object on Save (after writing the values back) and NIL on Cancel."))
+object on Save (after writing the values back) and NIL on Cancel.  Make one
+with MAKE-EDITOR."))
 
 (defmethod initialize-instance :after ((self description-editor) &key)
   (dolist (field (description-fields (editor-description self)))
@@ -400,13 +438,26 @@ object on Save (after writing the values back) and NIL on Cancel."))
   (list self (editor-texts self)))
 
 (defun make-editor (object &key (description object) title (save-label "Save") (write t))
-  "An editor for OBJECT, described by DESCRIPTION (default: by its class).
-On Save it writes the values to OBJECT and answers it; with WRITE NIL it
-leaves OBJECT alone and answers the values as a plist keyed by field name
+  "A DESCRIPTION-EDITOR for OBJECT, described by DESCRIPTION (anything
+FIND-DESCRIPTION takes; by default OBJECT's class), headed by TITLE when
+given, its submit button labelled SAVE-LABEL (translated).  Save parses and
+checks every field that is neither read-only nor hidden, then the
+description's own check, and shows the problems beside the inputs; once
+they pass it writes the values to OBJECT and answers it.  With WRITE NIL it
+leaves OBJECT alone and answers those values as a plist keyed by field name
 keywords, for objects shared between sessions that the application changes
-under its own lock."
+under its own lock.  Cancel answers NIL."
   (make-instance 'description-editor :object object :description (find-description description)
                                      :title title :save-label save-label :write write))
+
+(defun kept-password (field object text)
+  "True, and the stored value, when FIELD is a password field left blank
+(TEXT) on an OBJECT that has one: the input starts empty, so a blank
+means \"unchanged\", not \"none\"."
+  (when (and (typep field 'password-field) object
+             (string= "" (string-trim " " (or text ""))))
+    (let ((stored (ignore-errors (field-value field object))))
+      (when stored (values t stored)))))
 
 (defun editor-values (editor)
   "Parse every field's text: an alist of (FIELD . VALUE) and an alist of
@@ -414,13 +465,17 @@ under its own lock."
   (let ((values '()) (problems '()))
     (dolist (field (description-fields (editor-description editor)))
       (unless (or (field-read-only-p field) (field-hidden-p field))
-        (handler-case
-            (let* ((value (parse-field field (gethash (field-name field) (editor-texts editor))))
-                   (problem (check-field field value)))
-              (if problem
-                  (push (cons (field-name field) problem) problems)
-                  (push (cons field value) values)))
-          (field-error (e) (push (cons (field-name field) (field-error-message e)) problems)))))
+        (let ((text (gethash (field-name field) (editor-texts editor))))
+          (multiple-value-bind (kept stored) (kept-password field (editor-object editor) text)
+            (if kept
+                (push (cons field stored) values)
+                (handler-case
+                    (let* ((value (parse-field field text))
+                           (problem (check-field field value)))
+                      (if problem
+                          (push (cons (field-name field) problem) problems)
+                          (push (cons field value) values)))
+                  (field-error (e) (push (cons (field-name field) (field-error-message e)) problems))))))))
     (values (nreverse values) (nreverse problems))))
 
 (defun save-editor (editor)
@@ -488,10 +543,13 @@ keep the problems to show."
 (defclass description-viewer (component)
   ((object :initarg :object :reader viewer-object)
    (description :initarg :description :reader viewer-description))
-  (:documentation "Shows an object's described values; answers on Close."))
+  (:documentation "Shows an object's described values in a table, except
+password and hidden fields, with a Close link that answers NIL.  Make one
+with MAKE-VIEWER."))
 
 (defun make-viewer (object &key (description object))
-  "A read-only view of OBJECT, described by DESCRIPTION."
+  "A DESCRIPTION-VIEWER of OBJECT, described by DESCRIPTION (anything
+FIND-DESCRIPTION takes; by default OBJECT's class)."
   (make-instance 'description-viewer :object object :description (find-description description)))
 
 (defmethod render ((self description-viewer))
@@ -503,8 +561,11 @@ keep the problems to show."
   (p () (anchor (:callback (lambda () (answer self))) (translate "Close"))))
 
 (defun description-columns (description &rest names)
-  "REPORT columns for DESCRIPTION's fields: those named in NAMES, or every
-field shown in reports."
+  "REPORT columns for DESCRIPTION's fields: those named in NAMES, in that
+order, or else every field neither hidden nor :IN-REPORT NIL.  Password
+fields are always left out.  Each column writes its value with
+RENDER-FIELD-VALUE and sorts by it (dates by their text); integer columns
+get the CSS class \"number\"."
   (let ((description (find-description description)))
     (loop for field in (if names
                            (mapcar (lambda (n) (find-field description n)) names)

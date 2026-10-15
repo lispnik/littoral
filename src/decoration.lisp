@@ -4,7 +4,7 @@
 
 (defun add-decoration (component decoration)
   "Add DECORATION to COMPONENT, outermost among those of its kind.
-Globals come first, then any delegation, then locals."
+Globals come first, then any delegation, then locals.  Returns DECORATION."
   (let* ((order '(:global :delegation :local))
          (rank (position (decoration-kind decoration) order))
          (chain (decorations component))
@@ -46,7 +46,8 @@ its answer."))
 
 (defun show (self other &key on-answer)
   "Show OTHER in place of SELF until OTHER answers, then call ON-ANSWER
-with the answer.  Returns OTHER at once: the non-blocking form of CALL."
+(when given) with the answer.  Returns OTHER at once: the non-blocking form
+of CALL.  Signals RENDER-PHASE-ERROR while rendering."
   (signal-if-rendering 'show)
   (let ((delegation (make-instance 'delegation :delegate other)))
     (add-decoration self delegation)
@@ -84,7 +85,9 @@ use SHOW with :ON-ANSWER there to act on it.")
 
 (defun answer (self &optional value)
   "Return control, with VALUE, to the component that called SELF.
-Validation decorations on SELF may refuse the answer."
+Validation decorations on SELF may refuse the answer.  True when a caller
+was given VALUE; NIL when a validation refused it or nothing called SELF.
+Signals RENDER-PHASE-ERROR while rendering."
   (signal-if-rendering 'answer)
   (dolist (d (decorations self))
     (when (validate-answer d value)
@@ -98,7 +101,8 @@ Validation decorations on SELF may refuse the answer."
       t)))
 
 (defun home (self)
-  "Dismiss whatever SELF has called, without answering."
+  "Dismiss whatever SELF has called, without answering, so SELF shows
+itself again.  Signals RENDER-PHASE-ERROR while rendering."
   (signal-if-rendering 'home)
   (setf (decorations self)
         (remove-if (lambda (d) (typep d 'delegation)) (decorations self))))
@@ -137,7 +141,8 @@ behind it but cannot be used until the dialog answers."))
 (defun show-modal (other &key on-answer (closable t) title)
   "Show OTHER in a dialog over the whole page until it answers, then call
 ON-ANSWER with the answer.  CLOSABLE adds a close button (and Esc), which
-answers NIL; TITLE names the dialog for screen readers."
+answers NIL; TITLE names the dialog for screen readers.  Use it during a
+request: the dialog covers *SESSION*'s root.  Returns OTHER at once."
   (let* ((root (session-root *session*))
          (modal (make-instance 'modal-decoration :dialog other :closable closable :title title)))
     (signal-if-rendering 'show-modal)
@@ -156,7 +161,8 @@ blocking call inside a flow, like CALL."
 ;; DEFUN/CC drops docstrings.
 (setf (documentation 'call-modal 'function)
       "Show OTHER in a dialog over the page and return what it answers; a
-blocking call inside a flow, like CALL.  TITLE names the dialog.")
+blocking call inside a flow, like CALL.  The optional second argument,
+TITLE, names the dialog for screen readers.  See SHOW-MODAL.")
 
 ;;; Toasts
 
@@ -191,7 +197,7 @@ AJAX response, or at once on pages with a push stream.  KIND is :INFO,
 
 (defclass message-decoration (decoration)
   ((message :initarg :message :accessor decoration-message))
-  (:documentation "A heading above the component."))
+  (:documentation "A heading above the component: its :MESSAGE, in an h3."))
 
 (defmethod render-decoration ((decoration message-decoration) component)
   (declare (ignore component))
@@ -202,8 +208,9 @@ AJAX response, or at once on pages with a push stream.  KIND is :INFO,
   ((buttons :initarg :buttons :initform '(("OK" . :ok)) :reader decoration-buttons
             :documentation "Alist of (LABEL . ACTION).  An ACTION that is a
 function is called with the component; any other value is answered."))
-  (:documentation "Puts the component in a form with a row of buttons, the
-way Seaside's WAFormDecoration does."))
+  (:documentation "Puts the component in a form with a row of :BUTTONS, the
+way Seaside's WAFormDecoration does.  The default is one OK button
+answering :OK."))
 
 (defmethod render-decoration ((decoration form-decoration) component)
   (form (:class "lt-form-decoration")
@@ -234,6 +241,7 @@ way Seaside's WAFormDecoration does."))
 
 (defun validate-with (component validator)
   "Answers from COMPONENT must first pass VALIDATOR, a function of the
-answer returning NIL to accept or an error message to refuse."
+answer returning NIL to accept or an error message to refuse.  The message
+is shown above COMPONENT until an answer passes.  Returns COMPONENT."
   (add-decoration component (make-instance 'validation-decoration :validator validator))
   component)

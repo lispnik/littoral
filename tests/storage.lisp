@@ -122,6 +122,8 @@
              (attach-file b "picture" "notes.txt" "text/plain" (sb-ext:string-to-octets "just text"))
              (press b "Upload")
              (is (has-text-p b "Picture must be a PNG, JPEG, GIF or WebP image."))
+             ;; A refused upload is never stored.
+             (is (null (uiop:directory-files (littoral.storage::storage-directory littoral.storage:*storage*))))
              ;; An image: kept, with a thumbnail shown.
              (attach-file b "picture" "beach.png" "image/png" (png-octets 600 400))
              (press b "Upload")
@@ -147,7 +149,7 @@
       (is (search "X-Amz-Signature=aeeed9bbccd4d02ee5c0109b86d86835f995330da4c265957d157751f604d404" url) url))))
 
 (test s3-storage-against-a-server
-  ;; Runs when LITTORAL_TEST_S3 names an S3-compatible server (CI runs MinIO).
+  ;; Runs when LITTORAL_TEST_S3 names an S3-compatible server (CI runs RustFS).
   (let ((endpoint (uiop:getenv "LITTORAL_TEST_S3")))
     (if (null endpoint)
         (skip "LITTORAL_TEST_S3 is not set")

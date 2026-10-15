@@ -88,7 +88,9 @@ shared structure and cycles are kept."
     (mapcar (lambda (entry) (cons (first entry) (deep-copy (rest entry) seen))) saved)))
 
 (defun take-snapshot (root)
-  "Capture the state of everything visible from ROOT."
+  "Capture the state of everything visible from ROOT: the slots of each
+object the visible components' STATES name, and the decorations of every
+visible component.  Returns a SNAPSHOT."
   (let ((entries '())
         (seen (make-hash-table :test 'eq)))
     (flet ((note (object saved)

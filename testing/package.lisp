@@ -13,7 +13,7 @@
    #:page-text #:body-text #:has-text-p #:find-link #:find-links #:element-name #:form-action
    #:attributes #:attr #:unescape #:strip-tags
    ;; Acting on it
-   #:click #:click-nth #:fill-in #:set-checkbox #:select-option #:attach-file #:press
+   #:click #:click-nth #:fill-in #:set-checkbox #:select-option #:choose-radio #:attach-file #:press
    #:encode-fields
    ;; AJAX and server push
    #:ajax-request #:ajax-specs #:sink #:sink-text #:open-stream #:wait-for

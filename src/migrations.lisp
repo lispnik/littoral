@@ -59,8 +59,12 @@ Put it in a new migration instead." (migration-changed-file c) (migration-change
         #'string< :key #'car))
 
 (defun define-migrations (name directory)
-  "Define the migrations NAME (a keyword) as the .sql files in DIRECTORY,
-read now so that an executable saved later carries them."
+  "Define the migrations NAME (a keyword) as the .sql files in DIRECTORY:
+each NNN-description.sql, or NNN-description.sqlite.sql and .postgres.sql
+for one driver.  The files are read now, so that an executable saved later
+carries them, and read again by MIGRATE while DIRECTORY exists.  Defining
+NAME again replaces it.  Signals an error when DIRECTORY doesn't exist.
+Returns NAME."
   (let ((directory (uiop:ensure-directory-pathname directory)))
     (unless (uiop:directory-exists-p directory)
       (error "No migrations directory ~A for ~S." directory name))
@@ -233,8 +237,9 @@ name TEXT, checksum TEXT, applied BIGINT, PRIMARY KEY (component, version))"))
 DEFINE-MIGRATIONS) to the current database, in order; the (NAME VERSION
 FILE) of each applied.  Signals MIGRATION-ERROR when one fails, having
 rolled it back, and MIGRATION-CHANGED (a warning) for an applied file that
-has since changed.  /metrics then reports how many of their migrations the
-database lacks."
+has since changed.  Signals an error when a set isn't defined, or its files
+are misnamed, numbered twice, or lack a version for this driver.  /metrics
+then reports how many of their migrations the database lacks."
   (ensure-migrations-table)
   (note-migrated names)
   (loop for name in names
@@ -275,7 +280,8 @@ applied without running them, for a database that already has their tables."
         (record-migration name migration)))))
 
 (defun forget-migrations (name)
-  "Forget which of NAME's migrations were applied, as when its tables are dropped."
+  "Forget which of NAME's migrations the current database has applied, as
+when its tables are dropped, so that MIGRATE applies them all again."
   (sb-thread:with-mutex (*migrated-lock*)
     (let ((entry (assoc *database* *migrated* :test #'equal)))
       (when entry (setf (cdr entry) (remove name (cdr entry))))))

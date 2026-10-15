@@ -10,7 +10,9 @@
    (selected :initarg :selected :initform 0 :accessor panel-selected
              :documentation "Index of the tab shown."))
   (:documentation "Shows one of several components, chosen by a row of tabs,
-like Seaside's WATabPanel."))
+like Seaside's WATabPanel.  :TABS is an alist of (LABEL . COMPONENT), the
+labels translated when shown; :SELECTED is the index of the tab shown first
+(0 by default).  The current tab is not a link."))
 
 (defclass navigation (tab-panel) ()
   (:documentation "A TAB-PANEL drawn as a menu beside its content, like
@@ -28,7 +30,8 @@ Seaside's WASimpleNavigation."))
     (and tab (list tab))))
 
 (defun select-tab (panel label)
-  "Show the tab of PANEL labelled LABEL."
+  "Show the tab of PANEL labelled LABEL (compared with EQUAL), and return
+its index; when no tab has that label, change nothing and return NIL."
   (let ((index (position label (panel-tabs panel) :key #'first :test #'equal)))
     (when index (setf (panel-selected panel) index))))
 
@@ -68,8 +71,13 @@ Seaside's WASimpleNavigation."))
               :documentation "Function called with an item when its label is clicked.")
    (expanded :initform '() :accessor tree-expanded
              :documentation "The items whose children show.  Replaced, never changed in place.")
-   (selected :initform nil :accessor tree-selected))
-  (:documentation "Items in a hierarchy, each expandable, like Seaside's WATree."))
+   (selected :initform nil :accessor tree-selected
+             :documentation "The item whose label was clicked last, or NIL."))
+  (:documentation "Items in a hierarchy, each expandable, like Seaside's WATree.
+:ROOTS are the top-level items and :CHILDREN a function of an item giving
+its child items (NIL for none).  :LABELS, a function of an item, gives the
+text shown (PRINC-TO-STRING by default).  Clicking a label selects the item
+and calls :ON-SELECT, when given, with it.  Items are compared with EQL."))
 
 (defmethod states ((self tree))
   (list self))
@@ -103,8 +111,8 @@ Seaside's WASimpleNavigation."))
           (if kids
               (anchor (:class "lt-tree-toggle" :title (if open (translate "Collapse") (translate "Expand"))
                        :aria-expanded (if open "true" "false")
-                       :aria-label (format nil "~:[Expand~;Collapse~] ~A" open
-                                           (funcall (tree-label-function tree) item))
+                       :aria-label (let ((label (funcall (tree-label-function tree) item)))
+                                     (if open (translate "Collapse ~A" label) (translate "Expand ~A" label)))
                        :callback (lambda () (toggle-item tree item)))
                 (text (if open "▾" "▸")))
               (span (:class "lt-tree-leaf") "·"))
@@ -128,7 +136,8 @@ Seaside's WASimpleNavigation."))
   (:documentation "The suggestions under an AUTOCOMPLETE's input."))
 
 (defclass autocomplete (component updatable)
-  ((value :initarg :value :initform "" :accessor autocomplete-value)
+  ((value :initarg :value :initform "" :accessor autocomplete-value
+          :documentation "The text in the field.")
    (suggest :initarg :suggest :reader autocomplete-suggest
             :documentation "Function of the text typed giving a list of suggestions.")
    (label-function :initarg :labels :initform #'princ-to-string :reader autocomplete-labels)
@@ -140,7 +149,14 @@ Seaside's WASimpleNavigation."))
    (placeholder :initarg :placeholder :initform nil :reader autocomplete-placeholder)
    (input-id :initarg :input-id :initform nil :reader autocomplete-input-id)
    (suggestions :reader autocomplete-list))
-  (:documentation "A text field suggesting completions as you type."))
+  (:documentation "A text field suggesting completions as you type, over
+AJAX.  :SUGGEST is a function of the text typed (trimmed) returning a list
+of suggestions; it is called once :MINIMUM characters are typed (1 by
+default), and the first :LIMIT suggestions (8) are shown, through :LABELS (a
+function of a suggestion; PRINC-TO-STRING by default).  Choosing one puts
+its label in the field and calls :ON-CHOOSE, when given, with it.  :VALUE is
+the starting text, :INPUT-ID the input's element id and :PLACEHOLDER its
+placeholder.  The field's text is submitted with its form, like any input."))
 
 (defmethod initialize-instance :after ((self autocomplete) &key)
   (setf (slot-value self 'suggestions) (make-instance 'suggestion-list :field self)))
@@ -170,7 +186,7 @@ Seaside's WASimpleNavigation."))
          (suggestions (current-suggestions field)))
     (when suggestions
       (span (:class "lt-visually-hidden")
-        (text (format nil "~D suggestion~:P." (length suggestions))))
+        (text (translate-plural (length suggestions) "~D suggestion." "~D suggestions.")))
       (ul (:class "lt-suggestions")
         (dolist (suggestion suggestions)
           (let ((suggestion suggestion))
@@ -195,13 +211,16 @@ Seaside's WASimpleNavigation."))
 ;;; Sortable list
 
 (defclass sortable-list (component updatable)
-  ((items :initarg :items :initform '() :accessor sortable-items)
+  ((items :initarg :items :initform '() :accessor sortable-items
+          :documentation "The items, in their current order.")
    (render-item :initarg :render-item :initform (lambda (item) (text item)) :reader sortable-renderer
                 :documentation "Function writing one item.")
    (on-reorder :initarg :on-reorder :initform nil :reader sortable-on-reorder
                :documentation "Function called with the new list after every move."))
-  (:documentation "A list the user can reorder by dragging, or with the
-up and down buttons beside each item (which work without JavaScript)."))
+  (:documentation "A list of :ITEMS the user can reorder by dragging, or with
+the up and down links beside each item (which work without JavaScript).
+:RENDER-ITEM, a function of an item, writes it (as text by default), and
+:ON-REORDER is called with the new list after every move."))
 
 (defmethod states ((self sortable-list))
   (list self))
@@ -212,7 +231,9 @@ up and down buttons beside each item (which work without JavaScript)."))
     (funcall (sortable-on-reorder list) (sortable-items list))))
 
 (defun move-item (list from to)
-  "Move the item at FROM to position TO in LIST."
+  "Move the item at position FROM to position TO in LIST, a SORTABLE-LIST,
+counting from 0, and call its ON-REORDER.  Does nothing when either is out
+of range or they are the same."
   (let* ((items (sortable-items list))
          (count (length items)))
     (when (and (< -1 from count) (< -1 to count) (/= from to))
@@ -263,7 +284,9 @@ browser sends after a drag.  Anything malformed is ignored."
   ((languages :initarg :languages :initform nil :reader chooser-languages
               :documentation "Codes to offer; NIL for the application's."))
   (:documentation "Links to show the session in each language offered,
-each named in its own language; the current one is not a link."))
+each named in its own language; the current one is not a link.  :LANGUAGES
+lists the codes to offer; by default the application's LANGUAGE and
+LANGUAGES."))
 
 (defmethod render ((self language-chooser))
   (let ((current (current-language)))

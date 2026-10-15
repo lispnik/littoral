@@ -25,7 +25,10 @@
 
 (defpackage #:littoral.db
   (:use #:cl #:littoral #:littoral.html)
-  (:documentation "Keep described objects in a SQL database.")
+  (:documentation "Load with `(asdf:load-system :littoral/db)` and a cl-dbi driver, such as
+`:dbd-sqlite3` or `:dbd-postgres`.  Keeps described objects in a SQL database
+(SQLite or PostgreSQL): tables, queries, full-text search, transactions,
+optimistic locking and migrations.")
   (:export #:connect-database #:disconnect-database #:database-connection #:*database*
            #:*sqlite-busy-timeout* #:*sqlite-journal-mode* #:*sqlite-synchronous* #:database-label
            #:persistent #:object-id #:object-version
@@ -44,11 +47,18 @@
 
 (defvar *database* nil
   "The arguments of the last CONNECT-DATABASE: a driver keyword and its
-connection parameters, as DBI:CONNECT takes them.")
+connection parameters, as cl-dbi's CONNECT takes them; NIL for none.  Binding it
+uses another database for a while (see also USING-DATABASE).")
 
 (defun connect-database (driver &rest parameters)
-  "Use the database DRIVER (:sqlite3, :postgres) reaches with PARAMETERS.
-Each thread gets its own connection, made when first needed."
+  "Use the database DRIVER (:sqlite3, :postgres) reaches with PARAMETERS,
+as cl-dbi's CONNECT takes them (:DATABASE-NAME, and :HOST, :PORT, :USERNAME and
+:PASSWORD for PostgreSQL).  For SQLite, PARAMETERS may also give
+:BUSY-TIMEOUT, :JOURNAL-MODE and :SYNCHRONOUS (see *SQLITE-BUSY-TIMEOUT*,
+*SQLITE-JOURNAL-MODE* and *SQLITE-SYNCHRONOUS*).
+Sets *DATABASE*, for every thread that doesn't bind it, and returns this
+thread's connection.  Each thread gets its own connection, made when first
+needed."
   (setf *database* (cons driver parameters))
   (database-connection))
 
@@ -122,7 +132,8 @@ and with the busy timeout."
   "SQLite connections whose pragmas are set.")
 
 (defun database-connection ()
-  "This thread's connection to *DATABASE*."
+  "This thread's connection to *DATABASE*, made the first time it is
+needed.  Signals an error when *DATABASE* is NIL."
   (unless *database*
     (error "No database: call CONNECT-DATABASE first."))
   (let ((connection (apply #'dbi:connect-cached (connection-arguments *database*))))
@@ -174,7 +185,8 @@ name, or a PostgreSQL server's host, port and database."
                 (getf parameters :port) (getf parameters :database-name)))))
 
 (defun disconnect-database ()
-  "Forget the database (connections close as their threads end)."
+  "Forget the database: *DATABASE* becomes NIL.  Connections already made
+stay open until their threads end (DBI closes them when it next connects)."
   (setf *database* nil))
 
 (defun driver ()
@@ -191,12 +203,16 @@ name, or a PostgreSQL server's host, port and database."
   (:documentation "Mixin for objects kept in a table."))
 
 (define-condition stale-object (error)
-  ((object :initarg :object :reader stale-object-object))
+  ((object :initarg :object :reader stale-object-object
+           :documentation "The object whose save or delete was refused."))
   (:report (lambda (condition stream)
              (format stream "~A was changed or deleted by someone else since it was read."
                      (stale-object-object condition))))
   (:documentation "Signalled when saving or deleting an object whose row has
 changed (or gone) since the object was read."))
+
+(setf (documentation 'stale-object-object 'function)
+      "The object whose save or delete STALE-OBJECT refused.")
 
 ;;; Tables
 
@@ -215,9 +231,11 @@ changed (or gone) since the object was read."))
   (substitute #\_ #\- (string-downcase (symbol-name symbol))))
 
 (defmacro define-table (class &key name description search)
-  "Keep objects of CLASS (a PERSISTENT class with a description) in the
-table NAME (default: the class name), with DESCRIPTION's fields as columns.
-SEARCH names text fields to keep in a full-text index, for DB-SEARCH."
+  "Keep objects of CLASS (a PERSISTENT class) in the table NAME (a string;
+by default the class name, lower case, with underscores for dashes), with a
+column for each field of the description DESCRIPTION names (by default
+CLASS), which must be defined first.  SEARCH names text fields to keep in a
+full-text index, for DB-SEARCH.  CREATE-TABLE makes the table."
   `(setf (gethash ',class *tables*)
          (make-instance 'table :class ',class
                                :name ,(or name (sql-name class))
@@ -225,7 +243,8 @@ SEARCH names text fields to keep in a full-text index, for DB-SEARCH."
                                :search ',search)))
 
 (defun find-table (designator)
-  "The table of DESIGNATOR, a class name or an object."
+  "The table of DESIGNATOR, a class name or an object.  Signals an error
+when DEFINE-TABLE hasn't defined one."
   (or (gethash (if (symbolp designator) designator (class-name (class-of designator))) *tables*)
       (error "No table for ~S: use DEFINE-TABLE." designator)))
 
@@ -289,7 +308,8 @@ SEARCH names text fields to keep in a full-text index, for DB-SEARCH."
 (defmethod sql-type ((field reference-field)) "BIGINT")
 
 (defun object-label (object)
-  "How OBJECT is named in choices and links: its first string field."
+  "How OBJECT is named in choices and links: the value of its first string
+field, or \"#ID\" when it has none or that value is NIL."
   (let* ((table (find-table object))
          (field (find-if (lambda (f) (typep f 'string-field)) (description-fields (table-description table)))))
     (if field
@@ -358,7 +378,10 @@ column name (\"login\" → :|login|), NULL as NIL."
   (execute-count sql parameters))
 
 (defun create-table (class)
-  "Create CLASS's table unless it exists."
+  "Create CLASS's table unless it exists, with the columns id, version and
+one for each field, and its full-text index if it has search fields.  An
+existing table is left as it is, columns and all: change it with a
+migration (see DEFINE-MIGRATIONS).  Returns CLASS."
   (let ((table (find-table class)))
     (execute-count
      (format nil "CREATE TABLE IF NOT EXISTS ~A (id ~A, version INTEGER NOT NULL DEFAULT 0~{, ~A~})"
@@ -440,8 +463,19 @@ parameters, for DB-SELECT; NIL when QUERY has no words."
                           (table-name table) (table-name table)))
               (list (search-query words))))))
 
+(defun limit-clause (limit offset)
+  "SQL ending a SELECT so it skips OFFSET rows and returns at most LIMIT,
+either of them NIL.  SQLite takes an OFFSET only after a LIMIT, of -1 for
+none."
+  (format nil "~:[~; LIMIT ~:*~D~]~@[ OFFSET ~D~]"
+          (or limit (and offset (not (eq (driver) :postgres)) -1))
+          offset))
+
 (defun db-search (class query &key limit offset)
-  "CLASS's objects that QUERY finds in its search fields, the best first."
+  "CLASS's objects that QUERY finds in its search fields (DEFINE-TABLE's
+:SEARCH), the best first, at most LIMIT of them after skipping OFFSET.  Each of QUERY's words (letters and digits,
+the first ten) matches words starting with it, and all are required; NIL
+when QUERY has no words.  Signals an error when CLASS has no search fields."
   (let* ((table (find-table class))
          (words (search-words query))
          (name (table-name table)))
@@ -451,11 +485,11 @@ parameters, for DB-SELECT; NIL when QUERY has no words."
       (mapcar (lambda (row) (object-from-row table row))
               (execute (if (eq (driver) :postgres)
                            (format nil "SELECT * FROM ~A WHERE ~A @@ to_tsquery('simple', ?) ~
-ORDER BY ts_rank(~A, to_tsquery('simple', ?)) DESC, id~@[ LIMIT ~D~]~@[ OFFSET ~D~]"
-                                   name (search-document table) (search-document table) limit (and limit offset))
+ORDER BY ts_rank(~A, to_tsquery('simple', ?)) DESC, id~A"
+                                   name (search-document table) (search-document table) (limit-clause limit offset))
                            (format nil "SELECT ~A.* FROM ~A JOIN ~A_search ON ~A_search.rowid = ~A.id ~
-WHERE ~A_search MATCH ? ORDER BY bm25(~A_search), ~A.id~@[ LIMIT ~D~]~@[ OFFSET ~D~]"
-                                   name name name name name name name name limit (and limit offset)))
+WHERE ~A_search MATCH ? ORDER BY bm25(~A_search), ~A.id~A"
+                                   name name name name name name name name (limit-clause limit offset)))
                        (if (eq (driver) :postgres)
                            (list (search-query words) (search-query words))
                            (list (search-query words))))))))
@@ -506,13 +540,13 @@ TEXT that start with one of QUERY's words."
 order (SQL, default by id), at most LIMIT of them after skipping OFFSET."
   (let ((table (find-table class)))
     (mapcar (lambda (row) (object-from-row table row))
-            (execute (format nil "SELECT * FROM ~A~@[ WHERE ~A~] ORDER BY ~A~@[ LIMIT ~D~]~@[ OFFSET ~D~]"
-                             (table-name table) where (or order-by "id") limit
-                             (and limit offset))
+            (execute (format nil "SELECT * FROM ~A~@[ WHERE ~A~] ORDER BY ~A~A"
+                             (table-name table) where (or order-by "id") (limit-clause limit offset))
                      params))))
 
 (defun db-count (class &key where params)
-  "How many objects of CLASS WHERE holds."
+  "How many objects of CLASS WHERE (SQL with ? for PARAMS) holds; all of
+them without WHERE."
   (let ((row (first (execute (format nil "SELECT COUNT(*) AS n FROM ~A~@[ WHERE ~A~]"
                                      (table-name (find-table class)) where)
                              params))))
@@ -523,7 +557,7 @@ order (SQL, default by id), at most LIMIT of them after skipping OFFSET."
   (mapcar (lambda (f) (to-sql f (field-value f object))) (table-fields table)))
 
 (defun db-insert (object)
-  "Store OBJECT as a new row; it gets its id.  Returns OBJECT."
+  "Store OBJECT as a new row; it gets its id, and version 0.  Returns OBJECT."
   (let* ((table (find-table object))
          (fields (table-fields table))
          (row (first (execute (format nil "INSERT INTO ~A (version~{, ~A~}) VALUES (0~{, ~A~}) RETURNING id"
@@ -535,8 +569,9 @@ order (SQL, default by id), at most LIMIT of them after skipping OFFSET."
     object))
 
 (defun db-update (object)
-  "Write OBJECT's fields to its row.  Signals STALE-OBJECT when the row
-changed since OBJECT was read.  Returns OBJECT."
+  "Write OBJECT's fields to its row and add one to its version.  Signals
+STALE-OBJECT when the row changed (or went) since OBJECT was read.  Returns
+OBJECT."
   (let* ((table (find-table object))
          (fields (table-fields table))
          (changed (execute-count
@@ -551,12 +586,14 @@ changed since OBJECT was read.  Returns OBJECT."
     object))
 
 (defun db-save (object)
-  "Insert OBJECT if it is new, else update it."
+  "Insert OBJECT if it has no id yet (DB-INSERT), else update its row
+(DB-UPDATE, which signals STALE-OBJECT when someone else changed it).
+Returns OBJECT."
   (if (object-id object) (db-update object) (db-insert object)))
 
 (defun db-delete (object)
-  "Delete OBJECT's row.  Signals STALE-OBJECT when the row changed since
-OBJECT was read."
+  "Delete OBJECT's row; OBJECT's id becomes NIL.  Signals STALE-OBJECT
+when the row changed (or went) since OBJECT was read.  Returns OBJECT."
   (let ((changed (execute-count (format nil "DELETE FROM ~A WHERE id = ? AND version = ?"
                                         (table-name (find-table object)))
                                 (list (object-id object) (object-version object)))))
@@ -576,8 +613,9 @@ OBJECT was read."
   "The database spec whose transaction is open in this thread, or NIL.")
 
 (defmacro with-transaction (() &body body)
-  "Run BODY in a transaction: committed if it returns, rolled back if it
-signals.  Inside another, just BODY."
+  "Run BODY in a transaction on *DATABASE*: committed if it returns, rolled
+back if it signals.  Inside another on the same database, just BODY.
+Returns BODY's value."
   `(call-with-transaction (lambda () ,@body)))
 
 (defun call-with-transaction (thunk)

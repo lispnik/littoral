@@ -31,7 +31,12 @@
    (problems :initform '() :accessor grid-problems))
   (:documentation "A table of a description's objects: a filter box per column,
 sorting by column, paging, and editing a row in place with the description's
-own inputs and validation."))
+own inputs and validation.  :DESCRIPTION names the description (anything
+FIND-DESCRIPTION takes) and :ROWS gives the objects (a list, or a function
+returning one, called on every render).  :FIELDS lists the field names to
+show; by default those in reports, without password fields.  :PAGE-SIZE is
+the rows per page (10).  After an edit is written to an object, :ON-SAVE is
+called with it.  Filtering, sorting and paging go over AJAX."))
 
 (defmethod states ((self data-grid)) (list self))
 
@@ -197,7 +202,11 @@ screen readers (and anyone who opens it)."
             (tr () (th () (text (first row))) (dolist (cell (rest row)) (td () (text cell))))))))))
 
 (defun bar-chart (data &key (title "") (width 480) (height 220) (format-value #'princ-to-string))
-  "Write a bar chart of DATA, a list of (LABEL . VALUE), as accessible SVG."
+  "Write a bar chart of DATA, a list of (LABEL . VALUE) with VALUE a
+non-negative number, as accessible SVG: a figure captioned by TITLE, each
+bar titled with its label and value, and the data as a table for screen
+readers.  FORMAT-VALUE, a function of a number, writes the values and the
+axis.  WIDTH and HEIGHT are in SVG units; the chart scales to fit."
   (let* ((top (max 1 (reduce #'max data :key #'cdr :initial-value 0)))
          (step (nice-step top 4))
          (top (* step (ceiling top step)))
@@ -227,7 +236,10 @@ screen readers (and anyone who opens it)."
 
 (defun line-chart (series &key (title "") (width 480) (height 220) x-labels (format-value #'princ-to-string))
   "Write a line chart of SERIES, a list of (NAME . VALUES), the values all
-the same length, as accessible SVG.  X-LABELS name the points."
+the same length and non-negative, as accessible SVG, like BAR-CHART: a
+figure captioned by TITLE, with the data as a table.  X-LABELS name the
+points; FORMAT-VALUE writes the values and the axis.  More than one series
+gets a legend."
   (let* ((count (reduce #'max series :key (lambda (s) (length (rest s))) :initial-value 0))
          (top (max 1 (reduce #'max (mapcan (lambda (s) (copy-list (rest s))) series) :initial-value 0)))
          (step (nice-step top 4))
@@ -266,13 +278,14 @@ the same length, as accessible SVG.  X-LABELS name the points."
            (format out "</svg>")))))))
 
 (defun sparkline (values &key (label "") (width 120) (height 28))
-  "Write a small line of VALUES, with LABEL for screen readers."
+  "Write a small line of VALUES, non-negative numbers, as SVG WIDTH by
+HEIGHT pixels, with LABEL for screen readers.  No axes, no figure."
   (let* ((top (max 1 (reduce #'max values :initial-value 0)))
          (count (length values)))
     (raw (format nil "<svg class=\"lt-sparkline\" width=\"~D\" height=\"~D\" viewBox=\"0 0 ~D ~D\" role=\"img\" aria-label=\"~A\"><polyline points=\"~{~A~^ ~}\"/></svg>"
                  width height width height (html-escape label)
                  (loop for v in values for i from 0
-                       collect (format nil "~A,~A" (svg-number (if (> count 1) (* (- width 2) (/ i (1- count))) 1))
+                       collect (format nil "~A,~A" (svg-number (if (> count 1) (+ 1 (* (- width 2) (/ i (1- count)))) 1))
                                        (svg-number (+ 1 (* (- height 2) (- 1 (/ (max 0 v) top)))))))))))
 
 ;;; A month calendar
@@ -286,14 +299,19 @@ the same length, as accessible SVG.  X-LABELS name the points."
                          0)))
 
 (defclass calendar (component)
-  ((year :initarg :year :initform nil :accessor calendar-year)
-   (month :initarg :month :initform nil :accessor calendar-month)
+  ((year :initarg :year :initform nil :accessor calendar-year
+         :documentation "The year of the month shown.")
+   (month :initarg :month :initform nil :accessor calendar-month
+          :documentation "The month shown, 1 to 12.")
    (events :initarg :events :initform '() :reader calendar-events-designator
            :documentation "(DATE . TITLE) pairs, DATE as (YEAR MONTH DAY): a list, or a function returning one.")
    (on-select :initarg :on-select :initform nil :reader calendar-on-select
               :documentation "Called with the (YEAR MONTH DAY) chosen, or NIL for none to choose."))
   (:documentation "A month of days, Monday first, with their events, and links
-to the months before and after."))
+to the months before and after.  :YEAR and :MONTH (1 to 12) say which month
+to show first, by default the current one.  :EVENTS are (DATE . TITLE)
+pairs, DATE as (YEAR MONTH DAY): a list, or a function returning one.  With
+:ON-SELECT each day is a link calling it with that day's date."))
 
 (defmethod initialize-instance :after ((self calendar) &key)
   (multiple-value-bind (s m h day month year) (decode-universal-time (get-universal-time))
@@ -354,12 +372,18 @@ to the months before and after."))
    (on-move :initarg :on-move :initform nil :reader kanban-on-move
             :documentation "Called with ITEM, the titles of the columns it left and joined, and its new position."))
   (:documentation "Columns of cards to drag between, or move with the arrow
-buttons on each card (which work without JavaScript or a mouse)."))
+links on each card (which work without JavaScript or a mouse).  :COLUMNS is
+a list of (TITLE . ITEMS); :RENDER-CARD, a function of an item, writes a
+card (as text by default); :ON-MOVE is called after every move with the
+item, the titles of the columns it left and joined, and its new position."))
 
 (defmethod states ((self kanban)) (list self))
 
 (defun move-card (board from-column from-index to-column to-index)
-  "Move the card at FROM-INDEX of FROM-COLUMN to TO-INDEX of TO-COLUMN; NIL if out of range."
+  "Move the card at position FROM-INDEX of column FROM-COLUMN to position
+TO-INDEX of column TO-COLUMN, all counting from 0, and call BOARD's ON-MOVE.
+TO-INDEX is kept in range.  Returns T, or NIL, moving nothing, when a column
+or FROM-INDEX is out of range."
   (let* ((columns (kanban-columns board))
          (count (length columns)))
     (when (and (< -1 from-column count) (< -1 to-column count))
@@ -455,7 +479,8 @@ buttons on each card (which work without JavaScript or a mouse)."))
   "MARKDOWN as HTML: paragraphs, # headings, - and 1. lists, > quotes, ```
 code blocks, `code`, **strong**, *emphasis* and [links](https://…).  All
 of MARKDOWN's own HTML is escaped, and links go only to http(s), mailto or
-this site, so the result is safe to show whoever wrote it."
+this site, so the result is safe to show whoever wrote it.  Headings start
+at h3 for #, so they sit under a page's own."
   (let ((lines (cl-ppcre:split "\\r?\\n" (or markdown "")))
         (paragraph '()) (list-kind nil)
         (out (make-string-output-stream)))
@@ -498,7 +523,8 @@ this site, so the result is safe to show whoever wrote it."
     (get-output-stream-string out)))
 
 (defclass markdown-field (text-field) ()
-  (:documentation "Text written in Markdown, shown as safe HTML."))
+  (:documentation "Text written in Markdown, shown as safe HTML (see
+MARKDOWN-HTML): the description field kind :MARKDOWN."))
 
 (defmethod render-field-input ((field markdown-field) id text callback)
   (text-area (:id id :value text :rows 6 :callback callback))

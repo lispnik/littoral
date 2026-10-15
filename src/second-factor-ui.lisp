@@ -59,7 +59,7 @@
       (form ()
         (div (:class "lt-field")
           (label (:for "sign-in-code")
-            (if (sign-in-recovery-p self) (translate "A recovery code") (translate "The code from your authenticator app")))
+            (text (if (sign-in-recovery-p self) (translate "A recovery code") (translate "The code from your authenticator app"))))
           (text-input (:id "sign-in-code" :value "" :autocomplete "one-time-code" :required t :autofocus t
                        :inputmode (unless (sign-in-recovery-p self) "numeric")
                        :callback (lambda (v) (setf (sign-in-code self) v)))))

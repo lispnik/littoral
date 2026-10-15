@@ -22,7 +22,8 @@
 
 (defpackage #:littoral.auth
   (:use #:cl #:littoral #:littoral.html #:littoral.db)
-  (:documentation "Users, signing in, roles and password reset for Littoral.")
+  (:documentation "Users, signing in, roles and password reset for Littoral.  Load it with
+`(asdf:load-system :littoral/auth)`.")
   (:export
    ;; Users
    #:user #:user-id #:user-name #:user-email #:user-roles #:user-active-p #:user-password-hash
@@ -106,7 +107,7 @@
   (:method ((store user-store) email) (declare (ignore email)) nil))
 
 (defgeneric store-find-user-by-id (store id)
-  (:documentation "The user whose USER-ID is ID, or its printed form; NIL if none."))
+  (:documentation "The user whose USER-ID is ID, which may be given as its printed form; NIL if none."))
 
 (defgeneric store-writable-p (store)
   (:documentation "True when STORE-SET-PASSWORD-HASH works.")
@@ -226,7 +227,7 @@ AROUND (another such function, such as USING-DATABASE's) if given."
 (defun granted-roles (user)
   "The roles granted to USER in the user_roles table."
   (let ((id (princ-to-string (user-id user))))
-    (cached (list :roles id)
+    (cached (list :roles id *database*)
             (lambda ()
               (mapcar (lambda (row) (name-keyword (getf row :|role|)))
                       (db-query "SELECT role FROM user_roles WHERE user_id = ? ORDER BY role" id))))))
@@ -271,7 +272,7 @@ AROUND (another such function, such as USING-DATABASE's) if given."
 
 (defun role-permissions (role)
   "What users with ROLE may do, as keywords."
-  (cached (list :role-permissions (role-name role))
+  (cached (list :role-permissions (role-name role) *database*)
           (lambda ()
             (mapcar (lambda (row) (name-keyword (getf row :|permission|)))
                     (db-query "SELECT permission FROM role_permissions WHERE role = ? ORDER BY permission"
@@ -333,7 +334,7 @@ and is seen by every process: the browser holds its token in a cookie."))
 
 (defun drop-auth-tables (&key (users t))
   "Drop the tables CREATE-AUTH-TABLES makes, the audit log too, for tests:
-everything is lost."
+everything is lost.  With USERS NIL, the users table stays."
   (dolist (table (append (when users '("users"))
                          '("auth_tokens" "auth_sessions" "auth_factors" "user_roles" "role_permissions"
                            "auth_events")))
@@ -435,8 +436,10 @@ permissions tables, and the audit log."
   user)
 
 (defun add-user (name email password &key roles)
-  "Store a new user; ROLES are keywords.  Signals when NAME is taken or the
-store doesn't create users."
+  "Store a new user called NAME, with EMAIL and PASSWORD (hashed; NIL for
+none, so they can't sign in with one), and return it.  ROLES are keywords.
+Signals an error when NAME is taken, case aside, or the store doesn't
+create users."
   (when (find-user name)
     (error "The name ~A is taken." name))
   (let ((user (or (store-create-user *user-store* :name name :email email :roles roles
@@ -701,8 +704,8 @@ looked at no more often than *AUTH-SESSION-CHECK-SECONDS*."
 ;;; The session's user
 
 (defun current-user ()
-  "The user signed in to this session, or NIL."
-  (let ((id (session-property :user-id)))
+  "The user signed in to this session, or NIL; NIL outside a request."
+  (let ((id (and *session* (session-property :user-id))))
     (and id (sign-in-stands-p)
          (let ((user (find-user-by-id id)))
            (and user (user-active-p user) user)))))
@@ -884,8 +887,9 @@ request's Host header is the client's to choose, and a reset link built
 from a forged one would send its token to someone else's site.")
 
 (defun request-base-url (&optional (request *request*))
-  "This site's address, such as https://example.org: *PUBLIC-URL*, or in
-development mode the request's own host."
+  "This site's address, such as https://example.org: *PUBLIC-URL* without a
+trailing slash, or in development mode REQUEST's own host.  Signals an error
+in deployment mode when *PUBLIC-URL* is unset."
   (cond (*public-url* (string-right-trim "/" *public-url*))
         ((and *application* (not (littoral::development-p)))
          (error "Set LITTORAL.AUTH:*PUBLIC-URL* to this site's address: links in mail ~
@@ -1006,8 +1010,10 @@ The link works once, for an hour.  If it wasn't you, ignore this mail."
 session starts at that path.")
 
 (defmacro define-auth-path (segment (root rest request) &body body)
-  "Run BODY when a session of an AUTH-ROOT application starts at
-/SEGMENT/…, with REST the remaining segments."
+  "Run BODY, instead of the root's INITIAL-REQUEST, when a session of an
+AUTH-ROOT application starts at /SEGMENT/…: with ROOT the root component,
+REST the remaining segments and REQUEST the request.  Defining SEGMENT again
+replaces it."
   `(setf (gethash ,segment *auth-paths*)
          (lambda (,root ,rest ,request)
            (declare (ignorable ,root ,rest ,request))
@@ -1132,8 +1138,8 @@ there is none and 403 when they lack ROLE."
           (t user))))
 
 (defun create-api-token (user &key (days 365))
-  "A new API token for USER, valid DAYS days: send it as
-\"Authorization: Bearer TOKEN\".  Only its hash is kept, so show it once."
+  "A new API token for USER, valid DAYS days (for good, with DAYS NIL): send
+it as \"Authorization: Bearer TOKEN\".  Only its hash is kept, so show it once."
   (let ((token (format nil "lt_~A" (littoral::random-key 40))))
     (db-insert (make-instance 'auth-token :token-hash (token-hash token)
                                           :user-id (princ-to-string (user-id user)) :purpose "api"
@@ -1142,7 +1148,7 @@ there is none and 403 when they lack ROLE."
     token))
 
 (defun revoke-api-tokens (user)
-  "Void all of USER's API tokens."
+  "Void all of USER's API tokens; how many there were."
   (prog1 (db-execute "DELETE FROM auth_tokens WHERE user_id = ? AND purpose = ?"
                      (princ-to-string (user-id user)) "api")
     (audit-user "api-tokens.revoked" user)))

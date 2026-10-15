@@ -62,7 +62,8 @@ REQUEST-EXTRA-PATH and REQUEST-PARAMETER.")
 ;;; The document head
 
 (defclass html-root ()
-  ((title :initform nil :accessor root-title)
+  ((title :initform nil :accessor root-title
+          :documentation "The page's title: the application's title, or its path, unless a component sets it.")
    (stylesheets :initform '() :accessor root-stylesheets)
    (scripts :initform '() :accessor root-scripts)
    (styles :initform '() :accessor root-styles)
@@ -117,7 +118,9 @@ The same REL and HREF are added once.  For stylesheets use ADD-STYLESHEET."
 
 (defgeneric update-root (component root)
   (:documentation "Contribute COMPONENT's title, stylesheets and scripts to
-the HTML-ROOT of the page.  Call CALL-NEXT-METHOD to keep STYLE and SCRIPT.")
+the HTML-ROOT of the page.  Called on every visible component before the
+page is written, parents first, so a child's title wins.  Call
+CALL-NEXT-METHOD to keep STYLE and SCRIPT.")
   (:method ((component component) root)
     (let ((css (style component)) (js (script component)))
       (when css (add-style root css))
@@ -164,7 +167,7 @@ Specialise RENDER-DECORATION and call RENDER-INNER for what it wraps."))
 (defgeneric decoration-kind (decoration)
   (:documentation ":GLOBAL decorations sit outside a delegation and so stay
 visible while another component is shown in their owner's place; :LOCAL
-ones sit inside it.")
+ones, the default, sit inside it.  A DELEGATION's kind is :DELEGATION.")
   (:method ((decoration decoration)) :local))
 
 (defgeneric render-decoration (decoration component)

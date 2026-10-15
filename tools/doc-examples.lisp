@@ -12,7 +12,8 @@
 ;;;;
 ;;;; The tests run every example on its own, in a new package that uses
 ;;;; the packages *EXAMPLE-PACKAGES* names (as the reference tells readers
-;;;; to set up), with no applications registered, and compare each ⇒.
+;;;; to set up), with no applications or endpoints registered and its
+;;;; own copy of the translation catalogues, and compare each ⇒.
 ;;;; make docs copies the code, exactly as tested, into docs/API.md.
 
 (defpackage #:littoral-doc-examples
@@ -101,16 +102,93 @@
             (setf position end)))))
     (nreverse pieces)))
 
+(defun copy-table (table)
+  "A copy of hash table TABLE, with any tables among its values copied too."
+  (alexandria:copy-hash-table
+   table :key (lambda (value) (if (hash-table-p value) (alexandria:copy-hash-table value) value))))
+
+(defparameter *optional-registries*
+  '(("LITTORAL.OAUTH" "*PROVIDERS*" :empty)
+    ("LITTORAL.ADMIN" "*ADMINS*" :empty)
+    ("LITTORAL.AUTH" "*APPLICATION-ROLES*" :empty)
+    ;; Keyed by database spec and user id, which every example's :memory: shares.
+    ("LITTORAL.AUTH" "*ROLES-CACHE*" :empty)
+    ;; Holds the jobs other systems define, such as mail delivery; job
+    ;; runner threads read it, so it is restored rather than rebound.
+    ("LITTORAL.JOBS" "*DEFINITIONS*" :restore)
+    ("LITTORAL.DB" "*MIGRATION-SETS*" :restore)
+    ;; Holds the built-in handlers, such as password reset.
+    ("LITTORAL.AUTH" "*AUTH-PATHS*" :copy)
+    ;; Which databases have a subsystem's tables, for /metrics and checks
+    ;; like AUDIT-ENABLED-P.  Every example's :memory: database has the
+    ;; same spec, so each starts with none, and the suite's are put back.
+    ("LITTORAL.AUDIT" "*AUDIT-DATABASES*" :clear)
+    ("LITTORAL.AUTH" "*AUTH-DATABASES*" :clear)
+    ("LITTORAL.JOBS" "*JOB-DATABASES*" :clear)
+    ("LITTORAL.MAIL" "*MAIL-DATABASES*" :clear)
+    ("LITTORAL.DB" "*MIGRATED*" :clear))
+  "Registries in systems this one doesn't depend on, as (PACKAGE NAME HOW):
+each example gets its own, :EMPTY or a :COPY, when the system is loaded.
+Registries other threads read are changed globally instead, and put back
+afterwards: kept as they are (:RESTORE) or emptied (:CLEAR).")
+
+(defun optional-registries (&rest hows)
+  "The entries of *OPTIONAL-REGISTRIES* whose packages are loaded and whose
+HOW is among HOWS, as (SYMBOL . HOW)."
+  (loop for (package name how) in *optional-registries*
+        for symbol = (and (find-package package) (find-symbol name package))
+        when (and symbol (boundp symbol) (member how hows)) collect (cons symbol how)))
+
+(defun call-restoring-registries (thunk)
+  "Call THUNK with the :CLEAR registries emptied, then put back the
+:RESTORE and :CLEAR registries as they were."
+  (let ((saved (loop for (symbol . how) in (optional-registries :restore :clear)
+                     for value = (symbol-value symbol)
+                     collect (list symbol value (if (hash-table-p value) (copy-table value) (copy-tree value)))
+                     when (eq how :clear)
+                       do (if (hash-table-p value) (clrhash value) (setf (symbol-value symbol) '())))))
+    (unwind-protect (funcall thunk)
+      (loop for (symbol table copy) in saved
+            do (if (hash-table-p table)
+                   (progn (clrhash table)
+                          (maphash (lambda (k v) (setf (gethash k table) v)) copy))
+                   (setf (symbol-value symbol) copy))))))
+
+(defun fresh-value (entry)
+  "The value an example starts with for ENTRY, a (SYMBOL . HOW)."
+  (destructuring-bind (symbol . how) entry
+    (let ((value (symbol-value symbol)))
+      (ecase how
+        (:copy (if (hash-table-p value) (copy-table value) (copy-list value)))
+        (:empty (if (hash-table-p value) (make-hash-table :test (hash-table-test value)) '()))))))
+
 (defun run-example (example)
-  "Run EXAMPLE in a package of its own.  Returns a list of problems, each a
-string; NIL when it works as written."
+  "Run EXAMPLE in a package and a thread of its own.  Returns a list of
+problems, each a string; NIL when it works as written.  The thread gives
+it database connections of its own, as a reader's REPL would have: DBI
+caches connections per thread, so a :memory: SQLite database would
+otherwise be the test suite's."
+  (call-restoring-registries
+   (lambda ()
+     (sb-thread:join-thread
+      (sb-thread:make-thread (lambda () (run-example-here example)) :name "littoral doc example")))))
+
+(defun run-example-here (example)
+  "Run EXAMPLE in a package of its own, in this thread."
   (let* ((name (format nil "LITTORAL-EXAMPLE-~D" (random (expt 10 9))))
          (package (make-package name :use *example-packages*))
          (problems '()))
     (unwind-protect
          (handler-case
              (let ((littoral::*applications* (make-hash-table :test 'equal))
+                   (littoral::*endpoints* (make-hash-table :test 'equal))
+                   ;; Catalogues an example adds to or changes are its own.
+                   (littoral::*languages* (copy-table littoral::*languages*))
+                   (littoral::*translations* (copy-table littoral::*translations*))
+                   (littoral::*missing* (copy-table littoral::*missing*))
                    (*package* package))
+              (progv (mapcar #'car (optional-registries :empty :copy))
+                     (mapcar #'fresh-value (optional-registries :empty :copy))
                (dolist (piece (forms-and-results (example-code example)))
                  (destructuring-bind (text . expected) piece
                    (let* ((form (read-from-string text))
@@ -119,7 +197,7 @@ string; NIL when it works as written."
                        (let ((got (let ((*print-pretty* nil) (*print-readably* nil))
                                     (prin1-to-string value))))
                          (unless (string= got expected)
-                           (push (format nil "~A~%  wanted ~A~%  got    ~A" text expected got) problems))))))))
+                           (push (format nil "~A~%  wanted ~A~%  got    ~A" text expected got) problems)))))))))
            (error (e)
              (push (format nil "signalled ~A: ~A" (type-of e) e) problems)))
       (delete-package package))

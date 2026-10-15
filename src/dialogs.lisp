@@ -12,7 +12,7 @@
     (p (:class "lt-dialog-message") (text (dialog-message dialog)))))
 
 (defclass message-dialog (dialog) ()
-  (:documentation "Shows a message; answers T."))
+  (:documentation "Shows its :MESSAGE with an OK button; answers T."))
 
 (defmethod render ((self message-dialog))
   (div (:class "lt-dialog")
@@ -21,7 +21,8 @@
       (submit-button (:callback (lambda () (answer self t))) (translate "OK")))))
 
 (defclass confirm-dialog (dialog) ()
-  (:documentation "Asks a yes/no question; answers T or NIL."))
+  (:documentation "Asks the yes/no question in its :MESSAGE; answers T for Yes
+or NIL for No."))
 
 (defmethod render ((self confirm-dialog))
   (div (:class "lt-dialog")
@@ -32,7 +33,8 @@
 
 (defclass input-dialog (dialog)
   ((value :initarg :value :initform "" :accessor dialog-value))
-  (:documentation "Asks for a line of text; answers the string."))
+  (:documentation "Asks for a line of text, with its :MESSAGE as the prompt and
+:VALUE (default \"\") as the text to start from; answers the string."))
 
 (defmethod render ((self input-dialog))
   (div (:class "lt-dialog")
@@ -47,7 +49,9 @@
   ((items :initarg :items :initform '() :reader dialog-items)
    (label-function :initarg :labels :initform #'princ-to-string :reader dialog-labels)
    (selected :initform nil :accessor dialog-selected))
-  (:documentation "Asks for one of ITEMS; answers it, or NIL on Cancel."))
+  (:documentation "Asks for one of :ITEMS from a select list, with :MESSAGE as
+the prompt; answers the item, or NIL on Cancel.  :LABELS is a function
+giving each item's label (default PRINC-TO-STRING)."))
 
 (defmethod render ((self choice-dialog))
   (div (:class "lt-dialog")
@@ -64,7 +68,8 @@
   ((username :initform "" :accessor dialog-username)
    (password :initform "" :accessor dialog-password))
   (:documentation "Asks for a username and password; answers them as a
-cons, or NIL on Cancel."))
+cons (USERNAME . PASSWORD), or NIL on Cancel.  Its fields have the DOM ids
+username and password."))
 
 (defmethod render ((self login-dialog))
   (div (:class "lt-dialog lt-login")
@@ -104,12 +109,14 @@ cons, or NIL on Cancel."))
       (documentation 'request-input 'function)
       "Ask for a line of text with PROMPT, starting from DEFAULT; the string typed.  A CALL."
       (documentation 'choose-from 'function)
-      "Ask for one of ITEMS, with PROMPT; the item chosen, or NIL.  A CALL.")
+      "Ask for one of ITEMS, with PROMPT; the item chosen, or NIL on Cancel.
+Items are labelled with PRINC-TO-STRING.  A CALL.")
 
 (defclass session-expired-notice (dialog) ()
   (:default-initargs
    :message (translate "Your session expired, so you are starting again from the beginning."))
-  (:documentation "A ready-made EXPIRED-NOTICE for REGISTER-APPLICATION."))
+  (:documentation "A ready-made EXPIRED-NOTICE for REGISTER-APPLICATION: it says the
+session expired and answers when its Continue button is pressed."))
 
 (defmethod render ((self session-expired-notice))
   (div (:class "lt-dialog lt-expired")

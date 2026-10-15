@@ -16,17 +16,20 @@
 (defclass batched-list (component)
   ((items :initarg :items :initform '()
           :documentation "A list, or a thunk returning one when needed.")
-   (batch-size :initarg :batch-size :initform 10 :accessor batch-size)
-   (page :initform 0 :accessor batch-page :documentation "Zero-based."))
-  (:documentation "Pages through ITEMS.  Render the current BATCH yourself
-and RENDER-COMPONENT the batched list for its page links, as with Seaside's
-WABatchedList."))
+   (batch-size :initarg :batch-size :initform 10 :accessor batch-size
+               :documentation "How many items a page holds.")
+   (page :initform 0 :accessor batch-page :documentation "The page shown, counting from 0."))
+  (:documentation "Pages through :ITEMS (a list, or a function returning
+one), :BATCH-SIZE (10 by default) at a time.  Render the current BATCH
+yourself and RENDER-COMPONENT the batched list for its page links, as with
+Seaside's WABatchedList."))
 
 (defmethod states ((self batched-list))
   (list self))
 
 (defun batch-items (list)
-  "All of LIST's items."
+  "All of LIST's items, calling its items function when it has one.
+SETF replaces them (with a list or a function), keeping the page in range."
   (let ((items (slot-value list 'items)))
     (if (functionp items) (funcall items) items)))
 
@@ -50,7 +53,8 @@ WABatchedList."))
             (min (+ start (batch-size list)) (length items)))))
 
 (defun go-to-page (list page)
-  "Show page PAGE (zero-based) of LIST, kept in range."
+  "Show page PAGE (counting from 0) of LIST, kept in range.  Returns the
+page shown."
   (setf (batch-page list) (max 0 (min page (1- (page-count list))))))
 
 (defmethod render ((self batched-list))
@@ -85,7 +89,13 @@ WABatchedList."))
   (:documentation "One column of a REPORT: its title, value, rendering and sorting."))
 
 (defun column (title value &rest initargs &key render sort-key sort-predicate sortable class)
-  "A REPORT column titled TITLE showing (FUNCALL VALUE ROW)."
+  "A REPORT column titled TITLE (translated) showing (FUNCALL VALUE ROW);
+VALUE NIL gives every cell the value NIL.  RENDER, a function of the row
+and the value, writes the cell; by default the value is written as text,
+and NIL as nothing.  SORTABLE NIL leaves the heading a plain title.  The
+column sorts by SORT-KEY, a function of the row (the value by default),
+under SORT-PREDICATE (by default numbers by <, anything else by its
+printed form, NIL last).  CLASS is the CSS class of the column's cells."
   (declare (ignore render sort-key sort-predicate sortable class))
   (apply #'make-instance 'report-column :title title :value value initargs))
 
@@ -103,14 +113,17 @@ WABatchedList."))
 (defclass report (component)
   ((rows :initarg :rows :initform '() :accessor report-rows
          :documentation "A list, or a thunk returning one on every render.")
-   (columns :initarg :columns :initform '() :accessor report-columns)
+   (columns :initarg :columns :initform '() :accessor report-columns
+            :documentation "The columns, made with COLUMN, in order.")
    (sort-column :initform nil :accessor report-sort-column)
    (descending :initform nil :accessor report-descending-p)
    (row-class :initarg :row-class :initform nil :accessor report-row-class
               :documentation "Function of a row giving its CSS class, or NIL.")
    (batcher :initform nil :reader report-batcher))
-  (:documentation "A table of ROWS with sortable COLUMNS, like Seaside's
-WATableReport.  Give :BATCH-SIZE to page it."))
+  (:documentation "A table of :ROWS (a list, or a function returning one,
+called on every render) in :COLUMNS (made with COLUMN), sorted by clicking
+a heading, like Seaside's WATableReport.  :ROW-CLASS, a function of a row,
+gives its CSS class.  Give :BATCH-SIZE to page it."))
 
 (defmethod initialize-instance :after ((self report) &key batch-size)
   (when batch-size
@@ -141,7 +154,9 @@ WATableReport.  Give :BATCH-SIZE to page it."))
           (if (report-descending-p report) (reverse sorted) sorted)))))
 
 (defun sort-by (report column)
-  "Sort REPORT by COLUMN, reversing the order when it already is."
+  "Sort REPORT by COLUMN, one of its columns, in ascending order, or
+reverse the order when REPORT is sorted by COLUMN already.  A paged report
+goes back to its first page."
   (if (eq column (report-sort-column report))
       (setf (report-descending-p report) (not (report-descending-p report)))
       (setf (report-sort-column report) column

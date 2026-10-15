@@ -22,6 +22,8 @@
    #:file-input #:uploaded-file #:file-name #:file-content-type #:file-contents)
   (:documentation "Tags and brushes for writing HTML in RENDER methods."))
 
+;;; The class JOB (a background job) is not exported: the name is too
+;;; common.  Its readers (JOB-ID, JOB-STATUS, …) are.
 (defpackage #:littoral
   (:use #:cl #:littoral.html)
   (:import-from #:cl-cont #:defun/cc #:let/cc #:with-call/cc)
@@ -71,7 +73,7 @@
    #:task #:define-flow #:flow
    ;; AJAX and push
    #:ajax #:ajax-update #:periodical #:execute-script
-   #:channel #:make-channel #:subscriptions #:publish #:notify #:close-event-streams
+   #:channel #:make-channel #:subscriptions #:publish #:notify #:close-event-streams #:*keepalive-seconds*
    #:with-session #:*source-editor* #:*async-stream-opener*
    ;; Wizards
    #:wizard #:make-wizard #:wizard-step
@@ -85,11 +87,12 @@
    #:reset-metrics #:log-requests-to #:*request-log* #:*latency-buckets*
    #:add-metrics-source #:remove-metrics-source #:metric-label
    #:define-metric #:count-metric #:observe-metric #:timing-metric
-   ;; Background jobs (the class JOB is not exported: the name is too common)
+   ;; Background jobs
    #:submit-job #:job-progress #:cancel-job #:watch-job #:wait-for-job #:list-jobs
    #:job-view #:job-view-job #:job-cancelled #:*current-job* #:*job-workers* #:*jobs-channel*
    #:job-id #:job-name #:job-status #:job-progress-fraction #:job-message #:job-result
    #:job-error #:job-attempt #:job-attempts
+   ;; Live reload
    #:*live-reload* #:reload-pages #:start-live-watcher #:stop-live-watcher
    ;; Sessions & applications
    #:session #:session-key #:session-root #:session-properties #:session-property

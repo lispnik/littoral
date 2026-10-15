@@ -14,7 +14,8 @@
 
 (defpackage #:littoral.admin
   (:use #:cl #:littoral #:littoral.html #:littoral.db)
-  (:documentation "An administration interface generated from descriptions.")
+  (:documentation "An administration interface generated from descriptions.  Load it with
+`(asdf:load-system :littoral/admin)`.")
   (:export #:register-admin #:admin #:job-queue-view))
 
 (in-package #:littoral.admin)

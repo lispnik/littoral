@@ -23,18 +23,23 @@
   "How long a process may take over a message before another may take it over.")
 
 (defclass outbox-mail (littoral.db:persistent)
-  ((sender :initarg :sender :initform nil :reader outbox-sender-address)
+  ((sender :initarg :sender :initform nil :reader outbox-sender-address
+           :documentation "The envelope's sender, a bare address.")
    (recipients :initarg :recipients :initform nil :reader outbox-recipients
                :documentation "The addresses it goes to, separated by spaces.")
    (subject :initarg :subject :initform nil :reader outbox-subject)
    (message :initarg :message :initform nil :reader outbox-message :documentation "The MIME message.")
    (status :initarg :status :initform "queued" :reader outbox-status
            :documentation "\"queued\", \"sending\", \"sent\" or \"failed\".")
-   (attempts :initarg :attempts :initform 0 :reader outbox-attempts)
-   (next-attempt :initarg :next-attempt :initform 0 :reader outbox-next-attempt)
-   (last-error :initarg :last-error :initform nil :reader outbox-last-error)
-   (created :initarg :created :initform nil :reader outbox-created)
-   (sent :initarg :sent :initform nil :reader outbox-sent))
+   (attempts :initarg :attempts :initform 0 :reader outbox-attempts :documentation "Tries so far.")
+   (next-attempt :initarg :next-attempt :initform 0 :reader outbox-next-attempt
+                 :documentation "When it is next due, a universal time.")
+   (last-error :initarg :last-error :initform nil :reader outbox-last-error
+               :documentation "Why the last try failed, or NIL.")
+   (created :initarg :created :initform nil :reader outbox-created
+            :documentation "When it was queued, a universal time.")
+   (sent :initarg :sent :initform nil :reader outbox-sent
+         :documentation "When it was sent, a universal time, or NIL."))
   (:documentation "A message in the outbox, and how sending it has gone."))
 
 (defun outbox-id (message)
@@ -62,7 +67,8 @@ and the job queue that sends it."
   (littoral.jobs:create-job-tables))
 
 (defun drop-mail-tables ()
-  "Drop the outbox table."
+  "Drop the outbox table.  The job queue CREATE-MAIL-TABLES made stays:
+LITTORAL.JOBS:DROP-JOB-TABLES drops it."
   (sb-thread:with-mutex (*mail-databases-lock*)
     (setf *mail-databases* (remove littoral.db:*database* *mail-databases* :test #'equal)))
   (littoral.db:drop-table 'outbox-mail)
@@ -155,9 +161,11 @@ may pass is scheduled to be tried again."
   (deliver-queued-mail))
 
 (defun deliver-queued-mail (&key (mailer (delivery-mailer)) (limit 50))
-  "Send the messages in the current database's outbox that are due, with
-MAILER; returns how many were sent.  Their jobs do this one at a time; a
-test can call it to send what's queued without waiting."
+  "Send at most LIMIT messages in the current database's outbox that are due,
+with MAILER (by default START-MAIL-DELIVERY's, or else *MAILER*); returns how
+many were sent.  A failure is recorded and tried again later, as by the job
+runner.  Their jobs do this one at a time; a test can call it to send what's
+queued without waiting."
   (let ((due (littoral.db:db-select 'outbox-mail
                                     :where "status IN ('queued', 'sending') AND next_attempt <= ?"
                                     :params (list (get-universal-time)) :order-by "id" :limit limit)))
@@ -190,7 +198,8 @@ RETRY-SECONDS set *MAIL-ATTEMPTS* and *MAIL-RETRY-SECONDS*."
 
 (defun stop-mail-delivery ()
   "Stop sending mail: the job runner too, if START-MAIL-DELIVERY started it,
-letting it finish the message it is sending."
+letting it finish the message it is sending.  An SMTP-MAILER's open
+connections are closed."
   (when (and *delivery-runner* (eq *delivery-runner* littoral.jobs::*runner-threads*))
     (littoral.jobs:stop-job-runner))
   (let ((mailer (shiftf *delivery-mailer* nil)))
@@ -206,7 +215,8 @@ letting it finish the message it is sending."
       (littoral.db:db-select 'outbox-mail :order-by "id DESC" :limit limit)))
 
 (defun retry-mail (id)
-  "Send the message ID again now, with its attempts counted afresh."
+  "Send the message ID again now, with its attempts counted afresh, unless it
+was sent."
   (when (plusp (littoral.db:db-execute "UPDATE mail_outbox SET status = 'queued', attempts = 0, next_attempt = ? WHERE id = ? AND status <> 'sent'"
                                        (get-universal-time) id))
     (schedule-delivery id (get-universal-time))))

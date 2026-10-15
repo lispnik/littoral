@@ -164,7 +164,7 @@ were not told to trust."
   (format nil "_ltb~A" (substitute #\_ #\/ (application-path app))))
 
 (defun request-cookie (name)
-  "The value of the request's cookie NAME, or NIL."
+  "The value of the current request's cookie NAME, or NIL."
   (cdr (assoc name (lack/request:request-cookies *request*) :test #'string=)))
 
 (defun session-cookie-header (name value app)
@@ -176,9 +176,12 @@ were not told to trust."
                                 (session *session*))
   "Have the browser keep the cookie NAME=VALUE, sent with this application's
 requests (or PATH's).  MAX-AGE in seconds keeps it that long, 0 deletes it,
-NIL keeps it until the browser closes.  Secure over HTTPS.  The cookie goes
-out with SESSION's next HTTP response: this one, or the next page load when
-called while answering a WebSocket message."
+NIL keeps it until the browser closes.  HTTP-ONLY hides it from scripts;
+SAME-SITE is \"Lax\", \"Strict\", \"None\" or NIL to leave it out.  Secure
+over HTTPS.  The cookie goes out with SESSION's next HTTP response: this
+one, or the next page load when called while answering a WebSocket message.
+Signals an error when NAME is not letters, digits and _.- or VALUE has
+characters other than letters, digits and _.~+/=-.  Returns VALUE."
   (unless (cl-ppcre:scan "^[A-Za-z0-9_.-]+$" name)
     (error "~S is not a usable cookie name." name))
   (unless (cl-ppcre:scan "^[A-Za-z0-9_.~+/=-]*$" value)
@@ -547,11 +550,11 @@ the handler falls back to the standard page."
                (string-equal "Basic " header :end2 6)
                (let ((given (ignore-errors (cl-base64:base64-string-to-string (subseq header 6))))
                      (expected (format nil "~A:~A" (first credentials) (rest credentials))))
-                 (and given
-                      (= (length given) (length expected))
-                      (ironclad:constant-time-equal
-                       (sb-ext:string-to-octets given :external-format :utf-8)
-                       (sb-ext:string-to-octets expected :external-format :utf-8)))))))))
+                 ;; Digests are the same length whatever was sent, so the
+                 ;; time taken says nothing about the credentials' length.
+                 (flet ((digest (text)
+                          (ironclad:digest-sequence :sha256 (sb-ext:string-to-octets text :external-format :utf-8))))
+                   (and given (ironclad:constant-time-equal (digest given) (digest expected))))))))))
 
 (defun gone-session-response ()
   "The answer to a page's background request (AJAX, its event stream, its
@@ -659,8 +662,9 @@ as stored files; see MOUNT-HANDLER.")
 
 (defun mount-handler (prefix handler)
   "Answer requests for paths under PREFIX (such as \"/files/\") with HANDLER, a
-function of the rest of the path that returns a Lack response.  Replaces any
-handler mounted at PREFIX."
+function of the rest of the path that returns a Lack response.  Mounted
+handlers are tried before applications.  Replaces any handler mounted at
+PREFIX.  Returns PREFIX."
   (setf *mounts* (acons prefix handler (remove prefix *mounts* :key #'car :test #'string=)))
   prefix)
 
@@ -758,7 +762,8 @@ not set :SCRIPT-NAME (lack's mount middleware does not)."
   (mapc #'reap-sessions (list-applications)))
 
 (defun start-reaper (&key (interval 60))
-  "Reap idle sessions every INTERVAL seconds in a background thread."
+  "Reap idle sessions every INTERVAL seconds in a background thread,
+replacing any reaper already running.  Returns the thread."
   (stop-reaper)
   (setf *reaper*
         (sb-thread:make-thread
@@ -782,7 +787,8 @@ INSTANCE-ID prefixes session keys, for routing several processes.
 MAX-THREADS caps Hunchentoot's worker threads; every open page with server
 push holds one, so raise it when many pages subscribe.  With SERVER :WOO
 (load littoral/woo first) WORKERS event loops serve everything, push included,
-without a thread per page."
+without a thread per page.  A server already started is stopped first.
+Returns the Clack handler."
   (when *handler* (stop))
   (setf *instance-id* instance-id)
   (when configuration-file
@@ -811,7 +817,8 @@ page with server push ties up a Woo worker.  Load littoral/woo."))
   *handler*)
 
 (defun stop ()
-  "Stop serving, close open event streams and stop reaping sessions."
+  "Stop serving, close open event streams and stop reaping sessions (and
+watching for redefinitions, as START began).  Returns NIL."
   (stop-reaper)
   (stop-live-watcher)
   (close-event-streams)

@@ -95,3 +95,16 @@
     (funcall (apply #'littoral.db:using-database database) #'tidy-up)
     (visit b "/")
     (is (has-text-p b "Signed in as ada"))))
+
+(test environment-flags
+  ;; TRUST_PROXY=0 must not mean "trust the proxy".
+  (let ((old (uiop:getenv "LITTORAL_TEMPLATE_TEST_FLAG")))
+    (unwind-protect
+         (progn
+           (dolist (off '("" "0" "false" "No"))
+             (setf (uiop:getenv "LITTORAL_TEMPLATE_TEST_FLAG") off)
+             (is (not ({{name}}::env-flag-p "LITTORAL_TEMPLATE_TEST_FLAG")) "~S is off" off))
+           (dolist (on '("1" "true" "yes"))
+             (setf (uiop:getenv "LITTORAL_TEMPLATE_TEST_FLAG") on)
+             (is ({{name}}::env-flag-p "LITTORAL_TEMPLATE_TEST_FLAG") "~S is on" on)))
+      (setf (uiop:getenv "LITTORAL_TEMPLATE_TEST_FLAG") (or old "")))))

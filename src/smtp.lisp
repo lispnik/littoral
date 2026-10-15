@@ -71,7 +71,8 @@ sent as it is."
 With USERNAME, signs in with the strongest AUTH method the server offers;
 without TLS only when ALLOW-INSECURE-AUTH is true.  The server's certificate
 is checked against the system's authorities, or CA-FILE's, unless VERIFY is NIL.
-TIMEOUT, in seconds, bounds connecting and each step of the conversation.
+HELO is the name it gives the server (this machine's).  TIMEOUT, in seconds,
+bounds connecting and each step of the conversation.
 DKIM, a signer from SMTP/DKIM:MAKE-DKIM-SIGNER or a list of them (RSA and
 Ed25519, say), signs each message as it is sent.  Up to POOL-SIZE
 connections are kept open and reused, so a batch of mail doesn't connect
@@ -84,7 +85,9 @@ for each message; NIL connects for each one."
 
 (defun smtp-mailer-from-url (url &rest options)
   "A mailer from URL: smtp://user:password@host:port (STARTTLS), smtps://… (TLS)
-or smtp+insecure://… (neither).  OPTIONS go to MAKE-SMTP-MAILER."
+or smtp+insecure://… (neither); the user name and password are URL-decoded,
+and the port defaults as MAKE-SMTP-MAILER's does.  OPTIONS go to
+MAKE-SMTP-MAILER.  Signals an error for any other scheme."
   (let* ((uri (quri:uri url))
          (userinfo (quri:uri-userinfo uri))
          (colon (and userinfo (position #\: userinfo)))

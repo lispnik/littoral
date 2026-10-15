@@ -57,7 +57,8 @@ to URL (another site, say) instead of the next page."
 (define-condition forbidden (error)
   ((message :initarg :message :initform "You are not allowed to do that." :reader forbidden-message))
   (:report (lambda (condition stream) (write-string (forbidden-message condition) stream)))
-  (:documentation "Signal it to refuse a request: the user sees a 403 page."))
+  (:documentation "Signal it to refuse a request: the user sees a 403 page
+showing its :MESSAGE, by default \"You are not allowed to do that.\""))
 
 (setf (documentation 'forbidden-message 'function)
       "The explanation a FORBIDDEN condition shows the user.")
@@ -88,7 +89,9 @@ the HTTP request's: how a WebSocket message is handled like a POST.")
   (and (assoc name (current-parameters request) :test #'string=) t))
 
 (defun request-path (&optional (request *request*))
-  "The path of REQUEST below the mount point."
+  "The path of REQUEST below the mount point, the application's path
+included: \"/shop/items/3\".  REQUEST-EXTRA-PATH gives the segments after
+the application's path."
   (lack/request:request-path-info request))
 
 (defvar *render-profile* :off
@@ -104,7 +107,8 @@ first; :OFF otherwise.")
              (format stream "~(~A~) was used while rendering.  Rendering must not ~
 change state: do it in a callback instead."
                      (render-phase-operation condition))))
-  (:documentation "Signalled by CALL, SHOW, ANSWER and HOME during rendering."))
+  (:documentation "Signalled by CALL, SHOW, ANSWER, HOME and SHOW-MODAL during
+rendering, which must not change state."))
 
 (defun signal-if-rendering (operation)
   "Signal RENDER-PHASE-ERROR, naming OPERATION, when a page is rendering."

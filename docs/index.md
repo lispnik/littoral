@@ -18,6 +18,7 @@ It runs on SBCL and serves through Clack (Hunchentoot by default). Dependencies 
 Version 0.3.0 puts the admin and `/config` behind sign-in, adds metrics for jobs, mail, sign-ins and the database, switches SQLite to WAL mode, and sends mail through the smtp library, with DKIM and pooled connections. Version 0.2.0 added a database with migrations, users and signing in, an admin, mail, durable jobs and an audit log. See the [changelog](https://github.com/lispnik/littoral/blob/master/CHANGELOG.md).
 
 ```lisp
+(asdf:load-system :littoral)
 (defpackage #:hello (:use #:cl #:littoral #:littoral.html))
 (in-package #:hello)
 
@@ -85,7 +86,7 @@ make tour          # the narrated video tour, recorded into tour/ (Chrome, Node,
 make lint          # ocicl lint
 ```
 
-Documentation is online at **<https://lispnik.github.io/littoral/>**. New to littoral? Start with **[the tutorial](tutorial.md)**, which builds a reading list one idea at a time. The full API reference is [docs/API.md](API.md).
+Documentation is online at **<https://lispnik.github.io/littoral/>**. New to littoral? Start with **[the tutorial](tutorial.md)**, which builds a reading list one idea at a time, then tests it, keeps it in a database, signs readers in and translates it. The full API reference is [docs/API.md](API.md).
 
 `/examples` is a guide to the examples. Three of them are complete small applications:
 
@@ -104,7 +105,7 @@ Documentation is online at **<https://lispnik.github.io/littoral/>**. New to lit
 
 It lives in `apps/tracker`, in its own system, `littoral/tracker`.
 
-The smaller examples are counter, multi-counter, login, todo, guess (a task), topics (bookmarkable URLs), report, ajax, upload and progress (a background job reporting through server push). The configuration application is at `/config`.
+The smaller examples include counter, multi-counter, login, todo, guess (a task), topics (bookmarkable URLs), report, ajax, upload and progress (a background job reporting through server push). The configuration application is at `/config`.
 
 ## Concepts
 
@@ -131,7 +132,7 @@ The smaller examples are counter, multi-counter, login, todo, guess (a task), to
 
 The tag and brush macros are in the `littoral.html` package. They live in their own package because names such as `main`, `header`, `label` and `table` are too common to push onto every package that uses `littoral`. A tag's first argument is its attribute plist, and you can omit it. Literal strings in a tag body are written as escaped text. To write any other value, call `text` (escaped) or `raw` (unescaped).
 
-The brushes are `anchor`, `form`, `text-input`, `password-input`, `number-input`, `hidden-input`, `text-area`, `checkbox`, `select-list`, `radio-group`, `file-input`, `submit-button`, `cancel-button` and `button`. Each takes a `:callback`. When a form is submitted, the field callbacks run first, in render order, and the button's action runs after them.
+The brushes are `anchor`, `form`, `text-input`, `password-input`, `number-input`, `hidden-input`, `text-area`, `checkbox`, `select-list`, `radio-group`, `file-input`, `submit-button`, `cancel-button` and `button`. Links, fields and the submit and cancel buttons take a `:callback`; a `button` submits nothing, so give it an AJAX `:on-click` (see "AJAX"). When a form is submitted, the field callbacks run first, in render order, and the button's action runs after them.
 
 A `file-input` needs its form to be `(form (:multipart t) …)`. Its callback receives an `uploaded-file`, with `file-name`, `file-content-type` and `file-contents` (octets), and is not called when no file was chosen.
 
@@ -259,7 +260,7 @@ Going back to one of those pages then shows the session as it is now. `littoral.
 
 ### AJAX
 
-To make a component re-renderable in place, mix `updatable` into its class. Then give an element an `:on-click`, `:on-change` or `:on-input` attribute whose value is `(ajax :callback thunk :update component)`. Use `(periodical seconds :update component)` instead to re-render on a timer. `static/littoral.js` is small and has no dependencies; it posts the request and swaps the HTML.
+To make a component re-renderable in place, mix `updatable` into its class. Then give an element an `:on-click`, `:on-change` or `:on-input` attribute whose value is `(ajax :callback thunk :update component)`. To re-render on a timer instead, give an element `:periodical (periodical seconds :update component)`. `static/littoral.js` is small and has no dependencies; it posts the request and swaps the HTML.
 
 `ajax` takes more options:
 
@@ -325,15 +326,15 @@ A socket opens only from a page of the same site: its `Origin` must match the ho
   - Only PNG, JPEG, GIF and WebP are ever shown in the page. Anything else is served as an attachment, with `nosniff` and a sandboxing CSP, so an uploaded HTML or SVG file can't run script on your site.
   - `:image` refuses files that aren't images.
 - **Thumbnails** are JPEGs `*thumbnail-size*` (240) pixels on their longer side, made with opticl. The image's dimensions are read from its header first, so a small file claiming enormous dimensions (a decompression bomb) is never decoded.
-- **Private files.** `:private t` serves files only through signed URLs that expire. On disk, the signature is an HMAC with `*signing-key*`; on S3 it's a presigned URL.
-- **S3.** The S3 backend speaks the S3 API with AWS Signature V4, so it also works with MinIO, R2, Spaces and others: give `:endpoint`. CI tests it against MinIO.
+- **Private files.** `:private t` serves files only through signed URLs that expire (after an hour unless `stored-file-url` is given `:expires`). On disk, the signature is an HMAC with `*signing-key*`; on S3 it's a presigned URL. S3 storage is private unless you pass `:private nil`.
+- **S3.** The S3 backend speaks the S3 API with AWS Signature V4, so it also works with MinIO, R2, Spaces and others: give `:endpoint`. CI tests it against RustFS, an S3-compatible server.
 - **Your own code** can use `store-upload`, `store-octets`, `stored-file-url` and `delete-stored-file`.
 
 The gallery example (`/examples/gallery`, system `littoral/storage-demo`) uploads photos with an optional attachment.
 
 ### JSON endpoints
 
-An application can answer JSON beside its pages, for mobile apps, scripts and webhooks:
+An application can answer JSON beside its pages, for mobile apps, scripts and webhooks. These endpoints belong to the application registered at `/notes`, so they answer `/notes/api/notes/…`. `find-note` and `create-note` stand for your own code, and the second needs `littoral/auth`:
 
 ```lisp
 (define-endpoint "/notes" :get "/api/notes/:id" (id)
@@ -352,11 +353,11 @@ An application can answer JSON beside its pages, for mobile apps, scripts and we
 - **Who's asking.** `endpoint-user` comes from an `Authorization: Bearer` token made with `create-api-token`, or from the browser's sign-in cookie.
 - **Cross-site safety.** A write signed in by cookie must be sent as `application/json`, which a cross-site form can't do.
 
-`/examples/api` calls its own endpoints from the page. The members example answers `GET /api/me` and makes API tokens.
+`/examples/api` calls its own endpoints from the page. The members example answers `GET /examples/members/api/me` and makes API tokens.
 
 ### Background jobs
 
-`submit-job` runs work on a pool of threads (`*job-workers*`, 4) and keeps the page up to date while it does:
+`submit-job` runs work on a pool of threads (`*job-workers*`, 4) and keeps the page up to date while it does. This runs in a callback. `resize-photo` stands for the work, and the `job-view` that `watch-job` returns must be rendered as a child:
 
 ```lisp
 (let ((job (submit-job (lambda ()
@@ -376,19 +377,20 @@ Jobs live in memory, so a restart forgets them; for work that must not be lost, 
 
 ### Durable jobs
 
-`littoral/jobs` keeps jobs in the database, in a `job_queue` table, so they survive restarts and any process sharing the database can run them:
+`littoral/jobs` keeps jobs in the database, in a `job_queue` table, so they survive restarts and any process sharing the database can run them. Here `digest-mail` is a mail of your own (see "Sending mail") and `user` one of `littoral/auth`'s users:
 
 ```lisp
-(define-job (send-digest :attempts 5 :retry-seconds 60) (user-id)
-  (queue-mail (digest-mail (find-user-by-id user-id))))
+(littoral.jobs:define-job (send-digest :attempts 5 :retry-seconds 60) (user-id)
+  (littoral.mail:queue-mail (digest-mail (littoral.auth:find-user-by-id user-id))))
 
-(define-job (tidy-up :every (daily-at 3)) ()        ; every night at three
-  (purge-durable-jobs))
+(littoral.jobs:define-job (tidy-up :every (littoral.jobs:daily-at 3)) ()   ; every night at three
+  (littoral.jobs:purge-durable-jobs))
 
-(create-job-tables)
-(start-job-runner :database spec :threads 2)
+(littoral.db:connect-database :sqlite3 :database-name "app.db")
+(littoral.jobs:create-job-tables)
+(littoral.jobs:start-job-runner :threads 2)         ; on the database just connected
 
-(enqueue-job (list 'send-digest (user-id user)) :in 600)
+(littoral.jobs:enqueue-job (list 'send-digest (littoral.auth:user-id user)) :in 600)
 ```
 
 - **Enqueueing.** `enqueue-job` writes the job inside the request's transaction, so it exists only if the action commits. A job is a name and its arguments, which must print readably (numbers, strings, symbols, lists). Pass ids, not objects. `:in` and `:at` schedule it later. With `:key`, a second job with the same key isn't queued while the first is still waiting, which collapses repeated requests such as "refresh feed 7".
@@ -397,11 +399,11 @@ Jobs live in memory, so a restart forgets them; for work that must not be lost, 
 - **Recurring jobs.** `:every` takes seconds or a function from a time to the next one, such as `daily-at`. Runners keep exactly one run scheduled, however many processes there are.
 - **Looking after them.** `durable-jobs` (with `:limit` and `:offset`), `find-durable-job`, `durable-job-counts`, `retry-durable-job`, `cancel-durable-job` and `purge-durable-jobs` cover inspecting and housekeeping. The admin shows the queue, with buttons to retry and cancel. In tests, `run-due-jobs` runs what's due without a runner.
 
-`/examples/jobs` has a report that shows its progress, a job that fails twice and then succeeds, one that always fails, and a job that sends mail ten seconds later through the mail demo's outbox. Generated apps start a runner and tidy up every night.
+`/examples/jobs` (system `littoral/members-demo`) has a report that shows its progress, a job that fails twice and then succeeds, one that always fails, and a job that sends mail ten seconds later through the mail demo's outbox. Generated apps start a runner and tidy up every night.
 
 ### Sending mail
 
-`littoral/mail` writes MIME messages, sends them over SMTP, makes them from templates, and keeps them in an outbox in the database until they've gone:
+`littoral/mail` writes MIME messages, sends them over SMTP, makes them from templates, and keeps them in an outbox in the database until they've gone. It needs a database connected (see "Keeping data in a database"). `order-email`, `order-number` and `tracking-url` stand for your own code:
 
 ```lisp
 (setf littoral.mail:*mailer* (littoral.mail:smtp-mailer-from-url "smtp://app:secret@smtp.example.org:587")
@@ -414,7 +416,7 @@ Jobs live in memory, so a restart forgets them; for work that must not be lost, 
          (p () (anchor (:href (tracking-url order)) "Track it"))))
 
 (littoral.mail:create-mail-tables)
-(littoral.mail:start-mail-delivery :database spec)   ; the job runner sends the outbox
+(littoral.mail:start-mail-delivery)   ; a job runner sends the outbox
 ;; …and in an action:
 (littoral.mail:queue-mail (order-shipped order))
 ```
@@ -429,7 +431,7 @@ Jobs live in memory, so a restart forgets them; for work that must not be lost, 
   - Sending goes through [smtp](https://github.com/lispnik/smtp), which also writes the MIME.
   - `make-smtp-mailer` takes `:security`: `:starttls` (port 587, the default), `:tls` (465) or `:none` (25, for a relay on the same machine).
   - With STARTTLS, a server that doesn't offer it is refused rather than used in the clear, and the certificate must match the host. Pass `:ca-file` for a private authority.
-  - It signs in with the strongest method the server offers (PLAIN, LOGIN, XOAUTH2 or OAUTHBEARER). With `:security :none` it won't send a password unless you pass `:allow-insecure-auth t`. Errors never include the password.
+  - Given `:username` and `:password`, it signs in with PLAIN, or LOGIN if the server offers only that. With `:security :none` it won't send a password unless you pass `:allow-insecure-auth t`. Errors never include the password.
   - `smtp-mailer-from-url` reads `smtp://`, `smtps://` and `smtp+insecure://` URLs.
   - Connections are kept and reused, up to `:pool-size` (2), so a batch of mail doesn't connect for each message. `:pool-size nil` connects each time. A kept connection the server has dropped is replaced, and the message sent again over a new one, when the server hadn't accepted it.
   - `:dkim` signs each message as it's sent: a signer from `smtp/dkim:make-dkim-signer` (RSA or Ed25519), or a list of them. `smtp/dkim:dkim-dns-record` gives the TXT record to publish. Generated apps read `DKIM_KEY_FILE`, `DKIM_DOMAIN` and `DKIM_SELECTOR`, and `myapp dkim-record` prints the record.
@@ -444,7 +446,7 @@ Jobs live in memory, so a restart forgets them; for work that must not be lost, 
   - Without `:text`, the plain-text part is made from the HTML, with links written out.
 - **Other mailers.** The default `*mailer*` prints each mail, which is what you want in development. A `memory-mailer` keeps them, for tests: `message-header`, `message-text` and `message-html` read a sent message back.
 - **Password reset.** Set `littoral.auth:*send-mail*` to `(littoral.mail:outbox-sender)` and reset links go through the outbox. Then the reset form takes the same time whether or not the address has an account. The `TEMPLATE=app` projects do this, and send through `$SMTP_URL`.
-- **The example.** `/examples/mail` queues plain and templated mail and lets you switch the pretend mail server off to watch the retries. It previews the HTML. CI sends through a real server, Mailpit, over STARTTLS with certificate checks.
+- **The example.** `/examples/mail` (system `littoral/members-demo`) queues plain and templated mail and lets you switch the pretend mail server off to watch the retries. It previews the HTML. CI sends through a real server, Mailpit, over STARTTLS with certificate checks.
 
 ### Live redefinition
 
@@ -457,18 +459,25 @@ For changes the watcher can't see, such as a helper function or a stylesheet, ca
 `littoral/parenscript` lets a component's browser behaviour be written in [Parenscript](https://parenscript.common-lisp.dev/), next to its `render` method:
 
 ```lisp
+(asdf:load-system :littoral/parenscript)
 (defpackage #:my-app
   (:use #:cl #:littoral #:littoral.html #:parenscript #:littoral.parenscript)
   (:shadowing-import-from #:littoral #:call)          ; Parenscript exports these too
   (:shadowing-import-from #:littoral.html #:label))
+(in-package #:my-app)
 
-(button (:on-click (in-browser (ps (chain this class-list (toggle "on")))))
-  "Toggle")                                          ; runs in the browser only
+(defclass buttons (updatable component) ())
 
-(let ((shout (client-callback (lambda (text) (string-upcase text)) :update self)))
-  (button (:on-click (in-browser (ps (chain littoral (call (lisp shout) "hi")
-                                            (then (lambda (answer) (alert answer)))))))
-    "Ask the server"))
+(defmethod render ((self buttons))
+  (button (:on-click (in-browser (ps (chain this class-list (toggle "on")))))
+    "Toggle")                                        ; runs in the browser only
+  (let ((shout (client-callback (lambda (text) (string-upcase text)) :update self)))
+    (button (:on-click (in-browser (ps (chain littoral (call (lisp shout) "hi")
+                                              (then (lambda (answer) (alert answer)))))))
+      "Ask the server")))
+
+(define-script buttons (self)
+  (chain console (log "ready")))
 ```
 
 - **Browser-only handlers:** `in-browser` gives `:on-click`, `:on-change`, `:on-input` or `:on-submit` JavaScript to run in the browser, with `this` the element and `event` the event.
@@ -540,7 +549,7 @@ To keep configuration across restarts, start with a file:
 (start :port 8080 :configuration-file "littoral.conf")
 ```
 
-Any applications saved in the file are configured first, and every change made in `/config` is written back to it. The file is plain Lisp, one plist per application, and is created with mode 600 because it can hold basic-auth credentials. Classes are stored by name, so an application whose system isn't loaded is skipped with a warning. Error handlers are functions and aren't saved. From code, use `save-configuration`, `load-configuration`, and `configure-application`; the last changes an application's settings without dropping its sessions.
+Any applications saved in the file are configured first, and every change made in `/config` is written back to it. The file is plain Lisp, one plist per application, and is created with mode 600 because it can hold basic-auth credentials. Classes are stored by name, so an application whose system isn't loaded is skipped with a warning. Only the settings `/config` edits, and the languages, are saved: error handlers, the `:around-…` hooks, `:websockets`, `:content-security-policy` and `:max-request-size` aren't. From code, use `save-configuration`, `load-configuration`, and `configure-application`; the last changes an application's settings without dropping its sessions.
 
 `(make-lack-app)` returns a plain Lack application you can mount into a larger Lack/Clack stack. Lack's `:mount` middleware strips the prefix without setting `:script-name`, so pass the prefix yourself: `(:mount "/apps" (make-lack-app :prefix "/apps"))`. A `:script-name` set by the server or proxy is honoured as well. Set `*debug-errors*` to enter the debugger on errors instead of rendering an error page.
 
@@ -573,7 +582,7 @@ The contacts example is translated into French and German.
 
 ## Keeping data in a database
 
-`littoral/db` stores described objects in SQL through cl-dbi. It's tested with SQLite and written for PostgreSQL too. A table is a description plus a name:
+`littoral/db` stores described objects in SQL through cl-dbi. It's tested with SQLite and PostgreSQL. A table is a description plus a name:
 
 ```lisp
 (defclass contact (littoral.db:persistent)      ; adds id and version
@@ -620,7 +629,7 @@ Generated applications keep their schema this way: `make migrate`, or `bin/app m
 
 ### Full-text search
 
-Give `define-table` the fields to index, and `db-search` finds objects by their words, the best matches first:
+Give `define-table` the fields to index, and `db-search` finds objects by their words, the best matches first. For an `article` class with `title` and `body` fields:
 
 ```lisp
 (littoral.db:define-table article :search (title body))
@@ -636,10 +645,10 @@ Give `define-table` the fields to index, and `db-search` finds objects by their 
 
 ## A generated admin
 
-`littoral/admin` builds a whole administration interface from descriptions and tables:
+`littoral/admin` builds a whole administration interface from descriptions and tables. Given classes with tables (`define-table`), here `project` and `issue`:
 
 ```lisp
-(littoral.admin:register-admin "/admin" '(project task)
+(littoral.admin:register-admin "/admin" '(project issue)
   :database '(:sqlite3 :database-name "app.db")
   :role :admin)                     ; users with the admin role sign in
 ```
@@ -651,7 +660,7 @@ For each class it gives:
 - editing with validation, which notices when someone else changed the record meanwhile
 - creation, and deletion after asking
 
-Each request's changes run in one transaction. `:database` gives the admin its own database (through the new `:around-request` hook).
+Each request's changes run in one transaction. `:database` gives the admin its own database (through the `:around-request` hook).
 
 Beside the tables it has two pages of its own:
 - **Audit log**, when the audit log is on (the default), showing who did what.
@@ -674,12 +683,13 @@ Who may use it:
 `/examples/accounts` is the same page signing in against an existing table.
 
 ```lisp
+(littoral.db:connect-database :sqlite3 :database-name "app.db")
 (littoral.auth:create-auth-tables)
 (littoral.auth:add-user "ada" "ada@example.org" "a long passphrase" :roles '(:admin))
 
-(defclass app (littoral.auth:auth-root component) …)        ; answers /reset links
-(defclass reports (littoral.auth:restricted component) …)   ; signed-in users only
-(defmethod littoral.auth:required-role ((self reports)) :admin)
+(defclass app (littoral.auth:auth-root component) ())        ; answers /reset links
+(defclass reports (littoral.auth:restricted component) ())   ; signed-in users only…
+(defmethod littoral.auth:required-role ((self reports)) :admin)   ; …with the admin role
 ```
 
 - **Restricted components.** A `restricted` component shows a sign-in prompt in its place until someone is signed in, or a refusal if they lack its role or permission. In callbacks, `(require-role :admin)` and `(require-permission :edit-posts)` refuse with a 403. `current-user`, `log-in`, `log-out`, `has-role-p` and `has-permission-p` cover the rest.
@@ -692,13 +702,13 @@ Who may use it:
   - "Keep me signed in" on the sign-in form makes the sign-in last `*remember-days*` (30), renewed by use. Without it, the sign-in lasts until the browser closes, or `*sign-in-idle-hours*` (12) unused.
   - `user-sessions` lists a user's sign-ins, `revoke-session` ends one, and `log-out-everywhere` ends them all. An ended sign-in signs that browser out within `*auth-session-check-seconds*` (60).
   - Callbacks can set cookies of their own with `(set-cookie name value :max-age seconds)`. Read them with `request-cookie`.
-- **Old rows.** Signing in deletes expired sign-ins and old failures only now and then. Call `purge-expired-auth-rows` from a nightly job: it deletes failures and reset mails too old to count, expired sign-ins, and expired reset links and API tokens.
+- **Old rows.** Signing in deletes expired sign-ins, and a failed attempt now and then deletes old failures, but expired reset links and API tokens stay. Call `purge-expired-auth-rows` from a nightly job: it deletes failures and reset mails too old to count, expired sign-ins, and expired reset links and API tokens.
 - **Second factors.** `security-settings` is a component where users add them:
   - **An authenticator app (TOTP, RFC 6238).** Setup shows a QR code; afterwards, signing in with a password asks for the app's code, and each code works once.
   - **Passkeys (WebAuthn).** A passkey signs a user in on its own ("Sign in with a passkey", no name or password), or serves as the second step. Littoral checks the browser's response itself: challenge, origin, relying party, and the ES256 signature with a signature count that must go up.
   - **Recovery codes.** Ten single-use codes, stored hashed, made when an authenticator app is set up or on request.
   - Failed codes count towards the lockout, like failed passwords. The members example has a Security section with all three, and CI signs in with a passkey through Chrome's virtual authenticator.
-- **Signing in gives the session a new key**, as does signing out, and closes the session's open streams and sockets. A session URL someone had beforehand, perhaps from a link they sent, is then useless.
+- **Signing in gives the session a new key** (unless the key is kept in a cookie), as does signing out, and closes the session's open streams and sockets. A session URL someone had beforehand, perhaps from a link they sent, is then useless.
 - **Password reset.** "Forgot your password?" emails a single-use link that expires after an hour. The answer is the same whether or not the address has an account. Each account gets at most one mail a minute, and each client address `*reset-mails-per-address*` in the window. `*send-mail*` is where you plug in your mailer; by default it prints the mail. With `littoral/mail`, `(littoral.mail:outbox-sender)` queues it in the outbox (see "Sending mail").
 - **`*public-url*`.** Set `littoral.auth:*public-url*` to the site's address (`"https://example.org"`): it is where reset links and OAuth redirects point. In deployment mode it is required, because the Host header is the client's to choose, and a reset link built from a forged one would send its token to someone else's site. In development the request's host is used.
 - **OAuth / OpenID Connect.** Load `littoral/oauth` and call `define-oauth-provider` with a provider's URLs and your client id and secret. The sign-in form then offers "Sign in with …". The flow is the authorisation code flow with PKCE, and its state is tied to the browser. Users are found by email, or created; an email the provider marks `"email_verified": false` is refused. Register `/<app>/oauth/<provider>` as the redirect address with the provider.
@@ -749,7 +759,7 @@ Roles and permissions are kept in two tables, keyed by name, so they work with a
 
 - **From `littoral/auth`:**
   - Sign-ins, with how (password, passkey, OAuth, or password with a second factor) and whether "keep me signed in" was ticked.
-  - Failed sign-ins, with the reason: unknown user, wrong password, inactive, locked out or a wrong code.
+  - Failed sign-ins, with the reason: unknown user, wrong password, inactive, locked out, a wrong code or a refused passkey.
   - Sign-outs, sessions ended elsewhere, password resets asked for, and password changes.
   - Users created, roles and permissions granted or revoked, API tokens, and second factors added or removed.
 - **From `littoral/admin`:** what it creates, changes (each field's old and new value, though password values are left out) and deletes.
@@ -771,7 +781,7 @@ The members demo shows the log to ada, under Admins.
 
 ### PostgreSQL
 
-`littoral/db` and `littoral/auth` are tested on SQLite and on PostgreSQL. Connect with `(connect-database :postgres :database-name "app" :host "localhost" :username "app" :password "…")`; the driver is pure Lisp. `make test-postgres LITTORAL_TEST_DATABASE=postgres://user:password@host:5432/db` runs the database tests against one, as CI does.
+`littoral/db` and `littoral/auth` are tested on SQLite and on PostgreSQL. Connect with `(littoral.db:connect-database :postgres :database-name "app" :host "localhost" :username "app" :password "…")`; the driver is pure Lisp. `make test-postgres LITTORAL_TEST_DATABASE=postgres://user:password@host:5432/db` runs the database tests against one, as CI does.
 
 ## Testing your application
 
@@ -807,7 +817,7 @@ The fake browser doesn't run JavaScript. For drag and drop, the back button with
 (test passkeys
   (with-chrome (page :base "http://localhost:8080")   ; a fresh profile each time
     (add-virtual-authenticator page)                  ; a passkey device that always says yes
-    (visit page "/members")
+    (visit page "/examples/members")
     (click-text page "Sign in")
     (type-into page "#sign-in-name" "ada")            ; real key events, by CSS selector
     (type-into page "#sign-in-password" "correct horse battery")
@@ -817,7 +827,7 @@ The fake browser doesn't run JavaScript. For drag and drop, the back button with
     (is (search "Passkey 1" (text page)))))
 ```
 
-- Start your application first, with `start`; serve it at `localhost` rather than `127.0.0.1` when testing passkeys, since WebAuthn won't accept an IP address as the site.
+- Start your application first, with `start`. This test needs the members example: load `littoral/members-demo` and call `(littoral-members-demo:register)`. Serve it at `localhost` rather than `127.0.0.1` when testing passkeys, since WebAuthn won't accept an IP address as the site.
 - `evaluate` runs JavaScript in the page and returns its value; `click-css`, `back`, `page-url` and `screenshot` do what they say. Clicks wait for any page load they start. A missing element signals `browser-error`.
 - Chrome is found in the usual places, or set `CHROME` to its path.
 - `make test-chrome` runs Littoral's own examples this way (`tests/chrome.lisp`, a model for your own), and CI runs it too.
@@ -843,7 +853,7 @@ The fake browser doesn't run JavaScript. For drag and drop, the back button with
   - Open event streams are capped in total (`*max-event-streams*`) and per session (`*max-event-streams-per-session*`); beyond that, 503.
   - Behind a proxy, set `*trust-forwarded-for*` so the client address comes from `X-Forwarded-For`.
 - **`/config`.** Without credentials, it only answers requests from the machine it runs on. A request forwarded by a proxy doesn't count as local unless you trust the proxy. Give it credentials with `(configure-admin :user … :password …)`, which are checked in constant time, or serve it to signed-in users with a role with `littoral.auth:configure-signed-in-admin`.
-- **Whole applications behind sign-in.** Make an application's root a `signed-in-root` and call `(restrict-application path role)`: new visitors get the sign-in form, and only users with the role see the application. Call `check-application-role` in actions that change things. The admin's `:role` is built on this.
+- **Whole applications behind sign-in.** With `littoral/auth`, make an application's root a `signed-in-root` and call `(restrict-application path role)`: new visitors get the sign-in form, and only users with the role see the application. Call `check-application-role` in actions that change things. The admin's `:role` is built on this.
 - **Development mode.** Halos can inspect and change component state, so `start` warns when an application in development mode is served on a public address. Deploy with `:mode :deployment`.
 - **New pieces.** Sign-in, reset links and WebSockets have protections of their own, described in their sections.
 - **Translations** are FORMAT control strings, so catalogues may not contain the `~/…/` directive, which would call a function named in the text. `define-translations` and `load-translations` refuse it.
@@ -864,7 +874,7 @@ The fake browser doesn't run JavaScript. For drag and drop, the back button with
 - several processes
 - a production checklist
 
-**Performance.** `make load` measures over real HTTP, using Hunchentoot on an Apple-silicon Mac with SBCL 2.6.8:
+**Performance.** These figures were measured over real HTTP against `bench/load-server.lisp`, using Hunchentoot on an Apple-silicon Mac with SBCL 2.6.8. `make load` measures the clicks, the memory per session, and 100 and 300 push streams (`bench/load.mjs`). The `ab` rows are ApacheBench against the same server, and the push row is `bench/load.mjs streams` with `STREAMS=600`:
 
 | Measurement | Result |
 |---|---|
@@ -872,7 +882,7 @@ The fake browser doesn't run JavaScript. For drag and drop, the back button with
 | rendering a session's page (`ab`, 32 connections) | ~10,900 requests/s |
 | static files (`ab`) | ~15,000 requests/s |
 | memory per session, back-button pages included | ~10 KB (counter), ~25 KB (store) |
-| open push streams | 600 at once with `:max-threads 1000`; ~1.5 MB each |
+| open push streams | 600 at once with `:max-threads 1000`; ~2 MB each |
 
 `make bench` measures the same cycle in-process, without the network: about 60 µs per click on the counter.
 
@@ -883,7 +893,7 @@ Against Seaside on Pharo 12, measured the same way (see "Littoral and Seaside co
 
 Requests in one session are serialised by its lock, and requests in different sessions run in parallel. The test suite runs concurrent sessions, many requests against one page, and concurrent AJAX.
 
-**Threads.** Hunchentoot gives every connection its own thread, and `start` allows 100 by default. Both idle keep-alive connections and open pages that use server push occupy a thread, and a push page holds its thread, about 1.5 MB of memory, for as long as it stays open. So capacity is counted in connections, not requests:
+**Threads.** Hunchentoot gives every connection its own thread, and `start` allows 100 by default. Both idle keep-alive connections and open pages that use server push occupy a thread, and a push page holds its thread, about 2 MB of memory, for as long as it stays open. So capacity is counted in connections, not requests:
 
 - If many pages subscribe to channels, raise `:max-threads`.
 - Put nginx in front: it holds idle browser connections cheaply and sends littoral fewer of its own.
@@ -969,7 +979,7 @@ location / { proxy_pass http://$littoral_backend; proxy_buffering off; }
 With cookie sessions, route on the cookie instead. Turning `proxy_buffering` off, or sending `X-Accel-Buffering: no` (littoral does this on its event streams), keeps server push working.
 
 **Health, metrics and logs.**
-- `/healthz` answers `{"status":"ok"}` for load balancers. It answers 503 when a check you add with `add-health-check` fails, for example a database ping.
+- `/healthz` answers `{"status":"ok",…}` for load balancers, with the uptime and each check's result. It answers 503 when a check you add with `add-health-check` fails, for example a database ping.
 - `(serve-metrics)` serves Prometheus metrics at `/metrics`, to this machine only by default: requests by application, kind and status, a latency histogram, sessions, push streams, jobs, heap and threads.
   - Also GC time, bytes allocated, the versions running (`littoral_build_info`), and sessions started, ended (expired or evicted) and refused.
   - With `littoral/jobs` and `littoral/mail`, each database whose tables were made in the process: durable jobs by queue and status, how long the oldest due job has waited, the outbox by status, and how long the oldest unsent mail has waited. Also job runs by job and result, with their durations; mail sends by result (sent, transient, permanent); SMTP send times; and the SMTP connection pools.

@@ -174,3 +174,14 @@
     (is (littoral::query-has-p query "_k") "~S has _k" query))
   (dolist (query '(nil "" "_kx=1" "a=_k" "x_k=1" "a=b&_kk" "_" "&"))
     (is (not (littoral::query-has-p query "_k")) "~S has no _k" query)))
+
+(test latency-buckets-can-change
+  ;; Timings kept with the old buckets would overflow; the histogram starts again.
+  (with-fresh-applications (("/rebucketed" 'littoral-examples:counter :mode :deployment))
+    (let ((b (make-instance 'browser)))
+      (visit b "/rebucketed")
+      (let ((*latency-buckets* (append *latency-buckets* '(30 60))))
+        (visit b "/rebucketed")
+        (is (search "le=\"60\"" (metrics-text))))
+      (visit b "/rebucketed")
+      (is (not (search "le=\"60\"" (metrics-text)))))))

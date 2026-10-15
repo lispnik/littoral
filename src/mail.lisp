@@ -15,7 +15,8 @@
 (defpackage #:littoral.mail
   (:use #:cl)
   (:import-from #:smtp #:smtp-error)
-  (:documentation "Sending mail: MIME messages, SMTP, templates and an outbox that retries.")
+  (:documentation "Load it with `(asdf:load-system :littoral/mail)`.  Sending mail: MIME messages,
+SMTP, templates and an outbox that retries.")
   (:export
    ;; Messages
    #:mail #:make-mail #:mail-to #:mail-cc #:mail-bcc #:mail-from #:mail-reply-to #:mail-subject
@@ -47,14 +48,16 @@
   "The From address of mail that doesn't give one.")
 
 (defclass mail ()
-  ((to :initarg :to :initform '() :reader mail-to)
-   (cc :initarg :cc :initform '() :reader mail-cc)
-   (bcc :initarg :bcc :initform '() :reader mail-bcc)
-   (from :initarg :from :reader mail-from)
-   (reply-to :initarg :reply-to :initform nil :reader mail-reply-to)
+  ((to :initarg :to :initform '() :reader mail-to :documentation "A list of addresses.")
+   (cc :initarg :cc :initform '() :reader mail-cc :documentation "A list of addresses.")
+   (bcc :initarg :bcc :initform '() :reader mail-bcc
+        :documentation "A list of addresses, which the message doesn't show.")
+   (from :initarg :from :reader mail-from :documentation "An address.")
+   (reply-to :initarg :reply-to :initform nil :reader mail-reply-to :documentation "An address, or NIL.")
    (subject :initarg :subject :initform "" :reader mail-subject)
-   (text :initarg :text :initform nil :reader mail-text)
-   (html :initarg :html :initform nil :reader mail-html)
+   (text :initarg :text :initform nil :reader mail-text
+         :documentation "The plain-text body, made from the HTML one when not given.")
+   (html :initarg :html :initform nil :reader mail-html :documentation "The HTML body, or NIL.")
    (attachments :initarg :attachments :initform '() :reader mail-attachments
                 :documentation "(FILE-NAME CONTENT-TYPE OCTETS-OR-STRING) lists.")
    (headers :initarg :headers :initform '() :reader mail-headers
@@ -65,10 +68,12 @@
 
 (defun make-mail (&key to cc bcc (from *mail-from*) reply-to (subject "") text html attachments headers)
   "A mail.  TO, CC and BCC are addresses (\"ada@example.org\" or \"Ada <ada@example.org>\")
-or lists of them; TEXT and HTML its plain and HTML bodies (one is enough: the
-plain one is made from the HTML when missing); ATTACHMENTS (FILE-NAME
-CONTENT-TYPE DATA) lists, DATA octets or a string; HEADERS (NAME . VALUE) pairs.
-A bad address, or a line break in a header, is refused here."
+or lists of them; FROM an address (*MAIL-FROM*) and REPLY-TO one or NIL; TEXT
+and HTML its plain and HTML bodies (one is enough: the plain one is made from
+the HTML when missing); ATTACHMENTS (FILE-NAME CONTENT-TYPE DATA) lists, DATA
+octets or a string (sent as UTF-8); HEADERS (NAME . VALUE) pairs.  Signals an
+error without a recipient or a body, and an SMTP-ERROR for a bad address or a
+line break in a header."
   (let ((to (listify to)) (cc (listify cc)) (bcc (listify bcc)))
     (unless (or to cc bcc) (error "A mail needs someone to send it to."))
     (unless (or text html) (error "A mail needs a TEXT or an HTML body."))
@@ -91,7 +96,8 @@ A bad address, or a line break in a header, is refused here."
                      :headers (mail-headers mail) :date date))
 
 (defun address-spec (address)
-  "The bare address in ADDRESS: \"Ada <ada@example.org>\" → \"ada@example.org\"."
+  "The bare address in ADDRESS: \"Ada <ada@example.org>\" → \"ada@example.org\".
+Signals an SMTP-ERROR when ADDRESS isn't one."
   (smtp:mailbox-address (smtp:parse-mailbox address)))
 
 (defun mail-recipients (mail)
@@ -100,7 +106,8 @@ A bad address, or a line break in a header, is refused here."
                      :test #'string-equal :from-end t))
 
 (defun mail-string (mail &key (date (get-universal-time)))
-  "MAIL as a MIME message, with CRLF line breaks; Bcc isn't written."
+  "MAIL as a MIME message, with CRLF line breaks, dated DATE (a universal
+time, now by default); Bcc isn't written."
   (sb-ext:octets-to-string (smtp:render-message (smtp-message mail :date date)) :external-format :utf-8))
 
 (defun crlf-lines (string)
@@ -155,7 +162,7 @@ A bad address, or a line break in a header, is refused here."
                     (t body))))))))
 
 (defun message-text (message)
-  "The plain text of MESSAGE (a MIME string), with plain newlines."
+  "The plain text of MESSAGE (a MIME string), with plain newlines, or NIL."
   (let ((text (find-part message "text/plain")))
     (and text (remove #\Return text))))
 
@@ -172,7 +179,8 @@ RECIPIENTS.  Signals on failure; an SMTP-ERROR that is SMTP-ERROR-PERMANENT-P
 won't succeed if tried again."))
 
 (defclass log-mailer () ((stream :initarg :stream :initform nil))
-  (:documentation "Prints each message's addresses, subject and text, instead of sending it."))
+  (:documentation "Prints each message's addresses, subject and text, instead of sending it,
+to its :STREAM, or else *ERROR-OUTPUT*."))
 
 (defmethod send-message ((mailer log-mailer) from recipients message)
   (format (or (slot-value mailer 'stream) *error-output*)
@@ -180,10 +188,12 @@ won't succeed if tried again."))
           from recipients (message-header message "Subject") (message-text message)))
 
 (defclass sent-message ()
-  ((from :initarg :from :reader sent-message-from)
-   (recipients :initarg :recipients :reader sent-message-recipients)
+  ((from :initarg :from :reader sent-message-from :documentation "The envelope's sender, a bare address.")
+   (recipients :initarg :recipients :reader sent-message-recipients
+               :documentation "The envelope's recipients, bare addresses, Bcc included.")
    (text :initarg :text :reader sent-message-text :documentation "The MIME message.")
-   (time :initform (get-universal-time) :reader sent-message-time))
+   (time :initform (get-universal-time) :reader sent-message-time
+         :documentation "When the mailer was given it, a universal time."))
   (:documentation "A message a MEMORY-MAILER was given."))
 
 (defclass memory-mailer ()
@@ -226,8 +236,9 @@ won't succeed if tried again."))
       (littoral:count-metric "littoral_mail_sends_total" (list "sent")))))
 
 (defun send-mail (mail &key (mailer *mailer*))
-  "Send MAIL now, waiting for the mailer.  QUEUE-MAIL sends it in the
-background instead, and tries again when it fails."
+  "Send MAIL now with MAILER, waiting for it, and signal what it signals when
+sending fails.  QUEUE-MAIL sends it in the background instead, and tries
+again when it fails."
   (send-counted mailer (address-spec (mail-from mail)) (mail-recipients mail) (mail-string mail)))
 
 ;;; Templates
@@ -249,9 +260,10 @@ readable page that mail programs show well."
 
 (defmacro define-mail (name lambda-list &key to cc bcc from reply-to subject text html attachments headers)
   "Define NAME, a function of LAMBDA-LIST making a mail.  The keyword forms are
-evaluated each time, with LAMBDA-LIST's variables bound; HTML is a list of
-forms written with Littoral's HTML tags (as in RENDER), inside *MAIL-LAYOUT*.
-Without TEXT, the plain text is made from the HTML."
+evaluated each time, with LAMBDA-LIST's variables bound, and given to
+MAKE-MAIL (FROM defaults to *MAIL-FROM*).  HTML is a list of forms written
+with Littoral's HTML tags (as in RENDER), inside *MAIL-LAYOUT*.  Without
+TEXT, the plain text is made from the HTML."
   (let ((subject-var (gensym "SUBJECT")))
     `(defun ,name ,lambda-list
        (let ((,subject-var ,subject))

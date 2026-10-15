@@ -34,14 +34,17 @@
 first; :NONE outside one.")
 
 (defun ajax (&key callback update value confirm on-complete)
-  "Run CALLBACK in the background, then re-render the component or list of
-components UPDATE.
+  "For an :ON-CLICK, :ON-CHANGE, :ON-INPUT or :ON-SUBMIT attribute: post
+CALLBACK, a function of no arguments, in the background (with the element's
+field, or its form for a submit button), then re-render the component or
+list of components UPDATE, which must be UPDATABLE, in place.  Either may be
+left out.
 
 VALUE is a JavaScript expression evaluated in the browser, with this bound
-to the element; when given, CALLBACK receives its result as a string.
-CALLBACK's return value goes back to the browser, where ON-COMPLETE, a
-JavaScript snippet, can use it as value.  CONFIRM asks the user before
-anything is sent."
+to the element; when given, CALLBACK takes one argument, its result as a
+string.  CALLBACK's return value goes back to the browser (as JSON), where
+ON-COMPLETE, a JavaScript snippet, can use it as value.  CONFIRM is a
+question the user must accept before anything is sent."
   (%make-ajax-spec :callback callback
                    :update (alexandria:ensure-list update)
                    :value value :confirm confirm :on-complete on-complete))
@@ -54,11 +57,15 @@ in place.  Outside an AJAX request it does nothing and returns NIL."
     t))
 
 (defun ajax-update (&rest components)
-  "Re-render COMPONENTS, running no callback first."
+  "For an :ON-CLICK, :ON-CHANGE, :ON-INPUT or :ON-SUBMIT attribute:
+re-render COMPONENTS (UPDATABLE) in place, running no callback first.  The
+element's field is still posted, so its own :CALLBACK runs."
   (ajax :update components))
 
 (defun periodical (seconds &key callback update)
-  "For a :PERIODICAL attribute: every SECONDS, run CALLBACK and re-render UPDATE."
+  "For a :PERIODICAL attribute: every SECONDS while the page is open, run
+CALLBACK (a function of no arguments, or NIL) and re-render the component or
+list of components UPDATE, which must be UPDATABLE."
   (%make-ajax-spec :callback callback
                    :update (alexandria:ensure-list update)
                    :every seconds))

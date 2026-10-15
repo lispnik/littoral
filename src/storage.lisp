@@ -20,13 +20,15 @@
 
 (defpackage #:littoral.storage
   (:use #:cl #:littoral #:littoral.html)
-  (:documentation "Store uploaded files on disk or in S3, with thumbnails and description fields.")
+  (:documentation "Load with `(asdf:load-system :littoral/storage)`.  Stores uploaded files on
+disk or in S3, with thumbnails, and gives descriptions the field types :file
+and :image.")
   (:export #:storage #:*storage* #:disk-storage #:make-disk-storage #:s3-storage #:make-s3-storage
            #:storage-put #:storage-get #:storage-delete #:storage-url #:ensure-bucket
            #:store-upload #:store-octets #:delete-stored-file
            #:stored-file #:stored-file-key #:stored-file-name #:stored-file-type #:stored-file-size
            #:stored-file-thumbnail #:stored-file-url #:stored-file-thumbnail-url
-           #:file-field #:image-field #:*thumbnail-size* #:*max-image-pixels* #:sniff-type))
+           #:file-field #:image-field #:*thumbnail-size* #:*max-image-pixels* #:sniff-type #:*signing-key*))
 
 (in-package #:littoral.storage)
 
@@ -35,10 +37,11 @@
 (defclass storage ()
   ((private :initarg :private :initform nil :reader storage-private-p
             :documentation "When true, files are served only through signed URLs that expire."))
-  (:documentation "Somewhere to keep files.  Specialise the STORAGE- generic functions."))
+  (:documentation "Somewhere to keep files.  A subclass specialises STORAGE-PUT, STORAGE-GET,
+STORAGE-DELETE and STORAGE-URL."))
 
 (defgeneric storage-put (storage key octets content-type)
-  (:documentation "Keep OCTETS under KEY, with CONTENT-TYPE."))
+  (:documentation "Keep OCTETS under KEY, with CONTENT-TYPE.  Returns KEY."))
 
 (defgeneric storage-get (storage key)
   (:documentation "The octets kept under KEY and their content type, or NIL."))
@@ -56,7 +59,10 @@ names the download; EXPIRES (seconds) limits how long a private URL works."))
 ;;; What a file is
 
 (defun sniff-type (octets)
-  "The type the bytes say they are, whatever the browser said."
+  "The type OCTETS' first bytes say they are, whatever the browser said:
+\"image/png\", \"image/jpeg\", \"image/gif\", \"image/webp\",
+\"application/pdf\" or \"application/zip\", else
+\"application/octet-stream\"."
   (flet ((starts (&rest bytes)
            (and (>= (length octets) (length bytes))
                 (every (lambda (b i) (or (null b) (= b (aref octets i)))) bytes
@@ -85,6 +91,12 @@ names the download; EXPIRES (seconds) limits how long a private URL works."))
 sniffed), its SIZE in bytes, and its THUMBNAIL's key or NIL."
   key name type size thumbnail)
 
+(setf (documentation 'stored-file-key 'function) "The key FILE, a STORED-FILE, is kept under in its storage."
+      (documentation 'stored-file-name 'function) "The name FILE, a STORED-FILE, was uploaded with, without directories."
+      (documentation 'stored-file-type 'function) "FILE's content type, as SNIFF-TYPE found it from its bytes."
+      (documentation 'stored-file-size 'function) "FILE's size in bytes."
+      (documentation 'stored-file-thumbnail 'function) "The key of FILE's thumbnail, or NIL when it has none.")
+
 (defun clean-name (name)
   "NAME without directories or characters that would trouble a header."
   (let* ((base (subseq name (1+ (or (position-if (lambda (c) (member c '(#\/ #\\))) name :from-end t) -1))))
@@ -99,6 +111,7 @@ sniffed), its SIZE in bytes, and its THUMBNAIL's key or NIL."
 
 (defun decode-stored-file (text)
   (and text (stringp text) (plusp (length text))
+       (char/= (char text 0) #\!)          ; an upload FILE-FIELD refused
        (destructuring-bind (key &optional (name "file") (type "application/octet-stream") (size "0") thumbnail)
            (cl-ppcre:split "\\t" text :limit 5)
          (make-stored-file key name type (or (parse-integer size :junk-allowed t) 0)
@@ -156,8 +169,11 @@ longer side, or NIL when it can't or shouldn't be made."
   (format nil "~A.~A" (littoral::random-key 24) (extension-for type)))
 
 (defun store-octets (octets name &key (storage *storage*) thumbnail)
-  "Keep OCTETS, uploaded as NAME, in STORAGE; the STORED-FILE.  With
-THUMBNAIL, an image gets a thumbnail too."
+  "Keep OCTETS, uploaded as NAME, in STORAGE under a new random key; the
+STORED-FILE.  Its name is NAME without directories, and its type is what
+SNIFF-TYPE says.  With THUMBNAIL, a PNG, JPEG or GIF image gets a JPEG
+thumbnail too (see *THUMBNAIL-SIZE* and *MAX-IMAGE-PIXELS*).  Signals an
+error when STORAGE is NIL."
   (unless storage (error "No storage: set LITTORAL.STORAGE:*STORAGE*."))
   (let* ((type (sniff-type octets))
          (key (new-key type))
@@ -168,18 +184,26 @@ THUMBNAIL, an image gets a thumbnail too."
     (make-stored-file key (clean-name name) type (length octets) thumbnail-key)))
 
 (defun store-upload (upload &rest options &key storage thumbnail)
-  "Keep UPLOAD, an UPLOADED-FILE from a FILE-INPUT; the STORED-FILE."
+  "Keep UPLOAD, an UPLOADED-FILE from a FILE-INPUT, under the name it was
+uploaded with; the STORED-FILE.  STORAGE and THUMBNAIL are as for
+STORE-OCTETS."
   (declare (ignore storage thumbnail))
   (apply #'store-octets (file-contents upload) (file-name upload) options))
 
 (defun delete-stored-file (file &optional (storage *storage*))
+  "Delete FILE, a STORED-FILE, and its thumbnail from STORAGE."
   (storage-delete storage (stored-file-key file))
   (when (stored-file-thumbnail file) (storage-delete storage (stored-file-thumbnail file))))
 
 (defun stored-file-url (file &key (storage *storage*) (expires 3600))
+  "A URL the browser can fetch FILE from in STORAGE, downloading under the
+name it was uploaded with.  A private storage's URL works for EXPIRES
+seconds."
   (storage-url storage (stored-file-key file) :filename (stored-file-name file) :expires expires))
 
 (defun stored-file-thumbnail-url (file &key (storage *storage*) (expires 3600))
+  "A URL the browser can fetch FILE's thumbnail from in STORAGE, or NIL when
+it has none.  A private storage's URL works for EXPIRES seconds."
   (and (stored-file-thumbnail file)
        (storage-url storage (stored-file-thumbnail file) :expires expires)))
 
@@ -281,8 +305,10 @@ as something that runs."
           (list 404 (list :content-type "text/plain") (list "Not found."))))))
 
 (defun make-disk-storage (directory &key (prefix "/files/") private)
-  "Keep files under DIRECTORY and serve them at PREFIX.  With PRIVATE, only
-signed URLs (STORAGE-URL) serve them, until they expire."
+  "A DISK-STORAGE keeping files under DIRECTORY (created if need be) and
+serving them at PREFIX, through MOUNT-HANDLER (UNMOUNT-HANDLER stops it).
+With PRIVATE, only signed URLs (STORAGE-URL) serve them, until they expire;
+the signing key is random per process."
   (let ((storage (make-instance 'disk-storage :directory (uiop:ensure-directory-pathname directory)
                                               :prefix prefix :private private)))
     (ensure-directories-exist (storage-directory storage))
@@ -307,9 +333,11 @@ Unless the bucket is public, browsers fetch them through presigned URLs."))
 
 (defun make-s3-storage (&key bucket (region "us-east-1") endpoint access-key secret-key (key-prefix "")
                           (private t) (path-style t))
-  "Keep files in BUCKET.  ENDPOINT defaults to AWS's for REGION; give it for
-MinIO or another service.  With PRIVATE (the default), URLs are presigned
-and expire; otherwise they point straight at the bucket."
+  "An S3-STORAGE keeping files in BUCKET, with ACCESS-KEY and SECRET-KEY.
+ENDPOINT defaults to AWS's for REGION; give it for MinIO or another service,
+with PATH-STYLE NIL when it names the bucket itself.  KEY-PREFIX goes before
+every key.  With PRIVATE (the default), URLs are presigned and expire;
+otherwise they point straight at the bucket.  Contacts no server."
   (make-instance 's3-storage :bucket bucket :region region :access-key access-key :secret-key secret-key
                              :endpoint (string-right-trim "/" (or endpoint (format nil "https://s3.~A.amazonaws.com" region)))
                              :key-prefix key-prefix :private private :path-style path-style))
@@ -465,10 +493,12 @@ and expire; otherwise they point straight at the bucket."
             :documentation "The STORAGE to keep files in; NIL for *STORAGE*.")
    (max-size :initarg :max-size :initform nil :reader field-max-size
              :documentation "The largest file accepted, in bytes, or NIL."))
-  (:documentation "An uploaded file, kept in storage; the value is a STORED-FILE."))
+  (:documentation "An uploaded file, kept in storage; the value is a STORED-FILE.  A
+description's :TYPE :FILE, with the options :STORAGE and :MAX-SIZE."))
 
 (defclass image-field (file-field) ()
-  (:documentation "An uploaded image, kept with a thumbnail."))
+  (:documentation "An uploaded PNG, JPEG, GIF or WebP image, kept with a thumbnail.  A
+description's :TYPE :IMAGE, with the options of FILE-FIELD."))
 
 (defun field-store (field) (or (field-storage field) *storage*))
 
@@ -478,18 +508,26 @@ and expire; otherwise they point straight at the bucket."
   (or (encode-stored-file value) ""))
 
 (defmethod littoral::parse-field ((field file-field) string)
-  (decode-stored-file string))
+  (if (and (plusp (length string)) (char= (char string 0) #\!))
+      (error 'littoral::field-error :message (subseq string 1))
+      (decode-stored-file string)))
+
+(defgeneric upload-problem (field size type)
+  (:documentation "NIL when a file of SIZE bytes and TYPE suits FIELD, or a
+sentence saying why not.")
+  (:method ((field file-field) size type)
+    (declare (ignore type))
+    (and (field-max-size field) (> size (field-max-size field))
+         (translate "~A is too large: at most ~:D bytes." (translate (littoral::field-label field))
+                    (field-max-size field))))
+  (:method ((field image-field) size type)
+    (or (call-next-method)
+        (and (not (member type *inline-types* :test #'string=))
+             (translate "~A must be a PNG, JPEG, GIF or WebP image." (translate (littoral::field-label field)))))))
 
 (defmethod littoral::check-field ((field file-field) value)
   (or (call-next-method)
-      (and value (field-max-size field) (> (stored-file-size value) (field-max-size field))
-           (translate "~A is too large: at most ~:D bytes." (translate (littoral::field-label field))
-                      (field-max-size field)))))
-
-(defmethod littoral::check-field ((field image-field) value)
-  (or (call-next-method)
-      (and value (not (member (stored-file-type value) *inline-types* :test #'string=))
-           (translate "~A must be a PNG, JPEG, GIF or WebP image." (translate (littoral::field-label field))))))
+      (and value (upload-problem field (stored-file-size value) (stored-file-type value)))))
 
 (defmethod littoral::render-field-input ((field file-field) id text callback)
   (let ((current (decode-stored-file text)))
@@ -502,11 +540,17 @@ and expire; otherwise they point straight at the bucket."
     (file-input (:id id
                  :accept (when (typep field 'image-field) "image/png,image/jpeg,image/gif,image/webp")
                  :callback (lambda (upload)
-                             (when (plusp (length (file-contents upload)))
-                               (funcall callback
-                                        (encode-stored-file
-                                         (store-upload upload :storage (field-store field)
-                                                              :thumbnail (typep field 'image-field))))))))))
+                             (let ((octets (file-contents upload)))
+                               (when (plusp (length octets))
+                                 ;; Refused uploads are never stored: the
+                                 ;; field's text carries the problem instead.
+                                 (let ((problem (upload-problem field (length octets) (sniff-type octets))))
+                                   (funcall callback
+                                            (if problem
+                                                (format nil "!~A" problem)
+                                                (encode-stored-file
+                                                 (store-upload upload :storage (field-store field)
+                                                                      :thumbnail (typep field 'image-field)))))))))))))
 
 (defun render-stored-file (file field)
   (let* ((storage (field-store field))

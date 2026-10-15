@@ -109,9 +109,16 @@ start the web server.  Mail comes from $MAIL_FROM."
     (when (and from (plusp (length from)))
       (setf littoral.mail:*mail-from* from)))
   (register-app :mode mode :database database)
-  (littoral.mail:start-mail-delivery :database database :mailer (mailer))
+  ;; The runner first: mail delivery then uses it rather than starting its own.
   (littoral.jobs:start-job-runner :database database)
+  (littoral.mail:start-mail-delivery :database database :mailer (mailer))
   (start :port port :address address))
+
+(defun env-flag-p (name)
+  "True when the environment variable NAME is set to something other than
+empty, 0, false or no."
+  (let ((value (uiop:getenv name)))
+    (and value (not (member (string-trim " " value) '("" "0" "false" "no") :test #'string-equal)))))
 
 (defun toplevel ()
   "The entry point of the executable `make build` writes: serves in deployment
@@ -144,7 +151,7 @@ user instead."
         (uiop:quit 0))))
   (let ((public-url (uiop:getenv "PUBLIC_URL")))
     (setf littoral.auth:*public-url* (and public-url (plusp (length public-url)) public-url)
-          *trust-forwarded-for* (and (uiop:getenv "TRUST_PROXY") t)))
+          *trust-forwarded-for* (env-flag-p "TRUST_PROXY")))
   (serve :port (parse-integer (or (uiop:getenv "PORT") "{{port}}"))
          :address (or (uiop:getenv "ADDRESS") "127.0.0.1")
          :mode :deployment)

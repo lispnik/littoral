@@ -17,7 +17,8 @@
 (in-package #:littoral)
 
 (defvar *canvas* (make-broadcast-stream)
-  "The stream render methods write HTML to.")
+  "The stream render methods write HTML to.  Outside rendering (and
+WITH-CANVAS-TO-STRING) it discards what is written.")
 
 (defun text (thing)
   "Write THING, printed with PRINC and HTML-escaped."
@@ -105,6 +106,13 @@ TRANSLATE-PLURAL forms, turned into TEXT calls."
      ,@body))
 
 (defmacro tag (name &rest arguments)
-  "Write an element whose NAME (a string) is computed."
+  "Write an element whose NAME (a string) is computed.  As for every tag,
+the first of ARGUMENTS may be a plist of attributes, whose values are
+evaluated: NIL leaves an attribute out, T writes it bare, a :CLASS list is
+joined with spaces, and anything else is printed and escaped.  The list may
+be omitted when the body does not start with a list beginning with a
+keyword.  In the body, literal strings (and TRANSLATE forms) are written as
+escaped text; other forms are evaluated for their effect, so a computed
+value is written with TEXT."
   (multiple-value-bind (attributes body) (split-tag-arguments arguments)
     `(emit-tag ,name (list ,@attributes) ,(body-thunk body))))

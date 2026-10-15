@@ -45,7 +45,10 @@ PASSWORD (the hash) and ACTIVE (optional: a boolean or 0/1 column).  Roles
 come from ROLES-COLUMN (comma-separated names) or ROLES-QUERY (SQL with one
 ?, the user's id, returning role names in its first column).  NAME and
 EMAIL match regardless of case unless CASE-INSENSITIVE is NIL.  VERIFY, a
-function of (PASSWORD HASH), replaces the built-in hash formats."
+function of (PASSWORD HASH), replaces the built-in hash formats.  With
+WRITABLE, password changes and resets write the password column; with
+CREATE, OAuth sign-in may add users (name and email).  Signals an error
+when TABLE or a column isn't a plain SQL name."
   (check-identifier table "The table")
   (dolist (column (list id name password)) (check-identifier column "A column"))
   (dolist (column (list email active roles-column)) (when column (check-identifier column "A column")))

@@ -44,7 +44,7 @@
 itself, its PLURAL rule (a function of a count returning the index of the
 plural form to use), its DECIMAL and GROUP separators, its MONTHS' names and
 its DATE function of (YEAR MONTH DAY MONTHS) returning a string.  Unsupplied
-details are English's."
+details are English's.  Replaces any description of CODE; returns CODE."
   (let ((language (%make-language :code code :name (or name code))))
     (when plural (setf (language-plural language) plural))
     (when decimal (setf (language-decimal language) decimal))
@@ -65,7 +65,9 @@ details are English's."
       (gethash "en" *languages*)))
 
 (defun language-display-name (code)
-  "What the language CODE calls itself."
+  "What the language CODE calls itself, as DEFINE-LANGUAGE named it; a
+regional code falls back to its language's name, an unknown one is
+returned as it is."
   (let ((language (or (gethash code *languages*) (gethash (primary-subtag code) *languages*))))
     (if language (language-name language) code)))
 
@@ -86,7 +88,9 @@ session's, else the application's."
 (defmacro define-translations (language &body entries)
   "Add ENTRIES, unevaluated, to LANGUAGE's catalogue.  Each is (SOURCE FORM
 ...): one form for plain text, or one per plural form, in the order the
-language's plural rule numbers them."
+language's plural rule numbers them.  An entry replaces any for the same
+SOURCE.  Signals an error when a form isn't a string or calls a function
+with ~/…/.  Returns LANGUAGE."
   `(add-translations ,language ',entries))
 
 (defun check-translation (entry)
@@ -149,13 +153,17 @@ for translators."
 
 (defun translate (source &rest arguments)
   "SOURCE in the current language; with ARGUMENTS, used as a FORMAT control
-string for them."
+string for them.  A regional language such as \"fr-CA\" falls back to
+\"fr\"'s catalogue; with no translation, SOURCE itself is used (and noted
+for MISSING-TRANSLATIONS)."
   (let ((text (or (first (translation-forms source (current-language))) source)))
     (if arguments (apply #'format nil text arguments) text)))
 
 (defun translate-plural (count singular plural &rest arguments)
   "The current language's form of SINGULAR (PLURAL in English) for COUNT,
-formatted with COUNT and then ARGUMENTS."
+formatted with COUNT and then ARGUMENTS.  The catalogue's entry is keyed by
+SINGULAR; the language's plural rule picks the form.  With no translation,
+SINGULAR when COUNT is 1, else PLURAL."
   (let* ((language (current-language))
          (forms (translation-forms singular language))
          (text (if forms
@@ -176,7 +184,9 @@ formatted with COUNT and then ARGUMENTS."
                (write-string separator out)))))
 
 (defun localized-number (number &key (decimals (if (integerp number) 0 2)))
-  "NUMBER as the current language writes it, with DECIMALS places."
+  "NUMBER as the current language writes it, rounded to DECIMALS places (0
+for an integer, else 2 by default), with its digit group and decimal
+separators."
   (let* ((language (find-language (current-language)))
          (scaled (round (* (abs number) (expt 10 decimals))))
          (whole (floor scaled (expt 10 decimals)))

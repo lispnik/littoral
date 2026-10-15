@@ -16,21 +16,26 @@
 
 (in-package #:littoral)
 
-(defvar *job-workers* 4 "Threads running jobs at once.")
+(defvar *job-workers* 4
+  "How many threads run jobs at once.  SUBMIT-JOB starts workers up to this
+many; lowering it stops none that are running.")
 (defvar *jobs-kept* 200 "Finished jobs remembered for LIST-JOBS.")
 
 (defclass job ()
-  ((id :initform (random-key 12) :reader job-id)
-   (name :initarg :name :initform "Job" :reader job-name)
+  ((id :initform (random-key 12) :reader job-id :documentation "A random string naming it.")
+   (name :initarg :name :initform "Job" :reader job-name :documentation "What to call it on a page.")
    (function :initarg :function :reader job-function)
    (status :initform :queued :accessor job-status
            :documentation ":QUEUED, :RUNNING, :WAITING (to retry), :DONE, :FAILED or :CANCELLED.")
-   (progress :initform 0 :accessor job-progress-fraction)
-   (message :initform nil :accessor job-message)
-   (result :initform nil :accessor job-result)
+   (progress :initform 0 :accessor job-progress-fraction
+             :documentation "How much is done, from 0 to 1, as JOB-PROGRESS last said; 1 once done.")
+   (message :initform nil :accessor job-message
+            :documentation "What JOB-PROGRESS last said it is doing, or NIL.")
+   (result :initform nil :accessor job-result :documentation "What its function returned, once :DONE.")
    (error :initform nil :accessor job-error :documentation "The last failure, as text.")
-   (attempts :initarg :attempts :initform 1 :reader job-attempts)
-   (attempt :initform 0 :accessor job-attempt)
+   (attempts :initarg :attempts :initform 1 :reader job-attempts
+             :documentation "How many times it may be tried.")
+   (attempt :initform 0 :accessor job-attempt :documentation "How many times it has been started.")
    (backoff :initarg :backoff :initform 2 :reader job-backoff)
    (retry-at :initform nil :accessor job-retry-at)
    (cancel-p :initform nil :accessor job-cancel-requested-p)
@@ -138,9 +143,12 @@ afterwards: when it times out, SBCL may return without it."
 ;;; The interface
 
 (defun submit-job (function &key (name "Job") (attempts 1) (backoff 2))
-  "Run FUNCTION, of no arguments, in the background; the JOB.  It is tried
-up to ATTEMPTS times, waiting BACKOFF seconds before the second and twice
-as long before each after.  Its value becomes the JOB-RESULT."
+  "Run FUNCTION, of no arguments, in the background, on one of
+*JOB-WORKERS* threads in the order submitted; returns the job.  The thread
+doesn't see the caller's dynamic bindings.  NAME is shown on pages.  The
+job is tried up to ATTEMPTS times, waiting BACKOFF seconds (in whole
+seconds, at least 1) before the second and twice as long before each
+after.  Its value becomes the JOB-RESULT."
   (let ((job (make-instance 'job :function function :name name :attempts attempts :backoff backoff)))
     (sb-thread:with-mutex (*jobs-lock*)
       (setf *job-queue* (append *job-queue* (list job)))
@@ -153,9 +161,10 @@ as long before each after.  Its value becomes the JOB-RESULT."
     job))
 
 (defun job-progress (fraction &optional message (job *current-job*))
-  "From inside a job: it is FRACTION (0 to 1) done, with MESSAGE to show.
-Re-renders the components watching it.  Signals JOB-CANCELLED once the job
-has been cancelled, ending it."
+  "From inside a job: it is FRACTION (0 to 1) done, with MESSAGE to show
+(when given).  Re-renders the components watching it.  Signals
+JOB-CANCELLED once the job has been cancelled, ending it.  Outside a job
+it does nothing."
   (when job
     (when (job-cancel-requested-p job)
       (error 'job-cancelled))
@@ -165,7 +174,7 @@ has been cancelled, ending it."
 
 (defun cancel-job (job)
   "Stop JOB: at once if it hasn't started or is waiting to retry, otherwise
-at its next JOB-PROGRESS."
+at its next JOB-PROGRESS.  Returns JOB."
   (setf (job-cancel-requested-p job) t)
   (let ((pending (sb-thread:with-mutex (*jobs-lock*)
                    (when (or (member job *job-queue*) (member job *waiting-jobs*))
@@ -178,13 +187,15 @@ at its next JOB-PROGRESS."
 (defun watch-job (job component &optional (session *session*))
   "Re-render COMPONENT on SESSION's pages whenever JOB changes.  The page
 must listen for pushes: a JOB-VIEW does; another component can subscribe
-to *JOBS-CHANNEL*."
+to *JOBS-CHANNEL*.  Returns COMPONENT."
   (sb-thread:with-mutex ((job-lock job))
     (pushnew (cons component session) (job-watchers job) :test #'equal))
   component)
 
 (defun wait-for-job (job &optional (timeout 60))
-  "Wait until JOB has finished, at most TIMEOUT seconds; its status."
+  "Wait until JOB has finished, at most TIMEOUT seconds (60 by default).
+Returns its status, which is :QUEUED, :RUNNING or :WAITING when the time ran
+out first."
   (sb-thread:with-mutex ((job-lock job))
     (loop with deadline = (+ (get-internal-real-time) (* timeout internal-time-units-per-second))
           until (or (finished-p job) (> (get-internal-real-time) deadline))
@@ -201,7 +212,7 @@ to *JOBS-CHANNEL*."
   "Subscribed to by JOB-VIEW so that its page listens for pushes; never published.")
 
 (defclass job-view (component updatable)
-  ((job :initarg :job :initform nil :accessor job-view-job))
+  ((job :initarg :job :initform nil :accessor job-view-job :documentation "The job shown, or NIL for none."))
   (:documentation "A job's progress bar, status and Cancel button, kept up to
 date by server push once WATCH-JOB has been called on it."))
 

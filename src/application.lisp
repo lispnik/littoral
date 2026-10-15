@@ -3,11 +3,16 @@
 (in-package #:littoral)
 
 (defclass application ()
-  ((path :initarg :path :accessor application-path)
-   (root-class :initarg :root-class :accessor application-root-class)
-   (title :initarg :title :initform nil :accessor application-title)
+  ((path :initarg :path :accessor application-path
+         :documentation "Where it is served, such as \"/shop\": a leading slash and no trailing one.")
+   (root-class :initarg :root-class :accessor application-root-class
+               :documentation "The component class each new session makes its root.")
+   (title :initarg :title :initform nil :accessor application-title
+          :documentation "The pages' title, or NIL for the path.  Components may change
+it with UPDATE-ROOT.")
    (language :initarg :language :initform "en" :accessor application-language
-             :documentation "The page's language, for the html lang attribute.")
+             :documentation "The language pages are shown in, unless the session has chosen
+another: their html lang attribute and the language TRANSLATE uses.")
    (mode :initarg :mode :initform :development :accessor application-mode
          :type (member :development :deployment)
          :documentation ":DEVELOPMENT adds the toolbar and halos.")
@@ -20,8 +25,10 @@
    (cookie-sessions-p :initarg :cookie-sessions :initform nil
                       :accessor application-cookie-sessions-p
                       :documentation "Track the session in a cookie instead of the URL.")
-   (stylesheets :initarg :stylesheets :initform '() :accessor application-stylesheets)
-   (scripts :initarg :scripts :initform '() :accessor application-scripts)
+   (stylesheets :initarg :stylesheets :initform '() :accessor application-stylesheets
+                :documentation "URLs of style sheets every page links, after littoral.css.")
+   (scripts :initarg :scripts :initform '() :accessor application-scripts
+            :documentation "URLs of scripts every page loads (deferred), after littoral.js.")
    (credentials :initarg :credentials :initform nil :accessor application-credentials
                 :documentation "(USER . PASSWORD) required by HTTP basic auth, or NIL.")
    (max-sessions :initarg :max-sessions :initform nil :accessor application-max-sessions
@@ -47,13 +54,19 @@ request, rendering included, or NIL.  littoral/db uses it to choose the
 application's database.")
    (around-actions :initarg :around-actions :initform nil :accessor application-around-actions
                    :documentation "A function called with a thunk that runs a request's
-callbacks, or NIL.  littoral/db uses it to run them in a transaction.")
+callbacks, or NIL.  It must return what the thunk returns (true when any
+callback ran).  It is called for every page request and AJAX request,
+including those naming no callbacks.  littoral/db uses it to run them in a
+transaction.")
    (local-only-p :initarg :local-only :initform nil :accessor application-local-only-p
-                 :documentation "Answer only requests from this machine.")
+                 :documentation "Answer only requests from this machine, and not through a
+proxy unless *TRUST-FORWARDED-FOR*; others get 403.")
    (expired-notice :initarg :expired-notice :initform nil :accessor application-expired-notice
                    :documentation "Component class shown, before the root, to someone whose
 session expired.  NIL starts them over silently.")
-   (sessions :initform (make-hash-table :test 'equal) :reader application-sessions)
+   (sessions :initform (make-hash-table :test 'equal) :reader application-sessions
+             :documentation "Session key → live SESSION.  Guarded by the application's lock;
+LIST-SESSIONS reads it safely.")
    (lock :initform (sb-thread:make-mutex :name "littoral application") :reader application-lock))
   (:documentation "A root component class served at a path, with its settings and live sessions."))
 
@@ -78,7 +91,11 @@ session expired.  NIL starts them over silently.")
                                max-request-size local-only language around-actions around-request
                                websockets languages content-security-policy)
   "Serve ROOT-CLASS, a component class, at PATH.  Replaces any application
-already there.  Returns the APPLICATION."
+already there, and with it that application's sessions (CONFIGURE-APPLICATION
+keeps them).  Each keyword sets the setting its reader names, such as
+APPLICATION-TITLE for TITLE; COOKIE-SESSIONS, LOCAL-ONLY and WEBSOCKETS are
+read with APPLICATION-COOKIE-SESSIONS-P, APPLICATION-LOCAL-ONLY-P and
+APPLICATION-WEBSOCKETS-P.  Returns the APPLICATION."
   (declare (ignore title mode session-timeout max-continuations cookie-sessions
                    stylesheets scripts credentials max-sessions error-handler expired-notice
                    max-request-size local-only language around-actions around-request

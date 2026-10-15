@@ -107,7 +107,7 @@
   :description "A fake browser for testing Littoral applications in-process."
   :author "Matthew Kennedy"
   :license "MIT"
-  :depends-on (#:littoral #:flexi-streams #:cl-ppcre #:quri)
+  :depends-on (#:littoral #:alexandria #:flexi-streams #:cl-ppcre #:quri)
   :serial t
   :components ((:module "testing"
                 :serial t
@@ -133,6 +133,7 @@
                #:littoral/examples
                #:littoral/tracker
                #:littoral/tutorial
+               #:littoral/tutorial-tests
                #:littoral/test
                #:littoral/db
                #:littoral/admin
@@ -237,9 +238,14 @@
                              (:file "ui")))))
 
 (asdf:defsystem #:littoral/tutorial
-  :description "The reading list application docs/tutorial.md builds."
-  :depends-on (#:littoral)
-  :components ((:module "docs/tutorial" :components ((:file "reading-list")))))
+  :description "The applications docs/tutorial.md builds: the reading list, and the list kept in a database."
+  :depends-on (#:littoral #:littoral/db #:littoral/auth #:dbd-sqlite3)
+  :components ((:module "docs/tutorial" :components ((:file "reading-list") (:file "my-books")))))
+
+(asdf:defsystem #:littoral/tutorial-tests
+  :description "The tests docs/tutorial.md writes for the reading list (step 12)."
+  :depends-on (#:littoral/tutorial #:littoral/test #:fiveam)
+  :components ((:module "docs/tutorial" :components ((:file "reading-list-tests")))))
 
 (asdf:defsystem #:littoral/woo
   :description "Serve Littoral on Woo, with server push from its event loops."

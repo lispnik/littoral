@@ -81,3 +81,9 @@
                                      littoral.html:file-name littoral.html:file-content-type
                                      littoral.html:file-contents))))
       (is (macro-function symbol) "~S is no longer a macro" symbol))))
+
+(test inputs-and-buttons-take-one-type
+  (is (string= "<input type=\"search\"><button type=\"submit\">x</button>"
+               (with-canvas-to-string () (text-input (:type "search")) (button (:type "submit") "x"))))
+  (is (string= "<input type=\"text\"><button type=\"button\">x</button>"
+               (with-canvas-to-string () (text-input ()) (button () "x")))))

@@ -116,7 +116,8 @@
            (with-fresh-applications (("/counter" 'littoral-examples:counter :title "Counting"
                                                  :mode :deployment :session-timeout 99
                                                  :stylesheets '("/a.css") :credentials '("u" . "p")
-                                                 :max-sessions 7 :expired-notice 'session-expired-notice))
+                                                 :max-sessions 7 :expired-notice 'session-expired-notice
+                                                 :local-only t))
              (is (string= file (save-configuration file)))
              ;; Owner-only: it may hold credentials.
              (is (= #o600 (logand #o777 (sb-posix:stat-mode (sb-posix:stat file))))))
@@ -131,7 +132,9 @@
                (is (equal '("/a.css") (application-stylesheets app)))
                (is (equal '("u" . "p") (application-credentials app)))
                (is (= 7 (application-max-sessions app)))
-               (is (eq 'session-expired-notice (application-expired-notice app))))))
+               (is (eq 'session-expired-notice (application-expired-notice app)))
+               ;; Or a reloaded /config would answer anyone.
+               (is (application-local-only-p app)))))
       (ignore-errors (delete-file file)))))
 
 (test configuration-skips-unknown-classes

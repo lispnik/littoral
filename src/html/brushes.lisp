@@ -41,7 +41,9 @@ request (to a string, in a test)."
               body)))
 
 (defmacro anchor (&rest arguments)
-  "A link.  :CALLBACK is a thunk run when it is followed; :HREF a plain URL."
+  "A link.  :CALLBACK is a thunk run when it is followed; :HREF a plain URL.
+With neither, an AJAX :ON-CLICK gets the href \"#\".  :LABEL becomes the
+aria-label; other attributes are written as given."
   (multiple-value-bind (attributes body) (split-tag-arguments arguments)
     `(%anchor (list ,@attributes) ,(body-thunk body))))
 
@@ -75,18 +77,20 @@ when the form is submitted without a button; :MULTIPART T allows FILE-INPUT."
 
 (defun %input (type attributes &optional (convert #'identity))
   (emit-tag "input"
-            (list* :type type
+            (list* :type (or (getf attributes :type) type) ; :type "search" makes a search field
                    :name (or (field-callback-name attributes convert) (getf attributes :name))
                    :value (getf attributes :value)
-                   (strip-attributes attributes :callback :name :value))
+                   (strip-attributes attributes :callback :name :value :type))
             nil))
 
 (defmacro text-input (&optional attributes)
-  "A text field.  :CALLBACK receives the submitted string."
+  "A text field showing :VALUE.  :CALLBACK receives the submitted string;
+without one, the field is named :NAME."
   `(%input "text" (list ,@attributes)))
 
 (defmacro password-input (&optional attributes)
-  "A password field.  :CALLBACK receives the submitted string."
+  "A password field, empty unless given a :VALUE.  :CALLBACK receives the
+submitted string."
   `(%input "password" (list ,@attributes)))
 
 (defun parse-number-or-nil (string)
@@ -162,7 +166,8 @@ submission does not parse."
 
 (defmacro select-list (&optional attributes)
   "A drop-down of :ITEMS shown through :LABELS (a function, default PRINC).
-:CALLBACK receives the chosen item; :SELECTED is the current one."
+:CALLBACK receives the chosen item, or NIL when the submission names none;
+:SELECTED is the current one, compared with :TEST (default EQL)."
   `(%select-list (list ,@attributes)))
 
 (defun %radio-group (attributes)
@@ -273,4 +278,6 @@ fields are not applied."
 (defmacro button (&rest arguments)
   "A button that submits nothing; give it an AJAX :ON-CLICK."
   (multiple-value-bind (attributes body) (split-tag-arguments arguments)
-    `(emit-tag "button" (list :type "button" ,@attributes) ,(body-thunk body))))
+    `(let ((attributes (list ,@attributes)))
+       (emit-tag "button" (list* :type (or (getf attributes :type) "button") (strip-attributes attributes :type))
+                 ,(body-thunk body)))))

@@ -4,7 +4,7 @@
 
 (defmacro define-tag (name &key (tag (string-downcase (symbol-name name))))
   `(defmacro ,name (&rest arguments)
-     ,(format nil "Write a <~A> element." tag)
+     ,(format nil "Write an HTML ~A element.  Arguments are as for TAG, without the name." tag)
      (multiple-value-bind (attributes body) (split-tag-arguments arguments)
        (list 'emit-tag ,tag (cons 'list attributes) (body-thunk body)))))
 

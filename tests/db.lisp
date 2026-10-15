@@ -64,6 +64,10 @@
                          (littoral.db:db-select 'job :where "state = ?" :params '("TODO")
                                                      :order-by "title" :limit 1 :offset 0))))
       (is (= 2 (littoral.db:db-count 'job :where "state = ?" :params '("TODO"))))
+      ;; OFFSET alone skips rows too.
+      (is (equal '("test" "write")
+                 (mapcar (lambda (j) (slot-value j 'title))
+                         (littoral.db:db-select 'job :order-by "title" :offset 1))))
       (let ((job (first (littoral.db:db-select 'job))))
         (littoral.db:db-delete job)
         (is (null (littoral.db:object-id job)))
@@ -196,6 +200,8 @@
     (is (equal '("Macro-writing macros") (titles "writing macro")))
     ;; The page about macros most of all comes first.
     (is (string= "Macro-writing macros" (first (titles "macros"))))
+    (is (equal '("Lisp macros")
+               (mapcar (lambda (a) (slot-value a 'title)) (littoral.db:db-search 'article "macros" :offset 1))))
     (is (null (titles "")))
     (is (null (titles "!!! ''")))
     ;; The index follows changes.

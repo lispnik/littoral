@@ -26,6 +26,7 @@
   ;; Widgets
   ("Pages" "Pages") ("« Previous" "« Précédent") ("Next »" "Suivant »") ("Tabs" "Onglets")
   ("Collapse" "Replier") ("Expand" "Déplier") ("Move up" "Monter") ("Move down" "Descendre")
+  ("Collapse ~A" "Replier ~A") ("Expand ~A" "Déplier ~A") ("~D suggestion." "~D suggestion." "~D suggestions.")
   ("Move item ~D up" "Monter l'élément ~D") ("Move item ~D down" "Descendre l'élément ~D")
   ("Language" "Langue")
   ("That code isn't right." "Ce code n'est pas le bon.") ("That passkey didn't work." "Cette clé d'accès n'a pas marché.")
@@ -72,7 +73,7 @@
   ("~A must be a date, like 2026-10-06." "~A doit être une date, comme 2026-10-06.")
   ;; Signing in
   ("Keep me signed in" "Rester connecté")
-  ("Sign in" "Se connecter") ("Name" "Nom") ("Email" "E-mail") ("Back" "Retour")
+  ("Sign in" "Se connecter") ("Sign out" "Se déconnecter") ("Name" "Nom") ("Email" "E-mail") ("Back" "Retour")
   ("Forgot your password?" "Mot de passe oublié ?")
   ("Sign in with ~A" "Se connecter avec ~A")
   ("Too many failed attempts; try again in a minute." "Trop d'essais infructueux ; réessayez dans une minute.")
@@ -126,6 +127,7 @@ Le lien ne sert qu'une fois, pendant une heure.  Si ce n'était pas vous, ignore
   ;; Widgets
   ("Pages" "Seiten") ("« Previous" "« Zurück") ("Next »" "Weiter »") ("Tabs" "Reiter")
   ("Collapse" "Zuklappen") ("Expand" "Aufklappen") ("Move up" "Nach oben") ("Move down" "Nach unten")
+  ("Collapse ~A" "~A zuklappen") ("Expand ~A" "~A aufklappen") ("~D suggestion." "~D Vorschlag." "~D Vorschläge.")
   ("Move item ~D up" "Eintrag ~D nach oben") ("Move item ~D down" "Eintrag ~D nach unten")
   ("Language" "Sprache")
   ("That code isn't right." "Dieser Code stimmt nicht.") ("That passkey didn't work." "Dieser Passkey hat nicht funktioniert.")
@@ -172,7 +174,7 @@ Le lien ne sert qu'une fois, pendant une heure.  Si ce n'était pas vous, ignore
   ("~A must be a date, like 2026-10-06." "~A muss ein Datum sein, etwa 2026-10-06.")
   ;; Signing in
   ("Keep me signed in" "Angemeldet bleiben")
-  ("Sign in" "Anmelden") ("Name" "Name") ("Email" "E-Mail") ("Back" "Zurück")
+  ("Sign in" "Anmelden") ("Sign out" "Abmelden") ("Name" "Name") ("Email" "E-Mail") ("Back" "Zurück")
   ("Forgot your password?" "Passwort vergessen?")
   ("Sign in with ~A" "Mit ~A anmelden")
   ("Too many failed attempts; try again in a minute." "Zu viele Fehlversuche; versuchen Sie es in einer Minute erneut.")
@@ -226,6 +228,7 @@ Der Link funktioniert einmal, eine Stunde lang.  Falls Sie das nicht waren, igno
   ;; Widgets
   ("Pages" "Páginas") ("« Previous" "« Anterior") ("Next »" "Siguiente »") ("Tabs" "Pestañas")
   ("Collapse" "Contraer") ("Expand" "Expandir") ("Move up" "Subir") ("Move down" "Bajar")
+  ("Collapse ~A" "Contraer ~A") ("Expand ~A" "Expandir ~A") ("~D suggestion." "~D sugerencia." "~D sugerencias.")
   ("Move item ~D up" "Subir el elemento ~D") ("Move item ~D down" "Bajar el elemento ~D")
   ("Language" "Idioma")
   ("That code isn't right." "Ese código no es correcto.") ("That passkey didn't work." "Esa llave de acceso no ha funcionado.")
@@ -272,7 +275,7 @@ Der Link funktioniert einmal, eine Stunde lang.  Falls Sie das nicht waren, igno
   ("~A must be a date, like 2026-10-06." "~A debe ser una fecha, como 2026-10-06.")
   ;; Signing in
   ("Keep me signed in" "Mantener la sesión iniciada")
-  ("Sign in" "Iniciar sesión") ("Name" "Nombre") ("Email" "Correo") ("Back" "Volver")
+  ("Sign in" "Iniciar sesión") ("Sign out" "Cerrar sesión") ("Name" "Nombre") ("Email" "Correo") ("Back" "Volver")
   ("Forgot your password?" "¿Ha olvidado su contraseña?")
   ("Sign in with ~A" "Iniciar sesión con ~A")
   ("Too many failed attempts; try again in a minute." "Demasiados intentos fallidos; inténtelo de nuevo en un minuto.")

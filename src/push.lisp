@@ -28,7 +28,9 @@
   (make-instance 'channel :name name))
 
 (defgeneric subscriptions (component)
-  (:documentation "The channels whose PUBLISH re-renders COMPONENT on open pages.")
+  (:documentation "The channels whose PUBLISH re-renders COMPONENT on open pages;
+none by default.  A page showing a component with subscriptions opens an
+event stream.  Subscribers must be UPDATABLE.")
   (:method ((component component)) '()))
 
 (defclass event-stream ()
@@ -115,7 +117,9 @@ event loop to call when woken; signals if the connection has gone."
 
 (defun publish (channel)
   "Re-render, on every open page, the visible components subscribed to CHANNEL.
-Safe to call from any thread.  Returns the number of pages told."
+Safe to call from any thread: it only queues the work, which each page's
+stream does.  Returns the number of open pages woken, whether or not they
+show a subscriber."
   (let ((count 0))
     (dolist (stream (open-event-streams) count)
       (wake stream channel)

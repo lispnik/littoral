@@ -31,7 +31,8 @@
 
 (defpackage #:littoral.jobs
   (:use #:cl)
-  (:documentation "Background jobs kept in the database: retried, scheduled, and run by any process.")
+  (:documentation "Load it with `(asdf:load-system :littoral/jobs)`.  Background jobs kept in the
+database: retried, scheduled, and run by any process.")
   (:export #:define-job #:enqueue-job #:daily-at
            #:create-job-tables #:drop-job-tables #:job-tables-p
            #:run-due-jobs #:start-job-runner #:stop-job-runner #:job-runner-running-p
@@ -138,28 +139,31 @@ as it does through CREATE-MAIL-TABLES: the admin then shows the job queue."
   t)
 
 (defun drop-job-tables ()
-  "Drop the job_queue table."
+  "Drop the job_queue table, and forget it for JOB-TABLES-P."
   (sb-thread:with-mutex (*job-databases-lock*)
     (setf *job-databases* (remove littoral.db:*database* *job-databases* :test #'equal)))
   (littoral.db:db-execute "DROP TABLE IF EXISTS job_queue")
   (littoral.db:forget-migrations :littoral-jobs))
 
 (defclass durable-job ()
-  ((id :initarg :id :reader durable-job-id)
+  ((id :initarg :id :reader durable-job-id :documentation "Its id, as ENQUEUE-JOB returned it.")
    (name :initarg :name :reader durable-job-name :documentation "The job's name, a symbol (or its text, when unreadable here).")
-   (arguments :initarg :arguments :reader durable-job-arguments)
-   (queue :initarg :queue :reader durable-job-queue)
+   (arguments :initarg :arguments :reader durable-job-arguments
+              :documentation "The list of arguments it is run with (or its text, when unreadable here).")
+   (queue :initarg :queue :reader durable-job-queue :documentation "The queue it is in, a string.")
    (status :initarg :status :reader durable-job-status
            :documentation "\"queued\", \"running\", \"done\", \"failed\" or \"cancelled\".")
    (attempts :initarg :attempts :reader durable-job-attempts
              :documentation "Tries so far; inside the job, which try this is.")
    (run-at :initarg :run-at :reader durable-job-run-at
            :documentation "When it is due; while running, when another runner may take it over.")
-   (key :initarg :key :reader durable-job-key)
+   (key :initarg :key :reader durable-job-key :documentation "The KEY it was enqueued with, or NIL.")
    (progress :initarg :progress :reader durable-job-progress :documentation "What NOTE-JOB-PROGRESS said last.")
-   (last-error :initarg :last-error :reader durable-job-last-error)
-   (created :initarg :created :reader durable-job-created)
-   (finished :initarg :finished :reader durable-job-finished))
+   (last-error :initarg :last-error :reader durable-job-last-error
+               :documentation "Why its last try failed: the error's text, then a backtrace; or NIL.")
+   (created :initarg :created :reader durable-job-created :documentation "When it was queued, a universal time.")
+   (finished :initarg :finished :reader durable-job-finished
+             :documentation "When it was done, failed or cancelled, a universal time; or NIL."))
   (:documentation "A job in the job_queue table, as it was when read."))
 
 (defmethod print-object ((job durable-job) stream)
@@ -208,7 +212,9 @@ VALUES (?, ?, ?, 'queued', 0, ?, ?, ?) ON CONFLICT DO NOTHING RETURNING id"
   "Queue CALL, (NAME . ARGUMENTS), in the current database, to run at once,
 IN seconds, or AT a universal time; its id.  With KEY (a string), nothing is
 queued while a job with that key waits untried, and the value is NIL.  QUEUE
-overrides the job's own."
+overrides the job's own.  Signals an error when NAME isn't a job DEFINE-JOB
+defined, when it is defined with :EVERY, or when ARGUMENTS don't print
+readably and read back as themselves."
   (destructuring-bind (name &rest arguments) call
     (let ((definition (or (find-definition name) (error "No job named ~S: see DEFINE-JOB." name)))
           (text (handler-case (stored-text arguments)
@@ -421,7 +427,8 @@ processes' jobs.  Stops any runner already started."
   t)
 
 (defun stop-job-runner ()
-  "Stop the runner threads, letting each finish the job it is running."
+  "Stop the runner threads, letting each finish the job it is running (waiting
+up to 30 seconds for each)."
   (when *runner-threads*
     (setf *runner-stop* t)
     (wake-runner)

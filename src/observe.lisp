@@ -24,12 +24,17 @@ uptime isn't counted from when it was built."
 ;;; Counting requests
 
 (defparameter *latency-buckets* '(0.005 0.01 0.025 0.05 0.1 0.25 0.5 1 2.5 5 10)
-  "Upper bounds, in seconds, of the request duration histogram's buckets.")
+  "Upper bounds, in seconds, of the request duration histogram's buckets, and
+the default buckets of DEFINE-METRIC's histograms.  Changing it starts the
+request histogram again, since counts can't be moved between buckets.")
 
 (defvar *metrics-lock* (sb-thread:make-mutex :name "littoral metrics"))
 (defvar *request-counts* (make-hash-table :test 'equal) "(APP KIND STATUS) → count.")
 (defvar *request-times* (make-hash-table :test 'equal)
   "(APP KIND) → #(SUM COUNT BUCKET-COUNTS…), one count per bucket of *LATENCY-BUCKETS*.")
+
+(defvar *request-buckets* nil
+  "The *LATENCY-BUCKETS* that *REQUEST-TIMES* counts in.")
 
 (defvar *request-log* nil
   "A function of a plist describing each request (:TIME :METHOD :PATH :APP :KIND
@@ -69,6 +74,9 @@ uptime isn't counted from when it was built."
          (kind (request-kind env status)))
     (sb-thread:with-mutex (*metrics-lock*)
       (incf (gethash (list app kind status) *request-counts* 0))
+      (unless (equal *request-buckets* *latency-buckets*)
+        (clrhash *request-times*)
+        (setf *request-buckets* (copy-list *latency-buckets*)))
       (let ((times (or (gethash (list app kind) *request-times*)
                        (setf (gethash (list app kind) *request-times*)
                              (make-array (+ 2 (length *latency-buckets*)) :initial-element 0)))))
@@ -99,7 +107,7 @@ uptime isn't counted from when it was built."
 /metrics reports: TYPE :COUNTER, counted by COUNT-METRIC, or :HISTOGRAM, of
 values given to OBSERVE-METRIC and counted into BUCKETS.  LABELS names its
 labels; keep their values few (a job's name, not its arguments).  Defining
-NAME again keeps its counts."
+NAME again keeps its counts.  Returns NAME."
   (check-type type (member :counter :histogram))
   (sb-thread:with-mutex (*metrics-lock*)
     (let ((old (find name *metrics* :key #'metric-name :test #'string=)))
@@ -115,13 +123,17 @@ NAME again keeps its counts."
       (error "No metric ~S: define it with DEFINE-METRIC." name)))
 
 (defun count-metric (name &optional label-values (amount 1))
-  "Add AMOUNT to the counter NAME for LABEL-VALUES, a list in the order of its labels."
+  "Add AMOUNT (1 by default) to the counter NAME for LABEL-VALUES, a list in
+the order of its labels, printed with PRINC.  Returns AMOUNT.  Signals an
+error when NAME hasn't been defined with DEFINE-METRIC."
   (sb-thread:with-mutex (*metrics-lock*)
     (incf (gethash (mapcar #'princ-to-string label-values) (metric-values (find-metric name)) 0) amount))
   amount)
 
 (defun observe-metric (name value &optional label-values)
-  "Count VALUE, such as seconds taken, into the histogram NAME for LABEL-VALUES."
+  "Count VALUE, such as seconds taken, into the histogram NAME for
+LABEL-VALUES (a list in the order of its labels).  Returns VALUE.  Signals an
+error when NAME hasn't been defined with DEFINE-METRIC."
   (sb-thread:with-mutex (*metrics-lock*)
     (let* ((metric (find-metric name))
            (key (mapcar #'princ-to-string label-values))
@@ -135,7 +147,8 @@ NAME again keeps its counts."
   value)
 
 (defmacro timing-metric ((name &optional label-values) &body body)
-  "Evaluate BODY, observing the seconds it took in the histogram NAME, even when it fails."
+  "Evaluate BODY, observing the seconds it took in the histogram NAME for
+LABEL-VALUES, even when it fails.  Returns BODY's values."
   (let ((start (gensym "START")))
     `(let ((,start (get-internal-real-time)))
        (unwind-protect (progn ,@body)
@@ -188,8 +201,11 @@ NAME again keeps its counts."
     (format nil "~4,'0D-~2,'0D-~2,'0DT~2,'0D:~2,'0D:~2,'0DZ" year month day h m s)))
 
 (defun log-requests-to (stream &key (format :json))
-  "Write a line to STREAM for every request: JSON (FORMAT :JSON, for log
-collectors) or text (:TEXT).  NIL for STREAM stops logging."
+  "Write a line to STREAM for every request: JSON (FORMAT :JSON, the
+default, for log collectors) with the fields time, method, path, app, kind,
+status, ms and address, or text (:TEXT).  The path leaves out the query
+string, where session keys ride.  NIL for STREAM stops logging.  It sets
+*REQUEST-LOG*, so it replaces any log already set."
   (setf *request-log*
         (and stream
              (let ((lock (sb-thread:make-mutex :name "littoral request log")))
@@ -289,7 +305,7 @@ NAME is 0.  Replaces any source called NAME."
                          (metric-label app) (metric-label kind) status count))
         (head "littoral_request_duration_seconds" "histogram" "How long requests took to answer.")
         (loop for (app kind) being the hash-keys of *request-times* using (hash-value times)
-              do (loop for bound in *latency-buckets* for i from 2
+              do (loop for bound in *request-buckets* for i from 2
                        do (format out "littoral_request_duration_seconds_bucket{app=\"~A\",kind=\"~A\",le=\"~A\"} ~D~%"
                                   (metric-label app) (metric-label kind) bound (aref times i)))
                  (format out "littoral_request_duration_seconds_bucket{app=\"~A\",kind=\"~A\",le=\"+Inf\"} ~D~%"
@@ -327,9 +343,11 @@ NAME is 0.  Replaces any source called NAME."
     (write-metrics-sources out)))
 
 (defun serve-metrics (&key (path "/metrics") (local-only t))
-  "Serve metrics at PATH for Prometheus to scrape.  With LOCAL-ONLY (the
-default) only requests from this machine get them: put the scraper there,
-or behind the proxy with *TRUST-FORWARDED-FOR* and an allow list."
+  "Serve METRICS-TEXT at PATH for Prometheus to scrape, through
+MOUNT-HANDLER (UNMOUNT-HANDLER PATH stops it).  With LOCAL-ONLY (the
+default) only requests from this machine get them, others 403: put the
+scraper there, or behind the proxy with *TRUST-FORWARDED-FOR* and an allow
+list."
   (mount-handler path
                  (lambda (rest)
                    (cond ((string/= rest "") (simple-page 404 "Not Found"))
@@ -339,8 +357,11 @@ or behind the proxy with *TRUST-FORWARDED-FOR* and an allow list."
                                   (list (metrics-text))))))))
 
 (defun metrics-summary ()
-  "A plist of headline numbers, for pages that show them: :REQUESTS :ERRORS
-:SESSIONS :STREAMS :JOBS-RUNNING :HEAP :THREADS :UPTIME and :MEAN-MS."
+  "A plist of headline numbers, for pages that show them: :REQUESTS and
+:ERRORS (status 500 or more) answered, not counting event streams; live
+:SESSIONS; open :STREAMS; :JOBS-RUNNING; :HEAP bytes in use; :THREADS;
+:UPTIME in seconds; and :MEAN-MS, the mean time to answer a request other
+than a stream or socket, in milliseconds (a rational)."
   (let ((requests 0) (errors 0) (seconds 0) (timed 0))
     (sb-thread:with-mutex (*metrics-lock*)
       (loop for (nil kind status) being the hash-keys of *request-counts* using (hash-value count)

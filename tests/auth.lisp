@@ -557,3 +557,47 @@ and that URL."
     (restart-applications)
     (visit b "/m")
     (is (has-text-p b "Not signed in"))))
+
+;;; Applications with databases of their own
+
+(defclass roles-of-ada (component) ()
+  (:documentation "Shows the roles of the user ada in the application's database."))
+
+(defmethod render ((self roles-of-ada))
+  (p () (text (format nil "~{~(~A~)~^ ~}" (littoral.auth:user-roles (littoral.auth:find-user "ada"))))))
+
+(test cached-roles-belong-to-their-database
+  ;; Two applications, each with its own database whose user 1 is ada: one
+  ;; ada is an admin, the other isn't, cache or no cache.
+  (let* ((files (loop repeat 2
+                      collect (merge-pathnames (format nil "littoral-roles-~36R.sqlite3" (random (expt 36 8)))
+                                               (uiop:temporary-directory))))
+         (specs (mapcar (lambda (file) (list :sqlite3 :database-name (namestring file))) files)))
+    (unwind-protect
+         (progn
+           (loop for spec in specs
+                 for roles in '((:admin) ())
+                 do (let ((littoral.db:*database* spec))
+                      (littoral.auth:create-auth-tables)
+                      (littoral.auth:add-user "ada" "ada@example.org" nil :roles roles)))
+           (with-fresh-applications (("/one" 'roles-of-ada :mode :deployment
+                                             :around-request (apply #'littoral.db:using-database (first specs)))
+                                     ("/two" 'roles-of-ada :mode :deployment
+                                             :around-request (apply #'littoral.db:using-database (second specs))))
+             (let ((b (make-instance 'browser)))
+               (visit b "/one")
+               (is (string= "admin" (body-text b)))
+               (visit b "/two")
+               (is (string= "" (body-text b))))))
+      (loop for spec in specs
+            do (let ((littoral.db:*database* spec)) (littoral.auth:drop-auth-tables)))
+      (dolist (file files)
+        (dolist (suffix '("" "-wal" "-shm"))
+          (ignore-errors (delete-file (concatenate 'string (namestring file) suffix))))))))
+
+(test no-user-outside-a-request
+  (let ((littoral::*session* nil))
+    (is (null (littoral.auth:current-user)))
+    (is (not (littoral.auth:signed-in-p)))
+    (is (not (littoral.auth:has-permission-p :edit-posts)))
+    (is (not (littoral.auth:has-role-p :admin)))))

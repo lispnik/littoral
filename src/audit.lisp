@@ -19,7 +19,8 @@
 
 (defpackage #:littoral.audit
   (:use #:cl #:littoral #:littoral.html)
-  (:documentation "An audit log: who did what, and when, kept in the database.")
+  (:documentation "Load it with `(asdf:load-system :littoral/audit)`.  An audit log: who did what,
+and when, kept in the database.")
   (:export #:audit #:create-audit-tables #:drop-audit-tables #:audit-enabled-p
            #:*audit-actor* #:*audit-hook* #:audit-events #:audit-actions #:purge-audit-log
            #:audit-event #:audit-event-id #:audit-event-time #:audit-event-actor-id #:audit-event-actor-name
@@ -66,7 +67,7 @@ of whoever is acting now.  littoral/auth makes it the signed-in user.")
 (defvar *audit-hook* nil
   "A function of each event as a plist (:TIME :ACTOR-ID :ACTOR-NAME :ACTION
 :SUBJECT :SUBJECT-LABEL :DETAILS :ADDRESS), or NIL.  Called even where
-there's no audit table.")
+there's no audit table; errors it signals are ignored.")
 
 (defun clip (value &optional (length 200))
   (let ((text (and value (if (stringp value) value (princ-to-string value)))))
@@ -90,8 +91,10 @@ there's no audit table.")
 (defun audit (action &key subject subject-label details (actor-id nil actor-given) actor-name)
   "Record that ACTION (a string such as \"invoice.sent\") happened to SUBJECT
 (a string such as \"invoice:42\", named SUBJECT-LABEL for people), with
-DETAILS, a plist of short values.  The actor is ACTOR-ID and ACTOR-NAME when
-given, or else whoever *AUDIT-ACTOR* finds."
+DETAILS, a plist of short values (strings, numbers, T and NIL, symbols, lists
+of them).  The actor is ACTOR-ID and ACTOR-NAME when ACTOR-ID is given, even
+as NIL for none, or else whoever *AUDIT-ACTOR* finds.  Returns ACTION.  The
+event is written only where AUDIT-ENABLED-P, and passed to *AUDIT-HOOK*."
   (multiple-value-bind (id name) (if actor-given (values actor-id actor-name) (funcall *audit-actor*))
     (let ((event (list :time (get-universal-time) :actor-id (clip id) :actor-name (clip name)
                        :action action :subject (clip subject) :subject-label (clip subject-label)
@@ -110,16 +113,21 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
 ;;; Reading
 
 (defclass audit-event ()
-  ((id :initarg :id :reader audit-event-id)
+  ((id :initarg :id :reader audit-event-id :documentation "Its row's id, larger for later events.")
    (time :initarg :time :reader audit-event-time :documentation "A universal time.")
-   (actor-id :initarg :actor-id :reader audit-event-actor-id)
-   (actor-name :initarg :actor-name :reader audit-event-actor-name)
-   (action :initarg :action :reader audit-event-action)
-   (subject :initarg :subject :reader audit-event-subject)
-   (subject-label :initarg :subject-label :reader audit-event-subject-label)
+   (actor-id :initarg :actor-id :reader audit-event-actor-id :documentation "Who acted, a string, or NIL.")
+   (actor-name :initarg :actor-name :reader audit-event-actor-name
+               :documentation "Who acted, named for people, or NIL.")
+   (action :initarg :action :reader audit-event-action :documentation "What was done, such as \"invoice.sent\".")
+   (subject :initarg :subject :reader audit-event-subject
+            :documentation "What it was done to, such as \"invoice:42\", or NIL.")
+   (subject-label :initarg :subject-label :reader audit-event-subject-label
+                  :documentation "What it was done to, named for people, or NIL.")
    (details :initarg :details :reader audit-event-details
-            :documentation "An alist of (\"key\" . value), in the order recorded.")
-   (address :initarg :address :reader audit-event-address))
+            :documentation "An alist of (\"key\" . value), sorted by key; a list value
+is a list of strings, and NIL reads back as the symbol NULL.")
+   (address :initarg :address :reader audit-event-address
+            :documentation "The client's IP address, or NIL outside a request."))
   (:documentation "An event read from the audit log."))
 
 (defmethod print-object ((event audit-event) stream)
@@ -146,8 +154,10 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
 (defun audit-events (&key action actor subject search since until (limit 50) (offset 0))
   "Events, newest first.  ACTION matches itself and the actions under it
 (\"sign-in\" matches \"sign-in.failed\"); ACTOR is an actor id and SUBJECT
-a subject; SEARCH looks in the actor's and subject's names; SINCE and UNTIL
-are universal times."
+a subject; SEARCH looks in the actor's and subject's names, ignoring case
+(on SQLite, the case of ASCII letters only);
+SINCE and UNTIL are universal times.  At most LIMIT, skipping the first
+OFFSET."
   (let ((clauses '()) (parameters '()))
     (flet ((where (clause &rest values)
              (push clause clauses)

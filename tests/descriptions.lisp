@@ -135,3 +135,71 @@
     (is (equal '(:title "Sunset" :colour :green) answer))
     ;; The object itself is untouched.
     (is (string= "untitled" (slot-value swatch 'title)))))
+
+;;; Passwords left blank
+
+(defclass locker ()
+  ((owner :initarg :owner :accessor locker-owner)
+   (code :initarg :code :initform nil :accessor locker-code)))
+
+(define-description locker
+  ((owner :required t)
+   (code :type :password :required t)))
+
+(defclass locker-page (component)
+  ((locker :initform (make-instance 'locker :owner "ada" :code "1234") :reader page-locker)
+   (via :initarg :via :initform :editor :reader page-via)))
+
+(defmethod render ((self locker-page))
+  (p () "Code: " (text (or (locker-code (page-locker self)) "none")))
+  (anchor (:callback (lambda ()
+                       (show self (ecase (page-via self)
+                                    (:editor (make-editor (page-locker self)))
+                                    (:wizard (make-wizard (page-locker self)
+                                                          :steps '(("Owner" owner) ("Code" code))))
+                                    (:owner-only (make-wizard (page-locker self) :steps '(("Owner" owner))))))))
+    "Edit"))
+
+(defclass editor-locker-page (locker-page) ())
+(defclass wizard-locker-page (locker-page) () (:default-initargs :via :wizard))
+(defclass owner-locker-page (locker-page) () (:default-initargs :via :owner-only))
+
+(test blank-passwords-are-kept
+  (with-fresh-applications (("/locker-e" 'editor-locker-page :mode :deployment)
+                            ("/locker-w" 'wizard-locker-page :mode :deployment))
+    (let ((b (make-instance 'browser)))
+      (visit b "/locker-e")
+      (click b "Edit")
+      (fill-in b "owner" "grace")
+      (press b "Save")
+      (is (search "Code: 1234" (body-text b)) "A required password left blank keeps its value")
+      (click b "Edit")
+      (fill-in b "code" "9876")
+      (press b "Save")
+      (is (search "Code: 9876" (body-text b)) "A password typed in replaces it"))
+    (let ((b (make-instance 'browser)))
+      (visit b "/locker-w")
+      (click b "Edit")
+      (press b "Next")
+      (press b "Next")
+      (press b "Finish")
+      (is (search "Code: 1234" (body-text b)) "The wizard keeps it too"))))
+
+(test wizard-checks-see-every-field
+  ;; A whole-object check sees fields the steps leave out, as the editor's does.
+  (let ((seen nil))
+    (define-description locker
+      ((owner :required t)
+       (code :type :password))
+      :validate (lambda (values) (setf seen (list (getf values :owner) (getf values :code))) nil))
+    (unwind-protect
+         (with-fresh-applications (("/locker-o" 'owner-locker-page :mode :deployment))
+           (let ((b (make-instance 'browser)))
+             (visit b "/locker-o")
+             (click b "Edit")
+             (press b "Next")
+             (press b "Finish")
+             (is (equal '("ada" "1234") seen))))
+      (define-description locker
+        ((owner :required t)
+         (code :type :password :required t))))))

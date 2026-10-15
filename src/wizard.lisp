@@ -17,16 +17,25 @@
    (steps :initarg :steps :reader wizard-steps :documentation "(TITLE FIELD-NAME …) for each step.")
    (title :initarg :title :initform nil :reader wizard-title)
    (write-p :initarg :write :initform t :reader wizard-write-p)
-   (step :initform 0 :accessor wizard-step :documentation "The step shown; the number of steps for the review.")
+   (step :initform 0 :accessor wizard-step
+         :documentation "The step shown, counting from 0; the number of steps for the review.")
    (texts :initform '() :accessor wizard-texts :documentation "(FIELD-NAME . TEXT), replaced, never changed.")
    (problems :initform '() :accessor wizard-problems))
-  (:documentation "A description's fields in steps, with a review before finishing."))
+  (:documentation "A description's fields in steps, with a review before
+finishing.  Make one with MAKE-WIZARD."))
 
 (defmethod states ((self wizard)) (list self))
 
 (defun make-wizard (object &key (description object) steps title (write t))
-  "A wizard for OBJECT, described by DESCRIPTION, in STEPS: (TITLE FIELD-NAME …)
-lists.  Without STEPS, one step per field not hidden."
+  "A WIZARD for OBJECT, described by DESCRIPTION (anything FIND-DESCRIPTION
+takes; by default OBJECT's class), headed by TITLE when given.  STEPS is a
+list of (TITLE FIELD-NAME …), one for each step; without it, each field not
+hidden is a step, titled by its label.  Next checks the step's fields
+before moving on and Back keeps what was typed.  After the last step comes
+a review of every value, with a link back to each step; Finish checks
+everything and then the description's own check, writes the values to
+OBJECT and answers it.  With WRITE NIL it leaves OBJECT alone and answers
+the values as a plist keyed by field name keywords.  Cancel answers NIL."
   (let* ((description (find-description description))
          (shown (remove-if #'field-hidden-p (description-fields description)))
          (wizard (make-instance 'wizard :object object :description description :title title :write write
@@ -48,11 +57,15 @@ lists.  Without STEPS, one step per field not hidden."
   "Parse and check FIELDS' texts: their values as (FIELD . VALUE), and problems as (NAME . TEXT)."
   (let ((values '()) (problems '()))
     (dolist (field fields)
-      (handler-case
-          (let* ((value (parse-field field (wizard-text wizard (field-name field))))
-                 (problem (check-field field value)))
-            (if problem (push (cons (field-name field) problem) problems) (push (cons field value) values)))
-        (field-error (e) (push (cons (field-name field) (field-error-message e)) problems))))
+      (let ((text (wizard-text wizard (field-name field))))
+        (multiple-value-bind (kept stored) (kept-password field (wizard-object wizard) text)
+          (if kept
+              (push (cons field stored) values)
+              (handler-case
+                  (let* ((value (parse-field field text))
+                         (problem (check-field field value)))
+                    (if problem (push (cons (field-name field) problem) problems) (push (cons field value) values)))
+                (field-error (e) (push (cons (field-name field) (field-error-message e)) problems)))))))
     (values (nreverse values) (nreverse problems))))
 
 (defun wizard-next (wizard)
@@ -66,9 +79,15 @@ lists.  Without STEPS, one step per field not hidden."
   (let* ((fields (loop for i below (length (wizard-steps wizard)) append (step-fields wizard i))))
     (multiple-value-bind (values problems) (check-fields wizard fields)
       (let ((whole (and (null problems) (description-validator (wizard-description wizard))
+                        ;; Every field, as the editor's check sees them: the
+                        ;; stored value of any field the steps leave out.
                         (funcall (description-validator (wizard-description wizard))
-                                 (loop for (field . value) in values
-                                       append (list (intern (symbol-name (field-name field)) :keyword) value))))))
+                                 (loop for field in (description-fields (wizard-description wizard))
+                                       for entry = (assoc field values)
+                                       append (list (intern (symbol-name (field-name field)) :keyword)
+                                                    (cond (entry (cdr entry))
+                                                          ((wizard-object wizard)
+                                                           (ignore-errors (field-value field (wizard-object wizard)))))))))))
         (cond (problems
                ;; Back to the first step with a problem.
                (setf (wizard-problems wizard) problems

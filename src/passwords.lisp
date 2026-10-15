@@ -88,7 +88,8 @@ setup; ironclad's own bcrypt KDF can't take a 72-byte key without the NUL."
     (subseq hash 0 23)))
 
 (defun bcrypt-hash (password &key (cost 12) (salt (ironclad:random-data 16)))
-  "A $2b$ bcrypt hash of PASSWORD, for seeding a table that expects them."
+  "A $2b$ bcrypt hash of PASSWORD with COST (12) and SALT (16 random bytes),
+for seeding a table that expects them."
   (format nil "$2b$~2,'0D$~A~A" cost (subseq (bcrypt-encode salt) 0 22)
           (subseq (bcrypt-encode (bcrypt-raw password salt cost)) 0 31)))
 

@@ -75,8 +75,9 @@ not a plain class (an EQL specialiser), meaning every page."
 
 (defun reload-pages (&optional (classes t))
   "Have the open pages of applications in development mode reload: all of
-them, or those showing an instance of one of CLASSES.  Pages that poll see
-it on their next poll; returns how many pages with event streams were told."
+them (CLASSES T, the default), or those showing an instance of one of
+CLASSES, a list of classes or class names.  Pages that poll see it on their
+next poll; returns how many pages with event streams were told."
   (note-code-change classes)
   (let ((count 0))
     (dolist (stream (open-event-streams) count)
@@ -88,7 +89,11 @@ it on their next poll; returns how many pages with event streams were told."
           (incf count))))))
 
 (defun start-live-watcher (&key (interval 0.5))
-  "Watch for redefined rendering methods every INTERVAL seconds."
+  "Every INTERVAL seconds, in a thread, look for methods of RENDER, STYLE,
+SCRIPT, UPDATE-ROOT, CHILDREN or RENDER-DECORATION added or replaced since
+the last look, and reload the open development pages showing an instance
+of a class they are for (see RELOAD-PAGES), while *LIVE-RELOAD* is true.
+Replaces any watcher already running."
   (stop-live-watcher)
   (setf *live-watcher*
         (sb-thread:make-thread

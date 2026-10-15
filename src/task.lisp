@@ -24,7 +24,9 @@
 
 (defclass task (component)
   ()
-  (:documentation "A component defined by a FLOW of calls."))
+  (:documentation "A component defined by a FLOW of calls.  It renders nothing
+itself, only what it calls.  When the flow returns, the task answers its
+value; a root task, which nothing called, starts its flow again."))
 
 (defun task-running-p (task)
   "A task is running while it shows a component it called.  Deriving this
@@ -35,7 +37,12 @@ from its decorations keeps it right when the back button restores them."
   (:documentation "The body of TASK.  Define methods with DEFINE-FLOW."))
 
 (defmacro define-flow (class (self) &body body)
-  "Define the flow of the task CLASS, with SELF bound to the task."
+  "Define the flow of the task CLASS, with SELF bound to the task.  Each
+CALL in BODY (and INFORM, CONFIRM, REQUEST-INPUT, CHOOSE-FROM, CALL-MODAL)
+waits for the called component's answer; the task answers BODY's value.
+BODY is rewritten with cl-cont, so no UNWIND-PROTECT, CATCH or HANDLER-CASE
+may surround a CALL, and a variable SETQ'd after a CALL is shared by every
+page resuming from it."
   (multiple-value-bind (forms declarations doc) (alexandria:parse-body body :documentation t)
     `(defmethod flow ((,self ,class))
        ,@(when doc (list doc))

@@ -93,7 +93,7 @@
   (floor (unix-time universal-time) *totp-step*))
 
 (defun totp-code (secret &optional (universal-time (get-universal-time)))
-  "The six-digit code SECRET (base 32) gives now."
+  "The six-digit code SECRET (base 32) gives at UNIVERSAL-TIME, by default now."
   (hotp (base32-decode secret) (totp-step universal-time)))
 
 (defun verify-totp (secret code &key (after -1) (universal-time (get-universal-time)))
@@ -116,7 +116,8 @@ later than AFTER (so a code works once), or NIL."
           (quri:url-encode issuer) (quri:url-encode account) secret (quri:url-encode issuer) *totp-step*))
 
 (defun qr-svg (text &key (module 4) (label "QR code"))
-  "TEXT as a QR code, inline SVG."
+  "TEXT as a QR code, as a string of inline SVG: MODULE pixels a square, and
+LABEL for screen readers."
   (let* ((code (clqr:encode text :error-correction :m))
          (size (clqr:qr-size code))
          (margin 4)
@@ -133,8 +134,8 @@ later than AFTER (so a code works once), or NIL."
 ;;; Recovery codes
 
 (defun make-recovery-codes (user &key (count 10))
-  "Ten new single-use recovery codes for USER, replacing any others; only
-their hashes are kept, so show them once."
+  "COUNT (ten) new single-use recovery codes for USER, replacing any others;
+only their hashes are kept, so show them once."
   (db-execute "DELETE FROM auth_tokens WHERE user_id = ? AND purpose = ?" (princ-to-string (user-id user)) "recovery")
   (audit-user "recovery-codes.created" user)
   (loop repeat count
@@ -279,7 +280,9 @@ passkey for this site when USER is NIL (signing in without a name)."
   (cons (cdr (assoc -2 alist)) (cdr (assoc -3 alist))))
 
 (defun verify-registration (challenge client-data-b64 attestation-b64)
-  "Check a navigator.credentials.create response: (VALUES CREDENTIAL-ID X Y COUNT)."
+  "Check a navigator.credentials.create response, its client data and
+attestation object in base 64 URL, against CHALLENGE: (VALUES CREDENTIAL-ID X
+Y COUNT).  Signals PASSKEY-ERROR when a check fails."
   (let ((client-data (b64url-decode client-data-b64))
         (attestation (cbor-decode (b64url-decode attestation-b64))))
     (check-client-data client-data "webauthn.create" challenge)
@@ -319,8 +322,10 @@ passkey for this site when USER is NIL (signing in without a name)."
     (values (b64url-decode x) (b64url-decode y))))
 
 (defun verify-assertion (challenge response &optional user)
-  "Check a navigator.credentials.get RESPONSE (a parsed JSON hash table); the
-user it signs in, its passkey's signature count advanced."
+  "Check a navigator.credentials.get RESPONSE (a parsed JSON hash table)
+against CHALLENGE; the user it signs in, its passkey's signature count
+advanced.  With USER, only USER's passkeys count.  Signals PASSKEY-ERROR when
+a check fails."
   (let* ((id (gethash "id" response))
          (inner (gethash "response" response))
          (factor (and (stringp id)
@@ -349,7 +354,9 @@ user it signs in, its passkey's signature count advanced."
         owner))))
 
 (defun add-passkey (user challenge response-json &key (name "Passkey"))
-  "Keep the passkey a navigator.credentials.create response (JSON) made for USER."
+  "Keep, as NAME, the passkey a navigator.credentials.create response
+(RESPONSE-JSON, a string) made for USER against CHALLENGE.  Signals
+PASSKEY-ERROR when the response fails a check."
   (let* ((response (com.inuoe.jzon:parse response-json))
          (inner (gethash "response" response)))
     (multiple-value-bind (id x y count)

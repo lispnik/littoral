@@ -22,17 +22,23 @@
 
 (defpackage #:littoral.websocket
   (:use #:cl #:littoral)
-  (:documentation "Carry Littoral's AJAX and server push over WebSockets.")
+  (:documentation "Load with `(asdf:load-system :littoral/websocket)`, then register an
+application with `:websockets t`.  Its pages that have server push open one
+WebSocket and carry their AJAX and push over it, falling back to fetch and
+server-sent events when it can't open.  On Woo, pages keep server-sent
+events.")
   (:export #:*max-message-size* #:*allowed-origins*))
 
 (in-package #:littoral.websocket)
 
 (defvar *max-message-size* (* 1024 1024)
-  "The largest message, in bytes, a page may send over its socket.")
+  "The largest message, in bytes, a page may send over its socket (1 MiB by
+default); a larger one closes the socket.")
 
 (defvar *allowed-origins* '()
-  "Origins (such as \"https://app.example.org\") allowed to open sockets
-besides the server's own host, for pages served from another name.")
+  "Origins (such as \"https://app.example.org\", compared ignoring case)
+allowed to open sockets besides the server's own host, for pages served from
+another name.  A socket from any other origin is refused with 403.")
 
 ;;; Rendering pushes off the publisher's thread
 ;;;
