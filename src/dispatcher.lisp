@@ -778,6 +778,25 @@ replacing any reaper already running.  Returns the thread."
     (sb-thread:terminate-thread *reaper*))
   (setf *reaper* nil))
 
+(defun wait-until-listening (address port &key (seconds 10))
+  "Return once something accepts connections on PORT at ADDRESS, or after
+SECONDS.  Clack starts the server in a thread of its own; waiting means a
+STOP straight after START never kills that thread halfway through opening
+its socket.  Connects to the numeric address, so no name lookup is made;
+for an address other than IPv4, localhost or 0.0.0.0 it doesn't wait."
+  (let ((octets (cond ((member address '("0.0.0.0" "localhost") :test #'equal) #(127 0 0 1))
+                      ((and (stringp address)
+                            (= 3 (count #\. address))
+                            (every (lambda (c) (or (digit-char-p c) (char= c #\.))) address))
+                       (map 'vector #'parse-integer (uiop:split-string address :separator "."))))))
+    (loop repeat (if octets (* seconds 20) 0)
+          until (let ((socket (make-instance 'sb-bsd-sockets:inet-socket :type :stream :protocol :tcp)))
+                  (unwind-protect
+                       (handler-case (progn (sb-bsd-sockets:socket-connect socket octets port) t)
+                         (error () nil))
+                    (ignore-errors (sb-bsd-sockets:socket-close socket))))
+          do (sleep 0.05))))
+
 (defun start (&key (port 8080) (address "127.0.0.1") (server :hunchentoot) (prefix "")
                 configuration-file (instance-id *instance-id*) (max-threads 100) (workers 4))
   "Serve all registered applications with Clack on PORT, under PREFIX, and
@@ -813,6 +832,7 @@ page with server push ties up a Woo worker.  Load littoral/woo."))
                                                :max-accept-count (+ max-threads 20)))
                            (:woo (list :worker-num workers))
                            (otherwise '()))))
+  (wait-until-listening address port)
   (format t "~&Littoral listening on http://~A:~D/~%" address port)
   *handler*)
 

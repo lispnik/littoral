@@ -10,6 +10,7 @@
 - `*keepalive-seconds*` and `littoral.storage:*signing-key*` are exported, as the docs already said.
 
 ### Fixed
+- **`start` returns once the server accepts connections.** Clack starts the server in a thread of its own; a `stop` straight after `start` could kill that thread while it held SBCL's name-service lock, and every later address lookup in the process then waited forever.
 - **A saved configuration keeps `/config` local.** `:local-only` wasn't saved, so after `/config` was unregistered, loading an older configuration file brought it back open to any address.
 - **Editing an object with a password field no longer wipes the password.** The field starts empty, so Save wrote NIL, or refused when it was required. A blank password field now keeps the stored value, in editors and wizards.
 - **A wizard's whole-object check sees every field**, with the stored value for those its steps leave out, as an editor's does.
