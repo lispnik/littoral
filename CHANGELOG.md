@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 (2026-10-18)
+
+This release is about documentation you can trust: an example for nearly every exported function, macro and class, each run by the test suite, a tutorial that goes on to testing, a database, signing in and translation, and a README whose code is checked. Checking it all against the code found and fixed about fifteen bugs, one of them a way for `/config` to be reopened to everyone. Clicks are also 45–70% faster.
 
 ### Added
 - **Examples for the whole API, all tested.** docs/API.md has 813 examples, over every exported function, macro and class but those needing Chrome or an S3 server. They live in `docs/examples/`; the test suite runs each on its own, in a fresh package set up as the reference tells readers to, and checks every result shown (`;; ⇒`). `make examples` runs them alone. Docstrings were checked against the code throughout, and many corrected.

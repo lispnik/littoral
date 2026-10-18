@@ -11,7 +11,7 @@ Littoral is a Common Lisp port of Smalltalk's [Seaside](https://seaside.st) web 
 
 It runs on SBCL and serves through Clack (Hunchentoot by default). Dependencies are managed with ocicl.
 
-Version 0.3.0 puts the admin and `/config` behind sign-in, adds metrics for jobs, mail, sign-ins and the database, switches SQLite to WAL mode, and sends mail through the smtp library, with DKIM and pooled connections. Version 0.2.0 added a database with migrations, users and signing in, an admin, mail, durable jobs and an audit log. See the [changelog](https://github.com/lispnik/littoral/blob/master/CHANGELOG.md).
+Version 0.4.0 documents the API with an example for nearly every export, each run by the tests, extends the tutorial to testing, a database, signing in and translation, fixes about fifteen bugs found while checking the docs, and makes clicks 45–70% faster. Version 0.3.0 put the admin and `/config` behind sign-in, added metrics for jobs, mail, sign-ins and the database, switched SQLite to WAL mode, and sent mail through the smtp library, with DKIM and pooled connections. Version 0.2.0 added a database with migrations, users and signing in, an admin, mail, durable jobs and an audit log. See the [changelog](https://github.com/lispnik/littoral/blob/master/CHANGELOG.md).
 
 ```lisp
 (asdf:load-system :littoral)
