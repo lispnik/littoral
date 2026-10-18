@@ -8,6 +8,7 @@
 - **The tutorial goes further**: testing the reading list with the fake browser, keeping it in a database, signing readers in, and a second language (steps 12 to 15). A test pastes the tutorial's code blocks in order into fresh packages and checks each step does what the text says; another checks every block matches the code in `docs/tutorial/`.
 - **The fake browser** (`littoral.test`) gains `body-text`, a page's text as a reader sees it, and `choose-radio`. `fill-in` and `select-option` also find a field by its label, and responses whose body is octets or a file (such as stored files) can be read.
 - `*keepalive-seconds*` and `littoral.storage:*signing-key*` are exported, as the docs already said.
+- **The README is tested.** Every Lisp block in it must read, so each Littoral name it uses is exported; the complete ones (the first counter, the database, signing in, the audit log, Parenscript and the testing example) run as written, and their results are checked.
 
 ### Fixed
 - **`start` returns once the server accepts connections.** Clack starts the server in a thread of its own; a `stop` straight after `start` could kill that thread while it held SBCL's name-service lock, and every later address lookup in the process then waited forever.

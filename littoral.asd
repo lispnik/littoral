@@ -135,6 +135,7 @@
                #:littoral/tutorial
                #:littoral/tutorial-tests
                #:littoral/test
+               #:littoral/browser-test           ; loaded so the README's uses of it are checked
                #:littoral/db
                #:littoral/admin
                #:littoral/admin-demo
@@ -179,6 +180,7 @@
                              (:file "tracker")
                              (:file "tutorial")
                              (:file "doc-examples")
+                             (:file "readme")
                              (:file "live")
                              (:file "db")
                              (:file "admin")
