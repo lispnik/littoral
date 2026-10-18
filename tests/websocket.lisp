@@ -143,3 +143,81 @@ ended that thread; that race is the client library's, not the server's."
                (is (not (eq (wsd:ready-state second-socket) :open))))
              (close-client first-socket))
         (setf *max-event-streams-per-session* limit)))))
+
+;;; Event streams on Hunchentoot: the hub serves them, not a thread each
+
+(defun open-raw-event-stream (port url jar)
+  "Request URL's event stream over a socket of our own; the usocket."
+  (let* ((socket (usocket:socket-connect "127.0.0.1" port :element-type '(unsigned-byte 8)))
+         (out (usocket:socket-stream socket)))
+    (write-sequence (sb-ext:string-to-octets
+                     (format nil "GET ~A HTTP/1.1~C~CHost: 127.0.0.1:~D~C~CAccept: text/event-stream~C~CCookie: ~A~C~C~C~C"
+                             url #\Return #\Linefeed port #\Return #\Linefeed #\Return #\Linefeed
+                             (cookie-header jar) #\Return #\Linefeed #\Return #\Linefeed)
+                     :external-format :latin-1)
+                    out)
+    (force-output out)
+    socket))
+
+(defun read-raw-until (socket text &optional (seconds 5))
+  "What SOCKET sends until TEXT has come, as a string; NIL if it doesn't
+come within SECONDS."
+  (let ((seen (make-array 0 :element-type 'character :adjustable t :fill-pointer 0))
+        (deadline (+ (get-internal-real-time) (* seconds internal-time-units-per-second))))
+    (loop
+      (when (search text seen) (return seen))
+      (let ((left (/ (- deadline (get-internal-real-time)) internal-time-units-per-second)))
+        (unless (and (plusp left) (usocket:wait-for-input socket :timeout left :ready-only t))
+          (return nil))
+        (let ((byte (read-byte (usocket:socket-stream socket) nil)))
+          (unless byte (return nil))
+          (vector-push-extend (code-char byte) seen))))))
+
+(defun hunchentoot-workers (sockets)
+  "How many Hunchentoot threads serve the connections of SOCKETS, ours:
+each is named for the client's address and port."
+  (count-if (lambda (thread)
+              (let ((name (sb-thread:thread-name thread)))
+                (and (alexandria:starts-with-subseq "hunchentoot-worker" name)
+                     (some (lambda (socket)
+                             (alexandria:ends-with-subseq (format nil ":~D" (usocket:get-local-port socket)) name))
+                           sockets))))
+            (sb-thread:list-all-threads)))
+
+(test event-streams-hold-no-hunchentoot-thread
+  (let ((port (free-port)) (sockets '()) (keepalive littoral:*keepalive-seconds*))
+    (register-application "/push-hub" 'ws-counter :mode :deployment)
+    (start :port port)
+    ;; Keepalives come often, so the test sees them and notices a closed page soon.
+    (setf littoral:*keepalive-seconds* 0.2)
+    (unwind-protect
+         (let ((jars (loop repeat 3 collect (cl-cookie:make-cookie-jar))))
+           (dolist (jar jars)
+             (let* ((html (dex:get (format nil "http://127.0.0.1:~D/push-hub" port) :cookie-jar jar :keep-alive nil))
+                    (url (cl-ppcre:register-groups-bind (u) ("data-lt-events=\"([^\"]*)\"" html) (unescape u)))
+                    (socket (open-raw-event-stream port url jar)))
+               (push socket sockets)
+               (let ((head (read-raw-until socket "retry: 3000")))
+                 (is (search "HTTP/1.1 200" head))
+                 (is (search "Content-Type: text/event-stream" head))
+                 (is (search "X-Content-Type-Options: nosniff" head)))))
+           ;; Three pages listen, and no Hunchentoot thread waits on them.
+           (is (= 3 (littoral::hub-stream-count)))
+           (is (wait-for (lambda () (zerop (hunchentoot-workers sockets)))))
+           ;; A push reaches each page.
+           (publish *ws-channel*)
+           (dolist (socket sockets)
+             (is (search "event: update" (read-raw-until socket "ws-count"))))
+           ;; Idle streams get keepalives, and a page that goes is noticed.
+           (is (read-raw-until (first sockets) ": keepalive"))
+           (usocket:socket-close (pop sockets))
+           (is (wait-for (lambda () (= 2 (littoral::hub-stream-count)))))
+           ;; Stopping the server ends the rest.
+           (stop)
+           (is (wait-for (lambda () (zerop (littoral::hub-stream-count)))))
+           (dolist (socket sockets)
+             (is (null (read-raw-until socket "never sent" 2)))))
+      (setf littoral:*keepalive-seconds* keepalive)
+      (mapc (lambda (socket) (ignore-errors (usocket:socket-close socket))) sockets)
+      (stop)
+      (unregister-application "/push-hub"))))

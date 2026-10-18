@@ -48,7 +48,7 @@
   ("Add a passkey" "Ajouter une clé d'accès") ("Recovery codes" "Codes de secours") ("Make new codes" "Créer de nouveaux codes")
   ("Sign in with a passkey" "Se connecter avec une clé d'accès") ("~D code left" "~D code restant" "~D codes restants") ("Steps" "Étapes") ("Review" "Vérification") ("Change ~A" "Modifier ~A")
   ("Change" "Modifier") ("Finish" "Terminer") ("Next" "Suivant") ("Table" "Tableau") ("Actions" "Actions") ("Filter ~A" "Filtrer ~A") ("Filter" "Filtrer")
-  ("Nothing matches." "Aucun résultat.") ("Edit" "Modifier") ("~D row" "~D ligne" "~D lignes") ("Data" "Données")
+  ("Nothing matches." "Aucun résultat.") ("Edit" "Modifier") ("Delete" "Supprimer") ("~D row" "~D ligne" "~D lignes") ("Data" "Données")
   ("Previous month" "Mois précédent") ("Next month" "Mois suivant") ("Move to ~A" "Déplacer vers ~A")
   ("Mon" "lun") ("Tue" "mar") ("Wed" "mer") ("Thu" "jeu") ("Fri" "ven") ("Sat" "sam") ("Sun" "dim")
   ("Markdown: **strong**, *emphasis*, `code`, [links](https://…), - lists, # headings."
@@ -149,7 +149,7 @@ Le lien ne sert qu'une fois, pendant une heure.  Si ce n'était pas vous, ignore
   ("Add a passkey" "Passkey hinzufügen") ("Recovery codes" "Wiederherstellungscodes") ("Make new codes" "Neue Codes erstellen")
   ("Sign in with a passkey" "Mit einem Passkey anmelden") ("~D code left" "~D Code übrig" "~D Codes übrig") ("Steps" "Schritte") ("Review" "Überprüfen") ("Change ~A" "~A ändern")
   ("Change" "Ändern") ("Finish" "Fertigstellen") ("Next" "Weiter") ("Table" "Tabelle") ("Actions" "Aktionen") ("Filter ~A" "~A filtern") ("Filter" "Filtern")
-  ("Nothing matches." "Keine Treffer.") ("Edit" "Bearbeiten") ("~D row" "~D Zeile" "~D Zeilen") ("Data" "Daten")
+  ("Nothing matches." "Keine Treffer.") ("Edit" "Bearbeiten") ("Delete" "Löschen") ("~D row" "~D Zeile" "~D Zeilen") ("Data" "Daten")
   ("Previous month" "Voriger Monat") ("Next month" "Nächster Monat") ("Move to ~A" "Nach ~A verschieben")
   ("Mon" "Mo") ("Tue" "Di") ("Wed" "Mi") ("Thu" "Do") ("Fri" "Fr") ("Sat" "Sa") ("Sun" "So")
   ("Markdown: **strong**, *emphasis*, `code`, [links](https://…), - lists, # headings."
@@ -250,7 +250,7 @@ Der Link funktioniert einmal, eine Stunde lang.  Falls Sie das nicht waren, igno
   ("Add a passkey" "Añadir una llave de acceso") ("Recovery codes" "Códigos de recuperación") ("Make new codes" "Crear códigos nuevos")
   ("Sign in with a passkey" "Entrar con una llave de acceso") ("~D code left" "~D código restante" "~D códigos restantes") ("Steps" "Pasos") ("Review" "Revisión") ("Change ~A" "Cambiar ~A")
   ("Change" "Cambiar") ("Finish" "Terminar") ("Next" "Siguiente") ("Table" "Tabla") ("Actions" "Acciones") ("Filter ~A" "Filtrar ~A") ("Filter" "Filtrar")
-  ("Nothing matches." "Sin resultados.") ("Edit" "Editar") ("~D row" "~D fila" "~D filas") ("Data" "Datos")
+  ("Nothing matches." "Sin resultados.") ("Edit" "Editar") ("Delete" "Borrar") ("~D row" "~D fila" "~D filas") ("Data" "Datos")
   ("Previous month" "Mes anterior") ("Next month" "Mes siguiente") ("Move to ~A" "Mover a ~A")
   ("Mon" "lu") ("Tue" "ma") ("Wed" "mi") ("Thu" "ju") ("Fri" "vi") ("Sat" "sá") ("Sun" "do")
   ("Markdown: **strong**, *emphasis*, `code`, [links](https://…), - lists, # headings."

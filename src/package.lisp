@@ -59,6 +59,7 @@
    #:sortable-list #:sortable-items #:move-item
    ;; Descriptions
    #:define-description #:description #:find-description #:description-fields
+   #:description-label #:description-plural #:english-plural
    #:field #:field-name #:field-label #:field-value #:find-field #:*field-kinds*
    #:string-field #:text-field #:password-field #:email-field #:url-field
    #:integer-field #:boolean-field #:choice-field #:date-field #:field-choices #:field-hidden-p

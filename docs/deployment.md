@@ -115,7 +115,7 @@ Sign-ins are kept in the database (`auth_sessions`), so a browser that lands on 
 
 ## 7. Server push at scale
 
-On Hunchentoot every open page with server push holds a thread (about 1.5 MB). If many pages subscribe, raise `:max-threads`, or run on Woo, where an open push page costs almost nothing:
+An open page with server push holds a connection, but not a thread. On Hunchentoot, one thread, the push hub, serves every open stream; on Linux, 10,000 open pages and their sessions added about 40 MB to the server's heap. On macOS, SBCL waits on sockets with `select(2)`, so a Hunchentoot server there holds about 1,000 connections at most. Woo serves push from its event loops and has no such limit:
 
 ```lisp
 (asdf:load-system :littoral/woo)          ; needs the libev C library

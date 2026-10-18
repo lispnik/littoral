@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- **Server push on Hunchentoot no longer holds a thread per page.** Once a page's event stream has begun, its connection leaves Hunchentoot's thread (through `detach-socket`) for littoral's push hub, one thread that writes every open stream's updates and keepalives. 600 open push pages now cost 22 threads and 121 MB for the whole server, down from 621 threads and 1,355 MB, with `start`'s default `:max-threads` of 100. On Linux, 10,000 open pages took the server from 4 threads to 5. A page whose browser has stopped reading is dropped rather than waited for. (On macOS, SBCL waits on sockets with `select(2)`, so a Hunchentoot server there still holds about 1,000 connections at most.)
+- **The admin names tables properly**: "Shelves", "Categories" and "People", not "Shelfs", "Categorys" and "Persons". `define-description` takes `:label` and `:plural` for names the rules get wrong; `description-label`, `description-plural` and `english-plural` are exported.
+- The admin's Edit, Delete and "Back to the list" links (and the job queue's status filters) have spaces between them, so they read apart without the stylesheet. Edit and Delete are translated.
+- littoral/mail uses smtp 0.3.6, which exports `make-reply`; tests and examples no longer reach for `smtp::make-reply`.
+
 ## 0.4.0 (2026-10-18)
 
 This release is about documentation you can trust: an example for nearly every exported function, macro and class, each run by the test suite, a tutorial that goes on to testing, a database, signing in and translation, and a README whose code is checked. Checking it all against the code found and fixed about fifteen bugs, one of them a way for `/config` to be reopened to everyone. Clicks are also 45–70% faster.

@@ -316,3 +316,13 @@
         (press b "Save")
         (list before input (not (null (has-text-p b "Prices end in 0 or 5."))))))))
 ;; ⇒ ("Price £12.50 Close Edit" T T)
+
+;;;; Example: littoral:description-label littoral:description-plural littoral:english-plural
+;;; A description names its objects for pages such as the admin's: by default from the class name, with the English plural of the last word.  `:label` and `:plural` say otherwise.
+(defclass reading-shelf () ((title :initarg :title :initform nil)))
+(defclass cactus () ((kind :initarg :kind :initform nil)))
+(list (let ((shelves (define-description reading-shelf ((title)))))
+        (list (description-label shelves) (description-plural shelves)))
+      (description-plural (define-description cactus ((kind)) :plural "Cacti"))
+      (english-plural "Person"))
+;; ⇒ (("Reading Shelf" "Reading Shelves") "Cacti" "People")

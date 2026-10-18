@@ -2647,7 +2647,7 @@ of range or they are the same.
 
 ### Descriptions
 
-#### `define-description` `name fields &key validate` — macro
+#### `define-description` `name fields &key validate label plural` — macro
 
 Describe the objects of class `name`, replacing any description of that
 name, and return the `description`.  Each of `fields` is (`property` &rest
@@ -2667,6 +2667,10 @@ options are evaluated, except `:accessor`.
 
 `validate`, a function of a plist of the values keyed by keywords, checks
 them together: it returns `nil`, or what is wrong.
+
+`label` and `plural` name one object and several on pages, such as the
+admin's; by default they come from `name` (see `description-label` and
+`description-plural`).
 
 *Example:* Describe a class's fields once.  `validate` checks an object against its class's description and lists what is wrong, field by field.
 
@@ -2780,6 +2784,56 @@ Reads the fields of a description.
         (mapcar #'field-label (description-fields description))
         (type-of (find-field 'recipe 'serves))))
 ;; ⇒ (T (TITLE SERVES) ("Title" "Serves") INTEGER-FIELD)
+```
+
+#### `description-label` `description` — function
+
+What one of `description`'s objects is called on a page: its `:label`, or
+its name capitalised, with spaces for hyphens ("Reading List").
+
+*Example:* A description names its objects for pages such as the admin's: by default from the class name, with the English plural of the last word.  `:label` and `:plural` say otherwise.
+
+```lisp
+(defclass reading-shelf () ((title :initarg :title :initform nil)))
+(defclass cactus () ((kind :initarg :kind :initform nil)))
+(list (let ((shelves (define-description reading-shelf ((title)))))
+        (list (description-label shelves) (description-plural shelves)))
+      (description-plural (define-description cactus ((kind)) :plural "Cacti"))
+      (english-plural "Person"))
+;; ⇒ (("Reading Shelf" "Reading Shelves") "Cacti" "People")
+```
+
+#### `description-plural` `description` — function
+
+What several of `description`'s objects are called: its `:plural`, or the
+English plural of its label ("Shelves", "Categories", "People").
+
+*Example:* A description names its objects for pages such as the admin's: by default from the class name, with the English plural of the last word.  `:label` and `:plural` say otherwise.
+
+```lisp
+(defclass reading-shelf () ((title :initarg :title :initform nil)))
+(defclass cactus () ((kind :initarg :kind :initform nil)))
+(list (let ((shelves (define-description reading-shelf ((title)))))
+        (list (description-label shelves) (description-plural shelves)))
+      (description-plural (define-description cactus ((kind)) :plural "Cacti"))
+      (english-plural "Person"))
+;; ⇒ (("Reading Shelf" "Reading Shelves") "Cacti" "People")
+```
+
+#### `english-plural` `phrase` — function
+
+`phrase` with its last word made plural, keeping its capitalisation.
+
+*Example:* A description names its objects for pages such as the admin's: by default from the class name, with the English plural of the last word.  `:label` and `:plural` say otherwise.
+
+```lisp
+(defclass reading-shelf () ((title :initarg :title :initform nil)))
+(defclass cactus () ((kind :initarg :kind :initform nil)))
+(list (let ((shelves (define-description reading-shelf ((title)))))
+        (list (description-label shelves) (description-plural shelves)))
+      (description-plural (define-description cactus ((kind)) :plural "Cacti"))
+      (english-plural "Person"))
+;; ⇒ (("Reading Shelf" "Reading Shelves") "Cacti" "People")
 ```
 
 #### `field` — class
@@ -4331,7 +4385,7 @@ End every open stream; browsers reconnect when their page is current.
 #### `*keepalive-seconds*` — variable
 
 How often an idle stream sends a comment.  Writing is how a closed page
-is noticed, so this bounds how long a gone page keeps its server thread.
+is noticed, so this bounds how long a gone page keeps its connection.
 
 #### `with-session` `(session) &body body` — macro
 
@@ -7192,10 +7246,10 @@ Serve all registered applications with Clack on `port`, under `prefix`, and
 reap idle sessions in the background.  With `configuration-file`, first load
 the applications saved there; /config then saves its changes to it.
 `instance-id` prefixes session keys, for routing several processes.
-`max-threads` caps Hunchentoot's worker threads; every open page with server
-push holds one, so raise it when many pages subscribe.  With `server` `:woo`
-(load littoral/woo first) `workers` event loops serve everything, push included,
-without a thread per page.  A server already started is stopped first.
+`max-threads` caps Hunchentoot's worker threads, which serve connections
+while they make requests; open pages with server push leave them for the
+push hub, one thread for every stream.  With `server` `:woo` (load littoral/woo
+first) `workers` event loops serve everything, push included.  A server already started is stopped first.
 Returns the Clack handler.
 
 *Example:* `start` serves the registered applications over HTTP until `stop`.  It prints the address it listens on.
@@ -10891,7 +10945,7 @@ The root of every condition this library signals.
 (defmethod littoral.mail:send-message ((mailer refusing-mailer) from recipients message)
   (declare (ignore from recipients message))
   (error (if (>= (refusal-code mailer) 500) 'smtp:smtp-permanent-error 'smtp:smtp-transient-error)
-         :reply (smtp::make-reply (refusal-code mailer) '("Refused"))))
+         :reply (smtp:make-reply (refusal-code mailer) '("Refused"))))
 (flet ((try (code)
          (handler-case (littoral.mail:send-mail (littoral.mail:make-mail :to "ada@example.org" :text "Hi")
                                                 :mailer (make-instance 'refusing-mailer :code code))
@@ -10913,7 +10967,7 @@ conversation itself failed.  When recipients were refused, the first refusal's.
 (defmethod littoral.mail:send-message ((mailer refusing-mailer) from recipients message)
   (declare (ignore from recipients message))
   (error (if (>= (refusal-code mailer) 500) 'smtp:smtp-permanent-error 'smtp:smtp-transient-error)
-         :reply (smtp::make-reply (refusal-code mailer) '("Refused"))))
+         :reply (smtp:make-reply (refusal-code mailer) '("Refused"))))
 (flet ((try (code)
          (handler-case (littoral.mail:send-mail (littoral.mail:make-mail :to "ada@example.org" :text "Hi")
                                                 :mailer (make-instance 'refusing-mailer :code code))
@@ -10945,7 +10999,7 @@ sent as it is.
 (defmethod littoral.mail:send-message ((mailer refusing-mailer) from recipients message)
   (declare (ignore from recipients message))
   (error (if (>= (refusal-code mailer) 500) 'smtp:smtp-permanent-error 'smtp:smtp-transient-error)
-         :reply (smtp::make-reply (refusal-code mailer) '("Refused"))))
+         :reply (smtp:make-reply (refusal-code mailer) '("Refused"))))
 (flet ((try (code)
          (handler-case (littoral.mail:send-mail (littoral.mail:make-mail :to "ada@example.org" :text "Hi")
                                                 :mailer (make-instance 'refusing-mailer :code code))
@@ -18952,7 +19006,7 @@ Give `class`'s pages the JavaScript `body`, written in Parenscript, with
 Load with `(asdf:load-system :littoral/woo)`, then serve with
 `(start :server :woo)` (and `:workers`, 4 by default): Woo's event loops
 answer every request, and each open page with server push costs two libev
-watchers on its loop instead of a thread.  Exports nothing.
+watchers on its loop.  Exports nothing.
 
 ## Package `littoral.generator`
 

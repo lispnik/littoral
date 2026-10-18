@@ -10,7 +10,7 @@
   :bug-tracker "https://github.com/lispnik/littoral/issues"
   :source-control (:git "https://github.com/lispnik/littoral.git")
   :serial t
-  :depends-on (#:sb-posix #:sb-bsd-sockets
+  :depends-on (#:sb-posix #:sb-bsd-sockets #:usocket
                #:sb-introspect
                #:alexandria
                #:cl-ppcre

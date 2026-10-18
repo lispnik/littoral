@@ -28,9 +28,10 @@
   (gethash (application-path *application*) *admins*))
 
 (defun class-label (class &optional plural)
-  "CLASS's name for people: \"Job\", or with PLURAL \"Jobs\"."
-  (let ((name (string-capitalize (substitute #\Space #\- (symbol-name class)))))
-    (if plural (format nil "~A~:[s~;es~]" name (find (char name (1- (length name))) "sx")) name)))
+  "CLASS's name for people, from its description: \"Shelf\", or with
+PLURAL \"Shelves\"."
+  (let ((description (find-description class)))
+    (if plural (description-plural description) (description-label description))))
 
 (defun class-fields (class)
   "CLASS's described fields."
@@ -85,10 +86,14 @@ classes, that point at CLASS."
                 (tr () (th () (text (field-label field)))
                   (td () (render-value field (field-value field object) admin))))))
           (div (:class "lt-buttons")
+            ;; Spaces between, so the links read apart without the
+            ;; stylesheet too (in text browsers, reader views, copied text).
             (anchor (:class "action" :callback (lambda () (edit-object admin class (object-id object))))
-              "Edit")
+              (translate "Edit"))
+            " "
             (anchor (:class "action" :callback (lambda () (delete-object admin self object)))
-              "Delete")
+              (translate "Delete"))
+            " "
             (anchor (:callback (lambda () (answer self))) (translate "Back to the list")))
           ;; Those that refer to this one.
           (loop for (other . field) in (referring-fields class)
@@ -288,7 +293,8 @@ Shows everything: put it where only those who may see it can."))
                            (reduce #'+ counts :key #'cdr))))
             (anchor (:aria-current (when (equal status (view-status self)) "page")
                      :callback (lambda () (setf (view-status self) status (view-offset self) 0)))
-              (text (format nil "~A (~D)" (status-label status) count)))))
+              (text (format nil "~A (~D)" (status-label status) count)))
+            (text " ")))
         (anchor (:class "lt-job-refresh" :callback (lambda ())) (translate "Refresh")))
       (if (null jobs)
           (p () (translate "No jobs."))

@@ -309,9 +309,51 @@ Push your own (KEYWORD . CLASS-NAME).")
   ((name :initarg :name :reader description-name)
    (fields :initarg :fields :reader description-fields)
    (validator :initarg :validate :initform nil :reader description-validator
-              :documentation "Function of a plist of field values: NIL, or what is wrong with them together."))
+              :documentation "Function of a plist of field values: NIL, or what is wrong with them together.")
+   (label :initarg :label :initform nil)
+   (plural :initarg :plural :initform nil))
   (:documentation "The fields of a kind of object, in order, as
 DEFINE-DESCRIPTION makes them."))
+
+(defun description-label (description)
+  "What one of DESCRIPTION's objects is called on a page: its :LABEL, or
+its name capitalised, with spaces for hyphens (\"Reading List\")."
+  (or (slot-value description 'label)
+      (string-capitalize (substitute #\Space #\- (symbol-name (description-name description))))))
+
+(defun description-plural (description)
+  "What several of DESCRIPTION's objects are called: its :PLURAL, or the
+English plural of its label (\"Shelves\", \"Categories\", \"People\")."
+  (or (slot-value description 'plural)
+      (english-plural (description-label description))))
+
+(defparameter *irregular-plurals*
+  '(("person" . "people") ("child" . "children") ("man" . "men") ("woman" . "women")
+    ("mouse" . "mice") ("foot" . "feet") ("tooth" . "teeth") ("datum" . "data")
+    ("criterion" . "criteria") ("leaf" . "leaves") ("life" . "lives") ("knife" . "knives")
+    ("wife" . "wives") ("thief" . "thieves") ("series" . "series") ("species" . "species"))
+  "Singular → plural for the last words ENGLISH-PLURAL doesn't get by rule.")
+
+(defun english-plural (phrase)
+  "PHRASE with its last word made plural, keeping its capitalisation."
+  (let* ((start (1+ (or (position #\Space phrase :from-end t) -1)))
+         (word (subseq phrase start))
+         (lower (string-downcase word))
+         (n (length lower)))
+    (flet ((ends (suffix) (alexandria:ends-with-subseq suffix lower))
+           (stem (drop add) (concatenate 'string (subseq word 0 (- (length word) drop)) add)))
+      (let ((plural
+              (cond ((zerop n) word)
+                    ((assoc lower *irregular-plurals* :test #'string=)
+                     (let ((irregular (cdr (assoc lower *irregular-plurals* :test #'string=))))
+                       (cond ((every #'upper-case-p (remove-if-not #'alpha-char-p word)) (string-upcase irregular))
+                             ((upper-case-p (char word 0)) (string-capitalize irregular))
+                             (t irregular))))
+                    ((or (ends "s") (ends "x") (ends "z") (ends "ch") (ends "sh")) (stem 0 "es"))
+                    ((and (ends "y") (> n 1) (not (find (char lower (- n 2)) "aeiou"))) (stem 1 "ies"))
+                    ((ends "lf") (stem 1 "ves"))
+                    (t (stem 0 "s")))))
+        (concatenate 'string (subseq phrase 0 start) plural)))))
 
 (defvar *descriptions* (make-hash-table :test 'eq)
   "Name → DESCRIPTION.")
@@ -350,7 +392,7 @@ its class.  Signals an error when there is none."
                      ,@(when accessor `(:accessor ',accessor))
                      ,@(alexandria:remove-from-plist options :accessor))))))
 
-(defmacro define-description (name fields &key validate)
+(defmacro define-description (name fields &key validate label plural)
   "Describe the objects of class NAME, replacing any description of that
 name, and return the DESCRIPTION.  Each of FIELDS is (PROPERTY &rest
 options).  :TYPE is the field's kind, a keyword in *FIELD-KINDS* (:STRING by
@@ -368,11 +410,17 @@ text, :MIN and :MAX for integers, :CHOICES and :LABELS for choices.  The
 options are evaluated, except :ACCESSOR.
 
 VALIDATE, a function of a plist of the values keyed by keywords, checks
-them together: it returns NIL, or what is wrong."
+them together: it returns NIL, or what is wrong.
+
+LABEL and PLURAL name one object and several on pages, such as the
+admin's; by default they come from NAME (see DESCRIPTION-LABEL and
+DESCRIPTION-PLURAL)."
   `(setf (gethash ',name *descriptions*)
          (make-instance 'description
                         :name ',name
                         :validate ,validate
+                        :label ,label
+                        :plural ,plural
                         :fields (list ,@(mapcar (lambda (field)
                                                   (field-form field))
                                                 fields)))))

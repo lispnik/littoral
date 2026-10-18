@@ -803,10 +803,10 @@ for an address other than IPv4, localhost or 0.0.0.0 it doesn't wait."
 reap idle sessions in the background.  With CONFIGURATION-FILE, first load
 the applications saved there; /config then saves its changes to it.
 INSTANCE-ID prefixes session keys, for routing several processes.
-MAX-THREADS caps Hunchentoot's worker threads; every open page with server
-push holds one, so raise it when many pages subscribe.  With SERVER :WOO
-(load littoral/woo first) WORKERS event loops serve everything, push included,
-without a thread per page.  A server already started is stopped first.
+MAX-THREADS caps Hunchentoot's worker threads, which serve connections
+while they make requests; open pages with server push leave them for the
+push hub, one thread for every stream.  With SERVER :WOO (load littoral/woo
+first) WORKERS event loops serve everything, push included.  A server already started is stopped first.
 Returns the Clack handler."
   (when *handler* (stop))
   (setf *instance-id* instance-id)

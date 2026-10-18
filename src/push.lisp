@@ -11,7 +11,10 @@
 ;;;;   … (publish *news*) …
 ;;;;
 ;;;; Subscribers must be UPDATABLE.  Each open page holds one HTTP
-;;;; connection, and with Hunchentoot one thread.
+;;;; connection.  On Hunchentoot the connection leaves its request thread
+;;;; once the response has begun, and one hub thread serves them all (see
+;;;; "The Hunchentoot hub" below); on Woo the event loops serve them
+;;;; (littoral/woo).  Elsewhere, as in the tests, a thread waits on each.
 
 (in-package #:littoral)
 
@@ -55,7 +58,7 @@ marking the stream closed is enough (it ends at its next wake or keepalive).")
 
 (defparameter *keepalive-seconds* 5
   "How often an idle stream sends a comment.  Writing is how a closed page
-is noticed, so this bounds how long a gone page keeps its server thread.")
+is noticed, so this bounds how long a gone page keeps its connection.")
 
 (defun open-event-streams ()
   "The event streams open now."
@@ -225,6 +228,146 @@ after replying.")
     (unregister-event-stream stream)
     (ignore-errors (funcall writer nil :close t))))
 
+;;; The Hunchentoot hub
+;;;
+;;; Hunchentoot answers each connection in a thread of its own, and an
+;;; event stream never finishes, so served the usual way every open page
+;;; would keep a thread (and its stack) for as long as it stays open.
+;;; Instead the stream's response head is written straight to the socket,
+;;; the socket is detached from Hunchentoot (which then lets the thread
+;;; go without closing it), and the hub's one thread writes every stream's
+;;; updates and keepalives.  It runs while any stream is open.
+
+(defstruct (hub-entry (:constructor make-hub-entry (stream socket out)))
+  "A stream the hub serves: its EVENT-STREAM, usocket and octet stream."
+  stream socket out (keepalive-due 0))
+
+(defvar *hub-entries* '())
+(defvar *hub-lock* (sb-thread:make-mutex :name "littoral push hub"))
+(defvar *hub-waitqueue* (sb-thread:make-waitqueue :name "littoral push hub"))
+(defvar *hub-woken* nil "True when the hub has work it hasn't looked at yet.")
+(defvar *hub-thread* nil "The hub's thread while it runs.")
+
+(defun wake-hub ()
+  "Have the hub look at its streams now.  Safe from any thread."
+  (sb-thread:with-mutex (*hub-lock*)
+    (setf *hub-woken* t)
+    (sb-thread:condition-broadcast *hub-waitqueue*)))
+
+(defun hub-stream-count ()
+  "How many streams the hub serves now."
+  (sb-thread:with-mutex (*hub-lock*) (length *hub-entries*)))
+
+(defun hub-socket ()
+  "The socket of the request being answered, when Hunchentoot answers it
+and the hub can take it over: a plain socket, whose stream is an fd-stream.
+Else NIL."
+  (and (boundp 'hunchentoot:*acceptor*)
+       (typep hunchentoot:*acceptor* 'clack.handler.hunchentoot::clack-acceptor)
+       (not (hunchentoot:acceptor-ssl-p hunchentoot:*acceptor*))
+       (boundp 'clack.handler.hunchentoot::*client-socket*)
+       (let ((socket clack.handler.hunchentoot::*client-socket*))
+         (and (typep socket 'usocket:stream-usocket)
+              (typep (usocket:socket-stream socket) 'sb-sys:fd-stream)
+              socket))))
+
+(defun response-head-octets (status headers)
+  "The octets of a response head for STATUS and HEADERS (a plist).  The
+body ends when the connection closes, as HTTP/1.0 and 1.1 both allow, so
+there is neither a length nor chunking."
+  (let ((crlf (coerce '(#\Return #\Linefeed) 'string)))
+    (sb-ext:string-to-octets
+     (with-output-to-string (out)
+       (format out "HTTP/1.1 ~D OK~A" status crlf)
+       (loop for (name value) on headers by #'cddr
+             do (format out "~A: ~A~A" (string-capitalize (symbol-name name)) value crlf))
+       (format out "Connection: close~A~A" crlf crlf))
+     :external-format :latin-1)))
+
+(defun hub-writer (out socket)
+  "A writer, as Clack's responders return, for the hub's stream OUT.  It
+refuses to wait on a client that has stopped reading: when the socket
+can't take more, the stream is dropped (the browser reconnects later)."
+  (let ((fd (sb-sys:fd-stream-fd (usocket:socket-stream socket))))
+    (lambda (body &key close)
+      (when body
+        (unless (sb-unix:unix-simple-poll fd :output 0)
+          (error "The client isn't reading its event stream."))
+        (write-sequence (if (stringp body) (sb-ext:string-to-octets body :external-format :utf-8) body) out)
+        (force-output out))
+      (when close
+        (ignore-errors (finish-output out))))))
+
+(defun close-hub-entry (entry)
+  "Stop serving ENTRY and close its connection.  On the hub's thread."
+  (sb-thread:with-mutex (*hub-lock*)
+    (setf *hub-entries* (delete entry *hub-entries*)))
+  (unregister-event-stream (hub-entry-stream entry))
+  (ignore-errors (finish-output (hub-entry-out entry)))
+  (ignore-errors (usocket:socket-close (hub-entry-socket entry))))
+
+(defun serve-hub-entry (entry now)
+  "Write ENTRY's queued work, or a keepalive when one is due at NOW, or
+close it when its page has gone or writing fails."
+  (let ((stream (hub-entry-stream entry))
+        (writer (hub-writer (hub-entry-out entry) (hub-entry-socket entry))))
+    (handler-case
+        (cond ((not (stream-live-p stream)) (close-hub-entry entry))
+              (t (let ((pending (take-pending-now stream)))
+                   (cond (pending
+                          (write-pending stream writer pending)
+                          (setf (hub-entry-keepalive-due entry) (keepalive-time now)))
+                         ((>= now (hub-entry-keepalive-due entry))
+                          (keep-stream-alive stream writer)
+                          (setf (hub-entry-keepalive-due entry) (keepalive-time now)))))))
+      (error () (close-hub-entry entry)))))
+
+(defun keepalive-time (now)
+  "The internal real time a keepalive is due, *KEEPALIVE-SECONDS* after NOW."
+  (+ now (round (* *keepalive-seconds* internal-time-units-per-second))))
+
+(defun run-hub ()
+  "Serve the hub's streams until there are none."
+  (with-sane-printing ()
+    (loop
+      (let ((entries
+              (sb-thread:with-mutex (*hub-lock*)
+                (when (null *hub-entries*)
+                  (setf *hub-thread* nil)
+                  (return))
+                (unless *hub-woken*
+                  (let ((due (reduce #'min *hub-entries* :key #'hub-entry-keepalive-due)))
+                    (sb-thread:condition-wait
+                     *hub-waitqueue* *hub-lock*
+                     :timeout (max 0.01 (/ (- due (get-internal-real-time)) internal-time-units-per-second)))))
+                (setf *hub-woken* nil)
+                (copy-list *hub-entries*))))
+        (let ((now (get-internal-real-time)))
+          (dolist (entry entries)
+            (serve-hub-entry entry now)))))))
+
+(defun hub-take-over (stream socket head)
+  "Answer the current Hunchentoot request with STREAM, served by the hub
+over SOCKET: write HEAD's status and headers, detach the socket, and
+return, letting the request's thread go."
+  (let ((out (usocket:socket-stream socket)))
+    (write-sequence (response-head-octets (first head) (second head)) out)
+    (write-sequence (sb-ext:string-to-octets (format nil "retry: 3000~%~%") :external-format :utf-8) out)
+    (force-output out)
+    ;; Hunchentoot neither answers again nor closes the connection.
+    (setf hunchentoot::*headers-sent* t)
+    (hunchentoot:detach-socket hunchentoot:*acceptor*)
+    (let ((entry (make-hub-entry stream socket out)))
+      (setf (hub-entry-keepalive-due entry) (keepalive-time (get-internal-real-time))
+            (stream-waker stream) #'wake-hub)
+      (register-event-stream stream)
+      (sb-thread:with-mutex (*hub-lock*)
+        (push entry *hub-entries*)
+        (setf *hub-woken* t)
+        (if *hub-thread*
+            (sb-thread:condition-broadcast *hub-waitqueue*)
+            (setf *hub-thread* (sb-thread:make-thread #'run-hub :name "littoral push hub")))))))
+
 (defun async-socket (request)
   "The request's socket when the server is event-driven, else NIL."
   (let ((socket (getf (lack/request:request-env request) :clack.io))
@@ -257,11 +400,15 @@ is gone.  503 when too many are open."
     (lambda (responder)
       ;; The server calls this later, outside the request's bindings.
       (with-sane-printing ()
-       (let ((writer (funcall responder head)))
-        (if socket
-            ;; An event loop serves it: no thread waits on this stream.
-            (funcall *async-stream-opener* socket stream writer)
-            (run-event-stream stream writer)))))))
+        (let ((hub-socket (and (not socket) (hub-socket))))
+          (if hub-socket
+              ;; The hub serves it: this thread goes back to Hunchentoot.
+              (hub-take-over stream hub-socket head)
+              (let ((writer (funcall responder head)))
+                (if socket
+                    ;; An event loop serves it: no thread waits on this stream.
+                    (funcall *async-stream-opener* socket stream writer)
+                    (run-event-stream stream writer)))))))))
 
 (defun page-listens-p (session)
   "True when SESSION's page should open an event stream: something on it

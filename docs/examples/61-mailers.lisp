@@ -67,7 +67,7 @@
 (defmethod littoral.mail:send-message ((mailer refusing-mailer) from recipients message)
   (declare (ignore from recipients message))
   (error (if (>= (refusal-code mailer) 500) 'smtp:smtp-permanent-error 'smtp:smtp-transient-error)
-         :reply (smtp::make-reply (refusal-code mailer) '("Refused"))))
+         :reply (smtp:make-reply (refusal-code mailer) '("Refused"))))
 (flet ((try (code)
          (handler-case (littoral.mail:send-mail (littoral.mail:make-mail :to "ada@example.org" :text "Hi")
                                                 :mailer (make-instance 'refusing-mailer :code code))

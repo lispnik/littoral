@@ -64,7 +64,9 @@
     (is (has-text-p b "Jobs with this project"))
     (is (find-link b "Write docs"))
     (is (find-link b "Fix tabs"))
-    (is (not (find-link b "Port halos")))))
+    (is (not (find-link b "Port halos")))
+    ;; The actions read apart as text, not "EditDeleteBack to the list".
+    (is (search "Edit Delete Back to the list" (body-text b)))))
 
 (test admin-edit-create-delete
   (with-admin (b)

@@ -284,7 +284,7 @@ Components can be re-rendered on open pages by the server, without polling (this
 … (publish *news*) …
 ```
 
-`(notify component session)` re-renders one component for one session. Use it from a background job, and capture `*session*` in the callback that starts the job. Wrap changes made from another thread in `(with-session (session) …)` so they hold the session's lock. A page opens its event stream only if something on it subscribes. Each open page holds one connection, which with Hunchentoot means one thread. The chat and progress examples use this.
+`(notify component session)` re-renders one component for one session. Use it from a background job, and capture `*session*` in the callback that starts the job. Wrap changes made from another thread in `(with-session (session) …)` so they hold the session's lock. A page opens its event stream only if something on it subscribes. Each open page holds one connection, but not a thread: on Hunchentoot, one thread serves every open stream, and on Woo the event loops do. The chat and progress examples use this.
 
 #### Over a WebSocket
 
@@ -870,7 +870,7 @@ The fake browser doesn't run JavaScript. For drag and drop, the back button with
 - several processes
 - a production checklist
 
-**Performance.** These figures were measured over real HTTP against `bench/load-server.lisp`, using Hunchentoot on an Apple-silicon Mac with SBCL 2.6.8. `make load` measures the clicks, the memory per session, and 100 and 300 push streams (`bench/load.mjs`). The `ab` rows are ApacheBench against the same server, and the push row is `bench/load.mjs streams` with `STREAMS=600`:
+**Performance.** These figures were measured over real HTTP against `bench/load-server.lisp`, using Hunchentoot on an Apple-silicon Mac with SBCL 2.6.8. `make load` measures the clicks, the memory per session, and 100 and 300 push streams (`bench/load.mjs`). The `ab` rows are ApacheBench against the same server, and the push row is `bench/load.mjs streams` with `STREAMS=600`, with `start`'s default of 100 threads:
 
 | Measurement | Result |
 |---|---|
@@ -878,7 +878,7 @@ The fake browser doesn't run JavaScript. For drag and drop, the back button with
 | rendering a session's page (`ab`, 32 connections) | ~10,900 requests/s |
 | static files (`ab`) | ~15,000 requests/s |
 | memory per session, back-button pages included | ~10 KB (counter), ~25 KB (store) |
-| open push streams | 600 at once with `:max-threads 1000`; ~2 MB each |
+| open push streams | 600 at once: 600 of 600 updates delivered, 22 threads, 121 MB for the whole server |
 
 `make bench` measures the same cycle in-process, without the network: about 60 µs per click on the counter.
 
@@ -889,14 +889,15 @@ Against Seaside on Pharo 12, measured the same way (see "Littoral and Seaside co
 
 Requests in one session are serialised by its lock, and requests in different sessions run in parallel. The test suite runs concurrent sessions, many requests against one page, and concurrent AJAX.
 
-**Threads.** Hunchentoot gives every connection its own thread, and `start` allows 100 by default. Both idle keep-alive connections and open pages that use server push occupy a thread, and a push page holds its thread, about 2 MB of memory, for as long as it stays open. So capacity is counted in connections, not requests:
+**Threads.** Hunchentoot gives every connection its own thread while it makes requests, and `start` allows 100 by default (`:max-threads`). Idle keep-alive connections occupy a thread too. Open pages with server push don't: once a page's event stream has begun, its connection leaves Hunchentoot's thread for littoral's push hub, a single thread that writes every stream's updates and keepalives. On Linux, 10,000 open push pages took the server from 4 threads to 5, and their sessions and streams added 40 MB to its heap (76 MB to 116 MB); every page received its update.
 
-- If many pages subscribe to channels, raise `:max-threads`.
 - Put nginx in front: it holds idle browser connections cheaply and sends littoral fewer of its own.
+- On macOS, SBCL waits on sockets with `select(2)`, which can't watch file descriptors past 1,024. So a Hunchentoot server there holds about 1,000 connections at most, with or without push. Linux has no such limit.
+- The hub renders the pushed components one page at a time. A page whose browser has stopped reading, with its connection's buffer full, is dropped rather than waited for, and its EventSource reconnects later.
 
-A closed page frees its thread within about two keep-alive intervals (`*keepalive-seconds*`, 5 s by default).
+A closed page's stream ends within about one keep-alive interval (`*keepalive-seconds*`, 5 s by default).
 
-**Hunchentoot and Woo compared.** An optional system, `littoral/woo`, runs littoral on [Woo](https://github.com/fukamachi/woo), an event-loop server built on libev. Its point is server push: each open push page is served by two libev watchers on an event loop instead of a dedicated thread. `bench/compare.sh hunchentoot` and `bench/compare.sh woo` run the same measurements against each, on an Apple-silicon Mac (8 cores) with SBCL 2.6.8. Woo ran with 4 event-loop workers.
+**Hunchentoot and Woo compared.** An optional system, `littoral/woo`, runs littoral on [Woo](https://github.com/fukamachi/woo), an event-loop server built on libev. It is faster at ordinary requests, and it serves server push from its event loops: each open push page is two libev watchers. `bench/compare.sh hunchentoot` and `bench/compare.sh woo` run the same measurements against each, on an Apple-silicon Mac (8 cores) with SBCL 2.6.8. Woo ran with 4 event-loop workers.
 
 | | Hunchentoot | Woo | Woo vs Hunchentoot |
 |---|---|---|---|
@@ -909,14 +910,14 @@ A closed page frees its thread within about two keep-alive intervals (`*keepaliv
 | one user clicking | 3,070 /s | 3,940 /s | 1.3× |
 | memory per session (counter / store) | 10 KB / 25 KB | 8.5 KB / 24 KB | about the same |
 | idle server memory | 90 MB | 87 MB | about the same |
-| 600 open push pages: threads | 621 | 7 | |
-| 600 open push pages: memory | 1,355 MB | 99 MB | 14× less |
+| 600 open push pages: threads | 22 | 7 | |
+| 600 open push pages: memory | 121 MB | 99 MB | about the same |
 | 600 open push pages: updates delivered | 600 of 600 | 600 of 600 | |
-| most push pages tried (in an earlier run) | 600 (with 1,000 threads) | 6,000, at about 100 MB | |
+| most push pages tried | about 1,000 on macOS (the `select(2)` limit); 10,000 on Linux | 6,000 on macOS, at about 100 MB | |
 
 - **Ordinary pages:** Woo is 1.2–2.2× faster: most on rendering and static files, least on clicks, where littoral's own work (callbacks, snapshots, rendering) dominates.
 - **Hunchentoot and new connections:** it didn't slow down when every request opened a new connection, so creating threads isn't its bottleneck.
-- **Server push:** this is where the servers really differ. On Hunchentoot a push page costs a thread and about 2 MB of memory. On Woo it costs almost nothing, so memory and thread count stay nearly flat as pages are added.
+- **Server push:** on both, an open push page costs almost nothing, so memory and thread count stay nearly flat as pages are added. Hunchentoot's push rows were measured after the push hub was added, with `bench/load.mjs streams` alone; before it, every push page held a thread and about 2 MB (621 threads and 1,355 MB for 600 pages). The other rows predate 0.4.0's faster clicks.
 - **Caveats:** the load clients ran on the same machine and competed with the server for CPU, and other applications kept one or two cores busy. The figures are medians of six runs over two days, and runs varied by up to ±30%. The ratios are more reliable than the absolute numbers.
 
 To run on Woo, install the libev C library (`brew install libev`, or your system's package), then:

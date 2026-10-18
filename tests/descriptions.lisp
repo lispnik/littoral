@@ -203,3 +203,12 @@
       (define-description locker
         ((owner :required t)
          (code :type :password :required t))))))
+
+(test descriptions-name-their-objects
+  (is (equal '("Shelves" "Categories" "Days" "Boxes" "Matches" "People" "Reading Lists" "Books" "CHILDREN")
+             (mapcar #'english-plural '("Shelf" "Category" "Day" "Box" "Match" "Person" "Reading List"
+                                        "Book" "CHILD"))))
+  (let ((plain (make-instance 'description :name 'reading-list :fields '()))
+        (named (make-instance 'description :name 'cactus :fields '() :label "Cactus" :plural "Cacti")))
+    (is (equal '("Reading List" "Reading Lists") (list (description-label plain) (description-plural plain))))
+    (is (equal '("Cactus" "Cacti") (list (description-label named) (description-plural named))))))

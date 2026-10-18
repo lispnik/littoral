@@ -1,8 +1,7 @@
 ;;;; woo.lisp — server push without a thread per open page, on Woo
 ;;;;
-;;;; Load littoral/woo and start with :server :woo.  On Hunchentoot every
-;;;; open page with server push holds a thread; here each one is two libev
-;;;; watchers on the event loop that accepted it:
+;;;; Load littoral/woo and start with :server :woo.  Each open page with
+;;;; server push is two libev watchers on the event loop that accepted it:
 ;;;;
 ;;;;   - an async watcher, which PUBLISH and NOTIFY trigger from any thread
 ;;;;     with ev_async_send (the one libev call that is safe across threads),
@@ -17,7 +16,7 @@
   (:documentation "Load with `(asdf:load-system :littoral/woo)`, then serve with
 `(start :server :woo)` (and `:workers`, 4 by default): Woo's event loops
 answer every request, and each open page with server push costs two libev
-watchers on its loop instead of a thread.  Exports nothing."))
+watchers on its loop.  Exports nothing."))
 
 (in-package #:littoral.woo)
 

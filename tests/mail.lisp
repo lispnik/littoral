@@ -336,7 +336,7 @@ MC4CAQAwBQYDK2VwBCIEIG4G5eGc2mREsIg1N36yblimKfWTN1E+60t720EqbQSN
 
 (defun smtp-refusal (code text)
   (make-condition (if (>= code 500) 'smtp:smtp-permanent-error 'smtp:smtp-transient-error)
-                  :reply (smtp::make-reply code (list text))))
+                  :reply (smtp:make-reply code (list text))))
 
 (defmacro with-outbox (() &body body)
   `(progn
