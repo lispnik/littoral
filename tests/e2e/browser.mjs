@@ -248,30 +248,31 @@ try {
 
   // The command palette: Ctrl-K opens it, typing ranks the commands, the
   // arrow keys and Enter choose one, and Escape closes it.
-  const key = async (k, code, vk, modifiers = 0) => {
-    await send("Input.dispatchKeyEvent", { type: "keyDown", key: k, code, windowsVirtualKeyCode: vk, modifiers });
-    await send("Input.dispatchKeyEvent", { type: "keyUp", key: k, code, windowsVirtualKeyCode: vk, modifiers });
-  };
+  const keydown = (k, extra = "") =>
+    evaluate(`(document.activeElement || document.body).dispatchEvent(new KeyboardEvent("keydown",
+      { key: ${JSON.stringify(k)}, bubbles: true, cancelable: true ${extra} }))`);
   await go("/examples/widgets");
-  await key("k", "KeyK", 75, 2);         // Ctrl
+  await keydown("k", ", ctrlKey: true");
   check("Ctrl-K opens the palette", await waitFor(`document.querySelector("details.lt-palette").open && document.activeElement.type === "search"`));
   await send("Input.insertText", { text: "kanb" });
   check("the palette finds what's typed", await waitFor(`(() => { const r = [...document.querySelectorAll(".lt-palette-results a")];
     return r.length === 1 && r[0].textContent.includes("Show Kanban"); })()`));
-  await key("ArrowDown", "ArrowDown", 40);
+  await keydown("ArrowDown");
   check("the arrow keys reach the results", await evaluate(`document.activeElement.textContent.includes("Show Kanban")`));
-  await key("Enter", "Enter", 13);
+  await keydown("ArrowUp");
+  check("and go back to the box", await evaluate(`document.activeElement.type === "search"`));
+  await keydown("Enter");
   await waitLoad();
-  check("Enter runs the command", await waitFor(`document.body.innerText.includes("Write the docs")`));
-  await key("k", "KeyK", 75, 2);
-  check("the palette opens again", await waitFor(`document.querySelector("details.lt-palette").open`));
-  await key("Escape", "Escape", 27);
+  check("Enter runs the first command", await waitFor(`document.body.innerText.includes("Write the docs")`));
+  await keydown("k", ", metaKey: true");
+  check("so does ⌘K", await waitFor(`document.querySelector("details.lt-palette").open`));
+  await keydown("Escape");
   check("Escape closes the palette", await evaluate(`!document.querySelector("details.lt-palette").open`));
 
   // Lazy panels: filled in after the page arrives, without a click; the
   // report's chart once it is scrolled into view.
   await go("/examples/widgets");
-  await clickLink("Show Tools");
+  await clickLink("Tools");
   check("a lazy panel fills itself in", await waitFor(`document.body.innerText.includes("The first 20 primes")`));
   // A short window, so the chart starts out of view.
   await send("Emulation.setDeviceMetricsOverride", { width: 800, height: 300, deviceScaleFactor: 1, mobile: false });
