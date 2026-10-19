@@ -5710,7 +5710,7 @@ then say so instead of failing.  littoral.db's `stale-object` is one.
 
 #### `edit-conflict-object` `condition` — generic function
 
-*Undocumented.*
+The object someone else changed, as the `edit-conflict`'s `:object` gave it, or `nil`.
 
 *Example:* When someone else changed the value since Edit was pressed, Save says so and leaves theirs; saving again replaces it.  An `:on-save` that signals `edit-conflict` (as littoral.db's `stale-object` does, for rows changed meanwhile) is reported the same way, and nothing is kept.
 

@@ -150,6 +150,7 @@ simple-date, ghcr.io/ocicl/cl-postgres@sha256:9a0989d2bd1618f9451476d5c4fb92d986
 skippy, ghcr.io/ocicl/skippy@sha256:923f29159fd11965890d48db7af64c72ae6e9773679406c7f3a23d9f60c89e4b, skippy-20240503-e456210/skippy.asd
 smart-buffer, ghcr.io/ocicl/smart-buffer@sha256:b8d194f5881c415fd7f0099b88dfd9e2158405c2966de15c716b155a364bf0f7, smart-buffer-20240503-619759d/smart-buffer.asd
 smart-buffer-test, ghcr.io/ocicl/smart-buffer@sha256:b8d194f5881c415fd7f0099b88dfd9e2158405c2966de15c716b155a364bf0f7, smart-buffer-20240503-619759d/smart-buffer-test.asd
+smtp, ghcr.io/ocicl/smtp@sha256:79e2487cca7cf5e9d2b5cf8f9b22fb428b433d8df5fdde817da17ae5bd9d0ab1, smtp-20261019-e3adbe1/smtp.asd
 split-sequence, ghcr.io/ocicl/split-sequence@sha256:3a37662eedd99c42995587b9d443c4631f25c4c523091bcca31a27b880585b8e, split-sequence-2.0.1/split-sequence.asd
 sqlite, ghcr.io/ocicl/sqlite@sha256:a7f80757e6ee13af06e2eeaeff1e079dba439d85ea5c7f68e262bccc40dcbd5c, cl-sqlite-0.2.1/sqlite.asd
 sqlite-tests, ghcr.io/ocicl/sqlite@sha256:a7f80757e6ee13af06e2eeaeff1e079dba439d85ea5c7f68e262bccc40dcbd5c, cl-sqlite-0.2.1/sqlite-tests.asd

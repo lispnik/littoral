@@ -18,6 +18,9 @@
 changed by someone else since it was read: IN-PLACE-EDITOR and DATA-GRID
 then say so instead of failing.  littoral.db's STALE-OBJECT is one."))
 
+(setf (documentation 'edit-conflict-object 'function)
+      "The object someone else changed, as the EDIT-CONFLICT's :OBJECT gave it, or NIL.")
+
 (defun conflict-text (field text)
   "TEXT, FIELD's value as someone else left it, for a sentence."
   (if (typep field 'password-field) "…" (if (string= text "") (translate "nothing") text)))

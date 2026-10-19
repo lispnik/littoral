@@ -4,16 +4,14 @@
 #   docker run --rm -p 127.0.0.1:8080:8080 littoral-demo
 #
 # The image is built from the executable `make build` writes.  It copies the
-# dependencies in ocicl/, so run `ocicl install` first (make docker does), and
-# fetches the smtp library, which isn't in the ocicl registry.
+# dependencies in ocicl/, so run `ocicl install` first (make docker does).
 
 FROM ubuntu:24.04 AS build
 RUN apt-get update \
- && apt-get install -y --no-install-recommends sbcl gcc libc6-dev make ca-certificates libsqlite3-0 git \
+ && apt-get install -y --no-install-recommends sbcl gcc libc6-dev make ca-certificates libsqlite3-0 \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 COPY . .
-RUN tools/fetch-smtp.sh /src/ocicl/smtp
 RUN sbcl --non-interactive --eval '(require :asdf)' \
       --eval '(asdf:initialize-source-registry (quote (:source-registry (:directory "/src/") (:tree "/src/ocicl/") :ignore-inherited-configuration)))' \
       --load tools/demo-server.lisp --eval '(littoral-demo:build "/src/bin/littoral-demo")'

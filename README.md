@@ -34,13 +34,12 @@ Version 0.4.0 documents the API with an example for nearly every export, each ru
 
 ## Getting started
 
-You need SBCL and [ocicl](https://github.com/ocicl/ocicl). `littoral/mail` also needs [smtp](https://github.com/lispnik/smtp), which isn't in the ocicl registry yet. `tools/fetch-smtp.sh` checks out the version Littoral is tested with, and any directory ASDF searches will do.
+You need SBCL and [ocicl](https://github.com/ocicl/ocicl).
 
 ```sh
 git clone https://github.com/lispnik/littoral.git
 cd littoral
 ocicl install      # fetches everything in ocicl.csv into ./ocicl
-tools/fetch-smtp.sh ~/common-lisp/smtp   # the SMTP client, where ASDF looks by default
 make test          # FiveAM suite, in-process, no sockets
 make run           # examples on http://127.0.0.1:8080/examples
 make tracker       # the issue tracker on http://127.0.0.1:8080/tracker

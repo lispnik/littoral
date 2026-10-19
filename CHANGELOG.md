@@ -22,6 +22,7 @@
 - **The admin names tables properly**: "Shelves", "Categories" and "People", not "Shelfs", "Categorys" and "Persons". `define-description` takes `:label` and `:plural` for names the rules get wrong; `description-label`, `description-plural` and `english-plural` are exported.
 - The admin's Edit, Delete and "Back to the list" links (and the job queue's status filters) have spaces between them, so they read apart without the stylesheet. Edit and Delete are translated.
 - littoral/mail uses smtp 0.3.6, which exports `make-reply`; tests and examples no longer reach for `smtp::make-reply`.
+- **smtp comes from the ocicl registry**, like every other dependency, so `ocicl install` is all a checkout needs. `tools/fetch-smtp.sh` is gone, and the Docker images no longer install git.
 
 ## 0.4.0 (2026-10-18)
 
