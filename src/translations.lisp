@@ -10,7 +10,7 @@
   ("Job queue" "File des tâches") ("Job" "Tâche") ("Queue" "File") ("Status" "État") ("Tries" "Essais")
   ("Retry" "Relancer") ("Refresh" "Actualiser") ("No jobs." "Aucune tâche.") ("Jobs, newest first" "Tâches, les plus récentes d'abord")
   ("All" "Toutes") ("Queued" "En attente") ("Running" "En cours") ("Done" "Terminée") ("Failed" "Échouée") ("Cancelled" "Annulée")
-  ("Job #~D will run again." "La tâche n° ~D sera relancée.") ("Cancelled job #~D." "Tâche n° ~D annulée.")
+  ("Job #~D will run again." "La tâche n° ~D sera relancée.") ("Cancelled job #~D." "Tâche n° ~D annulée.") ("Asked job #~D to stop." "Arrêt de la tâche n° ~D demandé.")
   ("Job #~D has changed meanwhile; nothing was done." "La tâche n° ~D a changé entre-temps ; rien n'a été fait.")
   ;; Audit log
   ("Audit log" "Journal d'audit") ("Action" "Action") ("Who or what" "Qui ou quoi")
@@ -20,7 +20,7 @@
   ;; Dialogs
   ("OK" "OK") ("Yes" "Oui") ("No" "Non") ("Cancel" "Annuler") ("Continue" "Continuer")
   ("Answer" "Réponse") ("Choice" "Choix") ("Username" "Nom d'utilisateur") ("Password" "Mot de passe")
-  ("Log in" "Se connecter") ("Close" "Fermer") ("Save" "Enregistrer") ("Create" "Créer")
+  ("Log in" "Se connecter") ("Close" "Fermer") ("Save" "Enregistrer") ("Breadcrumbs" "Fil d’Ariane") ("Edit ~A" "Modifier : ~A") ("Create" "Créer")
   ("Your session expired, so you are starting again from the beginning."
    "Votre session a expiré : vous recommencez depuis le début.")
   ;; Widgets
@@ -55,7 +55,7 @@
    "Markdown : **gras**, *italique*, `code`, [liens](https://…), - listes, # titres.") ("Remove" "Supprimer")
   ("~A is too large: at most ~:D bytes." "~A est trop gros : au plus ~:D octets.")
   ("~A must be a PNG, JPEG, GIF or WebP image." "~A doit être une image PNG, JPEG, GIF ou WebP.")
-  ("Waiting to start." "En attente.") ("Working… ~D%" "En cours… ~D %") ("Done." "Terminé.")
+  ("Waiting to start." "En attente.") ("Working… ~D%" "En cours… ~D %") ("Working…" "En cours…") ("Stopping…" "Arrêt en cours…") ("Trying again soon." "Nouvel essai bientôt.") ("Done." "Terminé.")
   ("Failed: ~A" "Échec : ~A") ("Cancelled." "Annulé.")
   ("Failed (~A); trying again in ~D s, attempt ~D of ~D." "Échec (~A) ; nouvel essai dans ~D s, essai ~D sur ~D.")
   ;; Validation
@@ -111,7 +111,7 @@ Le lien ne sert qu'une fois, pendant une heure.  Si ce n'était pas vous, ignore
   ("Job queue" "Auftragswarteschlange") ("Job" "Auftrag") ("Queue" "Warteschlange") ("Status" "Status") ("Tries" "Versuche")
   ("Retry" "Wiederholen") ("Refresh" "Aktualisieren") ("No jobs." "Keine Aufträge.") ("Jobs, newest first" "Aufträge, neueste zuerst")
   ("All" "Alle") ("Queued" "Wartend") ("Running" "Läuft") ("Done" "Erledigt") ("Failed" "Fehlgeschlagen") ("Cancelled" "Abgebrochen")
-  ("Job #~D will run again." "Auftrag Nr. ~D läuft erneut.") ("Cancelled job #~D." "Auftrag Nr. ~D abgebrochen.")
+  ("Job #~D will run again." "Auftrag Nr. ~D läuft erneut.") ("Cancelled job #~D." "Auftrag Nr. ~D abgebrochen.") ("Asked job #~D to stop." "Auftrag Nr. ~D soll anhalten.")
   ("Job #~D has changed meanwhile; nothing was done." "Auftrag Nr. ~D hat sich inzwischen geändert; es wurde nichts getan.")
   ;; Audit log
   ("Audit log" "Audit-Protokoll") ("Action" "Aktion") ("Who or what" "Wer oder was")
@@ -121,7 +121,7 @@ Le lien ne sert qu'une fois, pendant une heure.  Si ce n'était pas vous, ignore
   ;; Dialogs
   ("OK" "OK") ("Yes" "Ja") ("No" "Nein") ("Cancel" "Abbrechen") ("Continue" "Weiter")
   ("Answer" "Antwort") ("Choice" "Auswahl") ("Username" "Benutzername") ("Password" "Passwort")
-  ("Log in" "Anmelden") ("Close" "Schließen") ("Save" "Speichern") ("Create" "Anlegen")
+  ("Log in" "Anmelden") ("Close" "Schließen") ("Save" "Speichern") ("Breadcrumbs" "Brotkrümelpfad") ("Edit ~A" "~A bearbeiten") ("Create" "Anlegen")
   ("Your session expired, so you are starting again from the beginning."
    "Ihre Sitzung ist abgelaufen, daher beginnen Sie wieder von vorn.")
   ;; Widgets
@@ -156,7 +156,7 @@ Le lien ne sert qu'une fois, pendant une heure.  Si ce n'était pas vous, ignore
    "Markdown: **fett**, *kursiv*, `Code`, [Links](https://…), - Listen, # Überschriften.") ("Remove" "Entfernen")
   ("~A is too large: at most ~:D bytes." "~A ist zu groß: höchstens ~:D Bytes.")
   ("~A must be a PNG, JPEG, GIF or WebP image." "~A muss ein PNG-, JPEG-, GIF- oder WebP-Bild sein.")
-  ("Waiting to start." "Wartet.") ("Working… ~D%" "In Arbeit… ~D %") ("Done." "Fertig.")
+  ("Waiting to start." "Wartet.") ("Working… ~D%" "In Arbeit… ~D %") ("Working…" "In Arbeit…") ("Stopping…" "Wird angehalten…") ("Trying again soon." "Neuer Versuch in Kürze.") ("Done." "Fertig.")
   ("Failed: ~A" "Fehlgeschlagen: ~A") ("Cancelled." "Abgebrochen.")
   ("Failed (~A); trying again in ~D s, attempt ~D of ~D." "Fehlgeschlagen (~A); neuer Versuch in ~D s, Versuch ~D von ~D.")
   ;; Validation
@@ -212,7 +212,7 @@ Der Link funktioniert einmal, eine Stunde lang.  Falls Sie das nicht waren, igno
   ("Job queue" "Cola de tareas") ("Job" "Tarea") ("Queue" "Cola") ("Status" "Estado") ("Tries" "Intentos")
   ("Retry" "Reintentar") ("Refresh" "Actualizar") ("No jobs." "No hay tareas.") ("Jobs, newest first" "Tareas, las más recientes primero")
   ("All" "Todas") ("Queued" "En espera") ("Running" "En curso") ("Done" "Hecha") ("Failed" "Fallida") ("Cancelled" "Cancelada")
-  ("Job #~D will run again." "La tarea n.º ~D se ejecutará de nuevo.") ("Cancelled job #~D." "Tarea n.º ~D cancelada.")
+  ("Job #~D will run again." "La tarea n.º ~D se ejecutará de nuevo.") ("Cancelled job #~D." "Tarea n.º ~D cancelada.") ("Asked job #~D to stop." "Se pidió detener la tarea n.º ~D.")
   ("Job #~D has changed meanwhile; nothing was done." "La tarea n.º ~D ha cambiado mientras tanto; no se ha hecho nada.")
   ;; Audit log
   ("Audit log" "Registro de auditoría") ("Action" "Acción") ("Who or what" "Quién o qué")
@@ -222,7 +222,7 @@ Der Link funktioniert einmal, eine Stunde lang.  Falls Sie das nicht waren, igno
   ;; Dialogs
   ("OK" "Aceptar") ("Yes" "Sí") ("No" "No") ("Cancel" "Cancelar") ("Continue" "Continuar")
   ("Answer" "Respuesta") ("Choice" "Opción") ("Username" "Usuario") ("Password" "Contraseña")
-  ("Log in" "Entrar") ("Close" "Cerrar") ("Save" "Guardar") ("Create" "Crear")
+  ("Log in" "Entrar") ("Close" "Cerrar") ("Save" "Guardar") ("Breadcrumbs" "Ruta de navegación") ("Edit ~A" "Editar: ~A") ("Create" "Crear")
   ("Your session expired, so you are starting again from the beginning."
    "Su sesión ha caducado, así que empieza de nuevo desde el principio.")
   ;; Widgets
@@ -257,7 +257,7 @@ Der Link funktioniert einmal, eine Stunde lang.  Falls Sie das nicht waren, igno
    "Markdown: **negrita**, *cursiva*, `código`, [enlaces](https://…), - listas, # títulos.") ("Remove" "Quitar")
   ("~A is too large: at most ~:D bytes." "~A es demasiado grande: como máximo ~:D bytes.")
   ("~A must be a PNG, JPEG, GIF or WebP image." "~A debe ser una imagen PNG, JPEG, GIF o WebP.")
-  ("Waiting to start." "En espera.") ("Working… ~D%" "Trabajando… ~D %") ("Done." "Hecho.")
+  ("Waiting to start." "En espera.") ("Working… ~D%" "Trabajando… ~D %") ("Working…" "Trabajando…") ("Stopping…" "Deteniendo…") ("Trying again soon." "Se reintentará pronto.") ("Done." "Hecho.")
   ("Failed: ~A" "Error: ~A") ("Cancelled." "Cancelado.")
   ("Failed (~A); trying again in ~D s, attempt ~D of ~D." "Error (~A); se reintentará en ~D s, intento ~D de ~D.")
   ;; Validation

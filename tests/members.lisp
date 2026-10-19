@@ -265,3 +265,21 @@
     (click b "Sign out")
     (members-sign-in b "bob" "another passphrase")
     (is (not (has-text-p b "reason: wrong-password")))))
+
+(test jobs-demo-report-progress
+  (with-members (b)
+    (littoral.jobs:stop-job-runner)
+    (visit b "/examples/jobs")
+    (is (not (has-text-p b "The report")) "No report asked for yet")
+    (press b "Build a report (8 s)")
+    (is (has-text-p b "The report"))
+    (is (has-text-p b "Waiting to start."))
+    ;; Running, a quarter of the way.
+    (let ((littoral.db:*database* littoral-jobs-demo::*demo-database*))
+      (littoral.db:db-execute "UPDATE job_queue SET status = 'running', progress = 'Step 3 of 8', progress_fraction = 0.25
+WHERE name LIKE '%BUILD-REPORT' AND status = 'queued'"))
+    (visit b (browser-url b))
+    (is (has-text-p b "Step 3 of 8 25%"))
+    ;; Cancel asks it to stop.
+    (let ((spec (first (ajax-specs b "on-click"))))
+      (is (search "Stopping…" (ajax-request b (first spec) (rest spec)))))))

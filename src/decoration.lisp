@@ -104,6 +104,12 @@ Signals RENDER-PHASE-ERROR while rendering."
   "Dismiss whatever SELF has called, without answering, so SELF shows
 itself again.  Signals RENDER-PHASE-ERROR while rendering."
   (signal-if-rendering 'home)
+  (dolist (delegation (remove-if-not (lambda (d) (typep d 'delegation)) (decorations self)))
+    ;; The dismissed component no longer answers to SELF.
+    (let ((delegate (delegation-delegate delegation)))
+      (setf (decorations delegate)
+            (remove-if (lambda (d) (and (typep d 'answer-handler) (eq (handler-delegation d) delegation)))
+                       (decorations delegate)))))
   (setf (decorations self)
         (remove-if (lambda (d) (typep d 'delegation)) (decorations self))))
 

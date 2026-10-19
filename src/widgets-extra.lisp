@@ -535,3 +535,84 @@ MARKDOWN-HTML): the description field kind :MARKDOWN."))
     (div (:class "lt-markdown") (raw (markdown-html value)))))
 
 (push '(:markdown . markdown-field) *field-kinds*)
+
+;;; In-place editor: one field of one object, edited where it is shown
+
+(defclass in-place-editor (component updatable)
+  ((object :initarg :object :reader in-place-object)
+   (field :initarg :field :reader in-place-field)
+   (on-save :initarg :on-save :initform nil :reader in-place-on-save)
+   (update :initarg :update :initform '() :reader in-place-update
+           :documentation "Other UPDATABLE components to re-render after a save.")
+   (editing :initform nil :accessor in-place-editing-p)
+   (text :initform "" :accessor in-place-text :documentation "What has been typed.")
+   (problem :initform nil :accessor in-place-problem))
+  (:documentation "One field of an object, shown with an Edit button; Edit
+turns it into the field's input, with Save and Cancel, over AJAX.  Save
+parses and checks the text as the description says, writes the value to
+the object and calls :ON-SAVE, when given, with the object (to store it,
+say); a problem is shown by the input instead.  :UPDATE lists other
+UPDATABLE components the value shows in, re-rendered after a save.  Make
+one with MAKE-IN-PLACE-EDITOR."))
+
+(defmethod states ((self in-place-editor)) (list self))
+
+(defun make-in-place-editor (object field-name &key (description object) on-save update)
+  "An IN-PLACE-EDITOR of OBJECT's field FIELD-NAME, as DESCRIPTION
+(anything FIND-DESCRIPTION takes; by default OBJECT's class) describes it.
+ON-SAVE is called with OBJECT after a value is written to it, and UPDATE,
+an UPDATABLE component or a list of them, is re-rendered with the editor."
+  (make-instance 'in-place-editor
+                 :object object
+                 :update (alexandria:ensure-list update)
+                 :field (or (find-field description field-name)
+                            (error "~S has no field ~S." (description-name (find-description description)) field-name))
+                 :on-save on-save))
+
+(defun start-in-place-edit (editor)
+  (let ((field (in-place-field editor)))
+    (setf (in-place-editing-p editor) t
+          (in-place-problem editor) nil
+          (in-place-text editor) (format-field field (field-value field (in-place-object editor))))))
+
+(defun save-in-place-edit (editor)
+  "Write what was typed, or keep it with its problem."
+  (let ((field (in-place-field editor)))
+    (handler-case
+        (let* ((value (parse-field field (in-place-text editor)))
+               (problem (check-field field value)))
+          (if problem
+              (setf (in-place-problem editor) problem)
+              (progn
+                (setf (field-value field (in-place-object editor)) value
+                      (in-place-editing-p editor) nil
+                      (in-place-problem editor) nil)
+                (when (in-place-on-save editor)
+                  (funcall (in-place-on-save editor) (in-place-object editor))))))
+      (field-error (e) (setf (in-place-problem editor) (field-error-message e))))))
+
+(defmethod render ((self in-place-editor))
+  (let* ((field (in-place-field self))
+         (label (translate (field-label field))))
+    (if (in-place-editing-p self)
+        (let ((problem (in-place-problem self))
+              (id (format nil "~A-input" (component-id self))))
+          (form (:class "lt-in-place lt-in-place-editing"
+                 :on-submit (ajax :callback (lambda () (save-in-place-edit self))
+                                  :update (cons self (in-place-update self))))
+            (let ((*next-field-attributes* (list :aria-label label :autofocus t
+                                                 :aria-invalid (when problem "true")
+                                                 :aria-describedby (when problem (format nil "~A-problem" id)))))
+              (render-field-input field id (in-place-text self)
+                                  (lambda (text) (setf (in-place-text self) text))))
+            (button (:type "submit") (translate "Save"))
+            (button (:on-click (ajax :callback (lambda () (setf (in-place-editing-p self) nil)) :update self))
+              (translate "Cancel"))
+            (when problem
+              (div (:class "lt-validation-error" :id (format nil "~A-problem" id)) (text problem)))))
+        (span (:class "lt-in-place")
+          (render-field-value field (field-value field (in-place-object self)))
+          " "
+          (button (:class "lt-in-place-edit" :aria-label (translate "Edit ~A" label)
+                   :on-click (ajax :callback (lambda () (start-in-place-edit self)) :update self))
+            (translate "Edit"))))))

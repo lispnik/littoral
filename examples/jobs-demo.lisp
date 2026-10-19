@@ -14,11 +14,12 @@
 ;;; The jobs
 
 (littoral.jobs:define-job (build-report :queue "demo" :timeout 60) (seconds)
-  "Work for SECONDS seconds, saying how far it has got."
+  "Work for SECONDS seconds, saying how far it has got.  Cancel stops it
+between steps."
   (dotimes (i seconds)
-    (littoral.jobs:note-job-progress (format nil "Step ~D of ~D" (1+ i) seconds))
+    (littoral.jobs:note-job-progress (format nil "Step ~D of ~D" (1+ i) seconds) :fraction (/ i seconds))
     (sleep 1))
-  (littoral.jobs:note-job-progress "Finished"))
+  (littoral.jobs:note-job-progress "Finished" :fraction 1))
 
 (littoral.jobs:define-job (flaky-job :queue "demo" :attempts 4 :retry-seconds 3) (failures)
   "Fail the first FAILURES tries, then succeed."
@@ -63,21 +64,24 @@ goes only if the job finishes."
 (defclass jobs-root (component)
   ((address :initform "you@example.org" :accessor digest-address)
    (notice :initform nil :accessor jobs-notice)
-   (live :initform (make-instance 'jobs-status) :reader jobs-live))
-  (:documentation "Buttons that enqueue jobs, and the queue."))
+   (live :initform (make-instance 'jobs-status) :reader jobs-live)
+   (report :initform (make-instance 'littoral.jobs:durable-job-view :database *demo-database*)
+           :reader jobs-report :documentation "The last report asked for, with its progress."))
+  (:documentation "Buttons that enqueue jobs, the last report's progress, and the queue."))
 
-(defmethod children ((self jobs-root)) (list (jobs-live self)))
+(defmethod children ((self jobs-root)) (list (jobs-report self) (jobs-live self)))
 
 (defclass jobs-status (component updatable) ()
   (:documentation "The queue, refreshed every second."))
 
 (defun enqueue (self call notice &rest options)
+  "Enqueue CALL and say NOTICE; the job's id, or NIL when it couldn't be queued."
   (handler-case
-      (progn (in-demo-database
+      (prog1 (in-demo-database
                (littoral.db:with-transaction ()
                  (apply #'littoral.jobs:enqueue-job call options)))
-             (setf (jobs-notice self) notice))
-    (error (e) (setf (jobs-notice self) (princ-to-string e)))))
+        (setf (jobs-notice self) notice))
+    (error (e) (setf (jobs-notice self) (princ-to-string e)) nil)))
 
 (defmethod render ((self jobs-root))
   (h1 () "Jobs")
@@ -89,7 +93,9 @@ goes only if the job finishes."
     (h2 () "Start something")
     (form ()
       (div (:class "lt-buttons")
-        (submit-button (:callback (lambda () (enqueue self (list 'build-report 8) "Queued a report.")))
+        (submit-button (:callback (lambda ()
+                                    (let ((id (enqueue self (list 'build-report 8) "Queued a report.")))
+                                      (when id (setf (littoral.jobs:durable-job-view-id (jobs-report self)) id)))))
           "Build a report (8 s)")
         (submit-button (:callback (lambda () (enqueue self (list 'flaky-job 2) "Queued a flaky job.")))
           "A job that fails twice")
@@ -107,6 +113,12 @@ goes only if the job finishes."
                                              :in 10)))
           "Send it in 10 seconds")))
     (p (:class "lt-help") "The welcome mail arrives at " (anchor (:href (url-for "/examples/mail")) "the mail demo") "."))
+  (when (littoral.jobs:durable-job-view-id (jobs-report self))
+    (section ()
+      (h2 () "The report")
+      (p () "A " (code () "durable-job-view") ": the runner's progress notes arrive by server push, "
+        "and Cancel stops the job between steps.")
+      (render-component (jobs-report self))))
   (render (jobs-live self)))
 
 (defun when-text (job)

@@ -278,3 +278,112 @@ VALUES ('SOMEONE-ELSES::JOB', 'NIL', 'default', 'queued', 0, 0, 0)")
       (littoral.jobs:stop-job-runner)
       (ignore-errors (delete-file file)))
     (is (not (littoral.jobs:job-runner-running-p)))))
+
+;;; Progress fractions, cancelling running jobs, and the view
+
+(littoral.jobs:define-job stepping-job (steps)
+  (dotimes (i steps)
+    (littoral.jobs:note-job-progress (format nil "Step ~D" (1+ i)) :fraction (/ (1+ i) steps))
+    (let ((job (littoral.jobs:find-durable-job (littoral.jobs:durable-job-id littoral.jobs:*durable-job*))))
+      (note-call 'step (littoral.jobs:durable-job-progress job) (littoral.jobs:durable-job-progress-fraction job)))))
+
+(littoral.jobs:define-job (stopping-job :attempts 3) (fail)
+  ;; Asks for itself to be cancelled, as a person would while it runs.
+  (note-call 'asked (littoral.jobs:cancel-durable-job (littoral.jobs:durable-job-id littoral.jobs:*durable-job*)))
+  (when fail (error "failed after the request"))
+  (littoral.jobs:note-job-progress "never recorded")
+  (note-call 'went-on))
+
+(test jobs-note-how-far-they-have-got
+  (with-job-queue ()
+    (let ((id (littoral.jobs:enqueue-job (list 'stepping-job 4))))
+      (is (null (littoral.jobs:durable-job-progress-fraction (littoral.jobs:find-durable-job id))))
+      (littoral.jobs:run-due-jobs)
+      (is (equal '((step "Step 1" 0.25d0) (step "Step 2" 0.5d0) (step "Step 3" 0.75d0) (step "Step 4" 1d0))
+                 (reverse *job-calls*)))
+      (is (string= "done" (queued-status id)))
+      (is (= 1 (littoral.jobs:durable-job-progress-fraction (littoral.jobs:find-durable-job id)))))))
+
+(test running-jobs-stop-when-asked
+  (with-job-queue ()
+    (let ((id (littoral.jobs:enqueue-job (list 'stopping-job nil))))
+      (littoral.jobs:run-due-jobs)
+      ;; Asked while running; it stopped at its next progress note.
+      (is (equal '((asked :requested)) *job-calls*))
+      (is (string= "cancelled" (queued-status id)))
+      (is (not (littoral.jobs:durable-job-cancel-requested-p (littoral.jobs:find-durable-job id))))
+      (is (null (littoral.jobs:durable-job-progress (littoral.jobs:find-durable-job id))))
+      (is (null (littoral.jobs:cancel-durable-job id)) "Finished: nothing to cancel")
+      ;; Retried, it runs afresh.
+      (is (littoral.jobs:retry-durable-job id))
+      (is (not (littoral.jobs:durable-job-cancel-requested-p (littoral.jobs:find-durable-job id)))))
+    ;; One that fails after the request isn't tried again.
+    (setf *job-calls* '())
+    (let ((id (littoral.jobs:enqueue-job (list 'stopping-job t))))
+      (littoral.jobs:run-due-jobs)
+      (is (string= "cancelled" (queued-status id)))
+      (is (search "failed after the request" (littoral.jobs:durable-job-last-error (littoral.jobs:find-durable-job id)))))))
+
+(defvar *job-page-id* nil "The job a new JOB-PAGE shows.")
+
+(defclass job-page (component)
+  ((view :initform (make-instance 'littoral.jobs:durable-job-view :id *job-page-id*) :reader job-page-view)))
+
+(defmethod children ((self job-page)) (list (job-page-view self)))
+(defmethod render ((self job-page)) (render-component (job-page-view self)))
+
+(test durable-job-views-show-and-cancel-jobs
+  (with-job-queue ()
+    (with-fresh-applications (("/job" 'job-page :mode :deployment))
+      (let* ((b (make-instance 'browser))
+             (id (littoral.jobs:enqueue-job (list 'stepping-job 2)))
+             (*job-page-id* nil))
+        (visit b "/job")
+        (is (not (search "lt-job" (browser-html b))) "No job, nothing shown")
+        (setf *job-page-id* id)
+        (setf b (make-instance 'browser))
+        (visit b "/job")
+        (is (search "data-lt-events=" (browser-html b)) "The page listens for pushes")
+        (is (search "Waiting to start." (body-text b)))
+        ;; Running, halfway.
+        (littoral.db:db-execute "UPDATE job_queue SET status = 'running', progress = 'Step 1', progress_fraction = 0.5 WHERE id = ?" id)
+        (visit b "/job")
+        (is (search "Step 1 50%" (body-text b)))
+        (is (search "aria-valuenow=\"50\"" (browser-html b)))
+        ;; Cancel asks it to stop.
+        (let ((spec (first (ajax-specs b "on-click"))))
+          (is (search "Stopping…" (ajax-request b (first spec) (rest spec)))))
+        (is (littoral.jobs:durable-job-cancel-requested-p (littoral.jobs:find-durable-job id)))
+        (visit b "/job")
+        (is (null (ajax-specs b "on-click")) "No Cancel once asked")
+        ;; Done.
+        (littoral.db:db-execute "UPDATE job_queue SET status = 'done', progress_fraction = 1, cancel_requested = 0 WHERE id = ?" id)
+        (visit b "/job")
+        (is (search "Done." (body-text b)))
+        (is (search "width: 100%" (browser-html b)))))))
+
+(test durable-job-views-hear-of-changes-by-push
+  ;; The stream renders in a thread of its own, with its own connection: a file.
+  (let* ((file (namestring (merge-pathnames (format nil "littoral-job-view-~36R.sqlite3" (random (expt 36 8)))
+                                            (uiop:temporary-directory))))
+         (littoral.jobs::*definitions* (test-job-definitions)))
+    (unwind-protect
+         (progn
+           (littoral.db:connect-database :sqlite3 :database-name file)
+           (littoral.jobs:create-job-tables)
+           (with-fresh-applications (("/job" 'job-page :mode :deployment))
+             (let* ((*job-page-id* (littoral.jobs:enqueue-job (list 'stepping-job 2)))
+                    (b (make-instance 'browser))
+                    (sink (make-instance 'sink)))
+               (visit b "/job")
+               (let ((thread (open-stream b sink)))
+                 (is (wait-for (lambda () (search "retry:" (sink-text sink)))))
+                 (littoral.jobs:run-due-jobs)
+                 (is (wait-for (lambda () (search "Done." (sink-text sink)))))
+                 (is (search "event: update" (sink-text sink)))
+                 (close-event-streams)
+                 (is (wait-for (lambda () (not (sb-thread:thread-alive-p thread)))))))))
+      (littoral.jobs:drop-job-tables)
+      (connect-test-database)
+      (dolist (suffix '("" "-wal" "-shm"))
+        (uiop:delete-file-if-exists (concatenate 'string file suffix))))))

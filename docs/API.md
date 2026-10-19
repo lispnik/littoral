@@ -4917,6 +4917,179 @@ Text written in Markdown, shown as safe HTML (see
 ;; ⇒ "<div class=\"lt-markdown\"><p>Doors open at <strong>seven</strong>.</p></div>"
 ```
 
+#### `breadcrumb-trail` — class
+
+A trail of links naming `:of`, the component it was made
+for, then what that has called, then what that has called, and so on, to
+the component showing now, which is not a link.  Following a link dismisses
+everything that level called, as `home` does, so it shows itself again.  The
+names are `breadcrumb-label`'s.  Render the trail outside `:of`, which a call
+replaces.  It is `updatable`, for AJAX callbacks that call or change a name.
+
+*Example:* A trail names a component, then what it has called, and so on down to what shows now, which is not a link.  Following a link goes back to that level.  Render the trail outside the component it follows, which a call replaces.
+
+```lisp
+(defclass inbox (component) ())
+(defclass letter (component) ())
+(defmethod breadcrumb-label ((self letter)) "Hello, Ada")
+(defmethod render ((self inbox))
+  (anchor (:callback (lambda () (show self (make-instance 'letter)))) "Open"))
+(defmethod render ((self letter))
+  (p () "Dear Ada,"))
+(defclass mail-page (component)
+  ((inbox :initform (make-instance 'inbox) :reader inbox)
+   (trail :reader trail)))
+(defmethod initialize-instance :after ((self mail-page) &key)
+  (setf (slot-value self 'trail) (make-instance 'breadcrumb-trail :of (inbox self))))
+(defmethod children ((self mail-page)) (list (trail self) (inbox self)))
+(defmethod render ((self mail-page))
+  (render-component (trail self))
+  (render-component (inbox self)))
+(with-fresh-applications (("/mail" 'mail-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/mail")
+    (click b "Open")
+    (let ((opened (body-text b)))
+      (click b "Inbox")
+      (list opened (body-text b)))))
+;; ⇒ ("Inbox Hello, Ada Dear Ada," "Inbox Open")
+```
+
+#### `breadcrumb-trail-of` `object` — generic function
+
+Reads the of of a breadcrumb-trail.  The component whose calls the trail follows.
+
+*Example:* A trail names a component, then what it has called, and so on down to what shows now, which is not a link.  Following a link goes back to that level.  Render the trail outside the component it follows, which a call replaces.
+
+```lisp
+(defclass inbox (component) ())
+(defclass letter (component) ())
+(defmethod breadcrumb-label ((self letter)) "Hello, Ada")
+(defmethod render ((self inbox))
+  (anchor (:callback (lambda () (show self (make-instance 'letter)))) "Open"))
+(defmethod render ((self letter))
+  (p () "Dear Ada,"))
+(defclass mail-page (component)
+  ((inbox :initform (make-instance 'inbox) :reader inbox)
+   (trail :reader trail)))
+(defmethod initialize-instance :after ((self mail-page) &key)
+  (setf (slot-value self 'trail) (make-instance 'breadcrumb-trail :of (inbox self))))
+(defmethod children ((self mail-page)) (list (trail self) (inbox self)))
+(defmethod render ((self mail-page))
+  (render-component (trail self))
+  (render-component (inbox self)))
+(with-fresh-applications (("/mail" 'mail-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/mail")
+    (click b "Open")
+    (let ((opened (body-text b)))
+      (click b "Inbox")
+      (list opened (body-text b)))))
+;; ⇒ ("Inbox Hello, Ada Dear Ada," "Inbox Open")
+```
+
+#### `breadcrumb-label` `component` — generic function
+
+`component`'s name in a `breadcrumb-trail`, translated when
+shown.  By default its class name, capitalised, with spaces for hyphens
+("Book List"); a `description-editor`'s is its title.
+
+*Example:* A trail names a component, then what it has called, and so on down to what shows now, which is not a link.  Following a link goes back to that level.  Render the trail outside the component it follows, which a call replaces.
+
+```lisp
+(defclass inbox (component) ())
+(defclass letter (component) ())
+(defmethod breadcrumb-label ((self letter)) "Hello, Ada")
+(defmethod render ((self inbox))
+  (anchor (:callback (lambda () (show self (make-instance 'letter)))) "Open"))
+(defmethod render ((self letter))
+  (p () "Dear Ada,"))
+(defclass mail-page (component)
+  ((inbox :initform (make-instance 'inbox) :reader inbox)
+   (trail :reader trail)))
+(defmethod initialize-instance :after ((self mail-page) &key)
+  (setf (slot-value self 'trail) (make-instance 'breadcrumb-trail :of (inbox self))))
+(defmethod children ((self mail-page)) (list (trail self) (inbox self)))
+(defmethod render ((self mail-page))
+  (render-component (trail self))
+  (render-component (inbox self)))
+(with-fresh-applications (("/mail" 'mail-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/mail")
+    (click b "Open")
+    (let ((opened (body-text b)))
+      (click b "Inbox")
+      (list opened (body-text b)))))
+;; ⇒ ("Inbox Hello, Ada Dear Ada," "Inbox Open")
+```
+
+#### `in-place-editor` — class
+
+One field of an object, shown with an Edit button; Edit
+turns it into the field's input, with Save and Cancel, over AJAX.  Save
+parses and checks the text as the description says, writes the value to
+the object and calls `:on-save`, when given, with the object (to store it,
+say); a problem is shown by the input instead.  `:update` lists other
+`updatable` components the value shows in, re-rendered after a save.  Make
+one with `make-in-place-editor`.
+
+*Example:* One field of one object, edited where it is shown: Edit turns it into the field's input, and Save checks the text as the description says and writes the value.  Both go over AJAX; here the fake browser reloads the page to see each step.
+
+```lisp
+(defclass guest () ((name :initarg :name :accessor guest-name)))
+(define-description guest ((name :required t)))
+(defvar *ada* (make-instance 'guest :name "Ada"))
+(defclass guest-page (component)
+  ((editor :initform (make-in-place-editor *ada* 'name) :reader editor)))
+(defmethod children ((self guest-page)) (list (editor self)))
+(defmethod render ((self guest-page)) (render-component (editor self)))
+(with-fresh-applications (("/guest" 'guest-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/guest")
+    (let ((before (body-text b))
+          (edit (first (ajax-specs b "on-click"))))
+      (ajax-request b (car edit) (cdr edit))
+      (visit b (browser-url b))
+      (let ((save (first (ajax-specs b "on-submit")))
+            (input (cl-ppcre:register-groups-bind (name) ("<input[^>]* name=\"(\\d+)\"" (browser-html b)) name)))
+        (ajax-request b (car save) (cdr save) :fields (list (cons input "Ada Lovelace")))
+        (visit b (browser-url b))
+        (list before (body-text b) (guest-name *ada*))))))
+;; ⇒ ("Ada Edit" "Ada Lovelace Edit" "Ada Lovelace")
+```
+
+#### `make-in-place-editor` `object field-name &key (description object) on-save update` — function
+
+An `in-place-editor` of `object`'s field `field-name`, as `description`
+(anything `find-description` takes; by default `object`'s class) describes it.
+`on-save` is called with `object` after a value is written to it, and `update`,
+an `updatable` component or a list of them, is re-rendered with the editor.
+
+*Example:* One field of one object, edited where it is shown: Edit turns it into the field's input, and Save checks the text as the description says and writes the value.  Both go over AJAX; here the fake browser reloads the page to see each step.
+
+```lisp
+(defclass guest () ((name :initarg :name :accessor guest-name)))
+(define-description guest ((name :required t)))
+(defvar *ada* (make-instance 'guest :name "Ada"))
+(defclass guest-page (component)
+  ((editor :initform (make-in-place-editor *ada* 'name) :reader editor)))
+(defmethod children ((self guest-page)) (list (editor self)))
+(defmethod render ((self guest-page)) (render-component (editor self)))
+(with-fresh-applications (("/guest" 'guest-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/guest")
+    (let ((before (body-text b))
+          (edit (first (ajax-specs b "on-click"))))
+      (ajax-request b (car edit) (cdr edit))
+      (visit b (browser-url b))
+      (let ((save (first (ajax-specs b "on-submit")))
+            (input (cl-ppcre:register-groups-bind (name) ("<input[^>]* name=\"(\\d+)\"" (browser-html b)) name)))
+        (ajax-request b (car save) (cdr save) :fields (list (cons input "Ada Lovelace")))
+        (visit b (browser-url b))
+        (list before (body-text b) (guest-name *ada*))))))
+;; ⇒ ("Ada Edit" "Ada Lovelace Edit" "Ada Lovelace")
+```
+
 ### JSON endpoints
 
 #### `define-endpoint` `application-path method pattern (&rest parameters) &body body` — macro
@@ -12436,10 +12609,14 @@ The `durable-job` this thread is running.
 ;; ⇒ ((1) "3 of 3 rows" NIL)
 ```
 
-#### `note-job-progress` `text` — function
+#### `note-job-progress` `text &key fraction` — function
 
 From inside a job: record `text` as how it's going (`durable-job-progress`),
-and hold on to the job for another `timeout`.
+and `fraction`, when given, as how far it has got, from 0 to 1
+(`durable-job-progress-fraction`); and hold on to the job for another
+`timeout`.  When `cancel-durable-job` has asked the job to stop, signal
+`job-cancelled` instead, ending it: call this between steps that may be
+abandoned.
 
 *Example:* Inside a job, `*durable-job*` is the job being run, and `note-job-progress` records how it is going.
 
@@ -12459,6 +12636,25 @@ and hold on to the job for another `timeout`.
                littoral.jobs:*durable-job*))
     (littoral.jobs:drop-job-tables)))
 ;; ⇒ ((1) "3 of 3 rows" NIL)
+```
+
+*Example:* `:fraction` says how far the job has got, from 0 to 1, for a progress bar such as `durable-job-view`'s.
+
+```lisp
+(littoral.jobs:define-job (import-rows :queue "examples") (rows)
+  (dotimes (i rows)
+    (littoral.jobs:note-job-progress (format nil "Row ~D of ~D" (1+ i) rows) :fraction (/ (1+ i) rows))))
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.jobs:create-job-tables)
+  (unwind-protect
+       (let ((id (littoral.jobs:enqueue-job (list 'import-rows 4))))
+         (littoral.jobs:run-due-jobs :queues '("examples"))
+         (let ((job (littoral.jobs:find-durable-job id)))
+           (list (littoral.jobs:durable-job-progress job)
+                 (littoral.jobs:durable-job-progress-fraction job)
+                 (littoral.jobs:durable-job-status job))))
+    (littoral.jobs:drop-job-tables)))
+;; ⇒ ("Row 4 of 4" 1.0d0 "done")
 ```
 
 #### `abandon-job` `control &rest arguments` — function
@@ -12523,6 +12719,132 @@ Signalled by `abandon-job`: the job fails without being tried again.
   (littoral.jobs:job-abandoned (condition)
     (princ-to-string condition)))
 ;; ⇒ "No order 7."
+```
+
+#### `job-cancelled` — condition
+
+Signalled by `note-job-progress` in a job that `cancel-durable-job`
+has asked to stop: the job ends, marked cancelled, and isn't tried again.
+
+*Example:* A running job can't be stopped from outside at any moment.  `cancel-durable-job` asks it to stop and answers `:requested`; the job then ends at its next `note-job-progress`, which signals `job-cancelled`, and is marked cancelled.  Here the job asks for itself, as someone pressing Cancel meanwhile would.
+
+```lisp
+(defvar *answers* '())
+(littoral.jobs:define-job (long-export :queue "examples") ()
+  (dotimes (part 1000)
+    (when (= part 3)
+      (let ((id (littoral.jobs:durable-job-id littoral.jobs:*durable-job*)))
+        (push (littoral.jobs:cancel-durable-job id) *answers*)
+        (push (littoral.jobs:durable-job-cancel-requested-p (littoral.jobs:find-durable-job id)) *answers*)))
+    (littoral.jobs:note-job-progress (format nil "Part ~D" part))))
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.jobs:create-job-tables)
+  (unwind-protect
+       (let ((id (littoral.jobs:enqueue-job (list 'long-export))))
+         (littoral.jobs:run-due-jobs :queues '("examples"))
+         (let ((job (littoral.jobs:find-durable-job id)))
+           (list (reverse *answers*)
+                 (littoral.jobs:durable-job-status job)
+                 (littoral.jobs:durable-job-progress job))))
+    (littoral.jobs:drop-job-tables)))
+;; ⇒ ((:REQUESTED T) "cancelled" "Part 2")
+```
+
+#### `*durable-jobs-channel*` — variable
+
+Published when a job changes in this process: it starts, notes progress,
+ends, or is cancelled or retried.  `durable-job-view` subscribes to it.
+
+*Example:* A job's progress bar, status and Cancel button.  The view subscribes to `*durable-jobs-channel*`, so its page listens for pushes, and jobs run in this process publish it as they change.
+
+```lisp
+(littoral.jobs:define-job (build-export :queue "examples") ()
+  (littoral.jobs:note-job-progress "Exported" :fraction 1))
+(defvar *export-id* nil)
+(defclass export-page (component)
+  ((view :initform (make-instance 'littoral.jobs:durable-job-view :id *export-id*) :reader view)))
+(defmethod children ((self export-page)) (list (view self)))
+(defmethod render ((self export-page)) (render-component (view self)))
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.jobs:create-job-tables)
+  (unwind-protect
+       (with-fresh-applications (("/export" 'export-page :mode :deployment))
+         (setf *export-id* (littoral.jobs:enqueue-job (list 'build-export)))
+         (let ((b (make-instance 'browser)))
+           (visit b "/export")
+           (let ((waiting (body-text b))
+                 (listens (and (search "data-lt-events=" (browser-html b)) t)))
+             (littoral.jobs:run-due-jobs :queues '("examples"))
+             (visit b (browser-url b))
+             (list waiting listens (body-text b)))))
+    (littoral.jobs:drop-job-tables)))
+;; ⇒ ("Waiting to start. Cancel" T "Done.")
+```
+
+#### `durable-job-view` — class
+
+A durable job's progress bar, status and Cancel button.
+`:id` is the job's id (setf `durable-job-view-id` to show another).  The bar
+shows `note-job-progress`'s `:fraction`, and the status its text.  Cancel stops
+a queued job at once and asks a running one to stop (see
+`cancel-durable-job`).  The page hears by server push of changes made in this
+process; when the job runs elsewhere, give `:poll`, the seconds between looks.
+`:database` is the job's database spec, when it isn't the current one.
+
+*Example:* A job's progress bar, status and Cancel button.  The view subscribes to `*durable-jobs-channel*`, so its page listens for pushes, and jobs run in this process publish it as they change.
+
+```lisp
+(littoral.jobs:define-job (build-export :queue "examples") ()
+  (littoral.jobs:note-job-progress "Exported" :fraction 1))
+(defvar *export-id* nil)
+(defclass export-page (component)
+  ((view :initform (make-instance 'littoral.jobs:durable-job-view :id *export-id*) :reader view)))
+(defmethod children ((self export-page)) (list (view self)))
+(defmethod render ((self export-page)) (render-component (view self)))
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.jobs:create-job-tables)
+  (unwind-protect
+       (with-fresh-applications (("/export" 'export-page :mode :deployment))
+         (setf *export-id* (littoral.jobs:enqueue-job (list 'build-export)))
+         (let ((b (make-instance 'browser)))
+           (visit b "/export")
+           (let ((waiting (body-text b))
+                 (listens (and (search "data-lt-events=" (browser-html b)) t)))
+             (littoral.jobs:run-due-jobs :queues '("examples"))
+             (visit b (browser-url b))
+             (list waiting listens (body-text b)))))
+    (littoral.jobs:drop-job-tables)))
+;; ⇒ ("Waiting to start. Cancel" T "Done.")
+```
+
+#### `durable-job-view-id` `object` — generic function
+
+Reads the id of a durable-job-view.  The id of the job shown, as `enqueue-job` returned it, or `nil` for none.
+
+*Example:* A job's progress bar, status and Cancel button.  The view subscribes to `*durable-jobs-channel*`, so its page listens for pushes, and jobs run in this process publish it as they change.
+
+```lisp
+(littoral.jobs:define-job (build-export :queue "examples") ()
+  (littoral.jobs:note-job-progress "Exported" :fraction 1))
+(defvar *export-id* nil)
+(defclass export-page (component)
+  ((view :initform (make-instance 'littoral.jobs:durable-job-view :id *export-id*) :reader view)))
+(defmethod children ((self export-page)) (list (view self)))
+(defmethod render ((self export-page)) (render-component (view self)))
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.jobs:create-job-tables)
+  (unwind-protect
+       (with-fresh-applications (("/export" 'export-page :mode :deployment))
+         (setf *export-id* (littoral.jobs:enqueue-job (list 'build-export)))
+         (let ((b (make-instance 'browser)))
+           (visit b "/export")
+           (let ((waiting (body-text b))
+                 (listens (and (search "data-lt-events=" (browser-html b)) t)))
+             (littoral.jobs:run-due-jobs :queues '("examples"))
+             (visit b (browser-url b))
+             (list waiting listens (body-text b)))))
+    (littoral.jobs:drop-job-tables)))
+;; ⇒ ("Waiting to start. Cancel" T "Done.")
 ```
 
 #### `durable-job` — class
@@ -12834,6 +13156,57 @@ Reads the progress of a durable-job.  What `note-job-progress` said last.
 ;; ⇒ ((1) "3 of 3 rows" NIL)
 ```
 
+#### `durable-job-progress-fraction` `object` — generic function
+
+Reads the progress-fraction of a durable-job.  How far it has got, from 0 to 1, as `note-job-progress`'s `:fraction` said last; or `nil`.
+
+*Example:* `:fraction` says how far the job has got, from 0 to 1, for a progress bar such as `durable-job-view`'s.
+
+```lisp
+(littoral.jobs:define-job (import-rows :queue "examples") (rows)
+  (dotimes (i rows)
+    (littoral.jobs:note-job-progress (format nil "Row ~D of ~D" (1+ i) rows) :fraction (/ (1+ i) rows))))
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.jobs:create-job-tables)
+  (unwind-protect
+       (let ((id (littoral.jobs:enqueue-job (list 'import-rows 4))))
+         (littoral.jobs:run-due-jobs :queues '("examples"))
+         (let ((job (littoral.jobs:find-durable-job id)))
+           (list (littoral.jobs:durable-job-progress job)
+                 (littoral.jobs:durable-job-progress-fraction job)
+                 (littoral.jobs:durable-job-status job))))
+    (littoral.jobs:drop-job-tables)))
+;; ⇒ ("Row 4 of 4" 1.0d0 "done")
+```
+
+#### `durable-job-cancel-requested-p` `object` — generic function
+
+Reads the cancel-requested of a durable-job.  True when `cancel-durable-job` has asked it, running, to stop.
+
+*Example:* A running job can't be stopped from outside at any moment.  `cancel-durable-job` asks it to stop and answers `:requested`; the job then ends at its next `note-job-progress`, which signals `job-cancelled`, and is marked cancelled.  Here the job asks for itself, as someone pressing Cancel meanwhile would.
+
+```lisp
+(defvar *answers* '())
+(littoral.jobs:define-job (long-export :queue "examples") ()
+  (dotimes (part 1000)
+    (when (= part 3)
+      (let ((id (littoral.jobs:durable-job-id littoral.jobs:*durable-job*)))
+        (push (littoral.jobs:cancel-durable-job id) *answers*)
+        (push (littoral.jobs:durable-job-cancel-requested-p (littoral.jobs:find-durable-job id)) *answers*)))
+    (littoral.jobs:note-job-progress (format nil "Part ~D" part))))
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.jobs:create-job-tables)
+  (unwind-protect
+       (let ((id (littoral.jobs:enqueue-job (list 'long-export))))
+         (littoral.jobs:run-due-jobs :queues '("examples"))
+         (let ((job (littoral.jobs:find-durable-job id)))
+           (list (reverse *answers*)
+                 (littoral.jobs:durable-job-status job)
+                 (littoral.jobs:durable-job-progress job))))
+    (littoral.jobs:drop-job-tables)))
+;; ⇒ ((:REQUESTED T) "cancelled" "Part 2")
+```
+
 #### `durable-job-last-error` `object` — generic function
 
 Reads the last-error of a durable-job.  Why its last try failed: the error's text, then a backtrace; or `nil`.
@@ -13040,7 +13413,9 @@ true unless it wasn't failed or cancelled, or a job with its key waits already.
 
 #### `cancel-durable-job` `id` — function
 
-Cancel the job `id` unless it has started; true if it was cancelled.
+Cancel the job `id`.  A queued job is cancelled at once: T.  A running job
+is asked to stop, and does at its next `note-job-progress` (a job that never
+calls it runs to the end): `:requested`.  `nil` when the job has finished.
 
 *Example:* `abandon-job` fails a job without trying again.  A failed job can be retried by hand, and a queued one cancelled before it starts.
 
@@ -13063,6 +13438,30 @@ Cancel the job `id` unless it has started; true if it was cancelled.
                  (littoral.jobs:cancel-durable-job id))))
     (littoral.jobs:drop-job-tables)))
 ;; ⇒ ("failed" "Order 7 was cancelled." T "queued" T "cancelled" NIL)
+```
+
+*Example:* A running job can't be stopped from outside at any moment.  `cancel-durable-job` asks it to stop and answers `:requested`; the job then ends at its next `note-job-progress`, which signals `job-cancelled`, and is marked cancelled.  Here the job asks for itself, as someone pressing Cancel meanwhile would.
+
+```lisp
+(defvar *answers* '())
+(littoral.jobs:define-job (long-export :queue "examples") ()
+  (dotimes (part 1000)
+    (when (= part 3)
+      (let ((id (littoral.jobs:durable-job-id littoral.jobs:*durable-job*)))
+        (push (littoral.jobs:cancel-durable-job id) *answers*)
+        (push (littoral.jobs:durable-job-cancel-requested-p (littoral.jobs:find-durable-job id)) *answers*)))
+    (littoral.jobs:note-job-progress (format nil "Part ~D" part))))
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.jobs:create-job-tables)
+  (unwind-protect
+       (let ((id (littoral.jobs:enqueue-job (list 'long-export))))
+         (littoral.jobs:run-due-jobs :queues '("examples"))
+         (let ((job (littoral.jobs:find-durable-job id)))
+           (list (reverse *answers*)
+                 (littoral.jobs:durable-job-status job)
+                 (littoral.jobs:durable-job-progress job))))
+    (littoral.jobs:drop-job-tables)))
+;; ⇒ ((:REQUESTED T) "cancelled" "Part 2")
 ```
 
 #### `purge-durable-jobs` `&key (older-than (* 7 24 3600)) (statuses (quote ("done" "cancelled")))` — function

@@ -308,7 +308,7 @@
   :author "Matthew Kennedy"
   :license "MIT"
   :depends-on (#:littoral #:littoral/db)
-  :components ((:module "src" :components ((:file "durable-jobs")))))
+  :components ((:module "src" :serial t :components ((:file "durable-jobs") (:file "durable-job-view")))))
 
 (asdf:defsystem #:littoral/oauth
   :description "Sign in to Littoral applications with OAuth 2 / OpenID Connect providers."

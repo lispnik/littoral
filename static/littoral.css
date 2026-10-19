@@ -100,6 +100,17 @@ dialog.lt-modal { position: fixed; top: 12vh; margin: 0 auto; max-width: min(36r
 .lt-toast-error { border-left-color: var(--lt-error); }
 .lt-toast-leaving { opacity: 0; }
 
+/* Breadcrumbs: the separators are drawn, so screen readers don't read them */
+.lt-breadcrumbs ol { display: flex; flex-wrap: wrap; align-items: baseline; list-style: none; padding: 0; margin: 0 0 .8rem; }
+.lt-breadcrumbs li + li::before { content: ""; display: inline-block; width: .35em; height: .35em; margin: 0 .6em .1em .4em;
+  border-top: 1px solid currentColor; border-right: 1px solid currentColor; transform: rotate(45deg); opacity: .6; }
+.lt-breadcrumbs [aria-current] { font-weight: 600; }
+
+/* In-place editor */
+.lt-in-place-editing { display: inline-flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin: 0; }
+.lt-in-place-editing .lt-validation-error { flex-basis: 100%; }
+.lt-in-place-edit { font-size: .85em; padding: .05rem .5rem; }
+
 /* Language chooser */
 .lt-languages ul { display: flex; flex-wrap: wrap; gap: .8rem; list-style: none; padding: 0; margin: 0; }
 

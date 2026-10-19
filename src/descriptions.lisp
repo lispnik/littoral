@@ -558,6 +558,9 @@ keep the problems to show."
                                (when (field-help field) (format nil "~A-help" id))))))
     (when ids (join-strings ids))))
 
+(defmethod breadcrumb-label ((self description-editor))
+  (or (editor-title self) (call-next-method)))
+
 (defmethod render ((self description-editor))
   (let ((problems (editor-problems self)))
     (div (:class "lt-editor")

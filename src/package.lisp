@@ -81,6 +81,8 @@
    ;; More widgets
    #:data-grid #:bar-chart #:line-chart #:sparkline #:calendar #:calendar-year #:calendar-month
    #:kanban #:kanban-columns #:move-card #:markdown-html #:markdown-field
+   #:breadcrumb-trail #:breadcrumb-trail-of #:breadcrumb-label
+   #:in-place-editor #:make-in-place-editor
    ;; JSON endpoints
    #:define-endpoint #:register-endpoint #:endpoint-error #:endpoint-body #:*endpoint-authenticator*
    ;; Health, metrics, request logs

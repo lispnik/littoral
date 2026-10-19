@@ -1,4 +1,4 @@
-;;;; widgets.lisp — tabs, navigation, a tree, autocomplete, a sortable list
+;;;; widgets.lisp — tabs, navigation, breadcrumbs, in-place editing, a tree, autocomplete, a sortable list
 
 (in-package #:littoral-examples)
 
@@ -137,6 +137,96 @@ Some *emphasis*, some **strong** text and `code`.
     (div (:class "lt-markdown markdown-preview" :aria-label "Preview")
       (raw (markdown-html (section-source self))))))
 
+;;; Breadcrumbs and in-place editing: a pantry to look through
+
+(defclass pantry-item ()
+  ((name :initarg :name :accessor pantry-item-name)
+   (stock :initarg :stock :accessor pantry-item-stock))
+  (:documentation "Something on a pantry shelf."))
+
+(define-description pantry-item
+  ((name :required t :max-length 40)
+   (stock :type :integer :min 0 :label "In stock")))
+
+(defclass pantry-level (component)
+  ((trail :initarg :trail :accessor level-trail :documentation "The breadcrumb trail above the pantry."))
+  (:documentation "A page of the pantry: it knows the trail, which an item's new name updates."))
+
+(defclass pantry-page (pantry-level)
+  ((shelves :initarg :shelves :reader pantry-shelves :documentation "Alist of shelf name → items."))
+  (:documentation "The shelves; each opens a SHELF-PAGE."))
+
+(defclass shelf-page (pantry-level)
+  ((name :initarg :name :reader shelf-name)
+   (items :initarg :items :reader shelf-items))
+  (:documentation "A shelf's items; each opens an ITEM-PAGE."))
+
+(defclass item-page (pantry-level)
+  ((item :initarg :item :reader page-item)
+   (editors :reader page-editors))
+  (:documentation "An item, its fields edited in place."))
+
+(defmethod breadcrumb-label ((self pantry-page)) "Pantry")
+(defmethod breadcrumb-label ((self shelf-page)) (shelf-name self))
+(defmethod breadcrumb-label ((self item-page)) (pantry-item-name (page-item self)))
+
+(defmethod initialize-instance :after ((self item-page) &key)
+  (setf (slot-value self 'editors)
+        ;; A new name shows in the trail at once.
+        (list (make-in-place-editor (page-item self) 'name :update (level-trail self))
+              (make-in-place-editor (page-item self) 'stock))))
+
+(defmethod children ((self item-page)) (page-editors self))
+
+(defmethod render ((self pantry-page))
+  (ul ()
+    (loop for (name . items) in (pantry-shelves self)
+          do (let ((name name) (items items))
+               (li () (anchor (:callback (lambda ()
+                                           (show self (make-instance 'shelf-page :name name :items items
+                                                                                 :trail (level-trail self)))))
+                        (text name)))))))
+
+(defmethod render ((self shelf-page))
+  (ul ()
+    (dolist (item (shelf-items self))
+      (let ((item item))
+        (li () (anchor (:callback (lambda ()
+                                    (show self (make-instance 'item-page :item item :trail (level-trail self)))))
+                 (text (pantry-item-name item)))))))
+  (p () (anchor (:callback (lambda () (answer self))) "Back to the pantry")))
+
+(defmethod render ((self item-page))
+  (dl (:class "pantry-item")
+    (loop for editor in (page-editors self)
+          for label in '("Name" "In stock")
+          do (dt () (text label))
+             (dd () (render-component editor)))))
+
+(defclass crumbs-section (component)
+  ((pantry :reader section-pantry)
+   (trail :reader section-trail))
+  (:documentation "A pantry to look through, with a breadcrumb trail."))
+
+(defmethod initialize-instance :after ((self crumbs-section) &key)
+  (let* ((pantry (make-instance 'pantry-page
+                                :shelves (list (cons "Fruit" (list (make-instance 'pantry-item :name "Apples" :stock 12)
+                                                                   (make-instance 'pantry-item :name "Pears" :stock 3)))
+                                               (cons "Vegetables" (list (make-instance 'pantry-item :name "Leeks" :stock 4))))))
+         (trail (make-instance 'breadcrumb-trail :of pantry)))
+    (setf (level-trail pantry) trail
+          (slot-value self 'pantry) pantry
+          (slot-value self 'trail) trail)))
+
+(defmethod children ((self crumbs-section)) (list (section-trail self) (section-pantry self)))
+
+(defmethod render ((self crumbs-section))
+  (h2 () "Breadcrumbs and in-place editing")
+  (p () "Open a shelf, then an item. The trail follows the calls, and its links go back to that level. "
+    "An item's fields are edited where they are shown.")
+  (render-component (section-trail self))
+  (render-component (section-pantry self)))
+
 (defclass widget-demo (component)
   ((navigation :reader demo-navigation)
    (chosen-symbol :initform nil :accessor chosen-symbol)
@@ -219,6 +309,7 @@ Some *emphasis*, some **strong** text and `code`.
                      (cons "Tree" (make-instance 'tree-section :demo self))
                      (cons "Autocomplete" (make-instance 'autocomplete-section :demo self))
                      (cons "Sortable" (make-instance 'sortable-section :list (demo-tasks self)))
+                     (cons "Breadcrumbs" (make-instance 'crumbs-section))
                      (cons "Data grid" (make-instance 'grid-section))
                      (cons "Charts" (make-instance 'charts-section))
                      (cons "Calendar" (make-instance 'calendar-section))

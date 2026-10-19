@@ -202,8 +202,16 @@ It's an ordinary component, so a flow can `call` it. `/examples/wizard` signs so
 - **`calendar`** shows a month, Monday first, with events (`(date . title)`) and month names in the session's language; `:on-select` gets the day chosen.
 - **`kanban`** shows columns of cards. Cards can be dragged between columns, or moved with arrow buttons that work by keyboard and without JavaScript; `:on-move` hears about every move.
 - **Markdown**: the `:markdown` field kind and `markdown-html` render Markdown as safe HTML. Raw HTML is escaped, and links go only to http(s), mailto or the site itself, so it's safe to show to whoever wrote it.
+- **`breadcrumb-trail`** follows a component's calls: it names the component, then what that has called, and so on down to what shows now. Each link goes back to its level, dismissing what that level called, as `home` does. Names come from `breadcrumb-label`, which defaults to the class name; a description editor's is its title. Render the trail outside the component it follows, since a call replaces that component.
+- **`make-in-place-editor`** edits one field of one object where it's shown. **Edit** turns the value into the field's input, with **Save** and **Cancel**, over AJAX. Save checks the text with the description's own validation, writes the value, and calls `:on-save` with the object. `:update` lists other components to redraw after a save, such as a heading that shows the value.
 
-They're in the widgets example. `/examples/monitoring` charts the server's own metrics live.
+```lisp
+(defmethod breadcrumb-label ((self order-page)) (format nil "Order ~D" (order-id (page-order self))))
+(make-instance 'breadcrumb-trail :of orders)            ; render it above ORDERS
+(make-in-place-editor order 'note :on-save #'littoral.db:db-save)
+```
+
+They're in the widgets example; its Breadcrumbs tab has both, in a pantry to browse. `/examples/monitoring` charts the server's own metrics live.
 
 ### Request cycle
 
@@ -393,9 +401,11 @@ Jobs live in memory, so a restart forgets them; for work that must not be lost, 
 - **Retries.** A job that signals is tried again after `:retry-seconds` (30), doubling each time, up to `:attempts` (5) tries. Then it's marked failed, with its error and backtrace. `abandon-job` fails it at once, for errors that trying again won't fix.
 - **Running.** A runner claims a job by updating its row, so each job runs in one process at a time. The runner holds the job for its `:timeout` (600 seconds), extended by each `note-job-progress`. If the process dies, another runner takes the job over once that time has passed, so jobs should be safe to repeat. With `:transaction t`, the job's database work and its being marked done commit together. Runners take jobs only from their `:queues` (`("default")`), and only jobs their process defines, so a rolling deploy doesn't fail jobs that only the new code knows.
 - **Recurring jobs.** `:every` takes seconds or a function from a time to the next one, such as `daily-at`. Runners keep exactly one run scheduled, however many processes there are.
+- **Progress.** `(note-job-progress "Row 40 of 100" :fraction 0.4)` records how a job is going. A `durable-job-view` shows a job's progress bar, its status and a Cancel button. Its page hears by server push when a job changes in this process; for jobs run by other processes, give it `:poll`, the seconds between looks.
+- **Cancelling.** `cancel-durable-job` cancels a queued job at once. A running job can't be stopped at an arbitrary moment, so it is asked to: its next `note-job-progress` signals `job-cancelled`, and the job ends marked cancelled. A job that never notes its progress runs to the end.
 - **Looking after them.** `durable-jobs` (with `:limit` and `:offset`), `find-durable-job`, `durable-job-counts`, `retry-durable-job`, `cancel-durable-job` and `purge-durable-jobs` cover inspecting and housekeeping. The admin shows the queue, with buttons to retry and cancel. In tests, `run-due-jobs` runs what's due without a runner.
 
-`/examples/jobs` (system `littoral/members-demo`) has a report that shows its progress, a job that fails twice and then succeeds, one that always fails, and a job that sends mail ten seconds later through the mail demo's outbox. Generated apps start a runner and tidy up every night.
+`/examples/jobs` (system `littoral/members-demo`) has a report that shows its progress in a `durable-job-view`, a job that fails twice and then succeeds, one that always fails, and a job that sends mail ten seconds later through the mail demo's outbox. Generated apps start a runner and tidy up every night.
 
 ### Sending mail
 

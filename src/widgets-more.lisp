@@ -1,4 +1,4 @@
-;;;; widgets-more.lisp — tabs, navigation, trees, autocomplete, sortable lists
+;;;; widgets-more.lisp — tabs, navigation, breadcrumbs, trees, autocomplete, sortable lists
 
 (in-package #:littoral)
 
@@ -59,6 +59,44 @@ its index; when no tab has that label, change nothing and return NIL."
     (div (:class "lt-navigation-body")
       (let ((tab (selected-tab self)))
         (when tab (render-component tab))))))
+
+;;; Breadcrumbs: the chain of calls
+
+(defclass breadcrumb-trail (component updatable)
+  ((of :initarg :of :reader breadcrumb-trail-of
+       :documentation "The component whose calls the trail follows."))
+  (:documentation "A trail of links naming :OF, the component it was made
+for, then what that has called, then what that has called, and so on, to
+the component showing now, which is not a link.  Following a link dismisses
+everything that level called, as HOME does, so it shows itself again.  The
+names are BREADCRUMB-LABEL's.  Render the trail outside :OF, which a call
+replaces.  It is UPDATABLE, for AJAX callbacks that call or change a name."))
+
+(defgeneric breadcrumb-label (component)
+  (:documentation "COMPONENT's name in a BREADCRUMB-TRAIL, translated when
+shown.  By default its class name, capitalised, with spaces for hyphens
+(\"Book List\"); a DESCRIPTION-EDITOR's is its title.")
+  (:method ((component component))
+    (string-capitalize (substitute #\Space #\- (symbol-name (class-name (class-of component)))))))
+
+(defun call-chain (component)
+  "COMPONENT, then what it has called, then what that has called, and so on."
+  (loop for c = component
+          then (let ((delegation (find-if (lambda (d) (typep d 'delegation)) (decorations c))))
+                 (and delegation (delegation-delegate delegation)))
+        while c collect c))
+
+(defmethod render ((self breadcrumb-trail))
+  (nav (:class "lt-breadcrumbs" :aria-label (translate "Breadcrumbs"))
+    (ol ()
+      (loop for (component . more) on (call-chain (breadcrumb-trail-of self))
+            do (let ((component component))
+                 (li ()
+                   (if more
+                       (anchor (:callback (lambda () (home component)))
+                         (text (translate-label (breadcrumb-label component))))
+                       (span (:aria-current "page")
+                         (text (translate-label (breadcrumb-label component)))))))))))
 
 ;;; Tree
 

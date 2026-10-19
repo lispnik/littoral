@@ -36,10 +36,12 @@ database: retried, scheduled, and run by any process.")
   (:export #:define-job #:enqueue-job #:daily-at
            #:create-job-tables #:drop-job-tables #:job-tables-p
            #:run-due-jobs #:start-job-runner #:stop-job-runner #:job-runner-running-p
-           #:*durable-job* #:note-job-progress #:abandon-job #:job-abandoned
+           #:*durable-job* #:note-job-progress #:abandon-job #:job-abandoned #:job-cancelled
+           #:*durable-jobs-channel* #:durable-job-view #:durable-job-view-id
            #:durable-job #:durable-job-id #:durable-job-name #:durable-job-arguments #:durable-job-queue
            #:durable-job-status #:durable-job-attempts #:durable-job-run-at #:durable-job-key
-           #:durable-job-progress #:durable-job-last-error #:durable-job-created #:durable-job-finished
+           #:durable-job-progress #:durable-job-progress-fraction #:durable-job-cancel-requested-p
+           #:durable-job-last-error #:durable-job-created #:durable-job-finished
            #:find-durable-job #:durable-jobs #:durable-job-counts
            #:retry-durable-job #:cancel-durable-job #:purge-durable-jobs))
 
@@ -159,6 +161,10 @@ as it does through CREATE-MAIL-TABLES: the admin then shows the job queue."
            :documentation "When it is due; while running, when another runner may take it over.")
    (key :initarg :key :reader durable-job-key :documentation "The KEY it was enqueued with, or NIL.")
    (progress :initarg :progress :reader durable-job-progress :documentation "What NOTE-JOB-PROGRESS said last.")
+   (progress-fraction :initarg :progress-fraction :reader durable-job-progress-fraction
+                      :documentation "How far it has got, from 0 to 1, as NOTE-JOB-PROGRESS's :FRACTION said last; or NIL.")
+   (cancel-requested :initarg :cancel-requested :reader durable-job-cancel-requested-p
+                     :documentation "True when CANCEL-DURABLE-JOB has asked it, running, to stop.")
    (last-error :initarg :last-error :reader durable-job-last-error
                :documentation "Why its last try failed: the error's text, then a backtrace; or NIL.")
    (created :initarg :created :reader durable-job-created :documentation "When it was queued, a universal time.")
@@ -180,6 +186,8 @@ as it does through CREATE-MAIL-TABLES: the admin then shows the job queue."
                    :arguments (stored-or-text (column "arguments")) :queue (column "queue")
                    :status (column "status") :attempts (column "attempts") :run-at (column "run_at")
                    :key (column "unique_key") :progress (column "progress")
+                   :progress-fraction (let ((f (column "progress_fraction"))) (and f (float f 1d0)))
+                   :cancel-requested (eql 1 (column "cancel_requested"))
                    :last-error (column "last_error") :created (column "created") :finished (column "finished"))))
 
 (defun select-jobs (where &rest parameters)
@@ -254,16 +262,50 @@ before inserting: runners call this often, and SQLite has one writer."
 format, without trying again."
   (error 'job-abandoned :reason (apply #'format nil control arguments)))
 
+(define-condition job-cancelled (error) ()
+  (:report "The job was cancelled.")
+  (:documentation "Signalled by NOTE-JOB-PROGRESS in a job that CANCEL-DURABLE-JOB
+has asked to stop: the job ends, marked cancelled, and isn't tried again."))
+
 (defvar *durable-job* nil "The DURABLE-JOB this thread is running.")
 
-(defun note-job-progress (text)
+;;; Pages showing jobs hear of changes made in this process by server push.
+
+(defvar *durable-jobs-channel* (littoral:make-channel "durable jobs")
+  "Published when a job changes in this process: it starts, notes progress,
+ends, or is cancelled or retried.  DURABLE-JOB-VIEW subscribes to it.")
+
+(defvar *last-progress-publish* 0
+  "When NOTE-JOB-PROGRESS last published, in internal real time.")
+
+(defun publish-job-change (&key progress)
+  "Publish *DURABLE-JOBS-CHANNEL*; for PROGRESS, at most ten times a second,
+since jobs may note their progress far more often than pages can show it."
+  (let ((now (get-internal-real-time)))
+    (when (or (not progress)
+              (>= (- now *last-progress-publish*) (floor internal-time-units-per-second 10)))
+      (when progress (setf *last-progress-publish* now))
+      (littoral:publish *durable-jobs-channel*))))
+
+(defun note-job-progress (text &key fraction)
   "From inside a job: record TEXT as how it's going (DURABLE-JOB-PROGRESS),
-and hold on to the job for another TIMEOUT."
+and FRACTION, when given, as how far it has got, from 0 to 1
+(DURABLE-JOB-PROGRESS-FRACTION); and hold on to the job for another
+TIMEOUT.  When CANCEL-DURABLE-JOB has asked the job to stop, signal
+JOB-CANCELLED instead, ending it: call this between steps that may be
+abandoned."
   (let ((job *durable-job*))
     (when job
-      (littoral.db:db-execute "UPDATE job_queue SET progress = ?, run_at = ? WHERE id = ? AND status = 'running' AND attempts = ?"
-                              text (+ (get-universal-time) (definition-timeout (find-definition (durable-job-name job))))
-                              (durable-job-id job) (durable-job-attempts job)))))
+      (when (eql 1 (getf (first (littoral.db:db-query "SELECT cancel_requested FROM job_queue WHERE id = ?"
+                                                         (durable-job-id job)))
+                         :|cancel_requested|))
+        (error 'job-cancelled))
+      (littoral.db:db-execute "UPDATE job_queue SET progress = ?, progress_fraction = COALESCE(CAST(? AS DOUBLE PRECISION), progress_fraction), run_at = ?
+WHERE id = ? AND status = 'running' AND attempts = ?"
+                              text (and fraction (float (max 0 (min 1 fraction)) 1d0))
+                              (+ (get-universal-time) (definition-timeout (find-definition (durable-job-name job))))
+                              (durable-job-id job) (durable-job-attempts job))
+      (publish-job-change :progress t))))
 
 (defun claim (job definition)
   "Take JOB, which was due, for this runner: the job as claimed, or NIL when
@@ -287,12 +329,23 @@ WHERE id = ? AND status = ? AND run_at = ? AND attempts = ?"
             (insert-job (stored-text (definition-name definition)) (stored-text '()) (definition-queue definition)
                         (next-run definition (durable-job-run-at job))
                         (format nil "every:~A" (stored-text (definition-name definition)))))
+          (publish-job-change)
           (first (select-jobs "WHERE id = ?" (durable-job-id job)))))))
 
 (defun mark-done (job)
-  (= 1 (littoral.db:db-execute "UPDATE job_queue SET status = 'done', finished = ?, last_error = NULL
+  (prog1 (= 1 (littoral.db:db-execute "UPDATE job_queue SET status = 'done', finished = ?, last_error = NULL,
+progress_fraction = CASE WHEN progress_fraction IS NULL THEN NULL ELSE 1 END
 WHERE id = ? AND status = 'running' AND attempts = ?"
-                               (get-universal-time) (durable-job-id job) (durable-job-attempts job))))
+                                      (get-universal-time) (durable-job-id job) (durable-job-attempts job)))
+    (publish-job-change)))
+
+(defun mark-cancelled (job)
+  "Record that JOB stopped when asked to."
+  (littoral.db:db-execute "UPDATE job_queue SET status = 'cancelled', finished = ?, cancel_requested = 0
+WHERE id = ? AND status = 'running' AND attempts = ?"
+                          (get-universal-time) (durable-job-id job) (durable-job-attempts job))
+  (publish-job-change)
+  "cancelled")
 
 (defun failure-text (condition backtrace)
   (let ((text (format nil "~A~@[~2%~A~]"
@@ -306,16 +359,20 @@ WHERE id = ? AND status = 'running' AND attempts = ?"
          (abandoned (typep condition 'job-abandoned))
          (give-up (or abandoned (>= attempts (definition-attempts definition))))
          (now (get-universal-time)))
-    (littoral.db:db-execute "UPDATE job_queue SET status = ?, run_at = ?, finished = ?, last_error = ?
+    ;; A job asked to stop isn't tried again: it is cancelled.
+    (littoral.db:db-execute "UPDATE job_queue SET status = CASE WHEN cancel_requested = 1 THEN 'cancelled' ELSE CAST(? AS TEXT) END,
+run_at = ?, finished = CASE WHEN cancel_requested = 1 THEN CAST(? AS BIGINT) ELSE CAST(? AS BIGINT) END,
+last_error = ?, cancel_requested = 0
 WHERE id = ? AND status = 'running' AND attempts = ?"
                             (if give-up "failed" "queued")
                             (+ now (* (definition-retry-seconds definition) (expt 2 (1- attempts))))
-                            (and give-up now) (failure-text condition backtrace)
+                            now (and give-up now) (failure-text condition backtrace)
                             (durable-job-id job) attempts)
+    (publish-job-change)
     (cond (abandoned "abandoned") (give-up "failed") (t "retried"))))
 
 (littoral:define-metric "littoral_durable_job_runs_total" :counter
-  "Durable job runs in this process, by job and how they ended: done, retried, failed or abandoned."
+  "Durable job runs in this process, by job and how they ended: done, retried, failed, abandoned or cancelled."
   :labels '("job" "result"))
 (littoral:define-metric "littoral_durable_job_seconds" :histogram
   "How long durable job runs took, by job."
@@ -356,6 +413,8 @@ WHERE id = ? AND status = 'running' AND attempts = ?"
                 (progn (apply function arguments)
                        (mark-done job))))
           t)
+      (job-cancelled ()
+        (or (ignore-errors (mark-cancelled job)) "failed"))
       (error (e)
         (or (ignore-errors (mark-failed job definition e (and (eq (car backtrace) e) (cdr backtrace))))
             "failed")))))
@@ -461,17 +520,26 @@ given.  At most LIMIT, skipping the first OFFSET."
 (defun retry-durable-job (id)
   "Run the failed or cancelled job ID again now, its tries counted afresh;
 true unless it wasn't failed or cancelled, or a job with its key waits already."
-  (prog1 (= 1 (littoral.db:db-execute "UPDATE job_queue SET status = 'queued', attempts = 0, run_at = ?, finished = NULL
+  (prog1 (= 1 (littoral.db:db-execute "UPDATE job_queue SET status = 'queued', attempts = 0, run_at = ?, finished = NULL,
+progress = NULL, progress_fraction = NULL, cancel_requested = 0
 WHERE id = ? AND status IN ('failed', 'cancelled')
 AND (unique_key IS NULL OR NOT EXISTS (SELECT 1 FROM job_queue q WHERE q.unique_key = job_queue.unique_key
                                        AND q.status = 'queued' AND q.attempts = 0))"
                                       (get-universal-time) id))
+    (publish-job-change)
     (wake-runner)))
 
 (defun cancel-durable-job (id)
-  "Cancel the job ID unless it has started; true if it was cancelled."
-  (= 1 (littoral.db:db-execute "UPDATE job_queue SET status = 'cancelled', finished = ? WHERE id = ? AND status = 'queued'"
-                               (get-universal-time) id)))
+  "Cancel the job ID.  A queued job is cancelled at once: T.  A running job
+is asked to stop, and does at its next NOTE-JOB-PROGRESS (a job that never
+calls it runs to the end): :REQUESTED.  NIL when the job has finished."
+  (prog1 (cond ((= 1 (littoral.db:db-execute "UPDATE job_queue SET status = 'cancelled', finished = ?
+WHERE id = ? AND status = 'queued'"
+                                             (get-universal-time) id))
+                t)
+               ((= 1 (littoral.db:db-execute "UPDATE job_queue SET cancel_requested = 1 WHERE id = ? AND status = 'running'" id))
+                :requested))
+    (publish-job-change)))
 
 ;;; Metrics: /metrics reports each database whose job tables were made here
 

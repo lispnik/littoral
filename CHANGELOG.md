@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Added
+- **Breadcrumbs from the call stack.** `breadcrumb-trail` names a component, then what it has called, down to what shows now; each link goes back to its level. `breadcrumb-label` names each level (a description editor's is its title). `home` now also drops the dismissed component's answer handler, which no caller could use any more.
+- **An in-place editor.** `make-in-place-editor` edits one field of one object where it is shown, over AJAX, with the description's own input and validation; `:on-save` gets the object, and `:update` redraws other components that show the value.
+- **Durable jobs show progress and can be stopped while running.** `note-job-progress` takes `:fraction` (`durable-job-progress-fraction`). `cancel-durable-job` asks a running job to stop and answers `:requested`: its next `note-job-progress` signals `job-cancelled`, and it ends marked cancelled; a job that fails after the request isn't retried. `durable-job-view` shows a job's progress bar, status and Cancel button, kept up to date by server push for jobs run in this process (`*durable-jobs-channel*`), or by polling (`:poll`). The admin's job queue offers Cancel on running jobs too. Two columns are added to `job_queue` by a migration.
+- The widgets example has a Breadcrumbs tab, a pantry to browse with fields edited in place, and the jobs demo shows its report's progress in a `durable-job-view`.
+
 ### Changed
 - **Server push on Hunchentoot no longer holds a thread per page.** Once a page's event stream has begun, its connection leaves Hunchentoot's thread (through `detach-socket`) for littoral's push hub, one thread that writes every open stream's updates and keepalives. 600 open push pages now cost 22 threads and 121 MB for the whole server, down from 621 threads and 1,355 MB, with `start`'s default `:max-threads` of 100. On Linux, 10,000 open pages took the server from 4 threads to 5. A page whose browser has stopped reading is dropped rather than waited for. (On macOS, SBCL waits on sockets with `select(2)`, so a Hunchentoot server there still holds about 1,000 connections at most.)
 - **The admin names tables properly**: "Shelves", "Categories" and "People", not "Shelfs", "Categorys" and "Persons". `define-description` takes `:label` and `:plural` for names the rules get wrong; `description-label`, `description-plural` and `english-plural` are exported.

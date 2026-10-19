@@ -244,3 +244,66 @@
     (dolist (suffix '("" "-wal" "-shm"))
       (uiop:delete-file-if-exists (concatenate 'string (namestring file) suffix)))))
 ;; ⇒ (T 12 NIL)
+
+;;;; Example: littoral.jobs:note-job-progress littoral.jobs:durable-job-progress-fraction
+;;; `:fraction` says how far the job has got, from 0 to 1, for a progress bar such as DURABLE-JOB-VIEW's.
+(littoral.jobs:define-job (import-rows :queue "examples") (rows)
+  (dotimes (i rows)
+    (littoral.jobs:note-job-progress (format nil "Row ~D of ~D" (1+ i) rows) :fraction (/ (1+ i) rows))))
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.jobs:create-job-tables)
+  (unwind-protect
+       (let ((id (littoral.jobs:enqueue-job (list 'import-rows 4))))
+         (littoral.jobs:run-due-jobs :queues '("examples"))
+         (let ((job (littoral.jobs:find-durable-job id)))
+           (list (littoral.jobs:durable-job-progress job)
+                 (littoral.jobs:durable-job-progress-fraction job)
+                 (littoral.jobs:durable-job-status job))))
+    (littoral.jobs:drop-job-tables)))
+;; ⇒ ("Row 4 of 4" 1.0d0 "done")
+
+;;;; Example: littoral.jobs:cancel-durable-job littoral.jobs:job-cancelled littoral.jobs:durable-job-cancel-requested-p
+;;; A running job can't be stopped from outside at any moment.  CANCEL-DURABLE-JOB asks it to stop and answers :REQUESTED; the job then ends at its next NOTE-JOB-PROGRESS, which signals JOB-CANCELLED, and is marked cancelled.  Here the job asks for itself, as someone pressing Cancel meanwhile would.
+(defvar *answers* '())
+(littoral.jobs:define-job (long-export :queue "examples") ()
+  (dotimes (part 1000)
+    (when (= part 3)
+      (let ((id (littoral.jobs:durable-job-id littoral.jobs:*durable-job*)))
+        (push (littoral.jobs:cancel-durable-job id) *answers*)
+        (push (littoral.jobs:durable-job-cancel-requested-p (littoral.jobs:find-durable-job id)) *answers*)))
+    (littoral.jobs:note-job-progress (format nil "Part ~D" part))))
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.jobs:create-job-tables)
+  (unwind-protect
+       (let ((id (littoral.jobs:enqueue-job (list 'long-export))))
+         (littoral.jobs:run-due-jobs :queues '("examples"))
+         (let ((job (littoral.jobs:find-durable-job id)))
+           (list (reverse *answers*)
+                 (littoral.jobs:durable-job-status job)
+                 (littoral.jobs:durable-job-progress job))))
+    (littoral.jobs:drop-job-tables)))
+;; ⇒ ((:REQUESTED T) "cancelled" "Part 2")
+
+;;;; Example: littoral.jobs:durable-job-view littoral.jobs:durable-job-view-id littoral.jobs:*durable-jobs-channel*
+;;; A job's progress bar, status and Cancel button.  The view subscribes to *DURABLE-JOBS-CHANNEL*, so its page listens for pushes, and jobs run in this process publish it as they change.
+(littoral.jobs:define-job (build-export :queue "examples") ()
+  (littoral.jobs:note-job-progress "Exported" :fraction 1))
+(defvar *export-id* nil)
+(defclass export-page (component)
+  ((view :initform (make-instance 'littoral.jobs:durable-job-view :id *export-id*) :reader view)))
+(defmethod children ((self export-page)) (list (view self)))
+(defmethod render ((self export-page)) (render-component (view self)))
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.jobs:create-job-tables)
+  (unwind-protect
+       (with-fresh-applications (("/export" 'export-page :mode :deployment))
+         (setf *export-id* (littoral.jobs:enqueue-job (list 'build-export)))
+         (let ((b (make-instance 'browser)))
+           (visit b "/export")
+           (let ((waiting (body-text b))
+                 (listens (and (search "data-lt-events=" (browser-html b)) t)))
+             (littoral.jobs:run-due-jobs :queues '("examples"))
+             (visit b (browser-url b))
+             (list waiting listens (body-text b)))))
+    (littoral.jobs:drop-job-tables)))
+;; ⇒ ("Waiting to start. Cancel" T "Done.")
