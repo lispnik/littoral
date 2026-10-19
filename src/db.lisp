@@ -34,7 +34,7 @@ optimistic locking and migrations.")
            #:persistent #:object-id #:object-version
            #:define-table #:find-table #:table-name #:table-class #:create-table #:drop-table
            #:db-find #:db-select #:db-count #:db-insert #:db-update #:db-save #:db-delete
-           #:db-reload #:db-query #:db-execute #:db-search #:search-condition #:highlight-matches #:with-transaction #:transactional #:using-database
+           #:db-reload #:db-query #:db-execute #:db-search #:search-condition #:highlight-matches #:with-transaction #:transactional #:after-commit #:using-database
            #:stale-object #:stale-object-object
            #:reference-field #:reference-class #:object-label #:sql-type #:to-sql #:from-sql
            ;; Migrations
@@ -629,16 +629,36 @@ back if it signals.  Inside another on the same database, just BODY.
 Returns BODY's value."
   `(call-with-transaction (lambda () ,@body)))
 
+(defvar *after-commit* nil
+  "A list (one cons, shared by the transaction) of functions to call once
+the open transaction commits, newest first; NIL outside a transaction.")
+
+(defun after-commit (function)
+  "Call FUNCTION, of no arguments, once the transaction open on *DATABASE*
+in this thread commits, or at once when none is open; if the transaction is
+rolled back it is never called.  For telling others of a change, such as
+publishing a channel whose subscribers read the database, which must not
+happen before they can see it."
+  (if (and *after-commit* (equal *in-transaction* *database*))
+      (push function (car *after-commit*))
+      (funcall function))
+  (values))
+
 (defun call-with-transaction (thunk)
-  "Call THUNK in a transaction unless one is already open on this database."
+  "Call THUNK in a transaction unless one is already open on this database,
+then what it asked AFTER-COMMIT to call."
   (if (equal *in-transaction* *database*)
       (funcall thunk)
-      (let ((*in-transaction* *database*))
-        (timing-metric ("littoral_db_transaction_seconds" (list (database-label)))
-          (if (eq (driver) :sqlite3)
-              (call-with-sqlite-transaction thunk)
-              (dbi:with-transaction (database-connection)
-                (funcall thunk)))))))
+      (let ((*after-commit* (list '())))
+        (multiple-value-prog1
+            (let ((*in-transaction* *database*))
+              (timing-metric ("littoral_db_transaction_seconds" (list (database-label)))
+                (if (eq (driver) :sqlite3)
+                    (call-with-sqlite-transaction thunk)
+                    (dbi:with-transaction (database-connection)
+                      (funcall thunk)))))
+          (dolist (function (reverse (car *after-commit*)))
+            (funcall function))))))
 
 (defun call-with-sqlite-transaction (thunk)
   "Call THUNK in a SQLite transaction that takes the write lock at once.  A

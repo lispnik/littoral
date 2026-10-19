@@ -14,7 +14,9 @@
 ;;;; and ends them.  Editors (a role an admin grants) may edit posts (a
 ;;;; permission).  /examples/accounts is the same page signing in against
 ;;;; an existing "accounts" table with bcrypt hashes, through
-;;;; MAKE-SQL-USER-STORE.  Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to offer
+;;;; MAKE-SQL-USER-STORE.  The bell beside a signed-in user's name counts
+;;;; their notifications (littoral/notifications), which arrive by server
+;;;; push.  Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to offer
 ;;;; signing in with Google too (register .../examples/members/oauth/google
 ;;;; as the redirect URI with Google).
 
@@ -53,9 +55,13 @@
 
 ;;; The page
 
-(defclass account-box (component) ()
-  (:documentation "Who is signed in, with a link to sign in or out.  The sign-in
-form shows in its place, so the rest of the page stays in view."))
+(defclass account-box (component)
+  ((bell :initform (make-instance 'littoral.notifications:notification-bell) :reader account-bell))
+  (:documentation "Who is signed in, their notifications, and a link to sign
+in or out.  The sign-in form shows in its place, so the rest of the page
+stays in view."))
+
+(defmethod children ((self account-box)) (list (account-bell self)))
 
 (defmethod render ((self account-box))
   (let ((user (littoral.auth:current-user)))
@@ -63,6 +69,8 @@ form shows in its place, so the rest of the page stays in view."))
       (if user
           (progn (text "Signed in as ") (strong () (text (littoral.auth:user-name user)))
                  (when (littoral.auth:has-role-p :admin user) (text " (admin)"))
+                 (text " ")
+                 (render-component (account-bell self))
                  (text " · ")
                  (littoral.auth:sign-out-link))
           (progn (text "Not signed in. ")
@@ -71,6 +79,11 @@ form shows in its place, so the rest of the page stays in view."))
 
 (defclass members-news (littoral.auth:restricted component) ()
   (:documentation "For anyone signed in."))
+
+(littoral.jobs:define-job (delayed-notification :queue "demo") (user-id message)
+  "Notify user USER-ID of MESSAGE: from the job runner's thread, which the
+bell on their open pages hears of by server push."
+  (littoral.notifications:notify-user user-id message :kind :success))
 
 (defmethod render ((self members-news))
   (p () "Welcome back. This is a restricted component: until someone signs in, a prompt shows in its place.")
@@ -83,7 +96,15 @@ form shows in its place, so the rest of the page stays in view."))
                              ;; A permission, which editors and admins have.
                              (littoral.auth:require-permission :edit-posts)
                              (toast "You may edit posts." :kind :success)))
-          "Edit a post (needs the edit-posts permission)")))
+          "Edit a post (needs the edit-posts permission)"))
+  (p () (anchor (:callback (lambda ()
+                             (littoral.jobs:enqueue-job
+                              (list 'delayed-notification
+                                    (littoral.auth:user-id (littoral.auth:current-user))
+                                    "Here is the notification you asked for.")
+                              :in 3)
+                             (toast "In three seconds, the bell will ring.")))
+          "Send me a notification in three seconds")))
 
 (defclass sessions-box (littoral.auth:restricted component)
   ((token :initform nil :accessor new-token :documentation "An API token just made, shown once."))
@@ -140,6 +161,11 @@ form shows in its place, so the rest of the page stays in view."))
   (if (member :editor (littoral.auth:user-roles user))
       (littoral.auth:revoke-role user :editor)
       (littoral.auth:grant-role user :editor))
+  ;; Waits for them until they read it; their open pages hear of it at once.
+  (littoral.notifications:notify-user
+   user (format nil "~A ~:[removed you as an editor~;made you an editor: you may edit posts now~]."
+                (littoral.auth:user-name (littoral.auth:current-user))
+                (member :editor (littoral.auth:user-roles user))))
   (toast (format nil "~A is ~:[no longer~;now~] an editor." (littoral.auth:user-name user)
                  (member :editor (littoral.auth:user-roles user)))))
 
@@ -400,6 +426,7 @@ and asks to go back to the members demo's own OAuth address."
 
 (defun seed ()
   (littoral.auth:create-auth-tables)
+  (littoral.notifications:create-notification-tables)
   (unless (littoral.auth:find-user "ada")
     (littoral.auth:add-user "ada" "ada@example.org" "correct horse battery" :roles '(:admin)))
   (unless (littoral.auth:find-user "bob")

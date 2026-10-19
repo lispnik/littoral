@@ -111,8 +111,22 @@ so you can bookmark [[Littoral]] or [[Sandbox]].~%~%- Click *Edit* to change a p
 
 (defclass wiki-history (component)
   ((name :initarg :name :reader history-page)
-   (shown :initform nil :accessor history-shown))
-  (:documentation "Lists a page's revisions, with view and revert."))
+   (shown :initform nil :accessor history-shown)
+   (changes :initform nil :accessor history-changes :documentation "A diff-view of one revision's changes, or NIL."))
+  (:documentation "Lists a page's revisions, with view, what changed, and revert."))
+
+(defmethod states ((self wiki-history)) (list self))
+
+(defmethod children ((self wiki-history))
+  (and (history-changes self) (list (history-changes self))))
+
+(defun show-changes (history older newer n)
+  "Show what revision N, NEWER, changed from OLDER (NIL for none)."
+  (setf (history-shown history) nil
+        (history-changes history)
+        (make-instance 'diff-view :old (if older (revision-text older) "") :new (revision-text newer)
+                                  :old-label (if older (format nil "#~D" (1- n)) "Nothing")
+                                  :new-label (format nil "#~D" n))))
 
 (defmethod render ((self wiki-history))
   (let* ((name (history-page self))
@@ -128,7 +142,13 @@ so you can bookmark [[Littoral]] or [[Sandbox]].~%~%- Click *Edit* to change a p
                    (td () (text n))
                    (td () (text (format-time (revision-time revision))))
                    (td () (text (revision-summary revision)))
-                   (td () (anchor (:callback (lambda () (setf (history-shown self) revision))) "view")
+                   (td () (anchor (:callback (lambda () (setf (history-shown self) revision
+                                                               (history-changes self) nil)))
+                            "view")
+                     (text " ")
+                     (anchor (:callback (lambda () (show-changes self (nth (- count n -1) revisions) revision n))
+                              :aria-label (format nil "Changes in #~D" n))
+                       "changes")
                      (unless (= n count)
                        (text " ")
                        (anchor (:callback (lambda ()
@@ -138,6 +158,8 @@ so you can bookmark [[Littoral]] or [[Sandbox]].~%~%- Click *Edit* to change a p
                          "revert")))))))
     (when (history-shown self)
       (div (:class "wiki-preview") (render-markup (revision-text (history-shown self)) nil)))
+    (when (history-changes self)
+      (render-component (history-changes self)))
     (p () (anchor (:callback (lambda () (answer self nil))) "Back to the page"))))
 
 (defun format-time (universal-time)

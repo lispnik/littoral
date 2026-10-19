@@ -360,6 +360,7 @@ Shows everything: put it where only those who may see it can."))
    (message :initform nil :accessor admin-message)
    (audit :initform (make-instance 'littoral.audit:audit-log-view) :reader admin-audit-view)
    (jobs :reader admin-jobs-view)
+   (palette :reader admin-palette)
    (main :reader admin-main))
   (:documentation "The root of an admin application: header, messages and
 menu stay; pages replace the main area."))
@@ -373,7 +374,8 @@ page shown in its place."))
   (setf (admin-selected self) (first (admin-classes))
         (slot-value self 'main) (make-instance 'main-area :admin self)
         (slot-value self 'jobs) (make-instance 'job-queue-view
-                                               :on-change (lambda (message) (setf (admin-message self) message)))))
+                                               :on-change (lambda (message) (setf (admin-message self) message)))
+        (slot-value self 'palette) (make-instance 'command-palette :commands (lambda () (admin-commands self)))))
 
 (defmethod states ((self admin))
   (list self))
@@ -384,7 +386,7 @@ page shown in its place."))
       (setf (gethash class (admin-lists admin)) (make-instance 'class-list :class class :admin admin))))
 
 (defmethod children ((self admin))
-  (list (admin-main self)))
+  (list (admin-palette self) (admin-main self)))
 
 (defmethod children ((self main-area))
   (let ((admin (area-admin self)))
@@ -502,20 +504,44 @@ name → \"old → new\", passwords shown only as changed."
                                  "Someone else changed or deleted this record meanwhile; nothing was deleted.")))
                        (home (admin-main admin))))))
 
+(defun select-admin-page (admin page)
+  "Show PAGE, a class or :AUDIT-LOG or :JOB-QUEUE, in ADMIN's main area."
+  (home (admin-main admin))
+  (setf (admin-selected admin) page
+        (admin-message admin) nil))
+
+(defun admin-commands (admin)
+  "The commands ADMIN's palette offers: each table's list and a new record
+in it, and the audit log and job queue when they are shown."
+  (append
+   (loop for class in (admin-classes)
+         collect (let ((class class))
+                   (palette-command (translate "Go to ~A" (class-label class t))
+                                    (lambda () (select-admin-page admin class))
+                                    :group (translate "Tables")
+                                    :keywords (list (string-downcase class)))))
+   (loop for class in (admin-classes)
+         collect (let ((class class))
+                   (palette-command (translate "New ~A" (string-downcase (class-label class)))
+                                    (lambda () (select-admin-page admin class) (create-object admin class))
+                                    :group (translate "Create"))))
+   (when (littoral.audit:audit-enabled-p)
+     (list (palette-command (translate "Audit log") (lambda () (select-admin-page admin :audit-log)))))
+   (when (littoral.jobs:job-tables-p)
+     (list (palette-command (translate "Job queue") (lambda () (select-admin-page admin :job-queue)))))))
+
 (defun menu-entry (admin page label)
   "A menu entry for one of ADMIN's own pages, such as the audit log."
   (let ((current (eq (admin-selected admin) page)))
     (li (:class (when current "lt-active"))
       (anchor (:aria-current (when current "page")
-               :callback (lambda ()
-                           (home (admin-main admin))
-                           (setf (admin-selected admin) page
-                                 (admin-message admin) nil)))
+               :callback (lambda () (select-admin-page admin page)))
         (text label)))))
 
 (defmethod render ((self admin))
   (header (:class "admin-header")
     (strong () (text (or (application-title *application*) "Admin")))
+    (render-component (admin-palette self))
     (let ((user (littoral.auth:current-user)))
       (when user
         (span (:class "admin-user") (text (littoral.auth:user-name user)) " · " (littoral.auth:sign-out-link)))))
@@ -528,10 +554,7 @@ name → \"old → new\", passwords shown only as changed."
           (let ((class class))
             (li (:class (when (eq class (admin-selected self)) "lt-active"))
               (anchor (:aria-current (when (eq class (admin-selected self)) "page")
-                       :callback (lambda ()
-                                   (home (admin-main self))
-                                   (setf (admin-selected self) class
-                                         (admin-message self) nil)))
+                       :callback (lambda () (select-admin-page self class)))
                 (text (class-label class t))))))
         (when (littoral.audit:audit-enabled-p)
           (menu-entry self :audit-log (translate "Audit log")))

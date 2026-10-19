@@ -23,6 +23,18 @@
   ("Log in" "Se connecter") ("Close" "Fermer") ("Save" "Enregistrer") ("Menu" "Menu") ("Uploading" "Envoi en cours") ("or drop a file here" "ou déposez un fichier ici") ("~A must be a time, like 09:30." "~A doit être une heure, comme 09:30.") ("~A needs both a first and a last day." "~A demande un premier et un dernier jour.") ("~A must not end before it starts." "~A ne doit pas finir avant de commencer.") ("From" "Du") ("To" "Au") ("Remove ~A" "Retirer ~A") ("Separate tags with commas." "Séparez les étiquettes par des virgules.") ("~A can have at most ~D." "~A ne peut en avoir que ~D au plus.") ("~A can only be ~{~A~^, ~}." "~A ne peut être que ~{~A~^, ~}.") ("Download CSV" "Télécharger en CSV") ("nothing" "rien") ("Someone else changed this to “~A” meanwhile. Save again to replace it." "Quelqu’un d’autre a entre-temps remplacé ceci par « ~A ». Enregistrez à nouveau pour le remplacer.") ("Someone else changed this row meanwhile; nothing was saved. Save again to replace their changes." "Quelqu’un d’autre a modifié cette ligne entre-temps ; rien n’a été enregistré. Enregistrez à nouveau pour remplacer ses modifications.") ("Someone else deleted this meanwhile; nothing was saved." "Quelqu’un d’autre a supprimé ceci entre-temps ; rien n’a été enregistré.") ("Someone else changed this meanwhile; nothing was saved." "Quelqu’un d’autre a modifié ceci entre-temps ; rien n’a été enregistré.") ("~D person here" "~D personne ici" "~D personnes ici") ("You" "Vous") ("A guest" "Un invité") ("~D guest" "~D invité" "~D invités") ("Breadcrumbs" "Fil d’Ariane") ("Edit ~A" "Modifier : ~A") ("Create" "Créer")
   ("Your session expired, so you are starting again from the beginning."
    "Votre session a expiré : vous recommencez depuis le début.")
+  ;; Lazy panels, differences, command palettes, notifications
+  ("Show it" "L’afficher") ("Loading…" "Chargement…") ("Removed:" "Supprimé :") ("Added:" "Ajouté :")
+  ("~D unchanged line" "~D ligne inchangée" "~D lignes inchangées") ("Show all" "Tout afficher") ("Line" "Ligne")
+  ("Before" "Avant") ("After" "Après") ("No differences." "Aucune différence.")
+  ("~D line added" "~D ligne ajoutée" "~D lignes ajoutées") ("~D line removed" "~D ligne supprimée" "~D lignes supprimées")
+  ("Inline" "Unifié") ("Side by side" "Côte à côte")
+  ("~D command" "~D commande" "~D commandes") ("No matching commands." "Aucune commande ne correspond.")
+  ("Commands" "Commandes") ("Search commands" "Rechercher une commande") ("Go to ~A" "Aller à : ~A")
+  ("~D unread" "~D non lue" "~D non lues") ("just now" "à l’instant")
+  ("~D minute ago" "il y a ~D minute" "il y a ~D minutes") ("~D hour ago" "il y a ~D heure" "il y a ~D heures")
+  ("Notifications" "Notifications") ("Mark all as read" "Tout marquer comme lu") ("No notifications." "Aucune notification.")
+  ("Unread:" "Non lue :")
   ;; Widgets
   ("Pages" "Pages") ("« Previous" "« Précédent") ("Next »" "Suivant »") ("Tabs" "Onglets")
   ("Collapse" "Replier") ("Expand" "Déplier") ("Move up" "Monter") ("Move down" "Descendre")
@@ -124,6 +136,18 @@ Le lien ne sert qu'une fois, pendant une heure.  Si ce n'était pas vous, ignore
   ("Log in" "Anmelden") ("Close" "Schließen") ("Save" "Speichern") ("Menu" "Menü") ("Uploading" "Wird hochgeladen") ("or drop a file here" "oder eine Datei hier ablegen") ("~A must be a time, like 09:30." "~A muss eine Uhrzeit sein, etwa 09:30.") ("~A needs both a first and a last day." "~A braucht einen ersten und einen letzten Tag.") ("~A must not end before it starts." "~A darf nicht vor dem Beginn enden.") ("From" "Von") ("To" "Bis") ("Remove ~A" "~A entfernen") ("Separate tags with commas." "Schlagwörter mit Kommas trennen.") ("~A can have at most ~D." "~A darf höchstens ~D haben.") ("~A can only be ~{~A~^, ~}." "~A kann nur ~{~A~^, ~} sein.") ("Download CSV" "Als CSV herunterladen") ("nothing" "nichts") ("Someone else changed this to “~A” meanwhile. Save again to replace it." "Jemand anderes hat dies inzwischen in „~A“ geändert. Speichern Sie erneut, um es zu ersetzen.") ("Someone else changed this row meanwhile; nothing was saved. Save again to replace their changes." "Jemand anderes hat diese Zeile inzwischen geändert; nichts wurde gespeichert. Speichern Sie erneut, um die Änderungen zu ersetzen.") ("Someone else deleted this meanwhile; nothing was saved." "Jemand anderes hat dies inzwischen gelöscht; nichts wurde gespeichert.") ("Someone else changed this meanwhile; nothing was saved." "Jemand anderes hat dies inzwischen geändert; nichts wurde gespeichert.") ("~D person here" "~D Person hier" "~D Personen hier") ("You" "Sie") ("A guest" "Ein Gast") ("~D guest" "~D Gast" "~D Gäste") ("Breadcrumbs" "Brotkrümelpfad") ("Edit ~A" "~A bearbeiten") ("Create" "Anlegen")
   ("Your session expired, so you are starting again from the beginning."
    "Ihre Sitzung ist abgelaufen, daher beginnen Sie wieder von vorn.")
+  ;; Lazy panels, differences, command palettes, notifications
+  ("Show it" "Anzeigen") ("Loading…" "Wird geladen…") ("Removed:" "Entfernt:") ("Added:" "Hinzugefügt:")
+  ("~D unchanged line" "~D unveränderte Zeile" "~D unveränderte Zeilen") ("Show all" "Alle anzeigen") ("Line" "Zeile")
+  ("Before" "Vorher") ("After" "Nachher") ("No differences." "Keine Unterschiede.")
+  ("~D line added" "~D Zeile hinzugefügt" "~D Zeilen hinzugefügt") ("~D line removed" "~D Zeile entfernt" "~D Zeilen entfernt")
+  ("Inline" "Einspaltig") ("Side by side" "Nebeneinander")
+  ("~D command" "~D Befehl" "~D Befehle") ("No matching commands." "Keine passenden Befehle.")
+  ("Commands" "Befehle") ("Search commands" "Befehle suchen") ("Go to ~A" "Zu ~A")
+  ("~D unread" "~D ungelesen" "~D ungelesen") ("just now" "gerade eben")
+  ("~D minute ago" "vor ~D Minute" "vor ~D Minuten") ("~D hour ago" "vor ~D Stunde" "vor ~D Stunden")
+  ("Notifications" "Benachrichtigungen") ("Mark all as read" "Alle als gelesen markieren") ("No notifications." "Keine Benachrichtigungen.")
+  ("Unread:" "Ungelesen:")
   ;; Widgets
   ("Pages" "Seiten") ("« Previous" "« Zurück") ("Next »" "Weiter »") ("Tabs" "Reiter")
   ("Collapse" "Zuklappen") ("Expand" "Aufklappen") ("Move up" "Nach oben") ("Move down" "Nach unten")
@@ -225,6 +249,18 @@ Der Link funktioniert einmal, eine Stunde lang.  Falls Sie das nicht waren, igno
   ("Log in" "Entrar") ("Close" "Cerrar") ("Save" "Guardar") ("Menu" "Menú") ("Uploading" "Subiendo") ("or drop a file here" "o suelte un archivo aquí") ("~A must be a time, like 09:30." "~A debe ser una hora, como 09:30.") ("~A needs both a first and a last day." "~A necesita un primer y un último día.") ("~A must not end before it starts." "~A no debe terminar antes de empezar.") ("From" "Desde") ("To" "Hasta") ("Remove ~A" "Quitar ~A") ("Separate tags with commas." "Separe las etiquetas con comas.") ("~A can have at most ~D." "~A puede tener como máximo ~D.") ("~A can only be ~{~A~^, ~}." "~A solo puede ser ~{~A~^, ~}.") ("Download CSV" "Descargar CSV") ("nothing" "nada") ("Someone else changed this to “~A” meanwhile. Save again to replace it." "Otra persona cambió esto a «~A» mientras tanto. Guarde de nuevo para reemplazarlo.") ("Someone else changed this row meanwhile; nothing was saved. Save again to replace their changes." "Otra persona cambió esta fila mientras tanto; no se guardó nada. Guarde de nuevo para reemplazar sus cambios.") ("Someone else deleted this meanwhile; nothing was saved." "Otra persona eliminó esto mientras tanto; no se guardó nada.") ("Someone else changed this meanwhile; nothing was saved." "Otra persona cambió esto mientras tanto; no se guardó nada.") ("~D person here" "~D persona aquí" "~D personas aquí") ("You" "Usted") ("A guest" "Un invitado") ("~D guest" "~D invitado" "~D invitados") ("Breadcrumbs" "Ruta de navegación") ("Edit ~A" "Editar: ~A") ("Create" "Crear")
   ("Your session expired, so you are starting again from the beginning."
    "Su sesión ha caducado, así que empieza de nuevo desde el principio.")
+  ;; Lazy panels, differences, command palettes, notifications
+  ("Show it" "Mostrarlo") ("Loading…" "Cargando…") ("Removed:" "Eliminado:") ("Added:" "Añadido:")
+  ("~D unchanged line" "~D línea sin cambios" "~D líneas sin cambios") ("Show all" "Mostrar todo") ("Line" "Línea")
+  ("Before" "Antes") ("After" "Después") ("No differences." "No hay diferencias.")
+  ("~D line added" "~D línea añadida" "~D líneas añadidas") ("~D line removed" "~D línea eliminada" "~D líneas eliminadas")
+  ("Inline" "Unificado") ("Side by side" "Lado a lado")
+  ("~D command" "~D comando" "~D comandos") ("No matching commands." "Ningún comando coincide.")
+  ("Commands" "Comandos") ("Search commands" "Buscar comandos") ("Go to ~A" "Ir a ~A")
+  ("~D unread" "~D sin leer" "~D sin leer") ("just now" "ahora mismo")
+  ("~D minute ago" "hace ~D minuto" "hace ~D minutos") ("~D hour ago" "hace ~D hora" "hace ~D horas")
+  ("Notifications" "Notificaciones") ("Mark all as read" "Marcar todo como leído") ("No notifications." "No hay notificaciones.")
+  ("Unread:" "Sin leer:")
   ;; Widgets
   ("Pages" "Páginas") ("« Previous" "« Anterior") ("Next »" "Siguiente »") ("Tabs" "Pestañas")
   ("Collapse" "Contraer") ("Expand" "Expandir") ("Move up" "Subir") ("Move down" "Bajar")

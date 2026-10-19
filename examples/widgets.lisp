@@ -1,4 +1,4 @@
-;;;; widgets.lisp — tabs, navigation, breadcrumbs, in-place editing, a tree, autocomplete, a sortable list
+;;;; widgets.lisp — tabs, a command palette, breadcrumbs, a tree, autocomplete, a sortable list, lazy panels, diffs
 
 (in-package #:littoral-examples)
 
@@ -312,8 +312,69 @@ Some *emphasis*, some **strong** text and `code`.
   (render-component (menus-faq self))
   (render-component (menus-more self)))
 
+
+;;; Tools: a lazy panel and the differences between two texts
+
+(defvar *slow-seconds* 0.8 "How long the lazy panel's content pretends to take.")
+
+(defclass primes-note (component)
+  ((primes :initarg :primes :reader note-primes))
+  (:documentation "Primes, which took a while to find."))
+
+(defmethod render ((self primes-note))
+  (p () (text (format nil "The first ~D primes, found after the page arrived: ~{~D~^, ~}."
+                      (length (note-primes self)) (note-primes self)))))
+
+(defun first-primes (count)
+  "The first COUNT primes."
+  (loop with found = '()
+        for n from 2
+        while (< (length found) count)
+        when (loop for p in found never (zerop (mod n p))) do (setf found (append found (list n)))
+        finally (return found)))
+
+(defclass tools-section (component)
+  ((lazy :initform (make-instance 'lazy-panel
+                                  :placeholder "Finding primes…"
+                                  :content (lambda ()
+                                             (sleep *slow-seconds*)
+                                             (make-instance 'primes-note :primes (first-primes 20))))
+         :reader tools-lazy)
+   (old :initform (format nil "Shopping:~%apples~%bread~%milk~%cheese~%") :accessor tools-old)
+   (new :initform (format nil "Shopping:~%apples~%brown bread~%cheese~%eggs~%") :accessor tools-new)
+   (diff :initform (make-instance 'diff-view :old-label "Monday" :new-label "Tuesday") :reader tools-diff))
+  (:documentation "A lazy panel, and two texts compared."))
+
+(defmethod initialize-instance :after ((self tools-section) &key)
+  (setf (diff-view-old (tools-diff self)) (tools-old self)
+        (diff-view-new (tools-diff self)) (tools-new self)))
+
+(defmethod children ((self tools-section)) (list (tools-lazy self) (tools-diff self)))
+
+(defmethod states ((self tools-section)) (list self))
+
+(defmethod render ((self tools-section))
+  (h2 () "Lazy panel")
+  (p () "This part of the page was left out when it was sent, then filled in over AJAX.")
+  (render-component (tools-lazy self))
+  (h2 () "Differences")
+  (form (:class "tools-texts")
+    (div (:class "lt-field")
+      (label (:for "diff-old") "Monday's list")
+      (text-area (:id "diff-old" :rows 6 :value (tools-old self) :callback (lambda (v) (setf (tools-old self) v)))))
+    (div (:class "lt-field")
+      (label (:for "diff-new") "Tuesday's list")
+      (text-area (:id "diff-new" :rows 6 :value (tools-new self) :callback (lambda (v) (setf (tools-new self) v)))))
+    (div (:class "lt-buttons")
+      (submit-button (:callback (lambda ()
+                                  (setf (diff-view-old (tools-diff self)) (tools-old self)
+                                        (diff-view-new (tools-diff self)) (tools-new self))))
+        "Compare")))
+  (render-component (tools-diff self)))
+
 (defclass widget-demo (component)
   ((navigation :reader demo-navigation)
+   (palette :reader demo-palette)
    (chosen-symbol :initform nil :accessor chosen-symbol)
    (selected-condition :initform nil :accessor selected-condition)
    (tasks :reader demo-tasks))
@@ -401,9 +462,37 @@ Some *emphasis*, some **strong** text and `code`.
                      (cons "Charts" (make-instance 'charts-section))
                      (cons "Calendar" (make-instance 'calendar-section))
                      (cons "Kanban" (make-instance 'kanban-section))
-                     (cons "Markdown" (make-instance 'markdown-section))))))
+                     (cons "Markdown" (make-instance 'markdown-section))
+                     (cons "Tools" (make-instance 'tools-section)))))
+  (setf (slot-value self 'palette)
+        (make-instance 'command-palette
+                       :commands (lambda () (widget-commands self))
+                       :search (lambda (query)
+                                 ;; Common Lisp symbols, opened in the Autocomplete tab.
+                                 (loop for symbol in (cl-symbols-starting query)
+                                       repeat 3
+                                       collect (let ((symbol symbol))
+                                                 (palette-command (format nil "Look up ~(~A~)" symbol)
+                                                                  (lambda ()
+                                                                    (select-tab (demo-navigation self) "Autocomplete")
+                                                                    (setf (chosen-symbol self) symbol))
+                                                                  :group "Symbols")))))))
 
-(defmethod children ((self widget-demo)) (list (demo-navigation self)))
+(defun widget-commands (demo)
+  "The palette's commands: a tab to show, or another example to open."
+  (append (loop for (label) in (panel-tabs (demo-navigation demo))
+                collect (let ((label label))
+                          (palette-command (format nil "Show ~A" label)
+                                           (lambda () (select-tab (demo-navigation demo) label))
+                                           :group "Tabs")))
+          (loop for (label path keywords) in '(("Counter" "/examples/counter" ("click"))
+                                               ("Wiki" "/examples/wiki" ("pages" "history"))
+                                               ("Report" "/examples/report" ("table" "elements"))
+                                               ("Chat" "/examples/chat" ("room" "talk")))
+                collect (palette-command (format nil "Open the ~A example" label) (url-for path)
+                                         :group "Examples" :keywords keywords))))
+
+(defmethod children ((self widget-demo)) (list (demo-palette self) (demo-navigation self)))
 
 (defmethod states ((self widget-demo)) (list self))
 
@@ -411,8 +500,15 @@ Some *emphasis*, some **strong** text and `code`.
   ".markdown-demo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; }
 .markdown-demo textarea { width: 100%; font-family: ui-monospace, monospace; }
 .markdown-preview { border: 1px solid var(--lt-border); border-radius: 6px; padding: .6rem; }
-@media (max-width: 40rem) { .markdown-demo { grid-template-columns: minmax(0, 1fr); } }")
+@media (max-width: 40rem) { .markdown-demo { grid-template-columns: minmax(0, 1fr); } }
+.widgets-heading { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.tools-texts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 1rem; }
+.tools-texts .lt-buttons { grid-column: 1 / -1; }
+.tools-texts textarea { width: 100%; font-family: ui-monospace, monospace; }
+@media (max-width: 40rem) { .tools-texts { grid-template-columns: minmax(0, 1fr); } }")
 
 (defmethod render ((self widget-demo))
-  (h1 () "Widgets")
+  (div (:class "widgets-heading")
+    (h1 () "Widgets")
+    (render-component (demo-palette self)))
   (render-component (demo-navigation self)))

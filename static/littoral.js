@@ -547,7 +547,8 @@
   document.addEventListener("keydown", function (event) {
     var menu = event.target.closest ? event.target.closest("details.lt-dropdown") : null;
     if (!menu) return;
-    var items = Array.prototype.slice.call(menu.querySelectorAll(":scope > ul a, :scope > ul button"));
+    var items = Array.prototype.slice.call(menu.querySelectorAll(
+      ":scope > ul a, :scope > ul button, :scope > .lt-dropdown-panel a, :scope > .lt-dropdown-panel button"));
     var at = items.indexOf(document.activeElement);
     if (event.key === "Escape" && menu.open) {
       menu.removeAttribute("open");
@@ -630,6 +631,81 @@
     xhr.send(data);
   });
 
+  // Lazy panels (data-lt-lazy): ask for their content once the page is
+  // here, or, with data-lt-lazy-visible, once they're scrolled into view.
+  function loadLazy(el) {
+    if (el.hasAttribute("data-lt-lazy-sent")) return;
+    el.setAttribute("data-lt-lazy-sent", "");
+    trigger(el, "data-lt-lazy", null);
+  }
+  var lazyWatcher = window.IntersectionObserver ? new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) { lazyWatcher.unobserve(entry.target); loadLazy(entry.target); }
+    });
+  }) : null;
+  function scanLazy() {
+    document.querySelectorAll("[data-lt-lazy]:not([data-lt-lazy-sent])").forEach(function (el) {
+      if (el.hasAttribute("data-lt-lazy-visible") && lazyWatcher) lazyWatcher.observe(el);
+      else loadLazy(el);
+    });
+  }
+  document.addEventListener("littoral:updated", scanLazy);
+
+  // Command palettes (details.lt-palette): Ctrl-K or ⌘K opens the one with
+  // the shortcut; the arrow keys go from the box through the results, Enter
+  // in the box follows the first, and Escape or a click elsewhere closes it.
+  var mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+  function setupPalettes() {
+    if (mac) document.querySelectorAll(".lt-palette-key").forEach(function (key) { key.textContent = "⌘K"; });
+  }
+  function paletteLinks(palette) {
+    return Array.prototype.slice.call(palette.querySelectorAll(".lt-palette-results a"));
+  }
+  function openPalette(palette) {
+    palette.setAttribute("open", "");
+    var box = palette.querySelector("input");
+    if (box) { box.focus(); box.select(); }
+  }
+  document.addEventListener("keydown", function (event) {
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && (event.key === "k" || event.key === "K")) {
+      var palette = document.querySelector("details.lt-palette[data-lt-palette=shortcut]");
+      if (!palette) return;
+      event.preventDefault();
+      if (palette.open) palette.removeAttribute("open"); else openPalette(palette);
+      return;
+    }
+    var within = event.target.closest ? event.target.closest("details.lt-palette") : null;
+    if (!within) return;
+    var links = paletteLinks(within);
+    var at = links.indexOf(document.activeElement);
+    var box = within.querySelector("input");
+    if (event.key === "Escape") {
+      event.preventDefault();
+      within.removeAttribute("open");
+      within.querySelector("summary").focus();
+    } else if (event.key === "ArrowDown" && links.length) {
+      event.preventDefault();
+      links[at < 0 ? 0 : Math.min(at + 1, links.length - 1)].focus();
+    } else if (event.key === "ArrowUp" && at >= 0) {
+      event.preventDefault();
+      if (at === 0) box.focus(); else links[at - 1].focus();
+    } else if (event.key === "Enter" && event.target === box) {
+      event.preventDefault();
+      if (links.length) links[0].click();
+    }
+  });
+  document.addEventListener("toggle", function (event) {
+    var palette = event.target;
+    if (!(palette.matches && palette.matches("details.lt-palette[open]"))) return;
+    var box = palette.querySelector("input");
+    if (box && document.activeElement !== box) box.focus();
+  }, true);
+  document.addEventListener("click", function (event) {
+    document.querySelectorAll("details.lt-palette[open]").forEach(function (palette) {
+      if (!palette.contains(event.target)) palette.removeAttribute("open");
+    });
+  });
+
   var timers = [];
   function scanPeriodicals() {
     timers.forEach(clearInterval);
@@ -663,6 +739,8 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     setupTags();
+    setupPalettes();
+    scanLazy();
     scanPeriodicals();
     listen();
     pollForReload();

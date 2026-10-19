@@ -323,3 +323,112 @@ Bring *two* copies of the **form**.
     (click b "Select all")
     (list *chosen* (length (menu-items (make-instance 'dropdown-menu :label "More" :items '(("A" . "/a") :separator)))))))
 ;; ⇒ ("Select all" 2)
+
+;;;; Example: littoral:lazy-panel littoral:lazy-panel-loaded-p littoral:lazy-panel-content
+;;; A lazy panel is sent as a placeholder; littoral.js asks for its content over AJAX as soon as the page is in (the `lazy` spec here), and only then is the function making it called.  Once loaded, it is drawn with the page.
+(defclass slow-total (component)
+  ((total :initarg :total :reader total)))
+(defmethod render ((self slow-total))
+  (p () (text (format nil "Total: ~D" (total self)))))
+(defvar *made* 0)
+(defclass ledger (component)
+  ((panel :initform (make-instance 'lazy-panel
+                                   :placeholder "Adding it up…"
+                                   :content (lambda ()
+                                              (incf *made*)
+                                              (make-instance 'slow-total :total (reduce #'+ (alexandria:iota 101)))))
+          :reader panel)))
+(defmethod children ((self ledger)) (list (panel self)))
+(defmethod render ((self ledger)) (render-component (panel self)))
+(with-fresh-applications (("/ledger" 'ledger :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/ledger")
+    (let ((first-page (list (not (null (has-text-p b "Adding it up…"))) *made*))
+          (spec (first (ajax-specs b "lazy"))))
+      (ajax-request b (car spec) (cdr spec))
+      (visit b (browser-url b))
+      (list first-page *made* (body-text b)))))
+;; ⇒ ((T 0) 1 "Total: 5050")
+
+;;;; Example: littoral:load-lazy-panel
+;;; Loading it from Lisp, as a callback might, makes the content at once; loading it again changes nothing.
+(let ((panel (make-instance 'lazy-panel :content (lambda () (make-instance 'component)))))
+  (list (lazy-panel-loaded-p panel)
+        (progn (load-lazy-panel panel) (lazy-panel-loaded-p panel))
+        (eq (lazy-panel-content panel) (lazy-panel-content (load-lazy-panel panel)))))
+;; ⇒ (NIL T T)
+
+;;;; Example: littoral:text-diff
+;;; The lines of two texts compared, keeping as many the same as possible; within a change, what was removed comes first.
+(text-diff (format nil "eggs~%milk~%bread~%") (format nil "eggs~%oat milk~%bread~%jam~%"))
+;; ⇒ ((:SAME . "eggs") (:REMOVED . "milk") (:ADDED . "oat milk") (:SAME . "bread") (:ADDED . "jam"))
+
+;;;; Example: littoral:diff-view littoral:diff-view-old littoral:diff-view-new littoral:diff-view-layout
+;;; A diff view shows two texts' differences, line by line, with the words that changed in a changed line marked.  Its texts can be changed, and its layout switched between :INLINE and :SIDE-BY-SIDE.
+(defclass recipe-changes (component)
+  ((diff :initform (make-instance 'diff-view :old (format nil "Flour~%Butter~%Sugar")
+                                             :new (format nil "Flour~%Salted Butter~%Sugar")
+                                             :old-label "Saturday" :new-label "Sunday")
+         :reader diff)))
+(defmethod children ((self recipe-changes)) (list (diff self)))
+(defmethod render ((self recipe-changes)) (render-component (diff self)))
+(with-fresh-applications (("/recipe" 'recipe-changes :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/recipe")
+    (let ((inline (body-text b))
+          (marked (cl-ppcre:all-matches-as-strings "<mark class=\"lt-diff-word\">[^<]*</mark>" (browser-html b))))
+      (click b "Side by side")
+      (list inline marked (not (null (search "lt-diff-sides" (browser-html b))))))))
+;; ⇒ ("1 line added, 1 line removed Inline Side by side Saturday Sunday Line 1 1 Flour 2 Removed: Butter 2 Added: Salted Butter 3 3 Sugar" ("<mark class=\"lt-diff-word\">Salted </mark>") T)
+
+;;;; Example: littoral:diff-view-old littoral:diff-view-new littoral:diff-view-layout
+;;; The accessors, for showing other texts or the other layout.
+(let ((view (make-instance 'diff-view :old "a" :new "b")))
+  (setf (diff-view-new view) "c"
+        (diff-view-layout view) :side-by-side)
+  (list (diff-view-old view) (diff-view-new view) (diff-view-layout view)))
+;; ⇒ ("a" "c" :SIDE-BY-SIDE)
+
+;;;; Example: littoral:command-palette littoral:palette-command
+;;; A command palette ranks its commands against what is typed into it (littoral.js sends that over AJAX, as `on-input` here) and lists the best as links; following one runs it.  Ctrl-K or ⌘K opens it in a browser.
+(defclass editor-page (component)
+  ((saved :initform nil :accessor saved)
+   (palette :reader palette)))
+(defmethod initialize-instance :after ((self editor-page) &key)
+  (setf (slot-value self 'palette)
+        (make-instance 'command-palette
+                       :commands (list (palette-command "Save" (lambda () (setf (saved self) t)) :group "File")
+                                       (palette-command "Save as…" (lambda ()) :group "File")
+                                       (palette-command "Find" (lambda ()) :keywords '("search"))
+                                       (palette-command "Help" "/help")))))
+(defmethod children ((self editor-page)) (list (palette self)))
+(defmethod render ((self editor-page))
+  (render-component (palette self))
+  (when (saved self) (p () "Saved.")))
+(with-fresh-applications (("/edit" 'editor-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/edit")
+    (let* ((box (cl-ppcre:register-groups-bind (name) ("<input type=\"search\" name=\"([^\"]+)\"" (browser-html b)) name))
+           (typing (first (ajax-specs b "on-input")))
+           (json (ajax-request b (car typing) (cdr typing) :fields (list (cons box "sav")))))
+      (visit b (browser-url b))
+      (list (not (null (search "Save as…" json)))
+            (not (null (search "Find" json)))
+            (progn (click b "Save") (not (null (has-text-p b "Saved."))))))))
+;; ⇒ (T NIL T)
+
+;;;; Example: littoral:palette-matches littoral:palette-match-score littoral:palette-query littoral:palette-command-label littoral:palette-command-action littoral:palette-command-group littoral:palette-command-keywords
+;;; What a palette shows for its query: its commands ranked by PALETTE-MATCH-SCORE (a run of the query found whole scores best, then the starts of words), then what its :SEARCH function adds.
+(let ((palette (make-instance 'command-palette
+                              :commands (list (palette-command "New project" "/projects/new" :group "Projects")
+                                              (palette-command "Go to projects" "/projects" :keywords '("list"))
+                                              (palette-command "Audit log" "/audit"))
+                              :search (lambda (query)
+                                        (list (palette-command (format nil "Search the docs for ~S" query) "/docs"))))))
+  (setf (palette-query palette) "proj")
+  (let ((best (first (palette-matches palette))))
+    (list (mapcar #'palette-command-label (palette-matches palette))
+          (list (palette-command-action best) (palette-command-group best) (palette-command-keywords best))
+          (palette-match-score "np" "New project")
+          (palette-match-score "xyz" "New project"))))
+;; ⇒ (("New project" "Go to projects" "Search the docs for \"proj\"") ("/projects/new" "Projects" NIL) 16 NIL)

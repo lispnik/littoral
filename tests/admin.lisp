@@ -34,7 +34,7 @@
     (click b "Jobs")
     (is (has-text-p b "3 jobs"))
     ;; Search over text fields, by AJAX.
-    (let* ((spec (first (ajax-specs b "on-input")))
+    (let* ((spec (first (field-ajax-specs b "on-input")))
            (json (ajax-request b (first spec) (rest spec)
                                :fields (list (cons (element-name b "search") "tabs")))))
       (is (search "Fix tabs" json))

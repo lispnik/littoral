@@ -42,7 +42,7 @@
 (defun postgres-test-p ()
   (eq (first (test-database-spec)) :postgres))
 
-(defparameter *database-suites* '(db auth auth-store admin outbox durable-jobs audit migrations)
+(defparameter *database-suites* '(db auth auth-store admin outbox durable-jobs audit migrations notifications)
   "The suites that use the test database, run again against PostgreSQL.")
 
 (defun run-database-suites ()
@@ -51,3 +51,13 @@
     (dolist (suite *database-suites*)
       (unless (fiveam:run! suite) (setf ok nil)))
     (uiop:quit (if ok 0 1))))
+
+(defun field-ajax-specs (browser attribute)
+  "AJAX-SPECS for ATTRIBUTE, without those of a command palette's box, which
+pages such as the widgets example and the admin show before their own fields."
+  (let ((palettes (let ((ids '()))
+                    (cl-ppcre:do-register-groups (id) ("<div id=\"([^\"]+)\" class=\"lt-updatable lt-palette-found\"" (browser-html browser))
+                      (push id ids))
+                    ids)))
+    (remove-if (lambda (spec) (member (cdr spec) palettes :test #'string=))
+               (ajax-specs browser attribute))))

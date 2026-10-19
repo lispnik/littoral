@@ -89,6 +89,11 @@
    #:disclosure #:disclosure-open-p #:accordion #:accordion-sections #:accordion-open
    #:dropdown-menu #:menu-bar #:menu-items
    #:in-place-editor #:make-in-place-editor #:edit-conflict #:edit-conflict-object
+   ;; Lazy panels, differences, command palettes
+   #:lazy-panel #:lazy-panel-loaded-p #:lazy-panel-content #:load-lazy-panel
+   #:text-diff #:diff-view #:diff-view-old #:diff-view-new #:diff-view-layout
+   #:command-palette #:palette-command #:palette-command-label #:palette-command-action
+   #:palette-command-group #:palette-command-keywords #:palette-match-score #:palette-matches #:palette-query
    ;; JSON endpoints
    #:define-endpoint #:register-endpoint #:endpoint-error #:endpoint-body #:*endpoint-authenticator*
    ;; Health, metrics, request logs

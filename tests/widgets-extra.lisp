@@ -81,7 +81,7 @@ Some *em*, **strong** and `<b>code</b>`.
       (is (has-text-p b "5 rows"))
       ;; Filtering, as littoral.js sends it while typing.
       (let* ((filter (cl-ppcre:register-groups-bind (name) ("<input[^>]*name=\"([0-9]+)\"[^>]*aria-label=\"Filter Name\"" (browser-html b)) name))
-             (spec (first (ajax-specs b "on-input"))))
+             (spec (first (field-ajax-specs b "on-input"))))
         (is (not (null filter)))
         (let ((json (ajax-request b (car spec) (cdr spec) :fields (list (cons filter "turing")))))
           (is (search "Alan Turing" json))
@@ -169,7 +169,7 @@ Some *em*, **strong** and `<b>code</b>`.
         (is (has-text-p b "Apples")))
       ;; The data grid exports what its filters let through.
       (let* ((filter (cl-ppcre:register-groups-bind (name) ("<input[^>]*name=\"([0-9]+)\"[^>]*aria-label=\"Filter Text\"" (browser-html b)) name))
-             (spec (first (ajax-specs b "on-input"))))
+             (spec (first (field-ajax-specs b "on-input"))))
         (ajax-request b (car spec) (cdr spec) :fields (list (cons filter "sec"))))
       (visit b (browser-url b))
       (multiple-value-bind (status headers body) (raw-request b :get (second (find-links b "Download CSV")))

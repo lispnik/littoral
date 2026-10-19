@@ -5742,6 +5742,514 @@ The object someone else changed, as the `edit-conflict`'s `:object` gave it, or 
 ;; ⇒ (T "Their text" "My text" T)
 ```
 
+### Lazy panels, differences, command palettes
+
+#### `lazy-panel` — class
+
+A placeholder, `:placeholder` (translated; "Loading…"),
+that littoral.js replaces over AJAX, as soon as the page has loaded, with
+`:content`: a component, or a function of no arguments making one, called
+then rather than when the page is made.  The page arrives without waiting
+for what is slow to compute, such as a big report or a chart over a slow
+query.  With `:when-visible` T it waits until the placeholder is scrolled
+into view.  Without JavaScript a link loads it.  Once loaded it stays
+loaded, and it shows its content straight away when the page is drawn
+again.
+
+*Example:* A lazy panel is sent as a placeholder; littoral.js asks for its content over AJAX as soon as the page is in (the `lazy` spec here), and only then is the function making it called.  Once loaded, it is drawn with the page.
+
+```lisp
+(defclass slow-total (component)
+  ((total :initarg :total :reader total)))
+(defmethod render ((self slow-total))
+  (p () (text (format nil "Total: ~D" (total self)))))
+(defvar *made* 0)
+(defclass ledger (component)
+  ((panel :initform (make-instance 'lazy-panel
+                                   :placeholder "Adding it up…"
+                                   :content (lambda ()
+                                              (incf *made*)
+                                              (make-instance 'slow-total :total (reduce #'+ (alexandria:iota 101)))))
+          :reader panel)))
+(defmethod children ((self ledger)) (list (panel self)))
+(defmethod render ((self ledger)) (render-component (panel self)))
+(with-fresh-applications (("/ledger" 'ledger :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/ledger")
+    (let ((first-page (list (not (null (has-text-p b "Adding it up…"))) *made*))
+          (spec (first (ajax-specs b "lazy"))))
+      (ajax-request b (car spec) (cdr spec))
+      (visit b (browser-url b))
+      (list first-page *made* (body-text b)))))
+;; ⇒ ((T 0) 1 "Total: 5050")
+```
+
+#### `lazy-panel-loaded-p` `object` — generic function
+
+Reads the loaded of a lazy-panel.
+
+*Example:* A lazy panel is sent as a placeholder; littoral.js asks for its content over AJAX as soon as the page is in (the `lazy` spec here), and only then is the function making it called.  Once loaded, it is drawn with the page.
+
+```lisp
+(defclass slow-total (component)
+  ((total :initarg :total :reader total)))
+(defmethod render ((self slow-total))
+  (p () (text (format nil "Total: ~D" (total self)))))
+(defvar *made* 0)
+(defclass ledger (component)
+  ((panel :initform (make-instance 'lazy-panel
+                                   :placeholder "Adding it up…"
+                                   :content (lambda ()
+                                              (incf *made*)
+                                              (make-instance 'slow-total :total (reduce #'+ (alexandria:iota 101)))))
+          :reader panel)))
+(defmethod children ((self ledger)) (list (panel self)))
+(defmethod render ((self ledger)) (render-component (panel self)))
+(with-fresh-applications (("/ledger" 'ledger :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/ledger")
+    (let ((first-page (list (not (null (has-text-p b "Adding it up…"))) *made*))
+          (spec (first (ajax-specs b "lazy"))))
+      (ajax-request b (car spec) (cdr spec))
+      (visit b (browser-url b))
+      (list first-page *made* (body-text b)))))
+;; ⇒ ((T 0) 1 "Total: 5050")
+```
+
+#### `lazy-panel-content` `object` — generic function
+
+Reads the content of a lazy-panel.  The component shown, once loaded.
+
+*Example:* A lazy panel is sent as a placeholder; littoral.js asks for its content over AJAX as soon as the page is in (the `lazy` spec here), and only then is the function making it called.  Once loaded, it is drawn with the page.
+
+```lisp
+(defclass slow-total (component)
+  ((total :initarg :total :reader total)))
+(defmethod render ((self slow-total))
+  (p () (text (format nil "Total: ~D" (total self)))))
+(defvar *made* 0)
+(defclass ledger (component)
+  ((panel :initform (make-instance 'lazy-panel
+                                   :placeholder "Adding it up…"
+                                   :content (lambda ()
+                                              (incf *made*)
+                                              (make-instance 'slow-total :total (reduce #'+ (alexandria:iota 101)))))
+          :reader panel)))
+(defmethod children ((self ledger)) (list (panel self)))
+(defmethod render ((self ledger)) (render-component (panel self)))
+(with-fresh-applications (("/ledger" 'ledger :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/ledger")
+    (let ((first-page (list (not (null (has-text-p b "Adding it up…"))) *made*))
+          (spec (first (ajax-specs b "lazy"))))
+      (ajax-request b (car spec) (cdr spec))
+      (visit b (browser-url b))
+      (list first-page *made* (body-text b)))))
+;; ⇒ ((T 0) 1 "Total: 5050")
+```
+
+#### `load-lazy-panel` `panel` — function
+
+Make `panel`'s content, unless it has been made, so `panel` shows it.
+
+*Example:* Loading it from Lisp, as a callback might, makes the content at once; loading it again changes nothing.
+
+```lisp
+(let ((panel (make-instance 'lazy-panel :content (lambda () (make-instance 'component)))))
+  (list (lazy-panel-loaded-p panel)
+        (progn (load-lazy-panel panel) (lazy-panel-loaded-p panel))
+        (eq (lazy-panel-content panel) (lazy-panel-content (load-lazy-panel panel)))))
+;; ⇒ (NIL T T)
+```
+
+#### `text-diff` `old new` — function
+
+The lines of `old` and `new`, two strings, compared: a list of (`op` . `line`),
+`op` `:same`, `:removed` or `:added`, in order, with as many lines kept the same as
+possible.  Lines end at `lf` or `crlf`.
+
+*Example:* The lines of two texts compared, keeping as many the same as possible; within a change, what was removed comes first.
+
+```lisp
+(text-diff (format nil "eggs~%milk~%bread~%") (format nil "eggs~%oat milk~%bread~%jam~%"))
+;; ⇒ ((:SAME . "eggs") (:REMOVED . "milk") (:ADDED . "oat milk") (:SAME . "bread") (:ADDED . "jam"))
+```
+
+#### `diff-view` — class
+
+The differences between two texts, `:old` and `:new`, line
+by line (`text-diff`): removed lines struck through, added ones marked, and
+within a changed line the words that changed.  `:layout` is `:inline`, one
+column, or `:side-by-side`, the two texts in columns headed `:old-label` and
+`:new-label` (translated; "Before" and "After"); links switch between
+them.  Unchanged stretches are cut to `:context` lines (3) either side of a
+change, with a link to show everything; `:context` `nil` shows everything.
+
+*Example:* A diff view shows two texts' differences, line by line, with the words that changed in a changed line marked.  Its texts can be changed, and its layout switched between `:inline` and `:side-by-side`.
+
+```lisp
+(defclass recipe-changes (component)
+  ((diff :initform (make-instance 'diff-view :old (format nil "Flour~%Butter~%Sugar")
+                                             :new (format nil "Flour~%Salted Butter~%Sugar")
+                                             :old-label "Saturday" :new-label "Sunday")
+         :reader diff)))
+(defmethod children ((self recipe-changes)) (list (diff self)))
+(defmethod render ((self recipe-changes)) (render-component (diff self)))
+(with-fresh-applications (("/recipe" 'recipe-changes :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/recipe")
+    (let ((inline (body-text b))
+          (marked (cl-ppcre:all-matches-as-strings "<mark class=\"lt-diff-word\">[^<]*</mark>" (browser-html b))))
+      (click b "Side by side")
+      (list inline marked (not (null (search "lt-diff-sides" (browser-html b))))))))
+;; ⇒ ("1 line added, 1 line removed Inline Side by side Saturday Sunday Line 1 1 Flour 2 Removed: Butter 2 Added: Salted Butter 3 3 Sugar" ("<mark class=\"lt-diff-word\">Salted </mark>") T)
+```
+
+#### `diff-view-old` `object` — generic function
+
+Reads the old of a diff-view.  The text before.
+
+*Example:* A diff view shows two texts' differences, line by line, with the words that changed in a changed line marked.  Its texts can be changed, and its layout switched between `:inline` and `:side-by-side`.
+
+```lisp
+(defclass recipe-changes (component)
+  ((diff :initform (make-instance 'diff-view :old (format nil "Flour~%Butter~%Sugar")
+                                             :new (format nil "Flour~%Salted Butter~%Sugar")
+                                             :old-label "Saturday" :new-label "Sunday")
+         :reader diff)))
+(defmethod children ((self recipe-changes)) (list (diff self)))
+(defmethod render ((self recipe-changes)) (render-component (diff self)))
+(with-fresh-applications (("/recipe" 'recipe-changes :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/recipe")
+    (let ((inline (body-text b))
+          (marked (cl-ppcre:all-matches-as-strings "<mark class=\"lt-diff-word\">[^<]*</mark>" (browser-html b))))
+      (click b "Side by side")
+      (list inline marked (not (null (search "lt-diff-sides" (browser-html b))))))))
+;; ⇒ ("1 line added, 1 line removed Inline Side by side Saturday Sunday Line 1 1 Flour 2 Removed: Butter 2 Added: Salted Butter 3 3 Sugar" ("<mark class=\"lt-diff-word\">Salted </mark>") T)
+```
+
+*Example:* The accessors, for showing other texts or the other layout.
+
+```lisp
+(let ((view (make-instance 'diff-view :old "a" :new "b")))
+  (setf (diff-view-new view) "c"
+        (diff-view-layout view) :side-by-side)
+  (list (diff-view-old view) (diff-view-new view) (diff-view-layout view)))
+;; ⇒ ("a" "c" :SIDE-BY-SIDE)
+```
+
+#### `diff-view-new` `object` — generic function
+
+Reads the new of a diff-view.  The text after.
+
+*Example:* A diff view shows two texts' differences, line by line, with the words that changed in a changed line marked.  Its texts can be changed, and its layout switched between `:inline` and `:side-by-side`.
+
+```lisp
+(defclass recipe-changes (component)
+  ((diff :initform (make-instance 'diff-view :old (format nil "Flour~%Butter~%Sugar")
+                                             :new (format nil "Flour~%Salted Butter~%Sugar")
+                                             :old-label "Saturday" :new-label "Sunday")
+         :reader diff)))
+(defmethod children ((self recipe-changes)) (list (diff self)))
+(defmethod render ((self recipe-changes)) (render-component (diff self)))
+(with-fresh-applications (("/recipe" 'recipe-changes :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/recipe")
+    (let ((inline (body-text b))
+          (marked (cl-ppcre:all-matches-as-strings "<mark class=\"lt-diff-word\">[^<]*</mark>" (browser-html b))))
+      (click b "Side by side")
+      (list inline marked (not (null (search "lt-diff-sides" (browser-html b))))))))
+;; ⇒ ("1 line added, 1 line removed Inline Side by side Saturday Sunday Line 1 1 Flour 2 Removed: Butter 2 Added: Salted Butter 3 3 Sugar" ("<mark class=\"lt-diff-word\">Salted </mark>") T)
+```
+
+*Example:* The accessors, for showing other texts or the other layout.
+
+```lisp
+(let ((view (make-instance 'diff-view :old "a" :new "b")))
+  (setf (diff-view-new view) "c"
+        (diff-view-layout view) :side-by-side)
+  (list (diff-view-old view) (diff-view-new view) (diff-view-layout view)))
+;; ⇒ ("a" "c" :SIDE-BY-SIDE)
+```
+
+#### `diff-view-layout` `object` — generic function
+
+Reads the layout of a diff-view.  `:inline` or `:side-by-side`.
+
+*Example:* A diff view shows two texts' differences, line by line, with the words that changed in a changed line marked.  Its texts can be changed, and its layout switched between `:inline` and `:side-by-side`.
+
+```lisp
+(defclass recipe-changes (component)
+  ((diff :initform (make-instance 'diff-view :old (format nil "Flour~%Butter~%Sugar")
+                                             :new (format nil "Flour~%Salted Butter~%Sugar")
+                                             :old-label "Saturday" :new-label "Sunday")
+         :reader diff)))
+(defmethod children ((self recipe-changes)) (list (diff self)))
+(defmethod render ((self recipe-changes)) (render-component (diff self)))
+(with-fresh-applications (("/recipe" 'recipe-changes :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/recipe")
+    (let ((inline (body-text b))
+          (marked (cl-ppcre:all-matches-as-strings "<mark class=\"lt-diff-word\">[^<]*</mark>" (browser-html b))))
+      (click b "Side by side")
+      (list inline marked (not (null (search "lt-diff-sides" (browser-html b))))))))
+;; ⇒ ("1 line added, 1 line removed Inline Side by side Saturday Sunday Line 1 1 Flour 2 Removed: Butter 2 Added: Salted Butter 3 3 Sugar" ("<mark class=\"lt-diff-word\">Salted </mark>") T)
+```
+
+*Example:* The accessors, for showing other texts or the other layout.
+
+```lisp
+(let ((view (make-instance 'diff-view :old "a" :new "b")))
+  (setf (diff-view-new view) "c"
+        (diff-view-layout view) :side-by-side)
+  (list (diff-view-old view) (diff-view-new view) (diff-view-layout view)))
+;; ⇒ ("a" "c" :SIDE-BY-SIDE)
+```
+
+#### `command-palette` — class
+
+A search box for commands, opened with Ctrl-K (⌘K on a
+Mac) or its button, `:label` (translated; "Commands").  Typing ranks
+`:commands`, a list of PALETTE-COMMANDs or a function of no arguments
+returning one, by `palette-match-score` against their labels and keywords,
+and shows the best `:limit` (10); `:search`, a function of the text typed,
+can add commands of its own, such as records whose names match, listed
+after them.  The arrow keys move through the results and Enter follows
+one; Escape closes it.  Each result is a link, so a palette works without
+JavaScript too: Enter in the box shows the results.  `:shortcut` `nil` leaves
+Ctrl-K alone (one palette a page should have it).
+
+*Example:* A command palette ranks its commands against what is typed into it (littoral.js sends that over AJAX, as `on-input` here) and lists the best as links; following one runs it.  Ctrl-K or ⌘K opens it in a browser.
+
+```lisp
+(defclass editor-page (component)
+  ((saved :initform nil :accessor saved)
+   (palette :reader palette)))
+(defmethod initialize-instance :after ((self editor-page) &key)
+  (setf (slot-value self 'palette)
+        (make-instance 'command-palette
+                       :commands (list (palette-command "Save" (lambda () (setf (saved self) t)) :group "File")
+                                       (palette-command "Save as…" (lambda ()) :group "File")
+                                       (palette-command "Find" (lambda ()) :keywords '("search"))
+                                       (palette-command "Help" "/help")))))
+(defmethod children ((self editor-page)) (list (palette self)))
+(defmethod render ((self editor-page))
+  (render-component (palette self))
+  (when (saved self) (p () "Saved.")))
+(with-fresh-applications (("/edit" 'editor-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/edit")
+    (let* ((box (cl-ppcre:register-groups-bind (name) ("<input type=\"search\" name=\"([^\"]+)\"" (browser-html b)) name))
+           (typing (first (ajax-specs b "on-input")))
+           (json (ajax-request b (car typing) (cdr typing) :fields (list (cons box "sav")))))
+      (visit b (browser-url b))
+      (list (not (null (search "Save as…" json)))
+            (not (null (search "Find" json)))
+            (progn (click b "Save") (not (null (has-text-p b "Saved."))))))))
+;; ⇒ (T NIL T)
+```
+
+#### `palette-command` — class
+
+*Undocumented.*
+
+#### `palette-command` `label action &key group keywords` — function
+
+A command for a `command-palette`: `label`, its name (translated when shown),
+and `action`, a function of no arguments called when it is chosen, as a
+link's callback (so it may `show`, `answer` or `redirect-to`), or a URL to go
+to.  `group`, such as "Tables", is shown beside it; `keywords`, a list of
+strings, are more words it is found by.
+
+*Example:* A command palette ranks its commands against what is typed into it (littoral.js sends that over AJAX, as `on-input` here) and lists the best as links; following one runs it.  Ctrl-K or ⌘K opens it in a browser.
+
+```lisp
+(defclass editor-page (component)
+  ((saved :initform nil :accessor saved)
+   (palette :reader palette)))
+(defmethod initialize-instance :after ((self editor-page) &key)
+  (setf (slot-value self 'palette)
+        (make-instance 'command-palette
+                       :commands (list (palette-command "Save" (lambda () (setf (saved self) t)) :group "File")
+                                       (palette-command "Save as…" (lambda ()) :group "File")
+                                       (palette-command "Find" (lambda ()) :keywords '("search"))
+                                       (palette-command "Help" "/help")))))
+(defmethod children ((self editor-page)) (list (palette self)))
+(defmethod render ((self editor-page))
+  (render-component (palette self))
+  (when (saved self) (p () "Saved.")))
+(with-fresh-applications (("/edit" 'editor-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/edit")
+    (let* ((box (cl-ppcre:register-groups-bind (name) ("<input type=\"search\" name=\"([^\"]+)\"" (browser-html b)) name))
+           (typing (first (ajax-specs b "on-input")))
+           (json (ajax-request b (car typing) (cdr typing) :fields (list (cons box "sav")))))
+      (visit b (browser-url b))
+      (list (not (null (search "Save as…" json)))
+            (not (null (search "Find" json)))
+            (progn (click b "Save") (not (null (has-text-p b "Saved."))))))))
+;; ⇒ (T NIL T)
+```
+
+#### `palette-command-label` `instance` — function
+
+The command's label, as given.
+
+*Example:* What a palette shows for its query: its commands ranked by `palette-match-score` (a run of the query found whole scores best, then the starts of words), then what its `:search` function adds.
+
+```lisp
+(let ((palette (make-instance 'command-palette
+                              :commands (list (palette-command "New project" "/projects/new" :group "Projects")
+                                              (palette-command "Go to projects" "/projects" :keywords '("list"))
+                                              (palette-command "Audit log" "/audit"))
+                              :search (lambda (query)
+                                        (list (palette-command (format nil "Search the docs for ~S" query) "/docs"))))))
+  (setf (palette-query palette) "proj")
+  (let ((best (first (palette-matches palette))))
+    (list (mapcar #'palette-command-label (palette-matches palette))
+          (list (palette-command-action best) (palette-command-group best) (palette-command-keywords best))
+          (palette-match-score "np" "New project")
+          (palette-match-score "xyz" "New project"))))
+;; ⇒ (("New project" "Go to projects" "Search the docs for \"proj\"") ("/projects/new" "Projects" NIL) 16 NIL)
+```
+
+#### `palette-command-action` `instance` — function
+
+The command's function, or URL to go to.
+
+*Example:* What a palette shows for its query: its commands ranked by `palette-match-score` (a run of the query found whole scores best, then the starts of words), then what its `:search` function adds.
+
+```lisp
+(let ((palette (make-instance 'command-palette
+                              :commands (list (palette-command "New project" "/projects/new" :group "Projects")
+                                              (palette-command "Go to projects" "/projects" :keywords '("list"))
+                                              (palette-command "Audit log" "/audit"))
+                              :search (lambda (query)
+                                        (list (palette-command (format nil "Search the docs for ~S" query) "/docs"))))))
+  (setf (palette-query palette) "proj")
+  (let ((best (first (palette-matches palette))))
+    (list (mapcar #'palette-command-label (palette-matches palette))
+          (list (palette-command-action best) (palette-command-group best) (palette-command-keywords best))
+          (palette-match-score "np" "New project")
+          (palette-match-score "xyz" "New project"))))
+;; ⇒ (("New project" "Go to projects" "Search the docs for \"proj\"") ("/projects/new" "Projects" NIL) 16 NIL)
+```
+
+#### `palette-command-group` `instance` — function
+
+The group the command is listed under, or `nil`.
+
+*Example:* What a palette shows for its query: its commands ranked by `palette-match-score` (a run of the query found whole scores best, then the starts of words), then what its `:search` function adds.
+
+```lisp
+(let ((palette (make-instance 'command-palette
+                              :commands (list (palette-command "New project" "/projects/new" :group "Projects")
+                                              (palette-command "Go to projects" "/projects" :keywords '("list"))
+                                              (palette-command "Audit log" "/audit"))
+                              :search (lambda (query)
+                                        (list (palette-command (format nil "Search the docs for ~S" query) "/docs"))))))
+  (setf (palette-query palette) "proj")
+  (let ((best (first (palette-matches palette))))
+    (list (mapcar #'palette-command-label (palette-matches palette))
+          (list (palette-command-action best) (palette-command-group best) (palette-command-keywords best))
+          (palette-match-score "np" "New project")
+          (palette-match-score "xyz" "New project"))))
+;; ⇒ (("New project" "Go to projects" "Search the docs for \"proj\"") ("/projects/new" "Projects" NIL) 16 NIL)
+```
+
+#### `palette-command-keywords` `instance` — function
+
+More words the command is found by.
+
+*Example:* What a palette shows for its query: its commands ranked by `palette-match-score` (a run of the query found whole scores best, then the starts of words), then what its `:search` function adds.
+
+```lisp
+(let ((palette (make-instance 'command-palette
+                              :commands (list (palette-command "New project" "/projects/new" :group "Projects")
+                                              (palette-command "Go to projects" "/projects" :keywords '("list"))
+                                              (palette-command "Audit log" "/audit"))
+                              :search (lambda (query)
+                                        (list (palette-command (format nil "Search the docs for ~S" query) "/docs"))))))
+  (setf (palette-query palette) "proj")
+  (let ((best (first (palette-matches palette))))
+    (list (mapcar #'palette-command-label (palette-matches palette))
+          (list (palette-command-action best) (palette-command-group best) (palette-command-keywords best))
+          (palette-match-score "np" "New project")
+          (palette-match-score "xyz" "New project"))))
+;; ⇒ (("New project" "Go to projects" "Search the docs for \"proj\"") ("/projects/new" "Projects" NIL) 16 NIL)
+```
+
+#### `palette-match-score` `query text` — function
+
+How well `query` matches `text`, ignoring case: `nil` unless `query`'s
+characters appear in `text` in order, else a score, higher for a better
+match.  A run of the query found whole scores best, then characters at the
+starts of words and next to each other.  An empty `query` scores 0.
+
+*Example:* What a palette shows for its query: its commands ranked by `palette-match-score` (a run of the query found whole scores best, then the starts of words), then what its `:search` function adds.
+
+```lisp
+(let ((palette (make-instance 'command-palette
+                              :commands (list (palette-command "New project" "/projects/new" :group "Projects")
+                                              (palette-command "Go to projects" "/projects" :keywords '("list"))
+                                              (palette-command "Audit log" "/audit"))
+                              :search (lambda (query)
+                                        (list (palette-command (format nil "Search the docs for ~S" query) "/docs"))))))
+  (setf (palette-query palette) "proj")
+  (let ((best (first (palette-matches palette))))
+    (list (mapcar #'palette-command-label (palette-matches palette))
+          (list (palette-command-action best) (palette-command-group best) (palette-command-keywords best))
+          (palette-match-score "np" "New project")
+          (palette-match-score "xyz" "New project"))))
+;; ⇒ (("New project" "Go to projects" "Search the docs for \"proj\"") ("/projects/new" "Projects" NIL) 16 NIL)
+```
+
+#### `palette-matches` `palette &optional (query (palette-query palette))` — function
+
+The commands `palette` shows for `query`: its commands ranked against it,
+at most its limit, then those its search function gives.
+
+*Example:* What a palette shows for its query: its commands ranked by `palette-match-score` (a run of the query found whole scores best, then the starts of words), then what its `:search` function adds.
+
+```lisp
+(let ((palette (make-instance 'command-palette
+                              :commands (list (palette-command "New project" "/projects/new" :group "Projects")
+                                              (palette-command "Go to projects" "/projects" :keywords '("list"))
+                                              (palette-command "Audit log" "/audit"))
+                              :search (lambda (query)
+                                        (list (palette-command (format nil "Search the docs for ~S" query) "/docs"))))))
+  (setf (palette-query palette) "proj")
+  (let ((best (first (palette-matches palette))))
+    (list (mapcar #'palette-command-label (palette-matches palette))
+          (list (palette-command-action best) (palette-command-group best) (palette-command-keywords best))
+          (palette-match-score "np" "New project")
+          (palette-match-score "xyz" "New project"))))
+;; ⇒ (("New project" "Go to projects" "Search the docs for \"proj\"") ("/projects/new" "Projects" NIL) 16 NIL)
+```
+
+#### `palette-query` `object` — generic function
+
+Reads the query of a command-palette.
+
+*Example:* What a palette shows for its query: its commands ranked by `palette-match-score` (a run of the query found whole scores best, then the starts of words), then what its `:search` function adds.
+
+```lisp
+(let ((palette (make-instance 'command-palette
+                              :commands (list (palette-command "New project" "/projects/new" :group "Projects")
+                                              (palette-command "Go to projects" "/projects" :keywords '("list"))
+                                              (palette-command "Audit log" "/audit"))
+                              :search (lambda (query)
+                                        (list (palette-command (format nil "Search the docs for ~S" query) "/docs"))))))
+  (setf (palette-query palette) "proj")
+  (let ((best (first (palette-matches palette))))
+    (list (mapcar #'palette-command-label (palette-matches palette))
+          (list (palette-command-action best) (palette-command-group best) (palette-command-keywords best))
+          (palette-match-score "np" "New project")
+          (palette-match-score "xyz" "New project"))))
+;; ⇒ (("New project" "Go to projects" "Search the docs for \"proj\"") ("/projects/new" "Projects" NIL) 16 NIL)
+```
+
 ### JSON endpoints
 
 #### `define-endpoint` `application-path method pattern (&rest parameters) &body body` — macro
@@ -14678,6 +15186,393 @@ who or what.  Shows everything: put it where only those who may see it can.
 ;; ⇒ (T T)
 ```
 
+## Package `littoral.notifications`
+
+Load it with `(asdf:load-system :littoral/notifications)`.  Notifications for
+users, kept in the database until read, and a bell that counts them as they arrive.
+
+### General
+
+#### `create-notification-tables` — function
+
+Create or bring up to date the notifications table (migrations
+`:littoral-notifications`) in the current database.
+
+*Example:* A notification waits in the notifications table until its user reads it.  Users are given as user objects or their ids.
+
+```lisp
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.notifications:create-notification-tables)
+  (unwind-protect
+       (progn
+         (littoral.notifications:notify-user 1 "Your export is ready." :url "/exports/7")
+         (littoral.notifications:notify-user 1 "Bob replied to you.")
+         (littoral.notifications:notify-user 2 "Welcome!")
+         (list (littoral.notifications:unread-notification-count 1)
+               (mapcar #'littoral.notifications:notification-message
+                       (littoral.notifications:user-notifications 1))))
+    (littoral.notifications:drop-notification-tables)))
+;; ⇒ (2 ("Bob replied to you." "Your export is ready."))
+```
+
+#### `drop-notification-tables` — function
+
+Drop the notifications table.
+
+*Example:* A notification waits in the notifications table until its user reads it.  Users are given as user objects or their ids.
+
+```lisp
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.notifications:create-notification-tables)
+  (unwind-protect
+       (progn
+         (littoral.notifications:notify-user 1 "Your export is ready." :url "/exports/7")
+         (littoral.notifications:notify-user 1 "Bob replied to you.")
+         (littoral.notifications:notify-user 2 "Welcome!")
+         (list (littoral.notifications:unread-notification-count 1)
+               (mapcar #'littoral.notifications:notification-message
+                       (littoral.notifications:user-notifications 1))))
+    (littoral.notifications:drop-notification-tables)))
+;; ⇒ (2 ("Bob replied to you." "Your export is ready."))
+```
+
+#### `notify-user` `user message &key url (kind :info)` — function
+
+Tell `user`, a user or its id, `message`: a notification kept until they
+read it, which a `notification-bell` lists.  URL, when given, is where
+following it goes.  `kind` is a keyword such as `:info`, `:success` or `:warning`,
+for styling.  Inside a transaction, the notification exists, and bells hear
+of it, only if the transaction commits.  Returns its id.
+
+*Example:* A notification waits in the notifications table until its user reads it.  Users are given as user objects or their ids.
+
+```lisp
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.notifications:create-notification-tables)
+  (unwind-protect
+       (progn
+         (littoral.notifications:notify-user 1 "Your export is ready." :url "/exports/7")
+         (littoral.notifications:notify-user 1 "Bob replied to you.")
+         (littoral.notifications:notify-user 2 "Welcome!")
+         (list (littoral.notifications:unread-notification-count 1)
+               (mapcar #'littoral.notifications:notification-message
+                       (littoral.notifications:user-notifications 1))))
+    (littoral.notifications:drop-notification-tables)))
+;; ⇒ (2 ("Bob replied to you." "Your export is ready."))
+```
+
+#### `user-notifications` `user &key (limit 20) unread-only` — function
+
+`user`'s notifications, newest first: at most `limit`, and only those not
+yet read when `unread-only`.
+
+*Example:* A notification waits in the notifications table until its user reads it.  Users are given as user objects or their ids.
+
+```lisp
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.notifications:create-notification-tables)
+  (unwind-protect
+       (progn
+         (littoral.notifications:notify-user 1 "Your export is ready." :url "/exports/7")
+         (littoral.notifications:notify-user 1 "Bob replied to you.")
+         (littoral.notifications:notify-user 2 "Welcome!")
+         (list (littoral.notifications:unread-notification-count 1)
+               (mapcar #'littoral.notifications:notification-message
+                       (littoral.notifications:user-notifications 1))))
+    (littoral.notifications:drop-notification-tables)))
+;; ⇒ (2 ("Bob replied to you." "Your export is ready."))
+```
+
+#### `unread-notification-count` `user` — function
+
+How many of `user`'s notifications haven't been read.
+
+*Example:* A notification waits in the notifications table until its user reads it.  Users are given as user objects or their ids.
+
+```lisp
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.notifications:create-notification-tables)
+  (unwind-protect
+       (progn
+         (littoral.notifications:notify-user 1 "Your export is ready." :url "/exports/7")
+         (littoral.notifications:notify-user 1 "Bob replied to you.")
+         (littoral.notifications:notify-user 2 "Welcome!")
+         (list (littoral.notifications:unread-notification-count 1)
+               (mapcar #'littoral.notifications:notification-message
+                       (littoral.notifications:user-notifications 1))))
+    (littoral.notifications:drop-notification-tables)))
+;; ⇒ (2 ("Bob replied to you." "Your export is ready."))
+```
+
+#### `mark-notification-read` `user id` — function
+
+Mark `user`'s notification `id` read.  Another user's is left alone.  True
+when it was unread.
+
+*Example:* Reading one marks it read; only its own user can.  Mark all as read does the rest.
+
+```lisp
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.notifications:create-notification-tables)
+  (let ((first (littoral.notifications:notify-user 1 "One")))
+    (littoral.notifications:notify-user 1 "Two")
+    (littoral.notifications:notify-user 1 "Three")
+    (list (littoral.notifications:mark-notification-read 2 first)       ; someone else's
+          (littoral.notifications:mark-notification-read 1 first)
+          (mapcar #'littoral.notifications:notification-read-p (littoral.notifications:user-notifications 1))
+          (progn (littoral.notifications:mark-all-notifications-read 1)
+                 (every #'littoral.notifications:notification-read-at (littoral.notifications:user-notifications 1))))))
+;; ⇒ (NIL T (NIL NIL T) T)
+```
+
+#### `mark-all-notifications-read` `user` — function
+
+Mark every one of `user`'s notifications read.
+
+*Example:* Reading one marks it read; only its own user can.  Mark all as read does the rest.
+
+```lisp
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.notifications:create-notification-tables)
+  (let ((first (littoral.notifications:notify-user 1 "One")))
+    (littoral.notifications:notify-user 1 "Two")
+    (littoral.notifications:notify-user 1 "Three")
+    (list (littoral.notifications:mark-notification-read 2 first)       ; someone else's
+          (littoral.notifications:mark-notification-read 1 first)
+          (mapcar #'littoral.notifications:notification-read-p (littoral.notifications:user-notifications 1))
+          (progn (littoral.notifications:mark-all-notifications-read 1)
+                 (every #'littoral.notifications:notification-read-at (littoral.notifications:user-notifications 1))))))
+;; ⇒ (NIL T (NIL NIL T) T)
+```
+
+#### `purge-notifications` `&key (older-than (* 90 24 60 60)) (unread ())` — function
+
+Delete notifications read more than `older-than` seconds ago (90 days),
+and with `unread`, unread ones made that long ago too.  For a recurring job.
+
+*Example:* For a nightly job: delete what was read long ago (90 days by default), and with `:unread`, what was never read either.
+
+```lisp
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.notifications:create-notification-tables)
+  (littoral.notifications:mark-notification-read 1 (littoral.notifications:notify-user 1 "Old news"))
+  (littoral.notifications:notify-user 1 "Still unread")
+  (littoral.db:db-execute "UPDATE notifications SET created = created - 100, read_at = read_at - 100")
+  (littoral.notifications:purge-notifications :older-than 60)
+  (mapcar #'littoral.notifications:notification-message (littoral.notifications:user-notifications 1)))
+;; ⇒ ("Still unread")
+```
+
+#### `notifications-channel` `user` — function
+
+The channel published when `user`'s notifications change in this process:
+one arrives, or some are read.  `user` is a user or its id.
+
+*Example:* Each user's channel is published when their notifications change in this process, once the change commits; a user and their id name the same one.
+
+```lisp
+(let ((channel (littoral.notifications:notifications-channel 42)))
+  (list (eq channel (littoral.notifications:notifications-channel "42"))
+        (eq channel (littoral.notifications:notifications-channel 7))
+        (typep channel 'channel)))
+;; ⇒ (T NIL T)
+```
+
+#### `notification` — class
+
+One message for one user, as `user-notifications` reads it.
+
+*Example:* Each one as `user-notifications` reads it: its message, where it leads, its kind and when it was made.
+
+```lisp
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.notifications:create-notification-tables)
+  (let* ((id (littoral.notifications:notify-user "ada" "Disk nearly full" :url "/admin/disks" :kind :warning))
+         (n (first (littoral.notifications:user-notifications "ada"))))
+    (list (= id (littoral.notifications:notification-id n))
+          (littoral.notifications:notification-message n)
+          (littoral.notifications:notification-url n)
+          (littoral.notifications:notification-kind n)
+          (<= (- (get-universal-time) (littoral.notifications:notification-created n)) 5))))
+;; ⇒ (T "Disk nearly full" "/admin/disks" :WARNING T)
+```
+
+#### `notification-id` `object` — generic function
+
+Reads the id of a notification.
+
+*Example:* Each one as `user-notifications` reads it: its message, where it leads, its kind and when it was made.
+
+```lisp
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.notifications:create-notification-tables)
+  (let* ((id (littoral.notifications:notify-user "ada" "Disk nearly full" :url "/admin/disks" :kind :warning))
+         (n (first (littoral.notifications:user-notifications "ada"))))
+    (list (= id (littoral.notifications:notification-id n))
+          (littoral.notifications:notification-message n)
+          (littoral.notifications:notification-url n)
+          (littoral.notifications:notification-kind n)
+          (<= (- (get-universal-time) (littoral.notifications:notification-created n)) 5))))
+;; ⇒ (T "Disk nearly full" "/admin/disks" :WARNING T)
+```
+
+#### `notification-message` `object` — generic function
+
+Reads the message of a notification.
+
+*Example:* Each one as `user-notifications` reads it: its message, where it leads, its kind and when it was made.
+
+```lisp
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.notifications:create-notification-tables)
+  (let* ((id (littoral.notifications:notify-user "ada" "Disk nearly full" :url "/admin/disks" :kind :warning))
+         (n (first (littoral.notifications:user-notifications "ada"))))
+    (list (= id (littoral.notifications:notification-id n))
+          (littoral.notifications:notification-message n)
+          (littoral.notifications:notification-url n)
+          (littoral.notifications:notification-kind n)
+          (<= (- (get-universal-time) (littoral.notifications:notification-created n)) 5))))
+;; ⇒ (T "Disk nearly full" "/admin/disks" :WARNING T)
+```
+
+#### `notification-url` `object` — generic function
+
+Reads the url of a notification.  Where following it goes, or `nil`.
+
+*Example:* Each one as `user-notifications` reads it: its message, where it leads, its kind and when it was made.
+
+```lisp
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.notifications:create-notification-tables)
+  (let* ((id (littoral.notifications:notify-user "ada" "Disk nearly full" :url "/admin/disks" :kind :warning))
+         (n (first (littoral.notifications:user-notifications "ada"))))
+    (list (= id (littoral.notifications:notification-id n))
+          (littoral.notifications:notification-message n)
+          (littoral.notifications:notification-url n)
+          (littoral.notifications:notification-kind n)
+          (<= (- (get-universal-time) (littoral.notifications:notification-created n)) 5))))
+;; ⇒ (T "Disk nearly full" "/admin/disks" :WARNING T)
+```
+
+#### `notification-kind` `object` — generic function
+
+Reads the kind of a notification.  A keyword such as `:info` (the default), `:success` or `:warning`.
+
+*Example:* Each one as `user-notifications` reads it: its message, where it leads, its kind and when it was made.
+
+```lisp
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.notifications:create-notification-tables)
+  (let* ((id (littoral.notifications:notify-user "ada" "Disk nearly full" :url "/admin/disks" :kind :warning))
+         (n (first (littoral.notifications:user-notifications "ada"))))
+    (list (= id (littoral.notifications:notification-id n))
+          (littoral.notifications:notification-message n)
+          (littoral.notifications:notification-url n)
+          (littoral.notifications:notification-kind n)
+          (<= (- (get-universal-time) (littoral.notifications:notification-created n)) 5))))
+;; ⇒ (T "Disk nearly full" "/admin/disks" :WARNING T)
+```
+
+#### `notification-created` `object` — generic function
+
+Reads the created of a notification.  A universal time.
+
+*Example:* Each one as `user-notifications` reads it: its message, where it leads, its kind and when it was made.
+
+```lisp
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.notifications:create-notification-tables)
+  (let* ((id (littoral.notifications:notify-user "ada" "Disk nearly full" :url "/admin/disks" :kind :warning))
+         (n (first (littoral.notifications:user-notifications "ada"))))
+    (list (= id (littoral.notifications:notification-id n))
+          (littoral.notifications:notification-message n)
+          (littoral.notifications:notification-url n)
+          (littoral.notifications:notification-kind n)
+          (<= (- (get-universal-time) (littoral.notifications:notification-created n)) 5))))
+;; ⇒ (T "Disk nearly full" "/admin/disks" :WARNING T)
+```
+
+#### `notification-read-at` `object` — generic function
+
+Reads the read-at of a notification.  When it was read, a universal time, or `nil`.
+
+*Example:* Reading one marks it read; only its own user can.  Mark all as read does the rest.
+
+```lisp
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.notifications:create-notification-tables)
+  (let ((first (littoral.notifications:notify-user 1 "One")))
+    (littoral.notifications:notify-user 1 "Two")
+    (littoral.notifications:notify-user 1 "Three")
+    (list (littoral.notifications:mark-notification-read 2 first)       ; someone else's
+          (littoral.notifications:mark-notification-read 1 first)
+          (mapcar #'littoral.notifications:notification-read-p (littoral.notifications:user-notifications 1))
+          (progn (littoral.notifications:mark-all-notifications-read 1)
+                 (every #'littoral.notifications:notification-read-at (littoral.notifications:user-notifications 1))))))
+;; ⇒ (NIL T (NIL NIL T) T)
+```
+
+#### `notification-read-p` `notification` — function
+
+True once `notification` has been read.
+
+*Example:* Reading one marks it read; only its own user can.  Mark all as read does the rest.
+
+```lisp
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.notifications:create-notification-tables)
+  (let ((first (littoral.notifications:notify-user 1 "One")))
+    (littoral.notifications:notify-user 1 "Two")
+    (littoral.notifications:notify-user 1 "Three")
+    (list (littoral.notifications:mark-notification-read 2 first)       ; someone else's
+          (littoral.notifications:mark-notification-read 1 first)
+          (mapcar #'littoral.notifications:notification-read-p (littoral.notifications:user-notifications 1))
+          (progn (littoral.notifications:mark-all-notifications-read 1)
+                 (every #'littoral.notifications:notification-read-at (littoral.notifications:user-notifications 1))))))
+;; ⇒ (NIL T (NIL NIL T) T)
+```
+
+#### `notification-bell` — class
+
+A bell showing how many notifications the signed-in
+user hasn't read, opening onto the latest `:limit` (8): following one marks
+it read and goes to its URL, and Mark all as read does that for them all.
+It shows nothing to someone not signed in.  New notifications made in this
+process arrive by server push; for those made by other processes, `:poll`
+gives the seconds between looks.  Like `dropdown-menu` it is a details
+element, so it opens without JavaScript, and closes on Escape or a click
+elsewhere.
+
+*Example:* The bell shows the signed-in user's unread count and opens onto their latest notifications; following one marks it read.  It subscribes to their channel, so on a real page the count goes up by server push.
+
+```lisp
+(defclass inbox-page (littoral.auth:auth-root component)
+  ((bell :initform (make-instance 'littoral.notifications:notification-bell) :reader bell)))
+(defmethod children ((self inbox-page)) (list (bell self)))
+(defmethod render ((self inbox-page))
+  (render-component (bell self))
+  (unless (littoral.auth:current-user)
+    (anchor (:callback (lambda () (show self (make-instance 'littoral.auth:sign-in)))) "Sign in")))
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
+      (littoral.auth:*pbkdf2-iterations* 1000))
+  (littoral.auth:create-auth-tables)
+  (littoral.notifications:create-notification-tables)
+  (let ((bob (littoral.auth:add-user "bob" "bob@example.org" "another passphrase")))
+    (littoral.notifications:notify-user bob "Your order has shipped.")
+    (with-fresh-applications (("/inbox" 'inbox-page :mode :deployment))
+      (let ((b (make-instance 'browser)))
+        (visit b "/inbox")
+        (click b "Sign in")
+        (fill-in b "sign-in-name" "bob")
+        (fill-in b "sign-in-password" "another passphrase")
+        (press b "Sign in")
+        (let ((before (body-text b)))
+          (littoral.notifications:mark-all-notifications-read bob)
+          (visit b (browser-url b))
+          (list before (body-text b)))))))
+;; ⇒ ("Notifications 1 1 unread Notifications Mark all as read Unread: Your order has shipped. just now" "Notifications 0 unread Notifications Your order has shipped. just now")
+```
+
 ## Package `littoral.auth`
 
 Users, signing in, roles and password reset for Littoral.  Load it with
@@ -17494,7 +18389,7 @@ for HTTP basic auth.  With neither, it answers only requests from this machine. 
 default), it records what it creates, changes and deletes in the audit log
 (creating its table) and shows the log.
 
-*Example:* An admin over stored classes: a menu of tables, a searchable list of each, and a page per record to edit or delete it.  Without `:role` or `:credentials` it answers only requests from this machine, as the fake browser's are.
+*Example:* An admin over stored classes: a command palette, a menu of tables, a searchable list of each, and a page per record to edit or delete it.  Without `:role` or `:credentials` it answers only requests from this machine, as the fake browser's are.
 
 ```lisp
 (defclass book (littoral.db:persistent)
@@ -17518,7 +18413,7 @@ default), it records what it creates, changes and deletes in the audit log
         (fill-in b "pages" "354")
         (press b "Save")
         (list list (slot-value (littoral.db:db-find 'book 2) 'pages))))))
-;; ⇒ ("Library admin Books Audit log Books New book 2 books # Title Pages 1 Moby-Dick 635 2 Walden 352" 354)
+;; ⇒ ("Library admin Commands Ctrl K Search commands 3 commands Go to Books Tables New book Create Audit log Books Audit log Books New book 2 books # Title Pages 1 Moby-Dick 635 2 Walden 352" 354)
 ```
 
 *Example:* With `:role`, users of littoral/auth with that role sign in to it, from anywhere; the database holds their tables too.  The audit log names who changed what.
@@ -17575,7 +18470,7 @@ default), it records what it creates, changes and deletes in the audit log
 The root of an admin application: header, messages and
 menu stay; pages replace the main area.
 
-*Example:* An admin over stored classes: a menu of tables, a searchable list of each, and a page per record to edit or delete it.  Without `:role` or `:credentials` it answers only requests from this machine, as the fake browser's are.
+*Example:* An admin over stored classes: a command palette, a menu of tables, a searchable list of each, and a page per record to edit or delete it.  Without `:role` or `:credentials` it answers only requests from this machine, as the fake browser's are.
 
 ```lisp
 (defclass book (littoral.db:persistent)
@@ -17599,7 +18494,7 @@ menu stay; pages replace the main area.
         (fill-in b "pages" "354")
         (press b "Save")
         (list list (slot-value (littoral.db:db-find 'book 2) 'pages))))))
-;; ⇒ ("Library admin Books Audit log Books New book 2 books # Title Pages 1 Moby-Dick 635 2 Walden 352" 354)
+;; ⇒ ("Library admin Commands Ctrl K Search commands 3 commands Go to Books Tables New book Create Audit log Books Audit log Books New book 2 books # Title Pages 1 Moby-Dick 635 2 Walden 352" 354)
 ```
 
 #### `job-queue-view` — class
@@ -18333,6 +19228,31 @@ transaction, for `register-application`.
       (click b "Vote")
       (list (browser-status b) (littoral.db:db-count 'vote)))))
 ;; ⇒ (500 0)
+```
+
+#### `after-commit` `function` — function
+
+Call `function`, of no arguments, once the transaction open on `*database*`
+in this thread commits, or at once when none is open; if the transaction is
+rolled back it is never called.  For telling others of a change, such as
+publishing a channel whose subscribers read the database, which must not
+happen before they can see it.
+
+*Example:* `after-commit` waits for the transaction to commit, so whatever it tells (a channel published, say) is never ahead of what other connections can see.  Rolled back, it is never called; outside a transaction, it is called at once.
+
+```lisp
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
+      (told '()))
+  (littoral.db:with-transaction ()
+    (littoral.db:after-commit (lambda () (push :committed told)))
+    (push :working told))
+  (ignore-errors
+   (littoral.db:with-transaction ()
+     (littoral.db:after-commit (lambda () (push :rolled-back told)))
+     (error "Never mind.")))
+  (littoral.db:after-commit (lambda () (push :at-once told)))
+  (reverse told))
+;; ⇒ (:WORKING :COMMITTED :AT-ONCE)
 ```
 
 #### `using-database` `driver &rest parameters` — function

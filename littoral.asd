@@ -47,6 +47,7 @@
                              (:file "widgets-more")
                              (:file "descriptions")
                              (:file "widgets-extra")
+                             (:file "widgets-tools")
                              (:file "wizard")
                              (:file "session")
                              (:file "application")
@@ -146,6 +147,7 @@
                #:littoral/mail
                #:littoral/jobs
                #:littoral/audit
+               #:littoral/notifications
                #:littoral/parenscript-demo
                #:littoral/websocket
                #:littoral/generator
@@ -199,6 +201,8 @@
                              (:file "observe")
                              (:file "endpoints")
                              (:file "widgets-extra")
+                             (:file "widgets-tools")
+                             (:file "notifications")
                              (:file "wizard")
                              (:file "second-factor")
                              (:file "mail")
@@ -218,7 +222,7 @@
 (asdf:defsystem #:littoral/docs
   :description "Writes docs/API.md from the docstrings: make docs."
   :depends-on (#:littoral #:littoral/test #:littoral/browser-test #:littoral/mail #:littoral/jobs #:littoral/audit
-               #:littoral/auth #:littoral/admin #:littoral/db #:littoral/storage #:littoral/oauth
+               #:littoral/auth #:littoral/admin #:littoral/db #:littoral/storage #:littoral/oauth #:littoral/notifications
                #:littoral/websocket #:littoral/parenscript #:littoral/woo #:littoral/generator
                #:littoral/doc-examples #:sb-introspect)
   :components ((:module "tools" :components ((:file "api-docs")))))
@@ -283,7 +287,8 @@
 
 (asdf:defsystem #:littoral/members-demo
   :description "Signing in, roles, password reset and OAuth, with a pretend identity provider."
-  :depends-on (#:littoral/auth #:littoral/oauth #:littoral/mail #:littoral/jobs #:littoral/audit #:dbd-sqlite3)
+  :depends-on (#:littoral/auth #:littoral/oauth #:littoral/mail #:littoral/jobs #:littoral/audit
+               #:littoral/notifications #:dbd-sqlite3)
   :components ((:module "examples" :serial t
                 :components ((:file "mail-demo") (:file "jobs-demo") (:file "members-demo")))))
 
@@ -310,6 +315,13 @@
   :license "MIT"
   :depends-on (#:littoral #:littoral/db)
   :components ((:module "src" :serial t :components ((:file "durable-jobs") (:file "durable-job-view")))))
+
+(asdf:defsystem #:littoral/notifications
+  :description "Notifications for users, kept until read, with a bell that counts them as they arrive."
+  :author "Matthew Kennedy"
+  :license "MIT"
+  :depends-on (#:littoral #:littoral/db #:littoral/auth)
+  :components ((:module "src" :components ((:file "notifications")))))
 
 (asdf:defsystem #:littoral/oauth
   :description "Sign in to Littoral applications with OAuth 2 / OpenID Connect providers."

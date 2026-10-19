@@ -166,6 +166,21 @@
   (mapcar (lambda (a) (slot-value a 'owner)) (littoral.db:db-select 'account)))
 ;; ⇒ ("Grace")
 
+;;;; Example: littoral.db:after-commit
+;;; AFTER-COMMIT waits for the transaction to commit, so whatever it tells (a channel published, say) is never ahead of what other connections can see.  Rolled back, it is never called; outside a transaction, it is called at once.
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
+      (told '()))
+  (littoral.db:with-transaction ()
+    (littoral.db:after-commit (lambda () (push :committed told)))
+    (push :working told))
+  (ignore-errors
+   (littoral.db:with-transaction ()
+     (littoral.db:after-commit (lambda () (push :rolled-back told)))
+     (error "Never mind.")))
+  (littoral.db:after-commit (lambda () (push :at-once told)))
+  (reverse told))
+;; ⇒ (:WORKING :COMMITTED :AT-ONCE)
+
 ;;;; Example: littoral.db:transactional
 ;;; With :AROUND-ACTIONS (TRANSACTIONAL), a request's callbacks share one transaction: when one fails, what the others saved is rolled back too.
 (defclass vote (littoral.db:persistent) ((choice :initarg :choice :initform nil)))

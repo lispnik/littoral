@@ -86,7 +86,7 @@ Documentation is online at **<https://lispnik.github.io/littoral/>**. New to lit
 `/examples` is a guide to the examples. Three of them are complete small applications:
 
 - **Sushi Store** (`/examples/store`): Seaside's classic demo. A catalog report and a cart share the page. Checkout is a task: review the cart, enter an address (validated), pick a delivery date with a reusable date-picker component, choose how to pay, then confirm. You can cancel at any step and the back button works throughout. Once the order is placed, the checkout pages are isolated, so going back can't place it twice.
-- **Wiki** (`/examples/wiki`): pages are shared by every session and kept out of backtracking. Each page has its own URL. There are `[[links]]` to new pages, editing with preview through `call`, history with revert, and search.
+- **Wiki** (`/examples/wiki`): pages are shared by every session and kept out of backtracking. Each page has its own URL. There are `[[links]]` to new pages, editing with preview through `call`, history showing what each revision changed, with revert, and search.
 - **Chat** (`/examples/chat`): many sessions in one room. Messages are posted with an AJAX form submit, and every open page receives them by server push.
 
 **Tracker** (`make tracker`, then `/tracker`) is a complete issue tracker built to try littoral on something real. It has:
@@ -229,7 +229,19 @@ It's an ordinary component, so a flow can `call` it. `/examples/wizard` signs so
   ((tags :type :tags :choices '("hiking" "food")) (meet :type :time) (dates :type :date-range)))
 ```
 
-They're in the widgets example. Its Breadcrumbs tab has the breadcrumbs and the in-place editor, in a pantry to browse; the Forms tab has the field kinds, and the Menus tab the menus, accordions and disclosures. `/examples/monitoring` charts the server's own metrics live.
+- **`lazy-panel`** leaves slow parts out of the page. The page is sent with a placeholder, and littoral.js asks for the content over AJAX as soon as it has loaded, or, with `:when-visible t`, once the placeholder is scrolled into view. `:content` is a component or a function making one, called only then. Once loaded, the panel is drawn with the page. Without JavaScript, a link loads it.
+- **`diff-view`** shows how two texts differ, line by line: removed lines struck through, added ones marked, and in a changed line the words that changed. It has an inline and a side-by-side layout, and cuts unchanged stretches to `:context` lines (3) around each change. `text-diff` gives the comparison as data.
+- **`command-palette`**: Ctrl-K (⌘K on a Mac) or its button opens a box that finds commands as you type, by fuzzy match on their labels and keywords. The arrow keys and Enter choose one, and Escape closes it. Each command is a `palette-command`, a label with a function to call or a URL; `:search` can add more from what's typed, such as records whose names match. The results are links, so it works without JavaScript too.
+
+```lisp
+(make-instance 'lazy-panel :content (lambda () (make-instance 'sales-chart :rows (slow-query))))
+(make-instance 'diff-view :old (revision-text before) :new (revision-text after))
+(make-instance 'command-palette
+               :commands (list (palette-command "New invoice" (lambda () (call-editor self)) :group "Invoices")
+                               (palette-command "Help" "/help" :keywords '("docs" "manual"))))
+```
+
+They're in the widgets example. Its Breadcrumbs tab has the breadcrumbs and the in-place editor, in a pantry to browse; the Forms tab has the field kinds, the Menus tab the menus, accordions and disclosures, and the Tools tab a lazy panel and a diff view. Its heading has a command palette over the tabs and the other examples. The report example's chart is a lazy panel, and the wiki's history shows each revision's changes. `/examples/monitoring` charts the server's own metrics live.
 
 ### Request cycle
 
@@ -640,7 +652,7 @@ The contacts example is translated into French and German.
 - **Where data lives:** the data lives in the database, and components hold only what the user is looking at. To edit, read a fresh copy (`db-find`), give it to `make-editor`, and `db-save` what the editor answers.
 - **Conflicting saves:** updates check the row's `version`, so saving an object someone else changed meanwhile signals `stale-object` rather than overwriting their change. Catch it and show the user the current version (`db-reload`).
 - **References:** a field of `:type :reference :to 'project` holds another stored object. It's chosen from that table in editors and kept as its id.
-- **Transactions:** `(register-application … :around-actions (littoral.db:transactional))` runs each request's callbacks, page or AJAX, in one transaction, rolled back if any of them signals.
+- **Transactions:** `(register-application … :around-actions (littoral.db:transactional))` runs each request's callbacks, page or AJAX, in one transaction, rolled back if any of them signals. `(littoral.db:after-commit function)` calls a function once the transaction commits, and never if it rolls back: for telling other pages of a change, which they could otherwise read the database too early to see.
 
 ### Schema migrations
 
@@ -664,7 +676,7 @@ migrations/003-search.postgres.sql        ; …and for PostgreSQL
 - **Forward only.** Fix a mistake with a new migration. Editing a file that's already applied signals a `migration-changed` warning and changes nothing.
 - **In an executable.** The files are read when `define-migrations` runs, so `make build` and Docker images carry them.
 - **A database that predates its migrations.** Write the first one with `IF NOT EXISTS`, or mark it as applied with `(baseline-migrations :my-app :through 1)`.
-- **Littoral's own tables** are migrations too (`:littoral-users`, `:littoral-auth`, `:littoral-mail`, `:littoral-jobs` and `:littoral-audit`, in `migrations/`), applied by `create-auth-tables`, `create-mail-tables`, `create-job-tables` and `create-audit-tables`. A database made by an earlier version is adopted as it is, and later versions change those tables by adding files.
+- **Littoral's own tables** are migrations too (`:littoral-users`, `:littoral-auth`, `:littoral-mail`, `:littoral-jobs`, `:littoral-audit` and `:littoral-notifications`, in `migrations/`), applied by `create-auth-tables`, `create-mail-tables`, `create-job-tables`, `create-audit-tables` and `create-notification-tables`. A database made by an earlier version is adopted as it is, and later versions change those tables by adding files.
 
 Generated applications keep their schema this way: `make migrate`, or `bin/app migrate` on a server, and starting the app migrates too.
 
@@ -701,7 +713,7 @@ For each class it gives:
 - editing with validation, which notices when someone else changed the record meanwhile
 - creation, and deletion after asking
 
-Each request's changes run in one transaction. `:database` gives the admin its own database (through the `:around-request` hook).
+A command palette in its header (Ctrl-K) goes to any table, or straight to a new record in one. Each request's changes run in one transaction. `:database` gives the admin its own database (through the `:around-request` hook).
 
 Beside the tables it has two pages of its own:
 - **Audit log**, when the audit log is on (the default), showing who did what.
@@ -819,6 +831,22 @@ Applications record their own events:
 - **Looking through it.** `audit-events` filters by action (`"sign-in"` also matches `"sign-in.failed"`), actor, subject, text and time. The admin gets an "Audit log" page, and `audit-log-view` is a component you can put on an admins-only page of your own. `purge-audit-log` deletes old events, by default those more than a year old (`:older-than` takes seconds). Nothing calls it for you, except the nightly job of generated apps.
 
 The members demo shows the log to ada, under Admins.
+
+### Notifications
+
+`littoral/notifications` keeps messages for users until they read them, in a `notifications` table. A toast is gone once seen; a notification waits, on whatever page and in whatever browser the user comes back with, across restarts.
+
+```lisp
+(littoral.notifications:create-notification-tables)
+(littoral.notifications:notify-user user "Your export is ready." :url "/exports/7")
+(make-instance 'littoral.notifications:notification-bell)   ; in the page's header
+```
+
+- **The bell** shows the signed-in user's unread count and opens onto their latest notifications. Following one marks it read and goes to its `:url`; Mark all as read does the rest. It's a dropdown, so it opens without JavaScript.
+- **Arriving live.** Each user has a channel (`notifications-channel`), published when their notifications change in this process, so the bell on their open pages counts a new one at once, even when a job thread made it. Inside a transaction it's published only once the transaction commits (`littoral.db:after-commit`), and a notification whose transaction rolls back never existed. For notifications made by other processes, give the bell `:poll`.
+- **Reading them.** `user-notifications` (with `:limit` and `:unread-only`), `unread-notification-count`, `mark-notification-read` (a user can mark only their own) and `mark-all-notifications-read`. `:kind` (`:info`, `:success`, `:warning`) is for styling. `purge-notifications` deletes those read more than 90 days ago, for a nightly job.
+
+In the members demo, the bell is beside the signed-in user's name: ada making bob an editor notifies him, and "Send me a notification in three seconds" sends one from a durable job.
 
 ### PostgreSQL
 

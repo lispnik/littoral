@@ -1,4 +1,4 @@
-;;;; report.lisp — a sortable, paged table
+;;;; report.lisp — a sortable, paged table, and a chart that loads after the page
 
 (in-package #:littoral-examples)
 
@@ -15,8 +15,27 @@
     (28 "Ni" "Nickel" 58.693) (29 "Cu" "Copper" 63.546) (30 "Zn" "Zinc" 65.38))
   "Number, symbol, name and standard atomic weight.")
 
+(defvar *chart-seconds* 0.6 "How long the chart pretends to take to work out.")
+
+(defclass weights-chart (component)
+  ((rows :initarg :rows :reader chart-rows))
+  (:documentation "The elements' weights, as a bar chart."))
+
+(defmethod render ((self weights-chart))
+  (bar-chart (mapcar (lambda (row) (cons (second row) (fourth row))) (chart-rows self))
+             :title "Standard atomic weights" :width 640
+             :format-value (lambda (v) (format nil "~,1F" v))))
+
 (defclass element-table (component)
   ((report :reader element-report)
+   (chart :initform (make-instance 'lazy-panel
+                                   :placeholder "Working out the chart…"
+                                   :when-visible t
+                                   :content (lambda ()
+                                              ;; A slow query, say: the page doesn't wait for it.
+                                              (sleep *chart-seconds*)
+                                              (make-instance 'weights-chart :rows *elements*)))
+          :reader element-chart)
    (selected :initform nil :accessor selected-element))
   (:documentation "A sortable, paged table of chemical elements."))
 
@@ -44,14 +63,17 @@
   (list self))
 
 (defmethod children ((self element-table))
-  (list (element-report self)))
+  (list (element-report self) (element-chart self)))
 
 (defmethod render ((self element-table))
   (h1 () "Elements")
   (p () "Click a heading to sort; click it again to reverse.")
   (render-component (element-report self))
   (when (selected-element self)
-    (p () "Selected: " (strong () (text (third (selected-element self)))))))
+    (p () "Selected: " (strong () (text (third (selected-element self))))))
+  (h2 () "Weights")
+  (p () "This chart is a lazy panel: it is filled in once you scroll to it, so the table above doesn't wait for it.")
+  (render-component (element-chart self)))
 
 (defmethod style ((self element-table))
   ".lt-report tr.selected td { background: var(--lt-panel); font-weight: 600; }")

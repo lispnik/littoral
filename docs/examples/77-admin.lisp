@@ -1,7 +1,7 @@
 ;;;; Examples for littoral.admin: an administration interface generated from descriptions and tables.
 
 ;;;; Example: littoral.admin:register-admin littoral.admin:admin
-;;; An admin over stored classes: a menu of tables, a searchable list of each, and a page per record to edit or delete it.  Without :ROLE or :CREDENTIALS it answers only requests from this machine, as the fake browser's are.
+;;; An admin over stored classes: a command palette, a menu of tables, a searchable list of each, and a page per record to edit or delete it.  Without :ROLE or :CREDENTIALS it answers only requests from this machine, as the fake browser's are.
 (defclass book (littoral.db:persistent)
   ((title :initarg :title :initform nil)
    (pages :initarg :pages :initform nil)))
@@ -23,7 +23,7 @@
         (fill-in b "pages" "354")
         (press b "Save")
         (list list (slot-value (littoral.db:db-find 'book 2) 'pages))))))
-;; ⇒ ("Library admin Books Audit log Books New book 2 books # Title Pages 1 Moby-Dick 635 2 Walden 352" 354)
+;; ⇒ ("Library admin Commands Ctrl K Search commands 3 commands Go to Books Tables New book Create Audit log Books Audit log Books New book 2 books # Title Pages 1 Moby-Dick 635 2 Walden 352" 354)
 
 ;;;; Example: littoral.admin:register-admin
 ;;; With :ROLE, users of littoral/auth with that role sign in to it, from anywhere; the database holds their tables too.  The audit log names who changed what.

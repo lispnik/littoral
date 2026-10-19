@@ -246,6 +246,42 @@ try {
   await send("Page.reload"); await waitLoad();
   check("the open section is remembered", await evaluate(`document.querySelectorAll(".lt-accordion details")[2].open`));
 
+  // The command palette: Ctrl-K opens it, typing ranks the commands, the
+  // arrow keys and Enter choose one, and Escape closes it.
+  const key = async (k, code, vk, modifiers = 0) => {
+    await send("Input.dispatchKeyEvent", { type: "keyDown", key: k, code, windowsVirtualKeyCode: vk, modifiers });
+    await send("Input.dispatchKeyEvent", { type: "keyUp", key: k, code, windowsVirtualKeyCode: vk, modifiers });
+  };
+  await go("/examples/widgets");
+  await key("k", "KeyK", 75, 2);         // Ctrl
+  check("Ctrl-K opens the palette", await waitFor(`document.querySelector("details.lt-palette").open && document.activeElement.type === "search"`));
+  await send("Input.insertText", { text: "kanb" });
+  check("the palette finds what's typed", await waitFor(`(() => { const r = [...document.querySelectorAll(".lt-palette-results a")];
+    return r.length === 1 && r[0].textContent.includes("Show Kanban"); })()`));
+  await key("ArrowDown", "ArrowDown", 40);
+  check("the arrow keys reach the results", await evaluate(`document.activeElement.textContent.includes("Show Kanban")`));
+  await key("Enter", "Enter", 13);
+  await waitLoad();
+  check("Enter runs the command", await waitFor(`document.body.innerText.includes("Write the docs")`));
+  await key("k", "KeyK", 75, 2);
+  check("the palette opens again", await waitFor(`document.querySelector("details.lt-palette").open`));
+  await key("Escape", "Escape", 27);
+  check("Escape closes the palette", await evaluate(`!document.querySelector("details.lt-palette").open`));
+
+  // Lazy panels: filled in after the page arrives, without a click; the
+  // report's chart once it is scrolled into view.
+  await go("/examples/widgets");
+  await clickLink("Show Tools");
+  check("a lazy panel fills itself in", await waitFor(`document.body.innerText.includes("The first 20 primes")`));
+  // A short window, so the chart starts out of view.
+  await send("Emulation.setDeviceMetricsOverride", { width: 800, height: 300, deviceScaleFactor: 1, mobile: false });
+  await go("/examples/report");
+  await sleep(1500);
+  check("a lazy panel out of view waits", await evaluate(`document.body.innerText.includes("Working out the chart")`));
+  await evaluate(`window.scrollTo(0, document.body.scrollHeight)`);
+  check("and loads once it is seen", await waitFor(`!!document.querySelector("figure svg") && document.body.innerText.includes("Standard atomic weights")`));
+  await send("Emulation.clearDeviceMetricsOverride");
+
   // JSON endpoints, called from the page with fetch.
   await go("/examples/api");
   await evaluate(`document.getElementById("api-post").click()`); await sleep(700);
@@ -268,6 +304,18 @@ try {
   await evaluate(`[...document.querySelectorAll("button")].find(b => b.textContent.includes("carol@example.org")).click()`);
   await waitLoad();
   check("signed in through demoid", (await evaluate("document.body.innerText")).includes("Signed in as carol"));
+  // Notifications: one from a durable job rings the bell by server push.
+  check("the bell shows no count", await evaluate(`!document.querySelector(".lt-bell-count")`));
+  await evaluate("window.__bell = 1");
+  await clickLink("Send me a notification in three seconds");
+  await evaluate("window.__bell = 1");
+  check("the bell counts a pushed notification",
+        await waitFor(`(document.querySelector(".lt-bell-count") || {}).textContent === "1"`) ||
+        await waitFor(`(document.querySelector(".lt-bell-count") || {}).textContent === "1"`));
+  check("without a reload", await evaluate("window.__bell") === 1);
+  await evaluate(`document.querySelector("details.lt-bell summary").click()`);
+  check("the bell opens onto it", await waitFor(`document.querySelector("details.lt-bell").open &&
+    document.querySelector(".lt-bell-panel").innerText.includes("Here is the notification you asked for.")`));
 
   // Passkeys, with Chrome's virtual authenticator.  WebAuthn won't take an IP
   // address as the site, so this part uses localhost.
