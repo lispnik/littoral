@@ -342,3 +342,30 @@ meanwhile; true if the commit went through.  OPTIONS go into the spec."
           (is (string= "Littoral by B" (slot-value (littoral.db:db-find 'project *edited-project-id*) 'name)))
           (save-in-place a a-input "Littoral by A")
           (is (string= "Littoral by A" (slot-value (littoral.db:db-find 'project *edited-project-id*) 'name))))))))
+
+(defclass trip (littoral.db:persistent)
+  ((tags :initarg :tags :initform nil)
+   (meet :initarg :meet :initform nil)
+   (dates :initarg :dates :initform nil)))
+
+(define-description trip
+  ((tags :type :tags)
+   (meet :type :time)
+   (dates :type :date-range)))
+
+(littoral.db:define-table trip)
+
+(test tags-times-and-date-ranges-are-stored
+  (connect-test-database)
+  (littoral.db:drop-table 'trip)
+  (littoral.db:create-table 'trip)
+  (unwind-protect
+       (let* ((saved (littoral.db:db-save (make-instance 'trip :tags '("food" "art") :meet '(9 30)
+                                                               :dates '((2026 11 6) . (2026 11 8)))))
+              (found (littoral.db:db-find 'trip (littoral.db:object-id saved)))
+              (blank (littoral.db:db-find 'trip (littoral.db:object-id (littoral.db:db-save (make-instance 'trip))))))
+         (is (equal '("food" "art") (slot-value found 'tags)))
+         (is (equal '(9 30) (slot-value found 'meet)))
+         (is (equal '((2026 11 6) . (2026 11 8)) (slot-value found 'dates)))
+         (is (equal '(nil nil nil) (list (slot-value blank 'tags) (slot-value blank 'meet) (slot-value blank 'dates)))))
+    (littoral.db:drop-table 'trip)))

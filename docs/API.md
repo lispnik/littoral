@@ -2731,8 +2731,10 @@ checked by `validate` but never shown; `:in-report` `nil` leaves a field out of
 `property`, unless given `:accessor` (the name of a SETF-able function) or
 `:reader` and `:writer` (functions of `object`, and of `value` and `object`).  The
 field's kind may take more: `:max-length`, `:pattern` and `:pattern-message` for
-text, `:min` and `:max` for integers, `:choices` and `:labels` for choices.  The
-options are evaluated, except `:accessor`.
+text, `:min` and `:max` for integers, `:choices` and `:labels` for choices, and
+`:choices` (offered while typing), `:only-choices` and `:max` for `:tags`.  `:time`
+holds (`hour` `minute`), `:date-range` two dates as ((Y M D) . (Y M D)), and
+`:tags` a list of strings.  The options are evaluated, except `:accessor`.
 
 `validate`, a function of a plist of the values keyed by keywords, checks
 them together: it returns `nil`, or what is wrong.
@@ -5333,6 +5335,255 @@ shown.  By default its class name, capitalised, with spaces for hyphens
       (click b "Inbox")
       (list opened (body-text b)))))
 ;; ⇒ ("Inbox Hello, Ada Dear Ada," "Inbox Open")
+```
+
+#### `disclosure` — class
+
+A line, `:summary` (translated), that opens and closes
+`:content`, a component, beneath it: an HTML details element, so it works
+without JavaScript too.  With JavaScript, opening and closing goes over
+AJAX and is remembered, so the page comes back as it was left.  `:open` T
+starts it open.
+
+*Example:* A line that opens and closes a component beneath it.  It is an HTML details element, so it works without JavaScript; with it, opening goes over AJAX and is remembered.
+
+```lisp
+(defclass small-print (component) ())
+(defmethod render ((self small-print)) (p () "No refunds after 30 days."))
+(defclass terms (component)
+  ((more :initform (make-instance 'disclosure :summary "Small print" :content (make-instance 'small-print))
+         :reader more)))
+(defmethod children ((self terms)) (list (more self)))
+(defmethod render ((self terms)) (render-component (more self)))
+(with-fresh-applications (("/terms" 'terms :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/terms")
+    (let ((closed (search "<details class=\"lt-disclosure\" open" (browser-html b)))
+          (toggle (first (ajax-specs b "on-click"))))
+      (ajax-request b (car toggle) (cdr toggle))
+      (visit b (browser-url b))
+      (list closed
+            (and (search "<details class=\"lt-disclosure\" open" (browser-html b)) t)
+            (body-text b)))))
+;; ⇒ (NIL T "Small print No refunds after 30 days.")
+```
+
+#### `disclosure-open-p` `object` — generic function
+
+Reads the open of a disclosure.
+
+*Example:* A line that opens and closes a component beneath it.  It is an HTML details element, so it works without JavaScript; with it, opening goes over AJAX and is remembered.
+
+```lisp
+(defclass small-print (component) ())
+(defmethod render ((self small-print)) (p () "No refunds after 30 days."))
+(defclass terms (component)
+  ((more :initform (make-instance 'disclosure :summary "Small print" :content (make-instance 'small-print))
+         :reader more)))
+(defmethod children ((self terms)) (list (more self)))
+(defmethod render ((self terms)) (render-component (more self)))
+(with-fresh-applications (("/terms" 'terms :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/terms")
+    (let ((closed (search "<details class=\"lt-disclosure\" open" (browser-html b)))
+          (toggle (first (ajax-specs b "on-click"))))
+      (ajax-request b (car toggle) (cdr toggle))
+      (visit b (browser-url b))
+      (list closed
+            (and (search "<details class=\"lt-disclosure\" open" (browser-html b)) t)
+            (body-text b)))))
+;; ⇒ (NIL T "Small print No refunds after 30 days.")
+```
+
+#### `accordion` — class
+
+Sections, each a title (translated) that opens and closes
+its component: `:sections` is an alist of (`title` . `component`).  Opening one
+closes the others, unless `:multiple` is true.  `:open` lists the indexes open
+at first.  Like `disclosure`, it is made of details elements, so it works
+without JavaScript, and remembers what is open.
+
+*Example:* Sections that open one at a time (or several, with `:multiple t`).  `accordion-open` lists the indexes open.
+
+```lisp
+(defclass answer-text (component) ((words :initarg :words :reader words)))
+(defmethod render ((self answer-text)) (p () (text (words self))))
+(defun open-sections (html)
+  "The titles of the accordion sections open in HTML."
+  (let ((titles '()))
+    (cl-ppcre:do-register-groups (title) ("<details class=\"lt-accordion-section\" open[^>]*><summary[^>]*>([^<]*)<" html)
+      (push title titles))
+    (nreverse titles)))
+(defclass faq-page (component)
+  ((faq :initform (make-instance 'accordion :open '(0)
+                                            :sections (list (cons "Shipping" (make-instance 'answer-text :words "Two days."))
+                                                            (cons "Returns" (make-instance 'answer-text :words "Thirty days."))))
+        :reader faq)))
+(defmethod children ((self faq-page)) (list (faq self)))
+(defmethod render ((self faq-page)) (render-component (faq self)))
+(with-fresh-applications (("/faq" 'faq-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/faq")
+    (let ((before (open-sections (browser-html b)))
+          (returns (second (ajax-specs b "on-click"))))
+      (ajax-request b (car returns) (cdr returns))   ; open Returns: Shipping closes
+      (visit b (browser-url b))
+      (let ((faq (make-instance 'accordion :sections (list (cons "One" nil)) :open '(0))))
+        (list before (open-sections (browser-html b))
+              (mapcar #'car (accordion-sections faq)) (accordion-open faq))))))
+;; ⇒ (("Shipping") ("Returns") ("One") (0))
+```
+
+#### `accordion-sections` `object` — generic function
+
+Reads the sections of an accordion.  Alist of (`title` . `component`).
+
+*Example:* Sections that open one at a time (or several, with `:multiple t`).  `accordion-open` lists the indexes open.
+
+```lisp
+(defclass answer-text (component) ((words :initarg :words :reader words)))
+(defmethod render ((self answer-text)) (p () (text (words self))))
+(defun open-sections (html)
+  "The titles of the accordion sections open in HTML."
+  (let ((titles '()))
+    (cl-ppcre:do-register-groups (title) ("<details class=\"lt-accordion-section\" open[^>]*><summary[^>]*>([^<]*)<" html)
+      (push title titles))
+    (nreverse titles)))
+(defclass faq-page (component)
+  ((faq :initform (make-instance 'accordion :open '(0)
+                                            :sections (list (cons "Shipping" (make-instance 'answer-text :words "Two days."))
+                                                            (cons "Returns" (make-instance 'answer-text :words "Thirty days."))))
+        :reader faq)))
+(defmethod children ((self faq-page)) (list (faq self)))
+(defmethod render ((self faq-page)) (render-component (faq self)))
+(with-fresh-applications (("/faq" 'faq-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/faq")
+    (let ((before (open-sections (browser-html b)))
+          (returns (second (ajax-specs b "on-click"))))
+      (ajax-request b (car returns) (cdr returns))   ; open Returns: Shipping closes
+      (visit b (browser-url b))
+      (let ((faq (make-instance 'accordion :sections (list (cons "One" nil)) :open '(0))))
+        (list before (open-sections (browser-html b))
+              (mapcar #'car (accordion-sections faq)) (accordion-open faq))))))
+;; ⇒ (("Shipping") ("Returns") ("One") (0))
+```
+
+#### `accordion-open` `object` — generic function
+
+Reads the open of an accordion.  The indexes of the sections open now.  Replaced, never changed in place.
+
+*Example:* Sections that open one at a time (or several, with `:multiple t`).  `accordion-open` lists the indexes open.
+
+```lisp
+(defclass answer-text (component) ((words :initarg :words :reader words)))
+(defmethod render ((self answer-text)) (p () (text (words self))))
+(defun open-sections (html)
+  "The titles of the accordion sections open in HTML."
+  (let ((titles '()))
+    (cl-ppcre:do-register-groups (title) ("<details class=\"lt-accordion-section\" open[^>]*><summary[^>]*>([^<]*)<" html)
+      (push title titles))
+    (nreverse titles)))
+(defclass faq-page (component)
+  ((faq :initform (make-instance 'accordion :open '(0)
+                                            :sections (list (cons "Shipping" (make-instance 'answer-text :words "Two days."))
+                                                            (cons "Returns" (make-instance 'answer-text :words "Thirty days."))))
+        :reader faq)))
+(defmethod children ((self faq-page)) (list (faq self)))
+(defmethod render ((self faq-page)) (render-component (faq self)))
+(with-fresh-applications (("/faq" 'faq-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/faq")
+    (let ((before (open-sections (browser-html b)))
+          (returns (second (ajax-specs b "on-click"))))
+      (ajax-request b (car returns) (cdr returns))   ; open Returns: Shipping closes
+      (visit b (browser-url b))
+      (let ((faq (make-instance 'accordion :sections (list (cons "One" nil)) :open '(0))))
+        (list before (open-sections (browser-html b))
+              (mapcar #'car (accordion-sections faq)) (accordion-open faq))))))
+;; ⇒ (("Shipping") ("Returns") ("One") (0))
+```
+
+#### `dropdown-menu` — class
+
+A button, `:label` (translated), that opens a list of
+`:items`: each (`label` . `action`), `action` a function called when it is chosen
+or a URL to go to, or `:separator` for a dividing line.  It is a details
+element, so it opens without JavaScript; littoral.js closes it on Escape or
+a click elsewhere, keeps one open at a time, and moves between items with
+the arrow keys.
+
+*Example:* A dropdown lists items, each a label and a function to call or a URL to go to; a menu bar is a row of links and dropdowns.  Both are details elements, so they open without JavaScript; littoral.js closes them on Escape or a click elsewhere.
+
+```lisp
+(defvar *chosen* nil)
+(defclass toolbar (component)
+  ((bar :initform (make-instance 'menu-bar
+                                 :items (list (cons "Home" "/")
+                                              (cons "Edit" (list (cons "Undo" (lambda () (setf *chosen* "Undo")))
+                                                                 :separator
+                                                                 (cons "Select all" (lambda () (setf *chosen* "Select all")))))))
+        :reader bar)))
+(defmethod children ((self toolbar)) (list (bar self)))
+(defmethod render ((self toolbar)) (render-component (bar self)))
+(with-fresh-applications (("/tools" 'toolbar :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/tools")
+    (click b "Select all")
+    (list *chosen* (length (menu-items (make-instance 'dropdown-menu :label "More" :items '(("A" . "/a") :separator)))))))
+;; ⇒ ("Select all" 2)
+```
+
+#### `menu-bar` — class
+
+A row of menus for finding one's way around: `:items` are
+(`label` . `action`), a link as in `dropdown-menu`, or (`label` . `items`), a
+dropdown of `items`.  It is a nav element, its links ordinary links.
+
+*Example:* A dropdown lists items, each a label and a function to call or a URL to go to; a menu bar is a row of links and dropdowns.  Both are details elements, so they open without JavaScript; littoral.js closes them on Escape or a click elsewhere.
+
+```lisp
+(defvar *chosen* nil)
+(defclass toolbar (component)
+  ((bar :initform (make-instance 'menu-bar
+                                 :items (list (cons "Home" "/")
+                                              (cons "Edit" (list (cons "Undo" (lambda () (setf *chosen* "Undo")))
+                                                                 :separator
+                                                                 (cons "Select all" (lambda () (setf *chosen* "Select all")))))))
+        :reader bar)))
+(defmethod children ((self toolbar)) (list (bar self)))
+(defmethod render ((self toolbar)) (render-component (bar self)))
+(with-fresh-applications (("/tools" 'toolbar :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/tools")
+    (click b "Select all")
+    (list *chosen* (length (menu-items (make-instance 'dropdown-menu :label "More" :items '(("A" . "/a") :separator)))))))
+;; ⇒ ("Select all" 2)
+```
+
+#### `menu-items` `object` — generic function
+
+Reads the items of a menu-bar.  List of (`label` . `action`) or (`label` . `items`).
+
+*Example:* A dropdown lists items, each a label and a function to call or a URL to go to; a menu bar is a row of links and dropdowns.  Both are details elements, so they open without JavaScript; littoral.js closes them on Escape or a click elsewhere.
+
+```lisp
+(defvar *chosen* nil)
+(defclass toolbar (component)
+  ((bar :initform (make-instance 'menu-bar
+                                 :items (list (cons "Home" "/")
+                                              (cons "Edit" (list (cons "Undo" (lambda () (setf *chosen* "Undo")))
+                                                                 :separator
+                                                                 (cons "Select all" (lambda () (setf *chosen* "Select all")))))))
+        :reader bar)))
+(defmethod children ((self toolbar)) (list (bar self)))
+(defmethod render ((self toolbar)) (render-component (bar self)))
+(with-fresh-applications (("/tools" 'toolbar :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/tools")
+    (click b "Select all")
+    (list *chosen* (length (menu-items (make-instance 'dropdown-menu :label "More" :items '(("A" . "/a") :separator)))))))
+;; ⇒ ("Select all" 2)
 ```
 
 #### `in-place-editor` — class

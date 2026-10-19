@@ -27,6 +27,11 @@ await send("Page.enable"); await send("Runtime.enable");
 const evaluate = async (expr) => { const r = await send("Runtime.evaluate", { expression: expr, awaitPromise: true, returnByValue: true });
   if (r.result.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails)); return r.result.result.value; };
 const waitLoad = async () => { await sleep(300); for (let i = 0; i < 50; i++) { if (await evaluate("document.readyState") === "complete") return; await sleep(100); } };
+// Wait (up to 10 s) until EXPR is true in the page; whether it became true.
+const waitFor = async (expr) => {
+  for (let i = 0; i < 100; i++) { try { if (await evaluate(expr)) return true; } catch {} await sleep(100); }
+  return false;
+};
 const go = async (path) => { await send("Page.navigate", { url: BASE + path }); await waitLoad(); };
 const clickLink = async (text) => { await evaluate(`[...document.querySelectorAll("a")].find(a => a.textContent.includes(${JSON.stringify(text)})).click()`); await waitLoad(); };
 // A second tab with its own DevTools connection (a separate session).
@@ -151,9 +156,29 @@ try {
   const doc = await send("DOM.getDocument");
   const node = await send("DOM.querySelector", { nodeId: doc.result.root.nodeId, selector: "input[type=file]" });
   await send("DOM.setFileInputFiles", { files: [upload], nodeId: node.result.nodeId });
-  await evaluate(`document.querySelector("button[type=submit]").click()`); await waitLoad();
+  // littoral.js sends forms with files by XHR, with a progress bar, then
+  // goes to the page the action led to; note the bar before it goes.
+  await evaluate(`new MutationObserver(() => { if (document.querySelector(".lt-upload-progress")) sessionStorage.sawProgress = "1"; })
+                    .observe(document.body, { childList: true, subtree: true })`);
+  await evaluate(`document.querySelector("button[type=submit]").click()`);
+  await waitFor(`document.body.innerText.includes("hello from chrome")`); await waitLoad();
   const text = await evaluate("document.body.innerText");
   check("upload received", text.includes("littoral-e2e-profile-upload.txt") && text.includes("hello from chrome"), text.slice(0, 200));
+  check("the upload showed a progress bar", await evaluate(`sessionStorage.sawProgress === "1"`));
+
+  // A file dropped on the drop zone is chosen, and uploads the same way.
+  await go("/examples/upload");
+  await evaluate(`(() => {
+    const zone = document.querySelector(".lt-drop");
+    const data = new DataTransfer();
+    data.items.add(new File(["dropped in chrome\n"], "dropped.txt", { type: "text/plain" }));
+    zone.dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer: data }));
+    zone.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: data }));
+  })()`);
+  check("a dropped file is chosen", await evaluate(`document.querySelector("#file").files[0].name`) === "dropped.txt");
+  check("the drop zone names it", await evaluate(`document.querySelector(".lt-drop-files").textContent`) === "dropped.txt");
+  await evaluate(`document.querySelector("button[type=submit]").click()`);
+  check("the dropped file is uploaded", await waitFor(`document.body.innerText.includes("dropped in chrome")`));
 
   // Gallery: an image through a real multipart upload, shown by its thumbnail.
   const dot = PROFILE + "/littoral-e2e-dot.png";
@@ -164,7 +189,8 @@ try {
   const gdoc = await send("DOM.getDocument");
   const gnode = await send("DOM.querySelector", { nodeId: gdoc.result.root.nodeId, selector: "#picture" });
   await send("DOM.setFileInputFiles", { files: [dot], nodeId: gnode.result.nodeId });
-  await evaluate(`[...document.querySelectorAll("button")].find(b => b.textContent.includes("Upload")).click()`); await waitLoad();
+  await evaluate(`[...document.querySelectorAll("button")].find(b => b.textContent.includes("Upload")).click()`);
+  await waitFor(`!!document.querySelector(".gallery img")`); await waitLoad();
   await sleep(500);
   check("gallery upload shows its thumbnail",
         await evaluate(`(() => { const i = document.querySelector(".gallery img"); return !!i && i.complete && i.naturalWidth > 0; })()`));
@@ -187,6 +213,38 @@ try {
   await send("Page.reload"); await waitLoad();
   check("the move is kept on the server",
         (await evaluate(`document.querySelectorAll("[data-lt-kanban] ol")[2].innerText`)).includes("Write the docs"));
+
+  // Tags: chips from what is typed; the hidden input carries the text.
+  await go("/examples/widgets");
+  await clickLink("Forms");
+  check("tags become chips", await evaluate(`[...document.querySelectorAll(".lt-tags-input .lt-tags li")].map(li => li.firstChild.textContent).join(",")`) === "food,museums");
+  await evaluate(`(() => {
+    const entry = document.querySelector(".lt-tags-entry");
+    entry.value = "beach";
+    entry.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    document.querySelector(".lt-tag-remove").click();   // removes food
+  })()`);
+  check("tags are added and removed", await evaluate(`document.querySelector("input[data-lt-tags]").value`) === "museums, beach",
+        await evaluate(`document.querySelector("input[data-lt-tags]").value`));
+  await clickButton("Save", true);
+  check("the tags are saved", (await evaluate(`document.querySelector(".outing-saved").innerText`)).includes("museums"));
+
+  // Menus: a dropdown opens, Escape closes it, and so does a click elsewhere.
+  await clickLink("Menus");
+  await evaluate(`document.querySelector("details.lt-dropdown summary").click()`);
+  check("a dropdown opens", await evaluate(`document.querySelector("details.lt-dropdown").open`));
+  await evaluate(`document.querySelector("details.lt-dropdown summary").focus();
+                  document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }))`);
+  check("the arrow keys reach its items", await evaluate(`document.activeElement.textContent`) === "New");
+  await evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))`);
+  check("Escape closes it", await evaluate(`!document.querySelector("details.lt-dropdown").open`));
+  await evaluate(`document.querySelector("details.lt-dropdown summary").click(); document.querySelector("h2").click()`);
+  check("a click elsewhere closes it", await evaluate(`!document.querySelector("details.lt-dropdown").open`));
+  // The accordion: opening a section goes to the server, and is kept.
+  await evaluate(`[...document.querySelectorAll(".lt-accordion summary")][2].click()`);
+  check("an accordion section opens", await waitFor(`document.querySelectorAll(".lt-accordion details")[2].open && !document.querySelectorAll(".lt-accordion details")[0].open`));
+  await send("Page.reload"); await waitLoad();
+  check("the open section is remembered", await evaluate(`document.querySelectorAll(".lt-accordion details")[2].open`));
 
   // JSON endpoints, called from the page with fetch.
   await go("/examples/api");

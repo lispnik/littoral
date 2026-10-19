@@ -98,6 +98,111 @@ shown.  By default its class name, capitalised, with spaces for hyphens
                        (span (:aria-current "page")
                          (text (translate-label (breadcrumb-label component)))))))))))
 
+;;; Disclosures and accordions: <details>, remembered on the server
+
+(defclass disclosure (component updatable)
+  ((summary :initarg :summary :reader disclosure-summary :documentation "The line that opens and closes it.")
+   (content :initarg :content :reader disclosure-content :documentation "The component shown when open.")
+   (open :initarg :open :initform nil :accessor disclosure-open-p))
+  (:documentation "A line, :SUMMARY (translated), that opens and closes
+:CONTENT, a component, beneath it: an HTML details element, so it works
+without JavaScript too.  With JavaScript, opening and closing goes over
+AJAX and is remembered, so the page comes back as it was left.  :OPEN T
+starts it open."))
+
+(defmethod states ((self disclosure)) (list self))
+(defmethod children ((self disclosure)) (list (disclosure-content self)))
+
+(defmethod render ((self disclosure))
+  (details (:class "lt-disclosure" :open (and (disclosure-open-p self) t))
+    (summary (:on-click (ajax :callback (lambda () (setf (disclosure-open-p self) (not (disclosure-open-p self))))
+                              :update self))
+      (text (translate-label (disclosure-summary self))))
+    (div (:class "lt-disclosure-content")
+      (render-component (disclosure-content self)))))
+
+(defclass accordion (component updatable)
+  ((sections :initarg :sections :initform '() :reader accordion-sections
+             :documentation "Alist of (TITLE . COMPONENT).")
+   (open :initarg :open :initform '() :accessor accordion-open
+         :documentation "The indexes of the sections open now.  Replaced, never changed in place.")
+   (multiple :initarg :multiple :initform nil :reader accordion-multiple-p))
+  (:documentation "Sections, each a title (translated) that opens and closes
+its component: :SECTIONS is an alist of (TITLE . COMPONENT).  Opening one
+closes the others, unless :MULTIPLE is true.  :OPEN lists the indexes open
+at first.  Like DISCLOSURE, it is made of details elements, so it works
+without JavaScript, and remembers what is open."))
+
+(defmethod states ((self accordion)) (list self))
+(defmethod children ((self accordion)) (mapcar #'cdr (accordion-sections self)))
+
+(defun toggle-section (accordion index)
+  (let ((open (accordion-open accordion)))
+    (setf (accordion-open accordion)
+          (cond ((member index open) (remove index open))
+                ((accordion-multiple-p accordion) (cons index open))
+                (t (list index))))))
+
+(defmethod render ((self accordion))
+  (div (:class "lt-accordion")
+    (loop for (title . component) in (accordion-sections self)
+          for index from 0
+          do (let ((index index))
+               ;; A shared name makes browsers open one at a time without
+               ;; JavaScript, too.
+               (details (:class "lt-accordion-section" :open (and (member index (accordion-open self)) t)
+                         :name (unless (accordion-multiple-p self) (component-id self)))
+                 (summary (:on-click (ajax :callback (lambda () (toggle-section self index)) :update self))
+                   (text (translate-label title)))
+                 (div (:class "lt-accordion-panel")
+                   (render-component component)))))))
+
+;;; Dropdown menus and menu bars
+
+(defclass dropdown-menu (component)
+  ((label :initarg :label :reader menu-label)
+   (items :initarg :items :initform '() :reader menu-items
+          :documentation "List of (LABEL . ACTION), or :SEPARATOR."))
+  (:documentation "A button, :LABEL (translated), that opens a list of
+:ITEMS: each (LABEL . ACTION), ACTION a function called when it is chosen
+or a URL to go to, or :SEPARATOR for a dividing line.  It is a details
+element, so it opens without JavaScript; littoral.js closes it on Escape or
+a click elsewhere, keeps one open at a time, and moves between items with
+the arrow keys."))
+
+(defun render-menu-item (item)
+  (if (eq item :separator)
+      (li (:class "lt-menu-separator" :role "separator"))
+      (destructuring-bind (label . action) item
+        (li ()
+          (if (stringp action)
+              (anchor (:href action) (text (translate-label label)))
+              (anchor (:callback action) (text (translate-label label))))))))
+
+(defun render-dropdown (label items)
+  (details (:class "lt-dropdown")
+    (summary () (text (translate-label label)))
+    (ul ()
+      (dolist (item items) (render-menu-item item)))))
+
+(defmethod render ((self dropdown-menu))
+  (render-dropdown (menu-label self) (menu-items self)))
+
+(defclass menu-bar (component)
+  ((items :initarg :items :initform '() :reader menu-items
+          :documentation "List of (LABEL . ACTION) or (LABEL . ITEMS)."))
+  (:documentation "A row of menus for finding one's way around: :ITEMS are
+\(LABEL . ACTION), a link as in DROPDOWN-MENU, or (LABEL . ITEMS), a
+dropdown of ITEMS.  It is a nav element, its links ordinary links."))
+
+(defmethod render ((self menu-bar))
+  (nav (:class "lt-menu-bar" :aria-label (translate "Menu"))
+    (ul ()
+      (dolist (item (menu-items self))
+        (if (and (consp item) (listp (cdr item)) (cdr item))
+            (li () (render-dropdown (car item) (cdr item)))
+            (render-menu-item item))))))
+
 ;;; Tree
 
 (defclass tree (component)

@@ -296,10 +296,154 @@ required, the select offers a blank option too."))
                           :required (field-required-p field))
             nil))
 
+;;; Times of day: (HOUR MINUTE), written 09:30
+
+(defclass time-field (field) ()
+  (:documentation "A time of day, held as (HOUR MINUTE) and written like 09:30;
+entered with the browser's time input."))
+
+(defmethod parse-field ((field time-field) string)
+  (let ((trimmed (string-trim " " string)))
+    (if (string= trimmed "")
+        nil
+        (or (cl-ppcre:register-groups-bind ((#'parse-integer hour minute))
+                ("^(\\d{1,2}):(\\d{2})(?::\\d{2})?$" trimmed)
+              (and (<= 0 hour 23) (<= 0 minute 59) (list hour minute)))
+            (field-problem "~A must be a time, like 09:30." (translate (field-label field)))))))
+
+(defmethod format-field ((field time-field) value)
+  (if (null value) "" (format nil "~2,'0D:~2,'0D" (first value) (second value))))
+
+(defmethod render-field-input ((field time-field) id text callback)
+  (emit-tag "input" (list :type "time" :id id :value text :name (register :value callback)
+                          :required (field-required-p field))
+            nil))
+
+;;; Date ranges: ((Y M D) . (Y M D)), written 2026-10-01/2026-10-07
+
+(defclass date-range-field (field) ()
+  (:documentation "Two dates, the first no later than the second, held as
+\((YEAR MONTH DAY) . (YEAR MONTH DAY)) and written as an ISO 8601 interval,
+2026-10-01/2026-10-07; entered with two date inputs, From and To."))
+
+(defun range-dates (field text)
+  "The two date texts of TEXT, split at its slash."
+  (declare (ignore field))
+  (let ((slash (position #\/ text)))
+    (if slash
+        (values (string-trim " " (subseq text 0 slash)) (string-trim " " (subseq text (1+ slash))))
+        (values (string-trim " " text) ""))))
+
+(defmethod parse-field ((field date-range-field) string)
+  (multiple-value-bind (from to) (range-dates field string)
+    (cond ((and (string= from "") (string= to "")) nil)
+          ((or (string= from "") (string= to ""))
+           (field-problem "~A needs both a first and a last day." (translate (field-label field))))
+          (t
+           (let ((day (make-instance 'date-field :name (field-name field) :label (field-label field))))
+             (cons (parse-field day from) (parse-field day to)))))))
+
+(defmethod format-field ((field date-range-field) value)
+  (if (null value)
+      ""
+      (let ((day (make-instance 'date-field :name (field-name field))))
+        (format nil "~A/~A" (format-field day (car value)) (format-field day (cdr value))))))
+
+(defmethod check-field ((field date-range-field) value)
+  (or (call-next-method)
+      (and value
+           (let ((from (car value)) (to (cdr value)))
+             (when (> (+ (* 10000 (first from)) (* 100 (second from)) (third from))
+                      (+ (* 10000 (first to)) (* 100 (second to)) (third to)))
+               (translate "~A must not end before it starts." (translate (field-label field))))))))
+
+(defmethod render-field-input ((field date-range-field) id text callback)
+  ;; Each input sends its half; together they make the range, whichever
+  ;; callback runs last.
+  (multiple-value-bind (from to) (range-dates field text)
+    (let ((attributes *next-field-attributes*))
+      (setf *next-field-attributes* '())
+      ;; The first input has ID, so a label for the field names it.
+      (emit-tag "span" (list :class "lt-date-range" :role (when (getf attributes :aria-label) "group")
+                             :aria-label (getf attributes :aria-label))
+                (lambda ()
+                  (label (:for id) (translate "From"))
+                  (let ((*next-field-attributes* (alexandria:remove-from-plist attributes :aria-label)))
+                    (emit-tag "input" (list :type "date" :id id :value from
+                                            :required (field-required-p field)
+                                            :name (register :value (lambda (v) (setf from v)
+                                                                     (funcall callback (format nil "~A/~A" from to)))))
+                              nil))
+                  (label (:for (format nil "~A-to" id)) (translate "To"))
+                  (emit-tag "input" (list :type "date" :id (format nil "~A-to" id) :value to
+                                          :required (field-required-p field)
+                                          :name (register :value (lambda (v) (setf to v)
+                                                                   (funcall callback (format nil "~A/~A" from to)))))
+                            nil))))))
+
+;;; Tags: a list of short texts, typed separated by commas
+
+(defclass tags-field (field)
+  ((suggestions :initarg :choices :initform '() :reader tags-suggestions-designator
+                :documentation "Texts offered while typing: a list, or a function returning one.")
+   (only-suggestions :initarg :only-choices :initform nil :reader tags-only-suggestions-p)
+   (max-tags :initarg :max :initform nil :reader tags-max))
+  (:documentation "A list of tags, short texts, typed separated by commas
+and shown as removable chips once littoral.js has loaded.  :CHOICES (a
+list, or a function returning one) are offered while typing; with
+:ONLY-CHOICES T no others are accepted.  :MAX caps how many.  Repeats are
+dropped, ignoring case."))
+
+(defun tags-suggestions (field)
+  (let ((designator (tags-suggestions-designator field)))
+    (mapcar #'princ-to-string (if (functionp designator) (funcall designator) designator))))
+
+(defmethod parse-field ((field tags-field) string)
+  (let ((tags '()))
+    (dolist (part (cl-ppcre:split "," string))
+      (let ((tag (string-trim '(#\Space #\Tab #\Newline) part)))
+        (unless (or (string= tag "") (member tag tags :test #'string-equal))
+          (push tag tags))))
+    (nreverse tags)))
+
+(defmethod format-field ((field tags-field) value)
+  (format nil "~{~A~^, ~}" value))
+
+(defmethod check-field ((field tags-field) value)
+  (or (call-next-method)
+      (cond ((and (tags-max field) (> (length value) (tags-max field)))
+             (translate "~A can have at most ~D." (translate (field-label field)) (tags-max field)))
+            ((and (tags-only-suggestions-p field)
+                  (find-if-not (lambda (tag) (member tag (tags-suggestions field) :test #'string-equal)) value))
+             (translate "~A can only be ~{~A~^, ~}." (translate (field-label field)) (tags-suggestions field)))
+            (t nil))))
+
+(defmethod render-field-input ((field tags-field) id text callback)
+  (let ((suggestions (tags-suggestions field)))
+    (emit-tag "input" (list :type "text" :id id :value text :name (register :value callback)
+                            :required (field-required-p field)
+                            :autocomplete "off"
+                            :list (and suggestions (format nil "~A-tags" id))
+                            :data-lt-tags (translate "Remove ~A")
+                            :aria-description (translate "Separate tags with commas."))
+              nil)
+    (when suggestions
+      (emit-tag "datalist" (list :id (format nil "~A-tags" id))
+                (lambda ()
+                  (dolist (s suggestions)
+                    (emit-tag "option" (list :value s) nil)))))))
+
+(defmethod render-field-value ((field tags-field) value)
+  (emit-tag "ul" (list :class "lt-tags")
+            (lambda ()
+              (dolist (tag value)
+                (li () (text tag))))))
+
 (defparameter *field-kinds*
   '((:string . string-field) (:text . text-field) (:password . password-field)
     (:email . email-field) (:url . url-field) (:integer . integer-field)
-    (:boolean . boolean-field) (:choice . choice-field) (:date . date-field))
+    (:boolean . boolean-field) (:choice . choice-field) (:date . date-field)
+    (:time . time-field) (:date-range . date-range-field) (:tags . tags-field))
   "Alist of keyword → field class name, for :TYPE in DEFINE-DESCRIPTION.
 Push your own (KEYWORD . CLASS-NAME).")
 
@@ -406,8 +550,10 @@ DESCRIPTION-COLUMNS and data grids.  A field reads and writes the slot named
 PROPERTY, unless given :ACCESSOR (the name of a SETF-able function) or
 :READER and :WRITER (functions of OBJECT, and of VALUE and OBJECT).  The
 field's kind may take more: :MAX-LENGTH, :PATTERN and :PATTERN-MESSAGE for
-text, :MIN and :MAX for integers, :CHOICES and :LABELS for choices.  The
-options are evaluated, except :ACCESSOR.
+text, :MIN and :MAX for integers, :CHOICES and :LABELS for choices, and
+:CHOICES (offered while typing), :ONLY-CHOICES and :MAX for :TAGS.  :TIME
+holds (HOUR MINUTE), :DATE-RANGE two dates as ((Y M D) . (Y M D)), and
+:TAGS a list of strings.  The options are evaluated, except :ACCESSOR.
 
 VALIDATE, a function of a plist of the values keyed by keywords, checks
 them together: it returns NIL, or what is wrong.

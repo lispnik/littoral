@@ -106,6 +106,33 @@ dialog.lt-modal { position: fixed; top: 12vh; margin: 0 auto; max-width: min(36r
   border-top: 1px solid currentColor; border-right: 1px solid currentColor; transform: rotate(45deg); opacity: .6; }
 .lt-breadcrumbs [aria-current] { font-weight: 600; }
 
+/* Disclosures, accordions, menus */
+.lt-disclosure > summary, .lt-accordion-section > summary { cursor: pointer; padding: .3rem 0; font-weight: 600; }
+.lt-accordion-section { border-bottom: 1px solid var(--lt-border); }
+.lt-accordion-panel, .lt-disclosure-content { padding: .2rem 0 .6rem 1rem; }
+.lt-dropdown { position: relative; display: inline-block; }
+.lt-dropdown > summary { cursor: pointer; list-style: none; padding: .25rem .6rem; border: 1px solid var(--lt-border); border-radius: 6px; }
+.lt-dropdown > summary::-webkit-details-marker { display: none; }
+.lt-dropdown > summary::after { content: " ▾"; }
+.lt-dropdown > ul { position: absolute; z-index: 20; min-width: 12rem; margin: .2rem 0 0; padding: .3rem 0; list-style: none;
+  background: var(--lt-bg, Canvas); border: 1px solid var(--lt-border); border-radius: 6px; box-shadow: 0 4px 14px rgb(0 0 0 / .15); }
+.lt-dropdown > ul a { display: block; padding: .3rem .8rem; text-decoration: none; }
+.lt-dropdown > ul a:hover, .lt-dropdown > ul a:focus { background: var(--lt-panel); }
+.lt-menu-separator { border-top: 1px solid var(--lt-border); margin: .3rem 0; }
+.lt-menu-bar > ul { display: flex; flex-wrap: wrap; gap: .3rem 1rem; align-items: center; list-style: none; padding: 0; margin: 0; }
+
+/* Tags, date ranges, uploads */
+.lt-tags { display: flex; flex-wrap: wrap; gap: .3rem; list-style: none; padding: 0; margin: 0; }
+.lt-tags li { padding: .05rem .5rem; border-radius: 999px; background: var(--lt-panel); }
+.lt-tags-input { display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; border: 1px solid var(--lt-border); border-radius: 6px; padding: .25rem; }
+.lt-tags-entry { flex: 1; min-width: 8rem; border: 0; }
+.lt-tag-remove { border: 0; background: none; padding: 0 0 0 .3rem; cursor: pointer; }
+.lt-date-range { display: inline-flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.lt-drop { border: 2px dashed var(--lt-border); border-radius: 8px; padding: .8rem; display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.lt-drop-over { border-color: var(--lt-accent); background: var(--lt-panel); }
+.lt-drop-hint { color: var(--lt-muted); }
+.lt-upload-progress { display: block; width: 100%; max-width: 30rem; margin-top: .5rem; }
+
 /* Presence */
 .lt-presence-count { margin: 0 0 .3rem; font-weight: 600; }
 .lt-presence ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: .3rem .5rem; }

@@ -227,6 +227,91 @@ Some *emphasis*, some **strong** text and `code`.
   (render-component (section-trail self))
   (render-component (section-pantry self)))
 
+;;; Forms: tags, a time and a date range, in a description's editor
+
+(defclass outing ()
+  ((title :initarg :title :accessor outing-title)
+   (tags :initarg :tags :accessor outing-tags)
+   (meet :initarg :meet :accessor outing-meet)
+   (dates :initarg :dates :accessor outing-dates))
+  (:documentation "A trip, to edit."))
+
+(define-description outing
+  ((title :required t)
+   (tags :type :tags :choices '("hiking" "museums" "food" "beach") :max 5 :help "Pick some, or type your own.")
+   (meet :type :time :label "Meeting time")
+   (dates :type :date-range :label "Dates")))
+
+(defclass forms-section (component)
+  ((outing :initform (make-instance 'outing :title "Lyon" :tags '("food" "museums") :meet '(9 30)
+                                            :dates '((2026 11 6) . (2026 11 8)))
+           :reader section-outing)
+   (editor :reader section-editor))
+  (:documentation "A description editor using the tags, time and date-range field kinds."))
+
+(defmethod initialize-instance :after ((self forms-section) &key)
+  (setf (slot-value self 'editor) (make-editor (section-outing self) :title "An outing")))
+
+(defmethod children ((self forms-section)) (list (section-editor self)))
+
+(defmethod render ((self forms-section))
+  (h2 () "Tags, times and date ranges")
+  (p () "Tags turn into chips as you type (Enter or a comma adds one); without JavaScript they're a comma-separated list.")
+  (render-component (section-editor self))
+  (let ((description (find-description 'outing)))
+    (dl (:class "outing-saved")
+      (dolist (field (description-fields description))
+        (dt () (text (field-label field)))
+        (dd () (render-field-value field (field-value field (section-outing self))))))))
+
+;;; Menus, accordions and disclosures
+
+(defclass menus-section (component)
+  ((chosen :initform nil :accessor menus-chosen)
+   (bar :reader menus-bar)
+   (actions :reader menus-actions)
+   (faq :reader menus-faq)
+   (more :reader menus-more))
+  (:documentation "A menu bar, a dropdown of actions, an accordion and a disclosure."))
+
+(defmethod initialize-instance :after ((self menus-section) &key)
+  (flet ((choose (what) (lambda () (setf (menus-chosen self) what))))
+    (setf (slot-value self 'bar)
+          (make-instance 'menu-bar :items (list (cons "Home" (url-for "/examples"))
+                                                (cons "File" (list (cons "New" (choose "New"))
+                                                                   (cons "Open…" (choose "Open"))
+                                                                   :separator
+                                                                   (cons "Close" (choose "Close"))))
+                                                (cons "Help" (list (cons "About" (choose "About"))))))
+          (slot-value self 'actions)
+          (make-instance 'dropdown-menu :label "Actions"
+                                        :items (list (cons "Rename" (choose "Rename"))
+                                                     (cons "Duplicate" (choose "Duplicate"))
+                                                     :separator
+                                                     (cons "Delete" (choose "Delete"))))
+          (slot-value self 'faq)
+          (make-instance 'accordion
+                         :sections (list (cons "What is an accordion?" (make-instance 'note :text "Sections that open one at a time."))
+                                         (cons "Does it need JavaScript?" (make-instance 'note :text "No: each section is a details element."))
+                                         (cons "Is it remembered?" (make-instance 'note :text "Yes: what is open is kept on the server.")))
+                         :open '(0))
+          (slot-value self 'more)
+          (make-instance 'disclosure :summary "Show the small print"
+                                     :content (make-instance 'note :text "Menus close on Escape or a click elsewhere.")))))
+
+(defmethod children ((self menus-section))
+  (list (menus-bar self) (menus-actions self) (menus-faq self) (menus-more self)))
+
+(defmethod states ((self menus-section)) (list self))
+
+(defmethod render ((self menus-section))
+  (h2 () "Menus, accordions and disclosures")
+  (render-component (menus-bar self))
+  (p () (render-component (menus-actions self))
+    (when (menus-chosen self) (text " ") (span (:class "menus-chosen" :role "status") (text (format nil "You chose ~A." (menus-chosen self))))))
+  (render-component (menus-faq self))
+  (render-component (menus-more self)))
+
 (defclass widget-demo (component)
   ((navigation :reader demo-navigation)
    (chosen-symbol :initform nil :accessor chosen-symbol)
@@ -310,6 +395,8 @@ Some *emphasis*, some **strong** text and `code`.
                      (cons "Autocomplete" (make-instance 'autocomplete-section :demo self))
                      (cons "Sortable" (make-instance 'sortable-section :list (demo-tasks self)))
                      (cons "Breadcrumbs" (make-instance 'crumbs-section))
+                     (cons "Forms" (make-instance 'forms-section))
+                     (cons "Menus" (make-instance 'menus-section))
                      (cons "Data grid" (make-instance 'grid-section))
                      (cons "Charts" (make-instance 'charts-section))
                      (cons "Calendar" (make-instance 'calendar-section))

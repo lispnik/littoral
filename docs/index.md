@@ -217,7 +217,24 @@ It's an ordinary component, so a flow can `call` it. `/examples/wizard` signs so
 (make-in-place-editor order 'note :on-save #'littoral.db:db-save)
 ```
 
-They're in the widgets example; its Breadcrumbs tab has both, in a pantry to browse. `/examples/monitoring` charts the server's own metrics live.
+- **`disclosure`** and **`accordion`** open and close sections. They're HTML details elements, so they work without JavaScript; with it, what's open is kept on the server, so a reload or the back button shows the page as it was left. An accordion opens one section at a time unless `:multiple t`.
+- **`dropdown-menu`** and **`menu-bar`**: a dropdown lists items, each a label with a function to call or a URL; a menu bar is a row of links and dropdowns. They open without JavaScript too. littoral.js closes them on Escape or a click elsewhere, keeps one open at a time, and moves between items with the arrow keys.
+- **More field kinds** for descriptions:
+  - `:tags`, a list of strings, typed separated by commas, which littoral.js shows as removable chips. `:choices` are offered while typing, `:only-choices t` accepts nothing else, and `:max` caps the count.
+  - `:time`, as `(9 30)`, with the browser's time input.
+  - `:date-range`, two dates with From and To inputs, which must not end before they start.
+
+  Like the other kinds, they're stored by littoral.db.
+- **Uploads**: a file input inside an `.lt-drop` element (as `file-field`s are) takes files dropped on it. A form sending files shows a progress bar while it uploads, then goes on to the next page as before.
+
+```lisp
+(make-instance 'dropdown-menu :label "Actions"
+               :items (list (cons "Rename" (lambda () (rename self))) :separator (cons "Help" "/help")))
+(define-description outing
+  ((tags :type :tags :choices '("hiking" "food")) (meet :type :time) (dates :type :date-range)))
+```
+
+They're in the widgets example. Its Breadcrumbs tab has the breadcrumbs and the in-place editor, in a pantry to browse; the Forms tab has the field kinds, and the Menus tab the menus, accordions and disclosures. `/examples/monitoring` charts the server's own metrics live.
 
 ### Request cycle
 

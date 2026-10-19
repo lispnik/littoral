@@ -537,6 +537,7 @@ sentence saying why not.")
         (label ()
           (checkbox (:callback (lambda (remove) (when remove (funcall callback "")))))
           (text " ") (translate "Remove"))))
+    (div (:class "lt-drop")
     (file-input (:id id
                  :accept (when (typep field 'image-field) "image/png,image/jpeg,image/gif,image/webp")
                  :callback (lambda (upload)
@@ -550,7 +551,9 @@ sentence saying why not.")
                                                 (format nil "!~A" problem)
                                                 (encode-stored-file
                                                  (store-upload upload :storage (field-store field)
-                                                                      :thumbnail (typep field 'image-field)))))))))))))
+                                                                      :thumbnail (typep field 'image-field)))))))))))
+      (span (:class "lt-drop-hint") (translate "or drop a file here"))
+      (span (:class "lt-drop-files" :aria-live "polite")))))
 
 (defun render-stored-file (file field)
   (let* ((storage (field-store field))

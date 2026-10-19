@@ -54,6 +54,8 @@ aria-label; other attributes are written as given."
                      :action (render-action-url (ensure-render-context))
                      :accept-charset "utf-8"
                      :enctype (when (getf attributes :multipart) "multipart/form-data")
+                     ;; The progress bar's name, while littoral.js uploads.
+                     :data-lt-uploading (when (getf attributes :multipart) (translate "Uploading"))
                      (strip-attributes attributes :multipart :default-action))
               (lambda ()
                 ;; Always submitted, but run only when no button was.

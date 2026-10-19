@@ -449,6 +449,187 @@
     trigger(board, "data-lt-kanban", null);
   });
 
+  // Tags fields: the comma-separated input hides, and chips with remove
+  // buttons and a box to type the next tag in take its place.  The hidden
+  // input keeps the text the form sends, so the server sees what it would
+  // without JavaScript.
+  function setupTags(root) {
+    (root || document).querySelectorAll("input[data-lt-tags]:not([data-lt-tags-ready])").forEach(function (input) {
+      input.setAttribute("data-lt-tags-ready", "");
+      var removeLabel = input.getAttribute("data-lt-tags");
+      var box = document.createElement("div");
+      box.className = "lt-tags-input";
+      var chips = document.createElement("ul");
+      chips.className = "lt-tags";
+      var entry = document.createElement("input");
+      entry.type = "text";
+      entry.className = "lt-tags-entry";
+      entry.autocomplete = "off";
+      // Labels and descriptions point at what is typed into.
+      ["list", "aria-label", "aria-invalid", "aria-describedby", "aria-description", "autofocus"].forEach(function (a) {
+        if (input.hasAttribute(a)) entry.setAttribute(a, input.getAttribute(a));
+      });
+      if (input.id) { entry.id = input.id; input.id = input.id + "-value"; }
+      input.type = "hidden";
+      input.removeAttribute("required");
+      function tags() {
+        return input.value.split(",").map(function (t) { return t.trim(); }).filter(Boolean);
+      }
+      function write(list) {
+        input.value = list.join(", ");
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        draw();
+      }
+      function add(text) {
+        var list = tags();
+        text.split(",").map(function (t) { return t.trim(); }).filter(Boolean).forEach(function (tag) {
+          var lower = tag.toLowerCase();
+          if (!list.some(function (t) { return t.toLowerCase() === lower; })) list.push(tag);
+        });
+        entry.value = "";
+        write(list);
+      }
+      function draw() {
+        chips.innerHTML = "";
+        tags().forEach(function (tag, i) {
+          var li = document.createElement("li");
+          li.appendChild(document.createTextNode(tag));
+          var remove = document.createElement("button");
+          remove.type = "button";
+          remove.className = "lt-tag-remove";
+          remove.textContent = "×";
+          remove.setAttribute("aria-label", removeLabel.replace("~A", tag));
+          remove.addEventListener("click", function () {
+            var list = tags(); list.splice(i, 1); write(list); entry.focus();
+          });
+          li.appendChild(remove);
+          chips.appendChild(li);
+        });
+      }
+      entry.addEventListener("keydown", function (event) {
+        if ((event.key === "Enter" || event.key === ",") && entry.value.trim()) {
+          event.preventDefault();
+          add(entry.value);
+        } else if (event.key === "Backspace" && !entry.value) {
+          var list = tags();
+          if (list.length) { list.pop(); write(list); }
+        }
+      });
+      entry.addEventListener("change", function () { if (entry.value.trim()) add(entry.value); });
+      // What has been typed but not yet added goes with the form too.
+      if (input.form) input.form.addEventListener("submit", function () {
+        if (entry.value.trim()) add(entry.value);
+      }, true);
+      box.appendChild(chips);
+      box.appendChild(entry);
+      input.parentNode.insertBefore(box, input);
+      draw();
+    });
+  }
+  document.addEventListener("littoral:updated", function () { setupTags(); });
+
+  // Dropdown menus (<details class="lt-dropdown">): one open at a time;
+  // Escape or a click elsewhere closes them, and the arrow keys move
+  // between their items.
+  document.addEventListener("click", function (event) {
+    document.querySelectorAll("details.lt-dropdown[open]").forEach(function (menu) {
+      if (!menu.contains(event.target)) menu.removeAttribute("open");
+    });
+  });
+  document.addEventListener("toggle", function (event) {
+    var menu = event.target;
+    if (!(menu.matches && menu.matches("details.lt-dropdown[open]"))) return;
+    document.querySelectorAll("details.lt-dropdown[open]").forEach(function (other) {
+      if (other !== menu && !other.contains(menu)) other.removeAttribute("open");
+    });
+  }, true);
+  document.addEventListener("keydown", function (event) {
+    var menu = event.target.closest ? event.target.closest("details.lt-dropdown") : null;
+    if (!menu) return;
+    var items = Array.prototype.slice.call(menu.querySelectorAll(":scope > ul a, :scope > ul button"));
+    var at = items.indexOf(document.activeElement);
+    if (event.key === "Escape" && menu.open) {
+      menu.removeAttribute("open");
+      menu.querySelector("summary").focus();
+    } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (!menu.open) menu.setAttribute("open", "");
+      if (!items.length) return;
+      var next = event.key === "ArrowDown" ? (at + 1) % items.length : (at <= 0 ? items.length - 1 : at - 1);
+      items[next].focus();
+    }
+  });
+
+  // File inputs: files can be dropped on them (or on the .lt-drop around
+  // them), and a form sending files shows a progress bar while it uploads.
+  function dropZone(target) {
+    var zone = target.closest ? target.closest(".lt-drop") : null;
+    return zone && zone.querySelector("input[type=file]") ? zone : null;
+  }
+  function carriesFiles(event) {
+    return event.dataTransfer && Array.prototype.indexOf.call(event.dataTransfer.types, "Files") >= 0;
+  }
+  document.addEventListener("dragover", function (event) {
+    var zone = dropZone(event.target);
+    if (!zone || !carriesFiles(event)) return;
+    event.preventDefault();
+    zone.classList.add("lt-drop-over");
+  });
+  document.addEventListener("dragleave", function (event) {
+    var zone = dropZone(event.target);
+    if (zone && !zone.contains(event.relatedTarget)) zone.classList.remove("lt-drop-over");
+  });
+  document.addEventListener("drop", function (event) {
+    var zone = dropZone(event.target);
+    if (!zone || !carriesFiles(event)) return;
+    event.preventDefault();
+    zone.classList.remove("lt-drop-over");
+    var input = zone.querySelector("input[type=file]");
+    var files = new DataTransfer();
+    Array.prototype.slice.call(event.dataTransfer.files, 0, input.multiple ? undefined : 1)
+      .forEach(function (file) { files.items.add(file); });
+    input.files = files.files;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  document.addEventListener("change", function (event) {
+    var input = event.target;
+    if (!(input.matches && input.matches("input[type=file]"))) return;
+    var zone = input.closest(".lt-drop");
+    var names = zone && zone.querySelector(".lt-drop-files");
+    if (names) names.textContent = Array.prototype.map.call(input.files, function (f) { return f.name; }).join(", ");
+  });
+  document.addEventListener("submit", function (event) {
+    var form = event.target;
+    if (event.defaultPrevented || form.hasAttribute("data-lt-on-submit") || !window.XMLHttpRequest) return;
+    var chosen = Array.prototype.some.call(form.querySelectorAll("input[type=file]"),
+                                           function (input) { return input.files && input.files.length; });
+    if (!chosen) return;
+    event.preventDefault();
+    var data = new FormData(form);
+    // The button pressed names the callback to run, as in a plain submit.
+    if (event.submitter && event.submitter.name) data.append(event.submitter.name, event.submitter.value);
+    var bar = document.createElement("progress");
+    bar.className = "lt-upload-progress";
+    bar.max = 100;
+    bar.value = 0;
+    bar.setAttribute("aria-label", form.getAttribute("data-lt-uploading") || "Uploading");
+    form.appendChild(bar);
+    Array.prototype.forEach.call(form.querySelectorAll("button, input[type=submit]"), function (b) { b.disabled = true; });
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", form.action || window.location.href);
+    xhr.upload.addEventListener("progress", function (e) {
+      if (e.lengthComputable) bar.value = Math.round(100 * e.loaded / e.total);
+    });
+    xhr.addEventListener("load", function () {
+      // Redirects were followed: the page the action led to.
+      if (xhr.status < 400 && xhr.responseURL) window.location.href = xhr.responseURL;
+      else { document.open(); document.write(xhr.responseText); document.close(); }
+    });
+    xhr.addEventListener("error", function () { form.submit(); });
+    xhr.send(data);
+  });
+
   var timers = [];
   function scanPeriodicals() {
     timers.forEach(clearInterval);
@@ -481,6 +662,7 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
+    setupTags();
     scanPeriodicals();
     listen();
     pollForReload();

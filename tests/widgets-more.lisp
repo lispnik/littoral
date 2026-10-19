@@ -281,3 +281,76 @@ reload: the page now has the editor's form.  The id of its input."
       (press a "Save")
       (is (has-text-p a "Someone else changed this row meanwhile; nothing was saved."))
       (is (string= "Copy" (shared-note-text (first *shared-notes*)))))))
+
+;;; Tags, times and date ranges
+
+(test new-field-kinds-parse-check-and-format
+  (let ((tags (littoral::make-field 'tags :type :tags :choices '("red" "green") :max 2))
+        (only (littoral::make-field 'tags :type :tags :choices '("red" "green") :only-choices t))
+        (time (littoral::make-field 'meet :type :time))
+        (dates (littoral::make-field 'dates :type :date-range)))
+    (is (equal '("red" "Blue") (parse-field tags " red, Blue ,, RED ")) "Trimmed, blanks and repeats dropped")
+    (is (string= "red, Blue" (format-field tags '("red" "Blue"))))
+    (is (search "at most 2" (check-field tags '("a" "b" "c"))))
+    (is (search "can only be red, green" (check-field only '("red" "pink"))))
+    (is (null (check-field only '("Red"))))
+    (is (equal '(9 5) (parse-field time "9:05")))
+    (is (equal '(23 59) (parse-field time "23:59:30")) "Seconds, as some browsers send them, are dropped")
+    (is (string= "09:05" (format-field time '(9 5))))
+    (signals field-error (parse-field time "24:00"))
+    (is (equal '((2026 11 6) . (2026 11 8)) (parse-field dates "2026-11-06/2026-11-08")))
+    (is (string= "2026-11-06/2026-11-08" (format-field dates '((2026 11 6) . (2026 11 8)))))
+    (is (null (parse-field dates "/")))
+    (signals field-error (parse-field dates "2026-11-06/"))
+    (is (search "must not end before it starts" (check-field dates '((2026 11 8) . (2026 11 6)))))))
+
+(test the-forms-tab
+  (with-widgets (b)
+    (click b "Forms")
+    (is (search "data-lt-tags=\"Remove ~A\"" (browser-html b)))
+    (is (search "<datalist id=\"tags-tags\"><option value=\"hiking\">" (browser-html b)))
+    (is (search "type=\"time\"" (browser-html b)))
+    (is (search "value=\"food, museums\"" (browser-html b)))
+    (fill-in b "tags" "food, Beach, food")
+    (fill-in b "meet" "25:00")
+    (fill-in b "dates" "2026-11-09")
+    (fill-in b "dates-to" "2026-11-07")
+    (press b "Save")
+    (is (has-text-p b "Meeting time must be a time, like 09:30."))
+    (is (has-text-p b "Dates must not end before it starts."))
+    (fill-in b "meet" "10:15")
+    (fill-in b "dates-to" "2026-11-10")
+    (press b "Save")
+    (is (search "Meeting time 10:15" (body-text b)))
+    (is (search "Tags food Beach" (body-text b)))
+    (is (search "Dates 2026-11-09/2026-11-10" (body-text b)))))
+
+;;; Menus, accordions and disclosures
+
+(test the-menus-tab
+  (with-widgets (b)
+    (click b "Menus")
+    (is (search "<nav class=\"lt-menu-bar\" aria-label=\"Menu\">" (browser-html b)))
+    (is (search "<details class=\"lt-dropdown\"><summary>File</summary>" (browser-html b)))
+    (is (search "role=\"separator\"" (browser-html b)))
+    ;; A dropdown's items are ordinary links.
+    (click b "Duplicate")
+    (is (has-text-p b "You chose Duplicate."))
+    (click b "Close")
+    (is (has-text-p b "You chose Close."))
+    ;; The accordion: the first section open, one at a time.
+    (flet ((open-sections () (cl-ppcre:count-matches "<details class=\"lt-accordion-section\" open" (browser-html b)))
+           (toggle (n)
+             (let ((spec (nth n (ajax-specs b "on-click"))))
+               (ajax-request b (car spec) (cdr spec))
+               (visit b (browser-url b)))))
+      (is (= 1 (open-sections)))
+      (is (search "open name=\"" (browser-html b)) "Sections share a name: one open at a time without JavaScript too")
+      (toggle 1)                        ; the second section
+      (is (= 1 (open-sections)))
+      (toggle 1)                        ; closed again
+      (is (= 0 (open-sections)))
+      ;; The disclosure, closed at first, and remembered once opened.
+      (is (not (search "<details class=\"lt-disclosure\" open" (browser-html b))))
+      (toggle 3)
+      (is (search "<details class=\"lt-disclosure\" open" (browser-html b))))))

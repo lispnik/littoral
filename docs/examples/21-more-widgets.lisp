@@ -254,3 +254,72 @@ Bring *two* copies of the **form**.
           (progn (save-as mine "My text") (memo-text *memo*))
           (eq *memo* (edit-conflict-object (make-condition 'edit-conflict :object *memo*))))))
 ;; ⇒ (T "Their text" "My text" T)
+
+;;;; Example: littoral:disclosure littoral:disclosure-open-p
+;;; A line that opens and closes a component beneath it.  It is an HTML details element, so it works without JavaScript; with it, opening goes over AJAX and is remembered.
+(defclass small-print (component) ())
+(defmethod render ((self small-print)) (p () "No refunds after 30 days."))
+(defclass terms (component)
+  ((more :initform (make-instance 'disclosure :summary "Small print" :content (make-instance 'small-print))
+         :reader more)))
+(defmethod children ((self terms)) (list (more self)))
+(defmethod render ((self terms)) (render-component (more self)))
+(with-fresh-applications (("/terms" 'terms :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/terms")
+    (let ((closed (search "<details class=\"lt-disclosure\" open" (browser-html b)))
+          (toggle (first (ajax-specs b "on-click"))))
+      (ajax-request b (car toggle) (cdr toggle))
+      (visit b (browser-url b))
+      (list closed
+            (and (search "<details class=\"lt-disclosure\" open" (browser-html b)) t)
+            (body-text b)))))
+;; ⇒ (NIL T "Small print No refunds after 30 days.")
+
+;;;; Example: littoral:accordion littoral:accordion-sections littoral:accordion-open
+;;; Sections that open one at a time (or several, with `:multiple t`).  ACCORDION-OPEN lists the indexes open.
+(defclass answer-text (component) ((words :initarg :words :reader words)))
+(defmethod render ((self answer-text)) (p () (text (words self))))
+(defun open-sections (html)
+  "The titles of the accordion sections open in HTML."
+  (let ((titles '()))
+    (cl-ppcre:do-register-groups (title) ("<details class=\"lt-accordion-section\" open[^>]*><summary[^>]*>([^<]*)<" html)
+      (push title titles))
+    (nreverse titles)))
+(defclass faq-page (component)
+  ((faq :initform (make-instance 'accordion :open '(0)
+                                            :sections (list (cons "Shipping" (make-instance 'answer-text :words "Two days."))
+                                                            (cons "Returns" (make-instance 'answer-text :words "Thirty days."))))
+        :reader faq)))
+(defmethod children ((self faq-page)) (list (faq self)))
+(defmethod render ((self faq-page)) (render-component (faq self)))
+(with-fresh-applications (("/faq" 'faq-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/faq")
+    (let ((before (open-sections (browser-html b)))
+          (returns (second (ajax-specs b "on-click"))))
+      (ajax-request b (car returns) (cdr returns))   ; open Returns: Shipping closes
+      (visit b (browser-url b))
+      (let ((faq (make-instance 'accordion :sections (list (cons "One" nil)) :open '(0))))
+        (list before (open-sections (browser-html b))
+              (mapcar #'car (accordion-sections faq)) (accordion-open faq))))))
+;; ⇒ (("Shipping") ("Returns") ("One") (0))
+
+;;;; Example: littoral:dropdown-menu littoral:menu-bar littoral:menu-items
+;;; A dropdown lists items, each a label and a function to call or a URL to go to; a menu bar is a row of links and dropdowns.  Both are details elements, so they open without JavaScript; littoral.js closes them on Escape or a click elsewhere.
+(defvar *chosen* nil)
+(defclass toolbar (component)
+  ((bar :initform (make-instance 'menu-bar
+                                 :items (list (cons "Home" "/")
+                                              (cons "Edit" (list (cons "Undo" (lambda () (setf *chosen* "Undo")))
+                                                                 :separator
+                                                                 (cons "Select all" (lambda () (setf *chosen* "Select all")))))))
+        :reader bar)))
+(defmethod children ((self toolbar)) (list (bar self)))
+(defmethod render ((self toolbar)) (render-component (bar self)))
+(with-fresh-applications (("/tools" 'toolbar :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/tools")
+    (click b "Select all")
+    (list *chosen* (length (menu-items (make-instance 'dropdown-menu :label "More" :items '(("A" . "/a") :separator)))))))
+;; ⇒ ("Select all" 2)

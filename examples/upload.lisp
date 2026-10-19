@@ -16,8 +16,13 @@
 (defmethod render ((self upload-demo))
   (h1 () "Upload")
   (form (:multipart t)
-    (label (:for "file") "File to upload ")
-    (file-input (:id "file" :callback (lambda (file) (setf (uploaded self) file))))
+    ;; A drop zone: littoral.js takes dropped files, and shows a progress
+    ;; bar while the form uploads.
+    (div (:class "lt-drop")
+      (label (:for "file") "File to upload ")
+      (file-input (:id "file" :callback (lambda (file) (setf (uploaded self) file))))
+      (span (:class "lt-drop-hint") "or drop a file here")
+      (span (:class "lt-drop-files" :aria-live "polite")))
     (submit-button () "Upload"))
   (let ((file (uploaded self)))
     (when file

@@ -86,6 +86,8 @@
    #:data-grid #:bar-chart #:line-chart #:sparkline #:calendar #:calendar-year #:calendar-month
    #:kanban #:kanban-columns #:move-card #:markdown-html #:markdown-field
    #:breadcrumb-trail #:breadcrumb-trail-of #:breadcrumb-label
+   #:disclosure #:disclosure-open-p #:accordion #:accordion-sections #:accordion-open
+   #:dropdown-menu #:menu-bar #:menu-items
    #:in-place-editor #:make-in-place-editor #:edit-conflict #:edit-conflict-object
    ;; JSON endpoints
    #:define-endpoint #:register-endpoint #:endpoint-error #:endpoint-body #:*endpoint-authenticator*
