@@ -75,7 +75,7 @@
    #:task #:define-flow #:flow
    ;; AJAX and push
    #:ajax #:ajax-update #:periodical #:execute-script
-   #:channel #:make-channel #:subscriptions #:publish #:notify #:close-event-streams #:*keepalive-seconds*
+   #:channel #:make-channel #:subscriptions #:publish #:notify #:close-event-streams #:*keepalive-seconds* #:*push-render-threads*
    #:with-session #:*source-editor* #:*async-stream-opener*
    ;; Presence
    #:presence #:find-presence #:presences #:presence-activity #:presence-name #:*presence-name-function*

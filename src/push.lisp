@@ -247,8 +247,19 @@ after replying.")
 ;;; updates and keepalives.  It runs while any stream is open.
 
 (defstruct (hub-entry (:constructor make-hub-entry (stream socket out)))
-  "A stream the hub serves: its EVENT-STREAM, usocket and octet stream."
-  stream socket out (keepalive-due 0))
+  "A stream the hub serves: its EVENT-STREAM, usocket, and the octet stream
+to write: the socket's own, or the TLS stream over it.  BUSY while a
+render thread serves it, so only one ever writes to it."
+  stream socket out (keepalive-due 0) (busy nil))
+
+(defparameter *push-render-threads* 4
+  "How many threads the push hub renders and writes pushed updates with:
+pages are served in parallel, each by one thread at a time.  1 serves them
+all on the hub's own thread, one page after another.")
+
+(defvar *hub-work* '() "Entries waiting for a render thread, oldest last.  Under *HUB-LOCK*.")
+(defvar *hub-work-waitqueue* (sb-thread:make-waitqueue :name "littoral push hub work"))
+(defvar *hub-workers* 0 "How many render threads run.  Under *HUB-LOCK*.")
 
 (defvar *hub-entries* '())
 (defvar *hub-lock* (sb-thread:make-mutex :name "littoral push hub"))
@@ -268,16 +279,21 @@ after replying.")
 
 (defun hub-socket ()
   "The socket of the request being answered, when Hunchentoot answers it
-and the hub can take it over: a plain socket, whose stream is an fd-stream.
+and the hub can take it over (its stream an fd-stream), and the stream to
+write the response to: the socket's own, or with TLS the stream over it.
 Else NIL."
   (and (boundp 'hunchentoot:*acceptor*)
        (typep hunchentoot:*acceptor* 'clack.handler.hunchentoot::clack-acceptor)
-       (not (hunchentoot:acceptor-ssl-p hunchentoot:*acceptor*))
        (boundp 'clack.handler.hunchentoot::*client-socket*)
-       (let ((socket clack.handler.hunchentoot::*client-socket*))
+       (boundp 'hunchentoot::*hunchentoot-stream*)
+       (let ((socket clack.handler.hunchentoot::*client-socket*)
+             (connection hunchentoot::*hunchentoot-stream*))
          (and (typep socket 'usocket:stream-usocket)
               (typep (usocket:socket-stream socket) 'sb-sys:fd-stream)
-              socket))))
+              connection
+              (values socket (if (typep connection 'chunga:chunked-stream)
+                                 (chunga:chunked-stream-stream connection)
+                                 connection))))))
 
 (defun response-head-octets (status headers)
   "The octets of a response head for STATUS and HEADERS (a plist).  The
@@ -294,8 +310,8 @@ there is neither a length nor chunking."
 
 (defun hub-writer (out socket)
   "A writer, as Clack's responders return, for the hub's stream OUT.  It
-refuses to wait on a client that has stopped reading: when the socket
-can't take more, the stream is dropped (the browser reconnects later)."
+refuses to wait on a client that has stopped reading: when SOCKET can't
+take more, the stream is dropped (the browser reconnects later)."
   (let ((fd (sb-sys:fd-stream-fd (usocket:socket-stream socket))))
     (lambda (body &key close)
       (when body
@@ -312,6 +328,9 @@ can't take more, the stream is dropped (the browser reconnects later)."
     (setf *hub-entries* (delete entry *hub-entries*)))
   (unregister-event-stream (hub-entry-stream entry))
   (ignore-errors (finish-output (hub-entry-out entry)))
+  ;; A TLS stream says goodbye before the socket closes.
+  (unless (eq (hub-entry-out entry) (usocket:socket-stream (hub-entry-socket entry)))
+    (ignore-errors (close (hub-entry-out entry))))
   (ignore-errors (usocket:socket-close (hub-entry-socket entry))))
 
 (defun serve-hub-entry (entry now)
@@ -334,6 +353,49 @@ close it when its page has gone or writing fails."
   "The internal real time a keepalive is due, *KEEPALIVE-SECONDS* after NOW."
   (+ now (round (* *keepalive-seconds* internal-time-units-per-second))))
 
+(defun needs-serving-p (entry now)
+  "True when ENTRY has work queued, a keepalive due at NOW, or has closed."
+  (let ((stream (hub-entry-stream entry)))
+    (or (stream-pending stream)
+        (not (stream-open-p stream))
+        (>= now (hub-entry-keepalive-due entry)))))
+
+(defun run-hub-worker ()
+  "Serve the entries the hub hands over, until the hub stops."
+  (with-sane-printing ()
+    (loop
+      (let ((entry (sb-thread:with-mutex (*hub-lock*)
+                     (loop while (and (null *hub-work*) *hub-thread*)
+                           do (sb-thread:condition-wait *hub-work-waitqueue* *hub-lock*))
+                     (if *hub-work*
+                         ;; Taken off the queue under the same lock it was found under.
+                         (prog1 (car (last *hub-work*))
+                           (setf *hub-work* (butlast *hub-work*)))
+                         (progn (decf *hub-workers*) (return))))))
+        (unwind-protect (serve-hub-entry entry (get-internal-real-time))
+          (sb-thread:with-mutex (*hub-lock*)
+            (setf (hub-entry-busy entry) nil)
+            ;; Work that came in meanwhile: have the hub look again.
+            (when (stream-pending (hub-entry-stream entry))
+              (setf *hub-woken* t)
+              (sb-thread:condition-broadcast *hub-waitqueue*))))))))
+
+(defun hand-over (entries now)
+  "Serve those of ENTRIES that need it: on render threads, or here when
+*PUSH-RENDER-THREADS* is 1."
+  (if (<= *push-render-threads* 1)
+      (dolist (entry entries)
+        (serve-hub-entry entry now))
+      (sb-thread:with-mutex (*hub-lock*)
+        (dolist (entry entries)
+          (when (and (not (hub-entry-busy entry)) (needs-serving-p entry now))
+            (setf (hub-entry-busy entry) t)
+            (push entry *hub-work*)))
+        (loop while (< *hub-workers* (min *push-render-threads* (length *hub-work*) ))
+              do (incf *hub-workers*)
+                 (sb-thread:make-thread #'run-hub-worker :name "littoral push render"))
+        (sb-thread:condition-broadcast *hub-work-waitqueue*))))
+
 (defun run-hub ()
   "Serve the hub's streams until there are none."
   (with-sane-printing ()
@@ -342,6 +404,8 @@ close it when its page has gone or writing fails."
               (sb-thread:with-mutex (*hub-lock*)
                 (when (null *hub-entries*)
                   (setf *hub-thread* nil)
+                  ;; Render threads end once their work is done.
+                  (sb-thread:condition-broadcast *hub-work-waitqueue*)
                   (return))
                 (unless *hub-woken*
                   (let ((due (reduce #'min *hub-entries* :key #'hub-entry-keepalive-due)))
@@ -350,15 +414,13 @@ close it when its page has gone or writing fails."
                      :timeout (max 0.01 (/ (- due (get-internal-real-time)) internal-time-units-per-second)))))
                 (setf *hub-woken* nil)
                 (copy-list *hub-entries*))))
-        (let ((now (get-internal-real-time)))
-          (dolist (entry entries)
-            (serve-hub-entry entry now)))))))
+        (hand-over entries (get-internal-real-time))))))
 
-(defun hub-take-over (stream socket head)
+(defun hub-take-over (stream socket out head)
   "Answer the current Hunchentoot request with STREAM, served by the hub
-over SOCKET: write HEAD's status and headers, detach the socket, and
-return, letting the request's thread go."
-  (let ((out (usocket:socket-stream socket)))
+over SOCKET, writing to OUT: write HEAD's status and headers, detach the
+socket, and return, letting the request's thread go."
+  (progn
     (write-sequence (response-head-octets (first head) (second head)) out)
     (write-sequence (sb-ext:string-to-octets (format nil "retry: 3000~%~%") :external-format :utf-8) out)
     (force-output out)
@@ -410,10 +472,10 @@ is gone.  503 when too many are open."
     (lambda (responder)
       ;; The server calls this later, outside the request's bindings.
       (with-sane-printing ()
-        (let ((hub-socket (and (not socket) (hub-socket))))
+        (multiple-value-bind (hub-socket out) (and (not socket) (hub-socket))
           (if hub-socket
               ;; The hub serves it: this thread goes back to Hunchentoot.
-              (hub-take-over stream hub-socket head)
+              (hub-take-over stream hub-socket out head)
               (let ((writer (funcall responder head)))
                 (if socket
                     ;; An event loop serves it: no thread waits on this stream.

@@ -168,6 +168,23 @@ jobs:
           for i in $(seq 1 120); do curl -s -o /dev/null http://127.0.0.1:8766/ && break; sleep 1; done
           LITTORAL_SERVER=woo BASE=http://127.0.0.1:8766 CHROME="$(command -v google-chrome || command -v chromium)" node tests/e2e/browser.mjs
 
+      - name: HTTPS on Woo
+        run: |
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=127.0.0.1 -keyout /tmp/key.pem -out /tmp/cert.pem 2>/dev/null
+          sbcl --non-interactive \
+            --eval '(asdf:initialize-source-registry (list :source-registry (list :directory (uiop:getcwd)) :inherit-configuration))' \
+            --eval '(asdf:load-system :littoral/examples)' --eval '(asdf:load-system :littoral/woo)' \
+            --eval '(littoral:start :port 8767 :server :woo :ssl-certificate-file "/tmp/cert.pem" :ssl-key-file "/tmp/key.pem")' \
+            --eval '(sleep 300)' > woo-tls.log 2>&1 &
+          for i in $(seq 1 120); do curl -sk -o /dev/null https://127.0.0.1:8767/ && break; sleep 1; done
+          # A page over HTTPS, and its event stream (the wiki lists who's reading).
+          page=$(curl -sk -L -c /tmp/jar -b /tmp/jar https://127.0.0.1:8767/examples/wiki)
+          echo "$page" | grep -q "FrontPage"
+          events=$(echo "$page" | grep -o 'data-lt-events="[^"]*"' | head -1 | sed 's/data-lt-events="//; s/"$//; s/&amp;/\&/g')
+          test -n "$events"
+          curl -sk -N -b /tmp/jar --max-time 4 "https://127.0.0.1:8767$events" > /tmp/sse.txt || true
+          grep -q "retry: 3000" /tmp/sse.txt || { cat woo-tls.log /tmp/sse.txt; exit 1; }
+
   docker:
     runs-on: ubuntu-latest
     timeout-minutes: 30

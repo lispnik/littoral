@@ -171,7 +171,7 @@ try {
   await evaluate(`(() => {
     const zone = document.querySelector(".lt-drop");
     const data = new DataTransfer();
-    data.items.add(new File(["dropped in chrome\n"], "dropped.txt", { type: "text/plain" }));
+    data.items.add(new File(["dropped in chrome\\n"], "dropped.txt", { type: "text/plain" }));
     zone.dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer: data }));
     zone.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: data }));
   })()`);

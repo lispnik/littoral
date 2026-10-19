@@ -204,9 +204,14 @@ Binds the session to its cookie the first time it comes back."
            (setf (session-browser-bound-p session) t))
           (t nil))))
 
+(defvar *serving-https* nil
+  "True while START serves HTTPS itself.  Woo calls every request http, so
+the scheme alone doesn't say.")
+
 (defun secure-request-p (&optional (request *request*))
   "True when REQUEST came over HTTPS, directly or through a proxy that says so."
-  (or (string-equal (princ-to-string (lack/request:request-uri-scheme request)) "https")
+  (or *serving-https*
+      (string-equal (princ-to-string (lack/request:request-uri-scheme request)) "https")
       (string-equal (gethash "x-forwarded-proto" (lack/request:request-headers request) "") "https")))
 
 (defun simple-page (status title &optional (message ""))
@@ -804,7 +809,8 @@ for an address other than IPv4, localhost or 0.0.0.0 it doesn't wait."
           do (sleep 0.05))))
 
 (defun start (&key (port 8080) (address "127.0.0.1") (server :hunchentoot) (prefix "")
-                configuration-file (instance-id *instance-id*) (max-threads 100) (workers 4))
+                configuration-file (instance-id *instance-id*) (max-threads 100) (workers 4)
+                ssl-certificate-file ssl-key-file ssl-key-password)
   "Serve all registered applications with Clack on PORT, under PREFIX, and
 reap idle sessions in the background.  With CONFIGURATION-FILE, first load
 the applications saved there; /config then saves its changes to it.
@@ -812,8 +818,12 @@ INSTANCE-ID prefixes session keys, for routing several processes.
 MAX-THREADS caps Hunchentoot's worker threads, which serve connections
 while they make requests; open pages with server push leave them for the
 push hub, one thread for every stream.  With SERVER :WOO (load littoral/woo
-first) WORKERS event loops serve everything, push included.  A server already started is stopped first.
+first) WORKERS event loops serve everything, push included.
+SSL-CERTIFICATE-FILE and SSL-KEY-FILE (PEM files; SSL-KEY-PASSWORD when
+the key is encrypted) serve HTTPS instead of HTTP, on either server.  A server already started is stopped first.
 Returns the Clack handler."
+  (when (alexandria:xor ssl-certificate-file ssl-key-file)
+    (error "START takes both :SSL-CERTIFICATE-FILE and :SSL-KEY-FILE, or neither."))
   (when *handler* (stop))
   (setf *instance-id* instance-id)
   (when configuration-file
@@ -833,13 +843,21 @@ page with server push ties up a Woo worker.  Load littoral/woo."))
   (setf *handler* (apply #'clack:clackup (make-lack-app :prefix prefix)
                          :server server :port port :address address
                          :use-default-middlewares nil :silent t :debug nil
-                         (case server
+                         (append
+                          (when ssl-certificate-file
+                            (list* :ssl-cert-file (namestring ssl-certificate-file)
+                                  :ssl-key-file (namestring ssl-key-file)
+                                  :ssl-key-password ssl-key-password
+                                  ;; Woo turns TLS on by the files alone.
+                                  (when (eq server :hunchentoot) (list :ssl t))))
+                          (case server
                            (:hunchentoot (list :max-thread-count max-threads
                                                :max-accept-count (+ max-threads 20)))
                            (:woo (list :worker-num workers))
-                           (otherwise '()))))
+                           (otherwise '())))))
+  (setf *serving-https* (and ssl-certificate-file t))
   (wait-until-listening address port)
-  (format t "~&Littoral listening on http://~A:~D/~%" address port)
+  (format t "~&Littoral listening on ~:[http~;https~]://~A:~D/~%" ssl-certificate-file address port)
   *handler*)
 
 (defun stop ()
@@ -848,6 +866,7 @@ watching for redefinitions, as START began).  Returns NIL."
   (stop-reaper)
   (stop-live-watcher)
   (close-event-streams)
+  (setf *serving-https* nil)
   (when *handler*
     (clack:stop *handler*)
     (setf *handler* nil)))

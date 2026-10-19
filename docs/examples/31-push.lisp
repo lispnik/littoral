@@ -116,3 +116,8 @@
   (list (eq (presence-list-presence list) (find-presence "wiki:Home"))
         (let ((*page-name* "Help")) (eq (presence-list-presence list) (find-presence "wiki:Help")))))
 ;; ⇒ (T T)
+
+;;;; Example: littoral:*push-render-threads*
+;;; On Hunchentoot, the push hub renders and writes pushed updates on this many threads, each page by one thread at a time; 1 renders on the hub's own thread, one page after another.
+*push-render-threads*
+;; ⇒ 4

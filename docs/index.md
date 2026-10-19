@@ -939,11 +939,11 @@ Against Seaside on Pharo 12, measured the same way (see "Littoral and Seaside co
 
 Requests in one session are serialised by its lock, and requests in different sessions run in parallel. The test suite runs concurrent sessions, many requests against one page, and concurrent AJAX.
 
-**Threads.** Hunchentoot gives every connection its own thread while it makes requests, and `start` allows 100 by default (`:max-threads`). Idle keep-alive connections occupy a thread too. Open pages with server push don't: once a page's event stream has begun, its connection leaves Hunchentoot's thread for littoral's push hub, a single thread that writes every stream's updates and keepalives. On Linux, 10,000 open push pages took the server from 4 threads to 5, and their sessions and streams added 40 MB to its heap (76 MB to 116 MB); every page received its update.
+**Threads.** Hunchentoot gives every connection its own thread while it makes requests, and `start` allows 100 by default (`:max-threads`). Idle keep-alive connections occupy a thread too. Open pages with server push don't: once a page's event stream has begun, its connection leaves Hunchentoot's thread for littoral's push hub. One thread watches every stream, and up to `*push-render-threads*` (4) more render and write their updates. On Linux, 10,000 open push pages took the server from 4 threads to 5, and their sessions and streams added 40 MB to its heap (76 MB to 116 MB); every page received its update. That was measured before the render threads were added, which add up to four more threads while pages are open.
 
 - Put nginx in front: it holds idle browser connections cheaply and sends littoral fewer of its own.
 - On macOS, SBCL waits on sockets with `select(2)`, which can't watch file descriptors past 1,024. So a Hunchentoot server there holds about 1,000 connections at most, with or without push. Linux has no such limit.
-- The hub renders the pushed components one page at a time. A page whose browser has stopped reading, with its connection's buffer full, is dropped rather than waited for, and its EventSource reconnects later.
+- The hub renders pushed updates on `*push-render-threads*` threads (4), so a broadcast to many pages is rendered in parallel, each page by one thread at a time. A page whose browser has stopped reading, with its connection's buffer full, is dropped rather than waited for, and its EventSource reconnects later.
 
 A closed page's stream ends within about one keep-alive interval (`*keepalive-seconds*`, 5 s by default).
 

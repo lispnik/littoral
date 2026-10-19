@@ -221,3 +221,113 @@ each is named for the client's address and port."
       (mapc (lambda (socket) (ignore-errors (usocket:socket-close socket))) sockets)
       (stop)
       (unregister-application "/push-hub"))))
+
+;;; HTTPS: start with a certificate; the hub serves event streams over TLS too
+
+(defun make-test-certificate (directory)
+  "A self-signed certificate and key for 127.0.0.1 in DIRECTORY, made with
+openssl: their paths, or NIL without openssl."
+  (let ((cert (merge-pathnames "cert.pem" directory))
+        (key (merge-pathnames "key.pem" directory)))
+    (and (ignore-errors
+          (uiop:run-program (list "openssl" "req" "-x509" "-newkey" "rsa:2048" "-nodes" "-days" "1"
+                                  "-subj" "/CN=127.0.0.1"
+                                  "-keyout" (namestring key) "-out" (namestring cert))
+                            :error-output nil :output nil)
+          t)
+         (probe-file cert)
+         (list cert key))))
+
+(test https-pages-and-event-streams
+  (let* ((directory (uiop:ensure-directory-pathname
+                     (merge-pathnames (format nil "littoral-tls-~36R" (random (expt 36 8))) (uiop:temporary-directory))))
+         (files (progn (ensure-directories-exist directory) (make-test-certificate directory)))
+         (port (free-port)) (jar (cl-cookie:make-cookie-jar))
+         (received (make-array 0 :element-type 'character :adjustable t :fill-pointer 0))
+         (lock (sb-thread:make-mutex)) (socket nil))
+    (if (null files)
+        (skip "openssl is not installed")
+        (unwind-protect
+             (progn
+               (register-application "/tls-test" 'ws-counter :mode :deployment)
+               (start :port port :ssl-certificate-file (first files) :ssl-key-file (second files))
+               (let* ((html (dex:get (format nil "https://127.0.0.1:~D/tls-test" port)
+                                     :cookie-jar jar :insecure t :keep-alive nil))
+                      (url (cl-ppcre:register-groups-bind (u) ("data-lt-events=\"([^\"]*)\"" html) (unescape u))))
+                 (is (search "ws-count" html) "The page, over HTTPS")
+                 ;; The page's event stream, over TLS.
+                 (setf socket (usocket:socket-connect "127.0.0.1" port :element-type '(unsigned-byte 8)))
+                 (let ((tls (cl+ssl:make-ssl-client-stream (usocket:socket-stream socket) :verify nil)))
+                   (write-sequence (sb-ext:string-to-octets
+                                    (format nil "GET ~A HTTP/1.1~C~CHost: 127.0.0.1~C~CCookie: ~A~C~C~C~C"
+                                            url #\Return #\Linefeed #\Return #\Linefeed (cookie-header jar)
+                                            #\Return #\Linefeed #\Return #\Linefeed)
+                                    :external-format :latin-1)
+                                   tls)
+                   (force-output tls)
+                   (sb-thread:make-thread
+                    (lambda ()
+                      (ignore-errors
+                       (loop for byte = (read-byte tls nil) while byte
+                             do (sb-thread:with-mutex (lock) (vector-push-extend (code-char byte) received)))))
+                    :name "TLS test reader")
+                   (flet ((seen (text) (sb-thread:with-mutex (lock) (search text received))))
+                     (is (wait-for (lambda () (seen "retry: 3000"))))
+                     (is (seen "HTTP/1.1 200"))
+                     (is (= 1 (littoral::hub-stream-count)) "The hub serves it")
+                     (is (wait-for (lambda () (zerop (hunchentoot-workers (list socket))))) "No thread waits on it")
+                     (publish *ws-channel*)
+                     (is (wait-for (lambda () (seen "event: update"))) "A push arrives over TLS")))))
+          (when socket (ignore-errors (usocket:socket-close socket)))
+          (stop)
+          (unregister-application "/tls-test")
+          (uiop:delete-directory-tree directory :validate t :if-does-not-exist :ignore)))))
+
+(test start-takes-both-tls-files
+  (signals error (start :port (free-port) :ssl-certificate-file "/tmp/cert.pem")))
+
+;;; The hub renders pushes on several threads
+
+(defvar *slow-channel* (make-channel "slow render test"))
+(defvar *slow-renders* '() "The threads slow-panel rendered on, by push.")
+(defvar *slow-renders-lock* (sb-thread:make-mutex))
+
+(defclass slow-panel (component updatable) ())
+(defmethod subscriptions ((self slow-panel)) (list *slow-channel*))
+(defmethod render ((self slow-panel))
+  (when (string= (sb-thread:thread-name sb-thread:*current-thread*) "littoral push render")
+    (sleep 0.3)
+    (sb-thread:with-mutex (*slow-renders-lock*) (push sb-thread:*current-thread* *slow-renders*)))
+  (span () "slow panel"))
+
+(test pushes-render-on-several-threads
+  (let ((port (free-port)) (sockets '()))
+    (register-application "/slow" 'slow-panel :mode :deployment)
+    (start :port port)
+    (setf *slow-renders* '())
+    (unwind-protect
+         (progn
+           (dotimes (i 4)
+             (let* ((jar (cl-cookie:make-cookie-jar))
+                    (html (dex:get (format nil "http://127.0.0.1:~D/slow" port) :cookie-jar jar :keep-alive nil))
+                    (url (cl-ppcre:register-groups-bind (u) ("data-lt-events=\"([^\"]*)\"" html) (unescape u)))
+                    (socket (open-raw-event-stream port url jar)))
+               (push socket sockets)
+               (is (read-raw-until socket "retry: 3000"))))
+           (let ((start (get-internal-real-time)))
+             (publish *slow-channel*)
+             (dolist (socket sockets)
+               (is (search "slow panel" (read-raw-until socket "slow panel" 5))))
+             ;; Four 0.3 s renders, side by side rather than one after another.
+             (is (< (/ (- (get-internal-real-time) start) internal-time-units-per-second) 1.1))
+             (is (< 1 (length (remove-duplicates *slow-renders*))) "More than one render thread")))
+      (mapc (lambda (socket) (ignore-errors (usocket:socket-close socket))) sockets)
+      (stop)
+      (unregister-application "/slow"))))
+
+(test serving-https-makes-every-request-secure
+  ;; Woo calls every request http, even over TLS: START's word counts.
+  (let ((request (lack/request:make-request (make-env :get "/page"))))
+    (is (not (littoral::secure-request-p request)))
+    (let ((littoral::*serving-https* t))
+      (is (littoral::secure-request-p request)))))

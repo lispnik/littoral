@@ -77,6 +77,8 @@ Littoral's own `make docker` builds `littoral-demo`, every example in one image:
 
 Littoral should listen on 127.0.0.1, with a proxy taking the public connections and handling TLS.
 
+To serve HTTPS without a proxy, give `start` a certificate and its key, as PEM files: `(start :port 8443 :address "0.0.0.0" :ssl-certificate-file "cert.pem" :ssl-key-file "key.pem")`, with `:ssl-key-password` for an encrypted key. It works on Hunchentoot and on Woo, server push included, and cookies are marked `Secure`. A proxy is still the better choice in front of the internet: it renews certificates, holds idle connections cheaply, and can spread requests over several processes.
+
 - **Caddy** ([deploy/Caddyfile](deploy/Caddyfile)) gets certificates by itself. `flush_interval -1` keeps server push streaming.
 - **nginx** ([deploy/nginx.conf](deploy/nginx.conf)): use Let's Encrypt (`certbot --nginx`) for certificates. The configuration passes `X-Forwarded-*` headers. For server push it turns buffering off and allows long reads. For `littoral/websocket` it passes WebSocket upgrades through.
 

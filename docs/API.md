@@ -4458,6 +4458,19 @@ End every open stream; browsers reconnect when their page is current.
 How often an idle stream sends a comment.  Writing is how a closed page
 is noticed, so this bounds how long a gone page keeps its connection.
 
+#### `*push-render-threads*` — variable
+
+How many threads the push hub renders and writes pushed updates with:
+pages are served in parallel, each by one thread at a time.  1 serves them
+all on the hub's own thread, one page after another.
+
+*Example:* On Hunchentoot, the push hub renders and writes pushed updates on this many threads, each page by one thread at a time; 1 renders on the hub's own thread, one page after another.
+
+```lisp
+*push-render-threads*
+;; ⇒ 4
+```
+
 #### `with-session` `(session) &body body` — macro
 
 Run `body` as `session`'s requests do: holding its lock, with `*session*` bound.
@@ -8052,7 +8065,7 @@ not set `:script-name` (lack's mount middleware does not).
 ;; ⇒ (302 "/hello?_s=")
 ```
 
-#### `start` `&key (port 8080) (address "127.0.0.1") (server :hunchentoot) (prefix "") configuration-file (instance-id *instance-id*) (max-threads 100) (workers 4)` — function
+#### `start` `&key (port 8080) (address "127.0.0.1") (server :hunchentoot) (prefix "") configuration-file (instance-id *instance-id*) (max-threads 100) (workers 4) ssl-certificate-file ssl-key-file ssl-key-password` — function
 
 Serve all registered applications with Clack on `port`, under `prefix`, and
 reap idle sessions in the background.  With `configuration-file`, first load
@@ -8061,7 +8074,9 @@ the applications saved there; /config then saves its changes to it.
 `max-threads` caps Hunchentoot's worker threads, which serve connections
 while they make requests; open pages with server push leave them for the
 push hub, one thread for every stream.  With `server` `:woo` (load littoral/woo
-first) `workers` event loops serve everything, push included.  A server already started is stopped first.
+first) `workers` event loops serve everything, push included.
+`ssl-certificate-file` and `ssl-key-file` (`pem` files; `ssl-key-password` when
+the key is encrypted) serve HTTPS instead of HTTP, on either server.  A server already started is stopped first.
 Returns the Clack handler.
 
 *Example:* `start` serves the registered applications over HTTP until `stop`.  It prints the address it listens on.
