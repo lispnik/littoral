@@ -126,3 +126,53 @@ Some *em*, **strong** and `<b>code</b>`.
           (let ((json (ajax-request b callback targets)))
             (is (search "Requests" json))
             (is (search "<polyline" json))))))))
+
+;;; CSV export
+
+(test csv-cells-are-quoted-and-safe
+  (is (string= (format nil "Name,Note~C~CAda,\"Says \"\"hi\"\", then leaves\"~C~C'=SUM(A1:A9),-5~C~C,'@home~C~C"
+                       #\Return #\Linefeed #\Return #\Linefeed #\Return #\Linefeed #\Return #\Linefeed)
+               (csv-text '("Name" "Note")
+                         '(("Ada" "Says \"hi\", then leaves") ("=SUM(A1:A9)" -5) (nil "@home"))))))
+
+(defclass csv-page (component)
+  ((report :reader csv-report
+           :initform (make-instance 'report :rows '((3 "Pears") (1 "Apples") (2 "Leeks")) :batch-size 2
+                                            :csv-filename "stock.csv"
+                                            :columns (list (column "Count" #'first) (column "Item" #'second)
+                                                           (column "" nil :sortable nil))))
+   (grid :reader csv-grid
+         :initform (make-instance 'data-grid :description 'shared-note :csv-filename "notes.csv"
+                                             :rows (list (make-instance 'shared-note :text "First")
+                                                         (make-instance 'shared-note :text "Second"))))))
+(defmethod children ((self csv-page)) (list (csv-report self) (csv-grid self)))
+(defmethod render ((self csv-page))
+  (render-component (csv-report self))
+  (render-component (csv-grid self)))
+
+(test reports-and-grids-download-csv
+  (with-fresh-applications (("/csv" 'csv-page :mode :deployment))
+    (let ((b (make-instance 'browser)))
+      (visit b "/csv")
+      (click b "Item")                  ; sorted by item, two to a page
+      (let ((page (browser-url b)))
+        (multiple-value-bind (status headers body) (raw-request b :get (find-link b "Download CSV"))
+          (is (= 200 status))
+          (is (string= "attachment; filename=\"stock.csv\"" (getf headers :content-disposition)))
+          (is (search "text/csv" (getf headers :content-type)))
+          ;; Every row, in the order shown, without the empty action column.
+          (is (string= (format nil "Count,Item~C~C1,Apples~C~C2,Leeks~C~C3,Pears~C~C"
+                               #\Return #\Linefeed #\Return #\Linefeed #\Return #\Linefeed #\Return #\Linefeed)
+                       body)))
+        ;; The page is still there, as it was.
+        (visit b page)
+        (is (has-text-p b "Apples")))
+      ;; The data grid exports what its filters let through.
+      (let* ((filter (cl-ppcre:register-groups-bind (name) ("<input[^>]*name=\"([0-9]+)\"[^>]*aria-label=\"Filter Text\"" (browser-html b)) name))
+             (spec (first (ajax-specs b "on-input"))))
+        (ajax-request b (car spec) (cdr spec) :fields (list (cons filter "sec"))))
+      (visit b (browser-url b))
+      (multiple-value-bind (status headers body) (raw-request b :get (second (find-links b "Download CSV")))
+        (declare (ignore headers))
+        (is (= 200 status))
+        (is (string= (format nil "Text~C~CSecond~C~C" #\Return #\Linefeed #\Return #\Linefeed) body))))))

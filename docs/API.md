@@ -2058,7 +2058,8 @@ page shown.
 A table of `:rows` (a list, or a function returning one,
 called on every render) in `:columns` (made with `column`), sorted by clicking
 a heading, like Seaside's WATableReport.  `:row-class`, a function of a row,
-gives its CSS class.  Give `:batch-size` to page it.
+gives its CSS class.  Give `:batch-size` to page it, and `:csv-filename`
+("orders.csv") for a Download CSV link (see `report-csv`).
 
 *Example:* A report shows rows in columns; a column's value is a function of the row.  Clicking a heading sorts by it, and clicking it again reverses the order.
 
@@ -2260,6 +2261,74 @@ goes back to its first page.
     (click b "Planet")
     (body-text b)))
 ;; ⇒ "Planet ▼ Distance (AU) Venus 0.72 Mercury 0.39 Mars 1.52 Earth 1.0"
+```
+
+#### `report-csv` `report` — function
+
+`report` as CSV: every row, not just the page shown, in its current order,
+under the titles of the columns that have values.
+
+*Example:* `report-csv` gives every row, not just the page shown, in the report's order, under the titles of the columns that have values.  With `:csv-filename` the report also shows a Download CSV link.  `csv-text` quotes what needs quoting and keeps cells from starting spreadsheet formulas.
+
+```lisp
+(let ((report (make-instance 'report :rows '(("Ada" 36) ("=HYPERLINK(\"x\")" 1))
+                                     :columns (list (column "Name" #'first) (column "Age" #'second)))))
+  ;; Its lines end with CRLF, as RFC 4180 says.
+  (cl-ppcre:split "\\r\\n" (report-csv report)))
+;; ⇒ ("Name,Age" "Ada,36" "\"'=HYPERLINK(\"\"x\"\")\",1")
+```
+
+#### `data-grid-csv` `grid` — function
+
+`grid`'s rows as CSV: those its filters let through, every page, in its
+current order, each field as the grid shows it.
+
+*Example:* A data grid's rows as CSV: what its filters let through, in its order, each field as the grid shows it.  `:csv-filename` adds a Download CSV link.
+
+```lisp
+(defclass city () ((name :initarg :name) (people :initarg :people)))
+(define-description city ((name) (people :type :integer)))
+(cl-ppcre:split "\\r\\n" (data-grid-csv (make-instance 'data-grid :description 'city
+                                                               :rows (list (make-instance 'city :name "Lyon" :people 520000)
+                                                                           (make-instance 'city :name "Nice" :people 340000)))))
+;; ⇒ ("Name,People" "Lyon,520000" "Nice,340000")
+```
+
+#### `send-download` `content &key (filename "download") (content-type "application/octet-stream")` — function
+
+From a callback (not an AJAX one): answer the request with `content`, a
+string (sent as UTF-8) or octets, as a file named `filename` for the browser
+to save, instead of showing the next page.  The page stays as it was, so
+the callback shouldn't change anything else.
+
+*Example:* From a callback, answer the request with a file for the browser to save, instead of the next page; the page stays as it was.
+
+```lisp
+(defclass export-button (component) ())
+(defmethod render ((self export-button))
+  (anchor (:callback (lambda () (send-download "id,total" :filename "orders.csv" :content-type "text/csv")))
+    "Export"))
+(with-fresh-applications (("/export" 'export-button :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/export")
+    (multiple-value-bind (status headers body) (raw-request b :get (find-link b "Export"))
+      (list status (getf headers :content-disposition) body))))
+;; ⇒ (200 "attachment; filename=\"orders.csv\"" "id,total")
+```
+
+#### `csv-text` `header rows` — function
+
+CSV (RFC 4180, lines ending `crlf`) of `header`, a list of titles, then `rows`,
+each a list of values; see `csv-cell`.
+
+*Example:* `report-csv` gives every row, not just the page shown, in the report's order, under the titles of the columns that have values.  With `:csv-filename` the report also shows a Download CSV link.  `csv-text` quotes what needs quoting and keeps cells from starting spreadsheet formulas.
+
+```lisp
+(let ((report (make-instance 'report :rows '(("Ada" 36) ("=HYPERLINK(\"x\")" 1))
+                                     :columns (list (column "Name" #'first) (column "Age" #'second)))))
+  ;; Its lines end with CRLF, as RFC 4180 says.
+  (cl-ppcre:split "\\r\\n" (report-csv report)))
+;; ⇒ ("Name,Age" "Ada,36" "\"'=HYPERLINK(\"\"x\"\")\",1")
 ```
 
 #### `tab-panel` — class
@@ -4843,7 +4912,13 @@ own inputs and validation.  `:description` names the description (anything
 returning one, called on every render).  `:fields` lists the field names to
 show; by default those in reports, without password fields.  `:page-size` is
 the rows per page (10).  After an edit is written to an object, `:on-save` is
-called with it.  Filtering, sorting and paging go over AJAX.
+called with it.  `:row-key`, a function of a row (`identity` by default; use
+`object-id` for rows read afresh from a database), says which rows are the
+same.  A field someone else changed while the row was being edited is
+reported rather than overwritten, and saving again replaces it; so is an
+`edit-conflict` signalled by `:on-save` (as `stale-object` is).  `:csv-filename`
+adds a Download CSV link (see `data-grid-csv`).  Filtering, sorting and
+paging go over AJAX.
 
 *Example:* A data grid shows a description's objects in a table and edits a row in place, with the description's own inputs and checks.  `:on-save` is called with the object once an edit is written to it.
 
@@ -5267,8 +5342,13 @@ turns it into the field's input, with Save and Cancel, over AJAX.  Save
 parses and checks the text as the description says, writes the value to
 the object and calls `:on-save`, when given, with the object (to store it,
 say); a problem is shown by the input instead.  `:update` lists other
-`updatable` components the value shows in, re-rendered after a save.  Make
-one with `make-in-place-editor`.
+`updatable` components the value shows in, re-rendered after a save.  When
+someone else changed the value since Edit was pressed, Save says so and
+leaves it; pressing it again replaces their value.  An `edit-conflict`
+signalled by `:on-save` (as littoral.db's `stale-object` is) is reported the
+same way, the object put back as it was, and `:reload`, when given, called
+with it to get it as it is now (#'littoral.db:db-reload, say).  Make one
+with `make-in-place-editor`.
 
 *Example:* One field of one object, edited where it is shown: Edit turns it into the field's input, and Save checks the text as the description says and writes the value.  Both go over AJAX; here the fake browser reloads the page to see each step.
 
@@ -5295,12 +5375,13 @@ one with `make-in-place-editor`.
 ;; ⇒ ("Ada Edit" "Ada Lovelace Edit" "Ada Lovelace")
 ```
 
-#### `make-in-place-editor` `object field-name &key (description object) on-save update` — function
+#### `make-in-place-editor` `object field-name &key (description object) on-save update reload` — function
 
 An `in-place-editor` of `object`'s field `field-name`, as `description`
 (anything `find-description` takes; by default `object`'s class) describes it.
 `on-save` is called with `object` after a value is written to it, and `update`,
 an `updatable` component or a list of them, is re-rendered with the editor.
+`reload` gets the object afresh after an `edit-conflict` (see `in-place-editor`).
 
 *Example:* One field of one object, edited where it is shown: Edit turns it into the field's input, and Save checks the text as the description says and writes the value.  Both go over AJAX; here the fake browser reloads the page to see each step.
 
@@ -5325,6 +5406,76 @@ an `updatable` component or a list of them, is re-rendered with the editor.
         (visit b (browser-url b))
         (list before (body-text b) (guest-name *ada*))))))
 ;; ⇒ ("Ada Edit" "Ada Lovelace Edit" "Ada Lovelace")
+```
+
+#### `edit-conflict` — condition
+
+What an editor's `:on-save` signals when the object was
+changed by someone else since it was read: `in-place-editor` and `data-grid`
+then say so instead of failing.  littoral.db's `stale-object` is one.
+
+*Example:* When someone else changed the value since Edit was pressed, Save says so and leaves theirs; saving again replaces it.  An `:on-save` that signals `edit-conflict` (as littoral.db's `stale-object` does, for rows changed meanwhile) is reported the same way, and nothing is kept.
+
+```lisp
+(defclass memo () ((text :initarg :text :accessor memo-text)))
+(define-description memo ((text)))
+(defvar *memo* (make-instance 'memo :text "Draft"))
+(defclass memo-page (component)
+  ((editor :initform (make-in-place-editor *memo* 'text) :reader editor)))
+(defmethod children ((self memo-page)) (list (editor self)))
+(defmethod render ((self memo-page)) (render-component (editor self)))
+(defun press-edit (b)
+  (let ((spec (first (ajax-specs b "on-click"))))
+    (ajax-request b (car spec) (cdr spec))
+    (visit b (browser-url b))))
+(defun save-as (b text)
+  (let ((spec (first (ajax-specs b "on-submit")))
+        (input (cl-ppcre:register-groups-bind (name) ("<input[^>]* name=\"(\\d+)\"" (browser-html b)) name)))
+    (ajax-request b (car spec) (cdr spec) :fields (list (cons input text)))))
+(with-fresh-applications (("/memo" 'memo-page :mode :deployment))
+  (let ((mine (make-instance 'browser)) (theirs (make-instance 'browser)))
+    (visit mine "/memo") (press-edit mine)
+    (visit theirs "/memo") (press-edit theirs)
+    (save-as theirs "Their text")
+    (list (and (search "Someone else changed this to “Their text” meanwhile." (save-as mine "My text")) t)
+          (memo-text *memo*)
+          (progn (save-as mine "My text") (memo-text *memo*))
+          (eq *memo* (edit-conflict-object (make-condition 'edit-conflict :object *memo*))))))
+;; ⇒ (T "Their text" "My text" T)
+```
+
+#### `edit-conflict-object` `condition` — generic function
+
+*Undocumented.*
+
+*Example:* When someone else changed the value since Edit was pressed, Save says so and leaves theirs; saving again replaces it.  An `:on-save` that signals `edit-conflict` (as littoral.db's `stale-object` does, for rows changed meanwhile) is reported the same way, and nothing is kept.
+
+```lisp
+(defclass memo () ((text :initarg :text :accessor memo-text)))
+(define-description memo ((text)))
+(defvar *memo* (make-instance 'memo :text "Draft"))
+(defclass memo-page (component)
+  ((editor :initform (make-in-place-editor *memo* 'text) :reader editor)))
+(defmethod children ((self memo-page)) (list (editor self)))
+(defmethod render ((self memo-page)) (render-component (editor self)))
+(defun press-edit (b)
+  (let ((spec (first (ajax-specs b "on-click"))))
+    (ajax-request b (car spec) (cdr spec))
+    (visit b (browser-url b))))
+(defun save-as (b text)
+  (let ((spec (first (ajax-specs b "on-submit")))
+        (input (cl-ppcre:register-groups-bind (name) ("<input[^>]* name=\"(\\d+)\"" (browser-html b)) name)))
+    (ajax-request b (car spec) (cdr spec) :fields (list (cons input text)))))
+(with-fresh-applications (("/memo" 'memo-page :mode :deployment))
+  (let ((mine (make-instance 'browser)) (theirs (make-instance 'browser)))
+    (visit mine "/memo") (press-edit mine)
+    (visit theirs "/memo") (press-edit theirs)
+    (save-as theirs "Their text")
+    (list (and (search "Someone else changed this to “Their text” meanwhile." (save-as mine "My text")) t)
+          (memo-text *memo*)
+          (progn (save-as mine "My text") (memo-text *memo*))
+          (eq *memo* (edit-conflict-object (make-condition 'edit-conflict :object *memo*))))))
+;; ⇒ (T "Their text" "My text" T)
 ```
 
 ### JSON endpoints
@@ -17949,7 +18100,8 @@ whatever else the process connects to: `driver` and `parameters` as for
 #### `stale-object` — condition
 
 Signalled when saving or deleting an object whose row has
-changed (or gone) since the object was read.
+changed (or gone) since the object was read.  It is an `edit-conflict`, so
+in-place editors and data grids report it rather than failing.
 
 *Example:* Two people edit the same row.  The second save would overwrite the first one's change, so it signals `stale-object` instead; reloading gives the current row to show or merge.
 

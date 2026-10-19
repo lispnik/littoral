@@ -197,13 +197,15 @@ It's an ordinary component, so a flow can `call` it. `/examples/wizard` signs so
 
 ### More widgets
 
-- **`data-grid`** shows a description's objects as a table, with a filter box per column, sortable headings and paging. **Edit** turns a row into the description's own inputs, with its validation; `:on-save` gets the object after the values are written to it.
+- **`data-grid`** shows a description's objects as a table, with a filter box per column, sortable headings and paging. **Edit** turns a row into the description's own inputs, with its validation; `:on-save` gets the object after the values are written to it. For rows read afresh from a database on each render, give `:row-key #'littoral.db:object-id`.
 - **Charts**: `bar-chart`, `line-chart` and `sparkline` write inline SVG, styled by the theme. Each chart is an image with a caption and carries its data as a table for screen readers.
 - **`calendar`** shows a month, Monday first, with events (`(date . title)`) and month names in the session's language; `:on-select` gets the day chosen.
 - **`kanban`** shows columns of cards. Cards can be dragged between columns, or moved with arrow buttons that work by keyboard and without JavaScript; `:on-move` hears about every move.
 - **Markdown**: the `:markdown` field kind and `markdown-html` render Markdown as safe HTML. Raw HTML is escaped, and links go only to http(s), mailto or the site itself, so it's safe to show to whoever wrote it.
 - **`breadcrumb-trail`** follows a component's calls: it names the component, then what that has called, and so on down to what shows now. Each link goes back to its level, dismissing what that level called, as `home` does. Names come from `breadcrumb-label`, which defaults to the class name; a description editor's is its title. Render the trail outside the component it follows, since a call replaces that component.
 - **`make-in-place-editor`** edits one field of one object where it's shown. **Edit** turns the value into the field's input, with **Save** and **Cancel**, over AJAX. Save checks the text with the description's own validation, writes the value, and calls `:on-save` with the object. `:update` lists other components to redraw after a save, such as a heading that shows the value.
+- **Edit conflicts.** The in-place editor and the data grid don't silently overwrite someone else's change. If the value changed after Edit was pressed, Save says "Someone else changed this to … meanwhile" and leaves their value; saving again replaces it. An `:on-save` that signals `edit-conflict` is reported the same way, and nothing is kept; littoral.db's `stale-object`, for a row changed since it was read, is one. Give the in-place editor `:reload #'littoral.db:db-reload` to show the record as it is now.
+- **CSV.** `:csv-filename "orders.csv"` on a `report` or `data-grid` adds a Download CSV link. It exports every row, not just the page shown, with the current filters and order. Cells that would start a spreadsheet formula get a leading apostrophe. `report-csv`, `data-grid-csv` and `csv-text` give the text, and `send-download` answers any callback with a file.
 
 ```lisp
 (defmethod breadcrumb-label ((self order-page)) (format nil "Order ~D" (order-id (page-order self))))

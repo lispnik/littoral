@@ -54,6 +54,45 @@ their components' rendering methods are redefined (see live.lisp).")
 to URL (another site, say) instead of the next page."
   (setf *redirect* url))
 
+(defvar *download* nil
+  "The response a callback asked for with SEND-DOWNLOAD, or NIL.")
+
+(defun send-download (content &key (filename "download") (content-type "application/octet-stream"))
+  "From a callback (not an AJAX one): answer the request with CONTENT, a
+string (sent as UTF-8) or octets, as a file named FILENAME for the browser
+to save, instead of showing the next page.  The page stays as it was, so
+the callback shouldn't change anything else."
+  (let ((octets (if (stringp content) (sb-ext:string-to-octets content :external-format :utf-8) content))
+        (name (remove-if (lambda (c) (or (char< c #\Space) (find c "\"\\/"))) filename)))
+    (setf *download*
+          (list 200 (list :content-type content-type
+                          :content-length (length octets)
+                          :content-disposition (format nil "attachment; filename=\"~A\"" name)
+                          :cache-control "no-store"
+                          :x-content-type-options "nosniff"
+                          :content-security-policy "default-src 'none'; sandbox")
+                octets))))
+
+(defun csv-cell (value)
+  "VALUE as one CSV field: quoted when it holds a comma, quote or line
+break, and with a leading apostrophe when it would otherwise start a
+spreadsheet formula (=, +, -, @, tab or carriage return)."
+  (let* ((text (cond ((null value) "") ((stringp value) value) (t (princ-to-string value))))
+         (text (if (and (plusp (length text)) (find (char text 0) '(#\= #\+ #\- #\@ #\Tab #\Return))
+                       (not (every (lambda (c) (or (digit-char-p c) (find c "+-.eE"))) text)))
+                   (concatenate 'string "'" text)
+                   text)))
+    (if (find-if (lambda (c) (find c '(#\, #\" #\Newline #\Return))) text)
+        (format nil "\"~A\"" (cl-ppcre:regex-replace-all "\"" text "\"\""))
+        text)))
+
+(defun csv-text (header rows)
+  "CSV (RFC 4180, lines ending CRLF) of HEADER, a list of titles, then ROWS,
+each a list of values; see CSV-CELL."
+  (with-output-to-string (out)
+    (dolist (line (cons header rows))
+      (format out "~{~A~^,~}~C~C" (mapcar #'csv-cell line) #\Return #\Linefeed))))
+
 (define-condition forbidden (error)
   ((message :initarg :message :initform "You are not allowed to do that." :reader forbidden-message))
   (:report (lambda (condition stream) (write-string (forbidden-message condition) stream)))

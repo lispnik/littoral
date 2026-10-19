@@ -222,3 +222,24 @@
     (click-nth b "↓" 0)
     (body-text b)))
 ;; ⇒ "⠿Dry↓ ⠿Wash↑↓ ⠿Fold↑"
+
+;;;; Example: littoral:report-csv littoral:csv-text
+;;; `report-csv` gives every row, not just the page shown, in the report's order, under the titles of the columns that have values.  With `:csv-filename` the report also shows a Download CSV link.  CSV-TEXT quotes what needs quoting and keeps cells from starting spreadsheet formulas.
+(let ((report (make-instance 'report :rows '(("Ada" 36) ("=HYPERLINK(\"x\")" 1))
+                                     :columns (list (column "Name" #'first) (column "Age" #'second)))))
+  ;; Its lines end with CRLF, as RFC 4180 says.
+  (cl-ppcre:split "\\r\\n" (report-csv report)))
+;; ⇒ ("Name,Age" "Ada,36" "\"'=HYPERLINK(\"\"x\"\")\",1")
+
+;;;; Example: littoral:send-download
+;;; From a callback, answer the request with a file for the browser to save, instead of the next page; the page stays as it was.
+(defclass export-button (component) ())
+(defmethod render ((self export-button))
+  (anchor (:callback (lambda () (send-download "id,total" :filename "orders.csv" :content-type "text/csv")))
+    "Export"))
+(with-fresh-applications (("/export" 'export-button :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/export")
+    (multiple-value-bind (status headers body) (raw-request b :get (find-link b "Export"))
+      (list status (getf headers :content-disposition) body))))
+;; ⇒ (200 "attachment; filename=\"orders.csv\"" "id,total")

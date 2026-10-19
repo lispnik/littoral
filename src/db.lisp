@@ -202,14 +202,15 @@ stay open until their threads end (DBI closes them when it next connects)."
             :documentation "Incremented by every update; how conflicting saves are noticed."))
   (:documentation "Mixin for objects kept in a table."))
 
-(define-condition stale-object (error)
+(define-condition stale-object (littoral:edit-conflict)
   ((object :initarg :object :reader stale-object-object
            :documentation "The object whose save or delete was refused."))
   (:report (lambda (condition stream)
              (format stream "~A was changed or deleted by someone else since it was read."
                      (stale-object-object condition))))
   (:documentation "Signalled when saving or deleting an object whose row has
-changed (or gone) since the object was read."))
+changed (or gone) since the object was read.  It is an EDIT-CONFLICT, so
+in-place editors and data grids report it rather than failing."))
 
 (setf (documentation 'stale-object-object 'function)
       "The object whose save or delete STALE-OBJECT refused.")

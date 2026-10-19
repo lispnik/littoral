@@ -52,7 +52,8 @@
    #:inform #:confirm #:request-input #:choose-from
    ;; Widgets
    #:batched-list #:batch #:batch-items #:batch-size #:batch-page #:go-to-page
-   #:report #:column #:report-rows #:report-columns #:sort-by
+   #:report #:column #:report-rows #:report-columns #:sort-by #:report-csv #:data-grid-csv
+   #:send-download #:csv-text
    #:tab-panel #:navigation #:panel-tabs #:panel-selected #:selected-tab #:select-tab
    #:tree #:tree-expanded #:tree-selected #:toggle-item #:expand-all
    #:autocomplete #:autocomplete-value
@@ -85,7 +86,7 @@
    #:data-grid #:bar-chart #:line-chart #:sparkline #:calendar #:calendar-year #:calendar-month
    #:kanban #:kanban-columns #:move-card #:markdown-html #:markdown-field
    #:breadcrumb-trail #:breadcrumb-trail-of #:breadcrumb-label
-   #:in-place-editor #:make-in-place-editor
+   #:in-place-editor #:make-in-place-editor #:edit-conflict #:edit-conflict-object
    ;; JSON endpoints
    #:define-endpoint #:register-endpoint #:endpoint-error #:endpoint-body #:*endpoint-authenticator*
    ;; Health, metrics, request logs

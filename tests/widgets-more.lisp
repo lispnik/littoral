@@ -189,3 +189,95 @@ reload: the page now has the editor's form.  The id of its input."
       (save-in-place b id "7"))
     (visit b (browser-url b))
     (is (search "In stock 7" (body-text b)))))
+
+;;; Edit conflicts: someone else saved first
+
+(defclass shared-note ()
+  ((text :initarg :text :accessor shared-note-text)
+   (id :initarg :id :initform 1 :reader shared-note-id)))
+
+(define-description shared-note ((text :required t)))
+
+(defvar *shared-note* (make-instance 'shared-note :text "Original"))
+(defvar *fresh-note* nil "What a test's :RELOAD gives.")
+(defvar *refuse-save* nil "True to have the next :ON-SAVE refuse, as a stale save would.")
+
+(defun refusing-save (note)
+  (when *refuse-save*
+    (setf *refuse-save* nil)
+    (error 'edit-conflict :object note)))
+
+(defclass shared-note-page (component)
+  ((editor :initform (make-in-place-editor *shared-note* 'text :on-save #'refusing-save
+                                                               :reload (lambda (note) (declare (ignore note)) *fresh-note*))
+           :reader note-editor)))
+(defmethod children ((self shared-note-page)) (list (note-editor self)))
+(defmethod render ((self shared-note-page)) (render-component (note-editor self)))
+
+(test in-place-edits-notice-other-peoples-changes
+  (setf *shared-note* (make-instance 'shared-note :text "Original")
+        *refuse-save* nil)
+  (with-fresh-applications (("/note" 'shared-note-page :mode :deployment))
+    (let ((a (make-instance 'browser)) (b (make-instance 'browser)))
+      (visit a "/note")
+      (visit b "/note")
+      (let ((a-input (start-in-place-edit a "Edit Text"))
+            (b-input (start-in-place-edit b "Edit Text")))
+        (save-in-place b b-input "From B")
+        (is (string= "From B" (shared-note-text *shared-note*)))
+        ;; A's save would overwrite B's: it says so instead.
+        (is (search "Someone else changed this to “From B” meanwhile." (save-in-place a a-input "From A")))
+        (is (string= "From B" (shared-note-text *shared-note*)))
+        ;; Saving again replaces it, knowingly.
+        (save-in-place a a-input "From A")
+        (is (string= "From A" (shared-note-text *shared-note*)))))))
+
+(test in-place-edits-report-refused-saves
+  (setf *shared-note* (make-instance 'shared-note :text "Original")
+        *fresh-note* (make-instance 'shared-note :text "Theirs")
+        *refuse-save* t)
+  (with-fresh-applications (("/note" 'shared-note-page :mode :deployment))
+    (let ((a (make-instance 'browser)))
+      (visit a "/note")
+      (let ((input (start-in-place-edit a "Edit Text")))
+        ;; :ON-SAVE signals EDIT-CONFLICT: the object is put back, the
+        ;; editor reloads it and says what it now reads.
+        (is (search "Someone else changed this to “Theirs” meanwhile." (save-in-place a input "Mine")))
+        (is (string= "Original" (shared-note-text *shared-note*)) "Put back")
+        (save-in-place a input "Mine")
+        (is (string= "Mine" (shared-note-text *fresh-note*)) "Saved to the object as it is now")))))
+
+(defvar *shared-notes* '())
+
+(defclass shared-notes-grid (component)
+  ((grid :initform (make-instance 'data-grid :description 'shared-note :rows (lambda () *shared-notes*)
+                                             :row-key #'shared-note-id :on-save #'refusing-save)
+         :reader notes-grid)))
+(defmethod children ((self shared-notes-grid)) (list (notes-grid self)))
+(defmethod render ((self shared-notes-grid)) (render-component (notes-grid self)))
+
+(test data-grids-notice-other-peoples-changes
+  (setf *shared-notes* (list (make-instance 'shared-note :text "Original")) *refuse-save* nil)
+  (with-fresh-applications (("/notes" 'shared-notes-grid :mode :deployment))
+    (let ((a (make-instance 'browser)) (b (make-instance 'browser)))
+      (visit a "/notes") (click a "Edit")
+      (visit b "/notes") (click b "Edit")
+      (fill-in b "grid-text" "From B")
+      (press b "Save")
+      (is (string= "From B" (shared-note-text (first *shared-notes*))))
+      (fill-in a "grid-text" "From A")
+      (press a "Save")
+      (is (has-text-p a "Someone else changed this to “From B” meanwhile."))
+      (is (string= "From B" (shared-note-text (first *shared-notes*))))
+      (press a "Save")
+      (is (string= "From A" (shared-note-text (first *shared-notes*))))
+      ;; Rows read afresh (here, a new copy each time) are found by :ROW-KEY.
+      (setf *shared-notes* (list (make-instance 'shared-note :text "Copy")))
+      (visit a "/notes") (click a "Edit")
+      (is (search "value=\"Copy\"" (browser-html a)) "The row being edited is shown as an editor")
+      ;; A save the store refuses is reported, and nothing is kept.
+      (setf *refuse-save* t)
+      (fill-in a "grid-text" "Refused")
+      (press a "Save")
+      (is (has-text-p a "Someone else changed this row meanwhile; nothing was saved."))
+      (is (string= "Copy" (shared-note-text (first *shared-notes*)))))))

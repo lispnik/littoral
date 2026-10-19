@@ -20,7 +20,7 @@
   ;; Dialogs
   ("OK" "OK") ("Yes" "Oui") ("No" "Non") ("Cancel" "Annuler") ("Continue" "Continuer")
   ("Answer" "Réponse") ("Choice" "Choix") ("Username" "Nom d'utilisateur") ("Password" "Mot de passe")
-  ("Log in" "Se connecter") ("Close" "Fermer") ("Save" "Enregistrer") ("~D person here" "~D personne ici" "~D personnes ici") ("You" "Vous") ("A guest" "Un invité") ("~D guest" "~D invité" "~D invités") ("Breadcrumbs" "Fil d’Ariane") ("Edit ~A" "Modifier : ~A") ("Create" "Créer")
+  ("Log in" "Se connecter") ("Close" "Fermer") ("Save" "Enregistrer") ("Download CSV" "Télécharger en CSV") ("nothing" "rien") ("Someone else changed this to “~A” meanwhile. Save again to replace it." "Quelqu’un d’autre a entre-temps remplacé ceci par « ~A ». Enregistrez à nouveau pour le remplacer.") ("Someone else changed this row meanwhile; nothing was saved. Save again to replace their changes." "Quelqu’un d’autre a modifié cette ligne entre-temps ; rien n’a été enregistré. Enregistrez à nouveau pour remplacer ses modifications.") ("Someone else deleted this meanwhile; nothing was saved." "Quelqu’un d’autre a supprimé ceci entre-temps ; rien n’a été enregistré.") ("Someone else changed this meanwhile; nothing was saved." "Quelqu’un d’autre a modifié ceci entre-temps ; rien n’a été enregistré.") ("~D person here" "~D personne ici" "~D personnes ici") ("You" "Vous") ("A guest" "Un invité") ("~D guest" "~D invité" "~D invités") ("Breadcrumbs" "Fil d’Ariane") ("Edit ~A" "Modifier : ~A") ("Create" "Créer")
   ("Your session expired, so you are starting again from the beginning."
    "Votre session a expiré : vous recommencez depuis le début.")
   ;; Widgets
@@ -121,7 +121,7 @@ Le lien ne sert qu'une fois, pendant une heure.  Si ce n'était pas vous, ignore
   ;; Dialogs
   ("OK" "OK") ("Yes" "Ja") ("No" "Nein") ("Cancel" "Abbrechen") ("Continue" "Weiter")
   ("Answer" "Antwort") ("Choice" "Auswahl") ("Username" "Benutzername") ("Password" "Passwort")
-  ("Log in" "Anmelden") ("Close" "Schließen") ("Save" "Speichern") ("~D person here" "~D Person hier" "~D Personen hier") ("You" "Sie") ("A guest" "Ein Gast") ("~D guest" "~D Gast" "~D Gäste") ("Breadcrumbs" "Brotkrümelpfad") ("Edit ~A" "~A bearbeiten") ("Create" "Anlegen")
+  ("Log in" "Anmelden") ("Close" "Schließen") ("Save" "Speichern") ("Download CSV" "Als CSV herunterladen") ("nothing" "nichts") ("Someone else changed this to “~A” meanwhile. Save again to replace it." "Jemand anderes hat dies inzwischen in „~A“ geändert. Speichern Sie erneut, um es zu ersetzen.") ("Someone else changed this row meanwhile; nothing was saved. Save again to replace their changes." "Jemand anderes hat diese Zeile inzwischen geändert; nichts wurde gespeichert. Speichern Sie erneut, um die Änderungen zu ersetzen.") ("Someone else deleted this meanwhile; nothing was saved." "Jemand anderes hat dies inzwischen gelöscht; nichts wurde gespeichert.") ("Someone else changed this meanwhile; nothing was saved." "Jemand anderes hat dies inzwischen geändert; nichts wurde gespeichert.") ("~D person here" "~D Person hier" "~D Personen hier") ("You" "Sie") ("A guest" "Ein Gast") ("~D guest" "~D Gast" "~D Gäste") ("Breadcrumbs" "Brotkrümelpfad") ("Edit ~A" "~A bearbeiten") ("Create" "Anlegen")
   ("Your session expired, so you are starting again from the beginning."
    "Ihre Sitzung ist abgelaufen, daher beginnen Sie wieder von vorn.")
   ;; Widgets
@@ -222,7 +222,7 @@ Der Link funktioniert einmal, eine Stunde lang.  Falls Sie das nicht waren, igno
   ;; Dialogs
   ("OK" "Aceptar") ("Yes" "Sí") ("No" "No") ("Cancel" "Cancelar") ("Continue" "Continuar")
   ("Answer" "Respuesta") ("Choice" "Opción") ("Username" "Usuario") ("Password" "Contraseña")
-  ("Log in" "Entrar") ("Close" "Cerrar") ("Save" "Guardar") ("~D person here" "~D persona aquí" "~D personas aquí") ("You" "Usted") ("A guest" "Un invitado") ("~D guest" "~D invitado" "~D invitados") ("Breadcrumbs" "Ruta de navegación") ("Edit ~A" "Editar: ~A") ("Create" "Crear")
+  ("Log in" "Entrar") ("Close" "Cerrar") ("Save" "Guardar") ("Download CSV" "Descargar CSV") ("nothing" "nada") ("Someone else changed this to “~A” meanwhile. Save again to replace it." "Otra persona cambió esto a «~A» mientras tanto. Guarde de nuevo para reemplazarlo.") ("Someone else changed this row meanwhile; nothing was saved. Save again to replace their changes." "Otra persona cambió esta fila mientras tanto; no se guardó nada. Guarde de nuevo para reemplazar sus cambios.") ("Someone else deleted this meanwhile; nothing was saved." "Otra persona eliminó esto mientras tanto; no se guardó nada.") ("Someone else changed this meanwhile; nothing was saved." "Otra persona cambió esto mientras tanto; no se guardó nada.") ("~D person here" "~D persona aquí" "~D personas aquí") ("You" "Usted") ("A guest" "Un invitado") ("~D guest" "~D invitado" "~D invitados") ("Breadcrumbs" "Ruta de navegación") ("Edit ~A" "Editar: ~A") ("Create" "Crear")
   ("Your session expired, so you are starting again from the beginning."
    "Su sesión ha caducado, así que empieza de nuevo desde el principio.")
   ;; Widgets

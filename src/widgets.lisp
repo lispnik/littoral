@@ -119,11 +119,14 @@ printed form, NIL last).  CLASS is the CSS class of the column's cells."
    (descending :initform nil :accessor report-descending-p)
    (row-class :initarg :row-class :initform nil :accessor report-row-class
               :documentation "Function of a row giving its CSS class, or NIL.")
+   (csv-filename :initarg :csv-filename :initform nil :reader report-csv-filename
+                 :documentation "When given, the name of the CSV file a Download CSV link gives.")
    (batcher :initform nil :reader report-batcher))
   (:documentation "A table of :ROWS (a list, or a function returning one,
 called on every render) in :COLUMNS (made with COLUMN), sorted by clicking
 a heading, like Seaside's WATableReport.  :ROW-CLASS, a function of a row,
-gives its CSS class.  Give :BATCH-SIZE to page it."))
+gives its CSS class.  Give :BATCH-SIZE to page it, and :CSV-FILENAME
+(\"orders.csv\") for a Download CSV link (see REPORT-CSV)."))
 
 (defmethod initialize-instance :after ((self report) &key batch-size)
   (when batch-size
@@ -164,6 +167,14 @@ goes back to its first page."
   (when (report-batcher report)
     (go-to-page (report-batcher report) 0)))
 
+(defun report-csv (report)
+  "REPORT as CSV: every row, not just the page shown, in its current order,
+under the titles of the columns that have values."
+  (let ((columns (remove nil (report-columns report) :key #'column-value)))
+    (csv-text (mapcar (lambda (c) (translate-label (column-title c))) columns)
+              (mapcar (lambda (row) (mapcar (lambda (c) (column-cell-value c row)) columns))
+                      (sorted-rows report)))))
+
 (defmethod render ((self report))
   (let* ((rows (sorted-rows self))
          (batcher (report-batcher self))
@@ -192,4 +203,9 @@ goes back to its first page."
                       (funcall (column-render column) row value)
                       (when value (text value))))))))))
     (when batcher
-      (render-component batcher))))
+      (render-component batcher))
+    (when (report-csv-filename self)
+      (p (:class "lt-csv")
+        (anchor (:callback (lambda () (send-download (report-csv self) :filename (report-csv-filename self)
+                                                                        :content-type "text/csv; charset=utf-8")))
+          (translate "Download CSV"))))))

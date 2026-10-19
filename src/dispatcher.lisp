@@ -453,7 +453,8 @@ posts and WebSocket messages alike."
 ran, snapshot the result as a new page, note the timings for the toolbar
 and return a redirect to it; otherwise NIL."
   (let ((start (get-internal-real-time))
-        (*redirect* nil))
+        (*redirect* nil)
+        (*download* nil))
     (when (call-around-actions
            session
            (lambda ()
@@ -461,6 +462,9 @@ and return a redirect to it; otherwise NIL."
                                       (continuation-callbacks continuation))
                (prepare-tasks (session-root session))
                t)))
+      ;; A callback sent a file: answer with it, and keep the page.
+      (when *download*
+        (return-from run-actions *download*))
       (let* ((acted (get-internal-real-time))
              (page (new-continuation session))
              (done (get-internal-real-time)))

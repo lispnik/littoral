@@ -316,3 +316,29 @@ meanwhile; true if the commit went through.  OPTIONS go into the spec."
     (littoral.db:db-save project)
     (signals littoral.db:stale-object (littoral.db:db-save copy))
     (is (= 1 (metric-value "littoral_db_stale_objects_total{table=\"project\"}")))))
+
+(defvar *edited-project-id* nil)
+
+(defclass project-name-page (component)
+  ((editor :reader project-editor
+           :initform (make-in-place-editor (littoral.db:db-find 'project *edited-project-id*) 'name
+                                           :on-save #'littoral.db:db-save :reload #'littoral.db:db-reload))))
+(defmethod children ((self project-name-page)) (list (project-editor self)))
+(defmethod render ((self project-name-page)) (render-component (project-editor self)))
+
+(test stale-saves-are-edit-conflicts
+  (is (subtypep 'littoral.db:stale-object 'edit-conflict))
+  (with-test-database ()
+    (setf *edited-project-id* (littoral.db:object-id (littoral.db:db-save (make-instance 'project :name "Littoral"))))
+    (with-fresh-applications (("/project" 'project-name-page :mode :deployment))
+      ;; Each page read the project for itself: the version check notices.
+      (let ((a (make-instance 'browser)) (b (make-instance 'browser)))
+        (visit a "/project")
+        (visit b "/project")
+        (let ((a-input (start-in-place-edit a "Edit Name"))
+              (b-input (start-in-place-edit b "Edit Name")))
+          (save-in-place b b-input "Littoral by B")
+          (is (search "Someone else changed this to “Littoral by B” meanwhile." (save-in-place a a-input "Littoral by A")))
+          (is (string= "Littoral by B" (slot-value (littoral.db:db-find 'project *edited-project-id*) 'name)))
+          (save-in-place a a-input "Littoral by A")
+          (is (string= "Littoral by A" (slot-value (littoral.db:db-find 'project *edited-project-id*) 'name))))))))

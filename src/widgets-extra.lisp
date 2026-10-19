@@ -11,6 +11,18 @@
 
 (in-package #:littoral)
 
+(define-condition edit-conflict (error)
+  ((object :initarg :object :initform nil :reader edit-conflict-object))
+  (:report "Someone else changed this meanwhile.")
+  (:documentation "What an editor's :ON-SAVE signals when the object was
+changed by someone else since it was read: IN-PLACE-EDITOR and DATA-GRID
+then say so instead of failing.  littoral.db's STALE-OBJECT is one."))
+
+(defun conflict-text (field text)
+  "TEXT, FIELD's value as someone else left it, for a sentence."
+  (if (typep field 'password-field) "…" (if (string= text "") (translate "nothing") text)))
+
+
 ;;; A data grid: a description's objects, filtered, sorted, paged, edited in place
 
 (defclass data-grid (component updatable)
@@ -26,8 +38,14 @@
    (sort-field :initform nil :accessor grid-sort-field)
    (descending :initform nil :accessor grid-descending-p)
    (filters :initform '() :accessor grid-filters :documentation "(FIELD-NAME . TEXT), replaced, never changed.")
+   (csv-filename :initarg :csv-filename :initform nil :reader grid-csv-filename
+                 :documentation "When given, the name of the CSV file a Download CSV link gives.")
+   (row-key :initarg :row-key :initform #'identity :reader grid-row-key
+            :documentation "Function of a row giving what identifies it, compared with EQUAL.")
    (editing :initform nil :accessor grid-editing :documentation "The object being edited, or NIL.")
    (texts :initform '() :accessor grid-texts :documentation "(FIELD-NAME . TEXT) typed into the row being edited.")
+   (originals :initform '() :accessor grid-originals
+              :documentation "(FIELD-NAME . TEXT): the row being edited as it was when editing began.")
    (problems :initform '() :accessor grid-problems))
   (:documentation "A table of a description's objects: a filter box per column,
 sorting by column, paging, and editing a row in place with the description's
@@ -36,7 +54,21 @@ FIND-DESCRIPTION takes) and :ROWS gives the objects (a list, or a function
 returning one, called on every render).  :FIELDS lists the field names to
 show; by default those in reports, without password fields.  :PAGE-SIZE is
 the rows per page (10).  After an edit is written to an object, :ON-SAVE is
-called with it.  Filtering, sorting and paging go over AJAX."))
+called with it.  :ROW-KEY, a function of a row (IDENTITY by default; use
+OBJECT-ID for rows read afresh from a database), says which rows are the
+same.  A field someone else changed while the row was being edited is
+reported rather than overwritten, and saving again replaces it; so is an
+EDIT-CONFLICT signalled by :ON-SAVE (as STALE-OBJECT is).  :CSV-FILENAME
+adds a Download CSV link (see DATA-GRID-CSV).  Filtering, sorting and
+paging go over AJAX."))
+
+(defun data-grid-csv (grid)
+  "GRID's rows as CSV: those its filters let through, every page, in its
+current order, each field as the grid shows it."
+  (let ((fields (grid-fields grid)))
+    (csv-text (mapcar (lambda (f) (translate (field-label f))) fields)
+              (mapcar (lambda (row) (mapcar (lambda (f) (format-field f (field-value f row))) fields))
+                      (grid-visible-rows grid)))))
 
 (defmethod states ((self data-grid)) (list self))
 
@@ -80,30 +112,64 @@ called with it.  Filtering, sorting and paging go over AJAX."))
       (setf (grid-descending-p grid) (not (grid-descending-p grid)))
       (setf (grid-sort-field grid) name (grid-descending-p grid) nil)))
 
+(defun row-texts (grid row)
+  "(FIELD-NAME . TEXT) for each of GRID's fields of ROW."
+  (mapcar (lambda (field) (cons (field-name field) (format-field field (field-value field row))))
+          (grid-fields grid)))
+
+(defun same-row-p (grid a b)
+  (equal (funcall (grid-row-key grid) a) (funcall (grid-row-key grid) b)))
+
+(defun current-row (grid row)
+  "ROW as GRID's rows hold it now (a fresh copy, for rows read afresh), or ROW."
+  (or (find-if (lambda (r) (same-row-p grid r row)) (grid-all-rows grid)) row))
+
 (defun edit-grid-row (grid row)
   (setf (grid-editing grid) row
         (grid-problems grid) '()
-        (grid-texts grid) (mapcar (lambda (field) (cons (field-name field) (format-field field (field-value field row))))
-                                  (grid-fields grid))))
+        (grid-texts grid) (row-texts grid row)
+        (grid-originals grid) (row-texts grid row)))
 
 (defun save-grid-row (grid)
   "Check the row being edited; write it and call ON-SAVE, or keep the problems."
-  (let ((row (grid-editing grid)) (values '()) (problems '()))
+  (let* ((row (grid-editing grid))
+         (current (current-row grid row))
+         (values '()) (problems '()))
     (dolist (field (grid-fields grid))
-      (let ((text (or (cdr (assoc (field-name field) (grid-texts grid))) "")))
-        (handler-case
-            (let* ((value (parse-field field text))
-                   (problem (check-field field value)))
-              (if problem
-                  (push (cons (field-name field) problem) problems)
-                  (push (cons field value) values)))
-          (field-error (e) (push (cons (field-name field) (field-error-message e)) problems)))))
+      (let* ((name (field-name field))
+             (text (or (cdr (assoc name (grid-texts grid))) ""))
+             (original (cdr (assoc name (grid-originals grid))))
+             (now (format-field field (field-value field current))))
+        (if (and original (string/= now original) (string/= now text))
+            ;; Changed by someone else since editing began: say so, once.
+            (progn
+              (push (cons name (translate "Someone else changed this to “~A” meanwhile. Save again to replace it."
+                                          (conflict-text field now)))
+                    problems)
+              (setf (grid-originals grid) (acons name now (grid-originals grid))))
+            (handler-case
+                (let* ((value (parse-field field text))
+                       (problem (check-field field value)))
+                  (if problem
+                      (push (cons name problem) problems)
+                      (push (cons field value) values)))
+              (field-error (e) (push (cons name (field-error-message e)) problems))))))
     (if problems
         (setf (grid-problems grid) problems)
-        (progn
+        (let ((before (mapcar (lambda (pair) (cons (car pair) (field-value (car pair) row))) values)))
           (loop for (field . value) in values do (setf (field-value field row) value))
-          (setf (grid-editing grid) nil (grid-problems grid) '())
-          (when (grid-on-save grid) (funcall (grid-on-save grid) row))))))
+          (handler-case
+              (progn
+                (when (grid-on-save grid) (funcall (grid-on-save grid) row))
+                (setf (grid-editing grid) nil (grid-problems grid) '()))
+            (edit-conflict ()
+              ;; Nothing was saved: put the row back, and edit it as it is now.
+              (loop for (field . value) in before do (setf (field-value field row) value))
+              (let ((now (current-row grid row)))
+                (setf (grid-editing grid) now
+                      (grid-originals grid) (row-texts grid now)
+                      (grid-problems grid)
+                      (list (cons :row (translate "Someone else changed this row meanwhile; nothing was saved. Save again to replace their changes.")))))))))))
 
 (defmethod render ((self data-grid))
   (let* ((fields (grid-fields self))
@@ -142,7 +208,7 @@ called with it.  Filtering, sorting and paging go over AJAX."))
                 (tr () (td (:colspan (princ-to-string (1+ (length fields)))) (translate "Nothing matches.")))
                 (dolist (row shown)
                   (let ((row row))
-                    (if (eq row (grid-editing self))
+                    (if (and (grid-editing self) (same-row-p self row (grid-editing self)))
                         (tr (:class "lt-grid-editing")
                           (dolist (field fields)
                             (let* ((name (field-name field))
@@ -156,6 +222,8 @@ called with it.  Filtering, sorting and paging go over AJAX."))
                                                                            (acons name text (remove name (grid-texts self) :key #'car))))))
                                 (when problem (div (:class "lt-validation-error") (text problem))))))
                           (td (:class "lt-grid-actions")
+                            (let ((problem (cdr (assoc :row (grid-problems self)))))
+                              (when problem (div (:class "lt-validation-error") (text problem))))
                             (submit-button (:callback (lambda () (save-grid-row self))) (translate "Save"))
                             (cancel-button (:callback (lambda () (setf (grid-editing self) nil))) (translate "Cancel"))))
                         (tr ()
@@ -165,6 +233,12 @@ called with it.  Filtering, sorting and paging go over AJAX."))
                             (anchor (:callback (lambda () (edit-grid-row self row))) (translate "Edit")))))))))))
       (div (:class "lt-batch")
         (text (translate-plural (length rows) "~D row" "~D rows"))
+        (when (grid-csv-filename self)
+          (text " ")
+          (anchor (:class "lt-csv"
+                   :callback (lambda () (send-download (data-grid-csv self) :filename (grid-csv-filename self)
+                                                                            :content-type "text/csv; charset=utf-8")))
+            (translate "Download CSV")))
         (when (> pages 1)
           (when (plusp page)
             (anchor (:on-click (ajax :callback (lambda () (setf (grid-page self) (1- page))) :update self) :href "#")
@@ -539,57 +613,101 @@ MARKDOWN-HTML): the description field kind :MARKDOWN."))
 ;;; In-place editor: one field of one object, edited where it is shown
 
 (defclass in-place-editor (component updatable)
-  ((object :initarg :object :reader in-place-object)
+  ((object :initarg :object :accessor in-place-object)
    (field :initarg :field :reader in-place-field)
    (on-save :initarg :on-save :initform nil :reader in-place-on-save)
    (update :initarg :update :initform '() :reader in-place-update
            :documentation "Other UPDATABLE components to re-render after a save.")
+   (reload :initarg :reload :initform nil :reader in-place-reload
+           :documentation "Function of the object giving it as it is now, or NIL when it has gone.")
    (editing :initform nil :accessor in-place-editing-p)
    (text :initform "" :accessor in-place-text :documentation "What has been typed.")
+   (original :initform nil :accessor in-place-original :documentation "The value's text when editing began.")
    (problem :initform nil :accessor in-place-problem))
   (:documentation "One field of an object, shown with an Edit button; Edit
 turns it into the field's input, with Save and Cancel, over AJAX.  Save
 parses and checks the text as the description says, writes the value to
 the object and calls :ON-SAVE, when given, with the object (to store it,
 say); a problem is shown by the input instead.  :UPDATE lists other
-UPDATABLE components the value shows in, re-rendered after a save.  Make
-one with MAKE-IN-PLACE-EDITOR."))
+UPDATABLE components the value shows in, re-rendered after a save.  When
+someone else changed the value since Edit was pressed, Save says so and
+leaves it; pressing it again replaces their value.  An EDIT-CONFLICT
+signalled by :ON-SAVE (as littoral.db's STALE-OBJECT is) is reported the
+same way, the object put back as it was, and :RELOAD, when given, called
+with it to get it as it is now (#'littoral.db:db-reload, say).  Make one
+with MAKE-IN-PLACE-EDITOR."))
 
 (defmethod states ((self in-place-editor)) (list self))
 
-(defun make-in-place-editor (object field-name &key (description object) on-save update)
+(defun make-in-place-editor (object field-name &key (description object) on-save update reload)
   "An IN-PLACE-EDITOR of OBJECT's field FIELD-NAME, as DESCRIPTION
 (anything FIND-DESCRIPTION takes; by default OBJECT's class) describes it.
 ON-SAVE is called with OBJECT after a value is written to it, and UPDATE,
-an UPDATABLE component or a list of them, is re-rendered with the editor."
+an UPDATABLE component or a list of them, is re-rendered with the editor.
+RELOAD gets the object afresh after an EDIT-CONFLICT (see IN-PLACE-EDITOR)."
   (make-instance 'in-place-editor
                  :object object
+                 :reload reload
                  :update (alexandria:ensure-list update)
                  :field (or (find-field description field-name)
                             (error "~S has no field ~S." (description-name (find-description description)) field-name))
                  :on-save on-save))
 
-(defun start-in-place-edit (editor)
+(defun in-place-value-text (editor)
   (let ((field (in-place-field editor)))
-    (setf (in-place-editing-p editor) t
-          (in-place-problem editor) nil
-          (in-place-text editor) (format-field field (field-value field (in-place-object editor))))))
+    (format-field field (field-value field (in-place-object editor)))))
+
+(defun start-in-place-edit (editor)
+  (setf (in-place-editing-p editor) t
+        (in-place-problem editor) nil
+        (in-place-text editor) (in-place-value-text editor)
+        (in-place-original editor) (in-place-value-text editor)))
+
+(defun in-place-conflict (editor)
+  "After :ON-SAVE refused the save: get the object afresh, when it can be,
+and say what happened."
+  (let* ((reload (in-place-reload editor))
+         (fresh (and reload (funcall reload (in-place-object editor)))))
+    (cond (fresh
+           (setf (in-place-object editor) fresh
+                 (in-place-original editor) (in-place-value-text editor)
+                 (in-place-problem editor)
+                 (translate "Someone else changed this to “~A” meanwhile. Save again to replace it."
+                            (conflict-text (in-place-field editor) (in-place-value-text editor)))))
+          (reload
+           (setf (in-place-problem editor) (translate "Someone else deleted this meanwhile; nothing was saved.")))
+          (t
+           (setf (in-place-problem editor) (translate "Someone else changed this meanwhile; nothing was saved."))))))
 
 (defun save-in-place-edit (editor)
   "Write what was typed, or keep it with its problem."
-  (let ((field (in-place-field editor)))
-    (handler-case
-        (let* ((value (parse-field field (in-place-text editor)))
-               (problem (check-field field value)))
-          (if problem
-              (setf (in-place-problem editor) problem)
-              (progn
-                (setf (field-value field (in-place-object editor)) value
-                      (in-place-editing-p editor) nil
-                      (in-place-problem editor) nil)
-                (when (in-place-on-save editor)
-                  (funcall (in-place-on-save editor) (in-place-object editor))))))
-      (field-error (e) (setf (in-place-problem editor) (field-error-message e))))))
+  (let* ((field (in-place-field editor))
+         (object (in-place-object editor))
+         (now (in-place-value-text editor))
+         (text (in-place-text editor)))
+    (if (and (in-place-original editor) (string/= now (in-place-original editor)) (string/= now text))
+        ;; Changed by someone else since Edit was pressed: say so, once.
+        (setf (in-place-original editor) now
+              (in-place-problem editor)
+              (translate "Someone else changed this to “~A” meanwhile. Save again to replace it."
+                         (conflict-text field now)))
+        (handler-case
+            (let* ((value (parse-field field text))
+                   (problem (check-field field value)))
+              (if problem
+                  (setf (in-place-problem editor) problem)
+                  (let ((before (field-value field object)))
+                    (setf (field-value field object) value)
+                    (handler-case
+                        (progn
+                          (when (in-place-on-save editor)
+                            (funcall (in-place-on-save editor) object))
+                          (setf (in-place-editing-p editor) nil
+                                (in-place-problem editor) nil))
+                      (edit-conflict ()
+                        (setf (field-value field object) before)
+                        (in-place-conflict editor))))))
+          (field-error (e) (setf (in-place-problem editor) (field-error-message e)))))))
 
 (defmethod render ((self in-place-editor))
   (let* ((field (in-place-field self))

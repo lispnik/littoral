@@ -217,3 +217,40 @@ Bring *two* copies of the **form**.
         (visit b (browser-url b))
         (list before (body-text b) (guest-name *ada*))))))
 ;; ⇒ ("Ada Edit" "Ada Lovelace Edit" "Ada Lovelace")
+
+;;;; Example: littoral:data-grid-csv
+;;; A data grid's rows as CSV: what its filters let through, in its order, each field as the grid shows it.  `:csv-filename` adds a Download CSV link.
+(defclass city () ((name :initarg :name) (people :initarg :people)))
+(define-description city ((name) (people :type :integer)))
+(cl-ppcre:split "\\r\\n" (data-grid-csv (make-instance 'data-grid :description 'city
+                                                               :rows (list (make-instance 'city :name "Lyon" :people 520000)
+                                                                           (make-instance 'city :name "Nice" :people 340000)))))
+;; ⇒ ("Name,People" "Lyon,520000" "Nice,340000")
+
+;;;; Example: littoral:edit-conflict littoral:edit-conflict-object
+;;; When someone else changed the value since Edit was pressed, Save says so and leaves theirs; saving again replaces it.  An :ON-SAVE that signals EDIT-CONFLICT (as littoral.db's STALE-OBJECT does, for rows changed meanwhile) is reported the same way, and nothing is kept.
+(defclass memo () ((text :initarg :text :accessor memo-text)))
+(define-description memo ((text)))
+(defvar *memo* (make-instance 'memo :text "Draft"))
+(defclass memo-page (component)
+  ((editor :initform (make-in-place-editor *memo* 'text) :reader editor)))
+(defmethod children ((self memo-page)) (list (editor self)))
+(defmethod render ((self memo-page)) (render-component (editor self)))
+(defun press-edit (b)
+  (let ((spec (first (ajax-specs b "on-click"))))
+    (ajax-request b (car spec) (cdr spec))
+    (visit b (browser-url b))))
+(defun save-as (b text)
+  (let ((spec (first (ajax-specs b "on-submit")))
+        (input (cl-ppcre:register-groups-bind (name) ("<input[^>]* name=\"(\\d+)\"" (browser-html b)) name)))
+    (ajax-request b (car spec) (cdr spec) :fields (list (cons input text)))))
+(with-fresh-applications (("/memo" 'memo-page :mode :deployment))
+  (let ((mine (make-instance 'browser)) (theirs (make-instance 'browser)))
+    (visit mine "/memo") (press-edit mine)
+    (visit theirs "/memo") (press-edit theirs)
+    (save-as theirs "Their text")
+    (list (and (search "Someone else changed this to “Their text” meanwhile." (save-as mine "My text")) t)
+          (memo-text *memo*)
+          (progn (save-as mine "My text") (memo-text *memo*))
+          (eq *memo* (edit-conflict-object (make-condition 'edit-conflict :object *memo*))))))
+;; ⇒ (T "Their text" "My text" T)
