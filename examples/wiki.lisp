@@ -150,8 +150,23 @@ so you can bookmark [[Littoral]] or [[Sandbox]].~%~%- Click *Edit* to change a p
   ((page :initform "FrontPage" :accessor wiki-page)
    (query :initform "" :accessor wiki-query)
    (results :initform nil :accessor wiki-results)
-   (trail :initform '() :accessor wiki-trail :documentation "Pages visited, newest first."))
+   (trail :initform '() :accessor wiki-trail :documentation "Pages visited, newest first.")
+   (readers :reader wiki-readers :documentation "Who else has this page open."))
   (:documentation "The wiki: one page at a time, with search, editing and history."))
+
+(defun page-presence (name)
+  "The presence of everyone with wiki page NAME open, reading or editing."
+  (find-presence (format nil "wiki:~A" name)))
+
+(defmethod initialize-instance :after ((self wiki) &key)
+  (setf (slot-value self 'readers)
+        (make-instance 'presence-list :presence (lambda () (page-presence (wiki-page self))))))
+
+(defmethod children ((self wiki)) (list (wiki-readers self)))
+
+;; Someone editing a page is still on it, and says so.
+(defmethod presences ((self wiki-editor)) (list (page-presence (editor-page self))))
+(defmethod presence-activity ((self wiki-editor)) "editing")
 
 ;; The page being viewed backtracks; the wiki's contents do not.
 (defmethod states ((self wiki))
@@ -221,6 +236,8 @@ so you can bookmark [[Littoral]] or [[Sandbox]].~%~%- Click *Edit* to change a p
             (p (:class "empty") "This page does not exist yet. "
               (anchor (:callback (lambda () (edit-page self))) "Write it")
               "."))))
+    (aside (:class "wiki-readers" :aria-label "On this page")
+      (render-component (wiki-readers self)))
     (nav (:class "wiki-actions")
       (anchor (:callback (lambda () (edit-page self))) "Edit")
       (when (page-revisions name)

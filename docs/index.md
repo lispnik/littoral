@@ -311,6 +311,23 @@ Nothing else changes: callbacks, `publish` and `notify` behave as before. Render
 
 A socket opens only from a page of the same site: its `Origin` must match the host, or be in `littoral.websocket:*allowed-origins*`. Sockets count against the event-stream limits. Messages are capped at `*max-message-size*` (1 MB), malformed messages are ignored, and in deployment mode a failing request answers "The request failed." rather than the error.
 
+#### Who's here
+
+A presence is a place pages can be in, such as one wiki page, and `find-presence` gives the one for a key. A `presence-list` shows who has a page in its presence open: "3 people here", then each person by name with what they're doing, you first, and the guests counted. Showing a presence list puts its page in the presence, and it redraws by server push as people come and go:
+
+```lisp
+(make-instance 'presence-list :presence (find-presence "chat room"))
+
+(defmethod presences ((self page-editor)) (list (find-presence (page-key self))))
+(defmethod presence-activity ((self page-editor)) "editing")
+```
+
+- **Being there.** A page is in the presences its visible components name with `presences` while its event stream (or WebSocket) is open. A component's `presence-activity` says what its person is doing there; the first visible one decides.
+- **Names.** `(setf (presence-name) "alice")`, in a callback, names the session's person, and otherwise `*presence-name-function*` does. littoral/auth sets that to the signed-in user's name, and anyone else is a guest.
+- **Changes.** Who is where is noted when a page's stream opens and after each AJAX request, so a list follows what the page shows. Its `:presence` can also be a function, called each time, such as the presence of the wiki page open now. `presence-viewers` gives the same information as data.
+
+The chat lists who's in the room by nickname, and each wiki page shows who's reading it and who's editing it.
+
 ### Files people upload
 
 `littoral/storage` keeps uploads on disk or in S3, and gives descriptions file fields:

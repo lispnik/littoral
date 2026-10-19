@@ -49,6 +49,10 @@ that has the loop serve the stream; NIL when a thread waits on it instead.")
    (closer :initform nil :accessor stream-closer
            :documentation "A function closing the connection at once, or NIL when
 marking the stream closed is enough (it ends at its next wake or keepalive).")
+   (presences :initform '() :accessor stream-presences
+              :documentation "The presences its page is in (see presence.lisp).")
+   (activity :initform nil :accessor stream-activity :documentation "What its person is doing there, or NIL.")
+   (viewer :initform nil :accessor stream-viewer :documentation "Its person's name, or NIL for a guest.")
    (lock :initform (sb-thread:make-mutex :name "littoral event stream") :reader stream-lock)
    (waitqueue :initform (sb-thread:make-waitqueue) :reader stream-waitqueue))
   (:documentation "One open page's server-sent event connection and the work queued for it."))
@@ -74,11 +78,15 @@ is noticed, so this bounds how long a gone page keeps its connection.")
 
 (defun register-event-stream (stream)
   "Count STREAM among the open ones."
-  (sb-thread:with-mutex (*event-streams-lock*) (push stream *event-streams*)))
+  (sb-thread:with-mutex (*event-streams-lock*) (push stream *event-streams*))
+  (presence-stream-changed stream))
 
 (defun unregister-event-stream (stream)
-  (sb-thread:with-mutex (*event-streams-lock*)
-    (setf *event-streams* (remove stream *event-streams*))))
+  (let ((found nil))
+    (sb-thread:with-mutex (*event-streams-lock*)
+      (setf found (member stream *event-streams*)
+            *event-streams* (remove stream *event-streams*)))
+    (when found (presence-stream-changed stream))))
 
 (defun take-pending-now (stream)
   "STREAM's queued work, without waiting."
@@ -389,8 +397,10 @@ return, letting the request's thread go."
 is gone.  503 when too many are open."
   (let ((refusal (too-many-streams-response session)))
     (when refusal (return-from handle-events refusal)))
-  (let ((stream (make-instance 'event-stream :session session :continuation continuation
-                                             :base-path *base-path*))
+  (let ((stream (let ((stream (make-instance 'event-stream :session session :continuation continuation
+                                                           :base-path *base-path*)))
+                  (note-stream-presences stream)
+                  stream))
         (socket (and *async-stream-opener* (async-socket *request*)))
         (head (list 200 (append (list :content-type "text/event-stream"
                                       :cache-control "no-store"
@@ -423,6 +433,6 @@ development mode and has no event stream to hear them through."
        (not (page-listens-p session))))
 
 (defun page-subscribes-p (root)
-  "True when a component visible from ROOT has subscriptions."
-  (map-visible (lambda (c) (when (subscriptions c) (return-from page-subscribes-p t))) root)
+  "True when a component visible from ROOT has subscriptions or presences."
+  (map-visible (lambda (c) (when (or (subscriptions c) (presences c)) (return-from page-subscribes-p t))) root)
   nil)

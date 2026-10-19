@@ -106,6 +106,12 @@ dialog.lt-modal { position: fixed; top: 12vh; margin: 0 auto; max-width: min(36r
   border-top: 1px solid currentColor; border-right: 1px solid currentColor; transform: rotate(45deg); opacity: .6; }
 .lt-breadcrumbs [aria-current] { font-weight: 600; }
 
+/* Presence */
+.lt-presence-count { margin: 0 0 .3rem; font-weight: 600; }
+.lt-presence ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: .3rem .5rem; }
+.lt-presence li { padding: .05rem .5rem; border-radius: 999px; background: var(--lt-panel); font-size: .9rem; }
+.lt-presence-activity { color: var(--lt-muted); font-style: italic; }
+
 /* In-place editor */
 .lt-in-place-editing { display: inline-flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin: 0; }
 .lt-in-place-editing .lt-validation-error { flex-basis: 100%; }

@@ -80,10 +80,14 @@
                    :callback (lambda (v) (setf (composer-draft self) v))))
       (submit-button () "Send"))))
 
+(defvar *room-presence* (find-presence "chat room")
+  "Everyone with the room open.")
+
 (defclass chat (component)
   ((nick :initform nil :accessor chat-nick)
    (messages :reader chat-messages)
-   (composer :reader chat-composer))
+   (composer :reader chat-composer)
+   (here :initform (make-instance 'presence-list :presence *room-presence*) :reader chat-here))
   (:documentation "The chat page: ask for a nickname, then show the room."))
 
 (defmethod initialize-instance :after ((self chat) &key)
@@ -91,7 +95,10 @@
         (slot-value self 'composer) (make-instance 'composer :chat self)))
 
 (defmethod children ((self chat))
-  (list (chat-messages self) (chat-composer self)))
+  ;; Only those who have joined are in the room.
+  (if (chat-nick self)
+      (list (chat-messages self) (chat-composer self) (chat-here self))
+      (list (chat-messages self) (chat-composer self))))
 
 (defun ask-nick (chat)
   "Ask for a nickname, refusing blank ones."
@@ -99,7 +106,10 @@
                             (lambda (nick)
                               (when (string= (string-trim " " nick) "")
                                 "A nickname needs at least one letter.")))
-        :on-answer (lambda (nick) (setf (chat-nick chat) (string-trim " " nick)))))
+        :on-answer (lambda (nick)
+                     (setf (chat-nick chat) (string-trim " " nick)
+                           ;; The room's presence list shows the nickname.
+                           (presence-name) (chat-nick chat)))))
 
 (defmethod render ((self chat))
   (h1 () "Chat")
@@ -107,6 +117,7 @@
          (p () "Open this page in two browsers to talk to yourself. "
            (anchor (:callback (lambda () (ask-nick self))) "Join the room")))
         (t
+         (render-component (chat-here self))
          (render-component (chat-messages self))
          (render-component (chat-composer self))
          (p (:class "chat-who") "You are " (strong () (text (chat-nick self))) ". "

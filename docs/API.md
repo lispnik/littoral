@@ -4436,6 +4436,243 @@ A function of (`socket` `stream` `writer`) that serves `stream` from an event
 loop, set by an optional system such as littoral/woo; `nil` when there is
 none and each stream gets a waiting thread.
 
+### Presence
+
+#### `presence` — class
+
+A place pages can be in, such as one wiki page; make or
+find one with `find-presence`.  It is a channel: `presence-list` subscribes to
+it, and it is published whenever someone arrives, leaves or changes what
+they're doing.
+
+*Example:* A page showing a `presence-list` is in its presence while the page's event stream is open, and the list shows who else is: by name, or counted as guests.  The page being rendered counts itself even before its stream opens.  `presence-viewers` gives the same as data.
+
+```lisp
+(defclass lobby (component)
+  ((here :initform (make-instance 'presence-list :presence (find-presence "lobby")) :reader here)))
+(defmethod children ((self lobby)) (list (here self)))
+(defmethod render ((self lobby)) (render-component (here self)))
+(with-fresh-applications (("/lobby" 'lobby :mode :deployment))
+  (let ((ada (make-instance 'browser)) (bob (make-instance 'browser)) (sink (make-instance 'sink)))
+    (visit bob "/lobby")
+    (open-stream bob sink)
+    (visit ada "/lobby")
+    (prog1 (list (body-text ada)
+                 (let ((*session* nil)) (presence-viewers (find-presence "lobby"))))
+      (close-event-streams))))
+;; ⇒ ("2 people here You 1 guest" ((:NAME NIL :ACTIVITY NIL :YOU NIL)))
+```
+
+#### `find-presence` `key` — function
+
+The presence for `key` (compared with `equal`), such as "wiki:Home", made
+the first time it is asked for.
+
+*Example:* A page showing a `presence-list` is in its presence while the page's event stream is open, and the list shows who else is: by name, or counted as guests.  The page being rendered counts itself even before its stream opens.  `presence-viewers` gives the same as data.
+
+```lisp
+(defclass lobby (component)
+  ((here :initform (make-instance 'presence-list :presence (find-presence "lobby")) :reader here)))
+(defmethod children ((self lobby)) (list (here self)))
+(defmethod render ((self lobby)) (render-component (here self)))
+(with-fresh-applications (("/lobby" 'lobby :mode :deployment))
+  (let ((ada (make-instance 'browser)) (bob (make-instance 'browser)) (sink (make-instance 'sink)))
+    (visit bob "/lobby")
+    (open-stream bob sink)
+    (visit ada "/lobby")
+    (prog1 (list (body-text ada)
+                 (let ((*session* nil)) (presence-viewers (find-presence "lobby"))))
+      (close-event-streams))))
+;; ⇒ ("2 people here You 1 guest" ((:NAME NIL :ACTIVITY NIL :YOU NIL)))
+```
+
+#### `presences` `component` — generic function
+
+The presences `component` puts its page in while the page
+is open and shows it; none by default.  A page showing any opens an event
+stream, as one with `subscriptions` does.
+
+*Example:* Any component can put its page in presences, and say what its person is doing there.  Names come from (`setf` `presence-name`), or `*presence-name-function*`, which littoral/auth sets to the signed-in user's name.
+
+```lisp
+(defvar *doc* (find-presence "doc:7"))
+(defclass doc-editor (component) ())
+(defmethod presences ((self doc-editor)) (list *doc*))
+(defmethod presence-activity ((self doc-editor)) "editing")
+(defmethod render ((self doc-editor))
+  (anchor (:callback (lambda () (setf (presence-name) "Ada"))) "I'm Ada"))
+(defclass doc-page (component)
+  ((here :initform (make-instance 'presence-list :presence *doc*) :reader here)))
+(defmethod children ((self doc-page)) (list (here self)))
+(defmethod render ((self doc-page)) (render-component (here self)))
+(with-fresh-applications (("/edit" 'doc-editor :mode :deployment) ("/doc" 'doc-page :mode :deployment))
+  (let ((editor (make-instance 'browser)) (reader (make-instance 'browser)) (sink (make-instance 'sink)))
+    (visit editor "/edit")
+    (click editor "I'm Ada")
+    (open-stream editor sink)
+    (visit reader "/doc")
+    (prog1 (body-text reader)
+      (close-event-streams))))
+;; ⇒ "2 people here You Ada editing"
+```
+
+#### `presence-activity` `component` — generic function
+
+What the person whose page shows `component` is doing, a
+short text such as "editing" that `presence-list` shows by their name; or
+`nil`, the default.  The first visible component with one decides.
+
+*Example:* Any component can put its page in presences, and say what its person is doing there.  Names come from (`setf` `presence-name`), or `*presence-name-function*`, which littoral/auth sets to the signed-in user's name.
+
+```lisp
+(defvar *doc* (find-presence "doc:7"))
+(defclass doc-editor (component) ())
+(defmethod presences ((self doc-editor)) (list *doc*))
+(defmethod presence-activity ((self doc-editor)) "editing")
+(defmethod render ((self doc-editor))
+  (anchor (:callback (lambda () (setf (presence-name) "Ada"))) "I'm Ada"))
+(defclass doc-page (component)
+  ((here :initform (make-instance 'presence-list :presence *doc*) :reader here)))
+(defmethod children ((self doc-page)) (list (here self)))
+(defmethod render ((self doc-page)) (render-component (here self)))
+(with-fresh-applications (("/edit" 'doc-editor :mode :deployment) ("/doc" 'doc-page :mode :deployment))
+  (let ((editor (make-instance 'browser)) (reader (make-instance 'browser)) (sink (make-instance 'sink)))
+    (visit editor "/edit")
+    (click editor "I'm Ada")
+    (open-stream editor sink)
+    (visit reader "/doc")
+    (prog1 (body-text reader)
+      (close-event-streams))))
+;; ⇒ "2 people here You Ada editing"
+```
+
+#### `presence-name` `&optional (session *session*)` — function
+
+The name `session`'s person goes by in presence lists: what (`setf`
+`presence-name`) gave it, else `*presence-name-function*`'s answer (in a
+request of `session`'s), else `nil` for a guest.
+
+*Example:* Any component can put its page in presences, and say what its person is doing there.  Names come from (`setf` `presence-name`), or `*presence-name-function*`, which littoral/auth sets to the signed-in user's name.
+
+```lisp
+(defvar *doc* (find-presence "doc:7"))
+(defclass doc-editor (component) ())
+(defmethod presences ((self doc-editor)) (list *doc*))
+(defmethod presence-activity ((self doc-editor)) "editing")
+(defmethod render ((self doc-editor))
+  (anchor (:callback (lambda () (setf (presence-name) "Ada"))) "I'm Ada"))
+(defclass doc-page (component)
+  ((here :initform (make-instance 'presence-list :presence *doc*) :reader here)))
+(defmethod children ((self doc-page)) (list (here self)))
+(defmethod render ((self doc-page)) (render-component (here self)))
+(with-fresh-applications (("/edit" 'doc-editor :mode :deployment) ("/doc" 'doc-page :mode :deployment))
+  (let ((editor (make-instance 'browser)) (reader (make-instance 'browser)) (sink (make-instance 'sink)))
+    (visit editor "/edit")
+    (click editor "I'm Ada")
+    (open-stream editor sink)
+    (visit reader "/doc")
+    (prog1 (body-text reader)
+      (close-event-streams))))
+;; ⇒ "2 people here You Ada editing"
+```
+
+#### `*presence-name-function*` — variable
+
+A function of no arguments giving the name of the person making the
+current request, or `nil` for a guest; `nil` itself makes everyone a guest
+unless `presence-name` is set.  littoral/auth sets it to the signed-in user's
+name.
+
+*Example:* Any component can put its page in presences, and say what its person is doing there.  Names come from (`setf` `presence-name`), or `*presence-name-function*`, which littoral/auth sets to the signed-in user's name.
+
+```lisp
+(defvar *doc* (find-presence "doc:7"))
+(defclass doc-editor (component) ())
+(defmethod presences ((self doc-editor)) (list *doc*))
+(defmethod presence-activity ((self doc-editor)) "editing")
+(defmethod render ((self doc-editor))
+  (anchor (:callback (lambda () (setf (presence-name) "Ada"))) "I'm Ada"))
+(defclass doc-page (component)
+  ((here :initform (make-instance 'presence-list :presence *doc*) :reader here)))
+(defmethod children ((self doc-page)) (list (here self)))
+(defmethod render ((self doc-page)) (render-component (here self)))
+(with-fresh-applications (("/edit" 'doc-editor :mode :deployment) ("/doc" 'doc-page :mode :deployment))
+  (let ((editor (make-instance 'browser)) (reader (make-instance 'browser)) (sink (make-instance 'sink)))
+    (visit editor "/edit")
+    (click editor "I'm Ada")
+    (open-stream editor sink)
+    (visit reader "/doc")
+    (prog1 (body-text reader)
+      (close-event-streams))))
+;; ⇒ "2 people here You Ada editing"
+```
+
+#### `presence-viewers` `presence` — function
+
+Who has a page in `presence` open now, one plist per session in the order
+they came: `:name` (`nil` for a guest), `:activity`, and `:you`, true for the
+current session.  The current session is included while it renders a page
+in `presence`, even before that page's stream has opened.
+
+*Example:* A page showing a `presence-list` is in its presence while the page's event stream is open, and the list shows who else is: by name, or counted as guests.  The page being rendered counts itself even before its stream opens.  `presence-viewers` gives the same as data.
+
+```lisp
+(defclass lobby (component)
+  ((here :initform (make-instance 'presence-list :presence (find-presence "lobby")) :reader here)))
+(defmethod children ((self lobby)) (list (here self)))
+(defmethod render ((self lobby)) (render-component (here self)))
+(with-fresh-applications (("/lobby" 'lobby :mode :deployment))
+  (let ((ada (make-instance 'browser)) (bob (make-instance 'browser)) (sink (make-instance 'sink)))
+    (visit bob "/lobby")
+    (open-stream bob sink)
+    (visit ada "/lobby")
+    (prog1 (list (body-text ada)
+                 (let ((*session* nil)) (presence-viewers (find-presence "lobby"))))
+      (close-event-streams))))
+;; ⇒ ("2 people here You 1 guest" ((:NAME NIL :ACTIVITY NIL :YOU NIL)))
+```
+
+#### `presence-list` — class
+
+Who has a page in `:presence` open: how many, then each
+person by name with what they're doing, the current one as "You", and the
+guests counted (those doing something are listed).  `:presence` is a presence,
+or a function returning one, called each time, for a list that follows what
+the page shows.  Showing it puts the page in the presence, and it is
+re-rendered by server push as people come and go.
+
+*Example:* A page showing a `presence-list` is in its presence while the page's event stream is open, and the list shows who else is: by name, or counted as guests.  The page being rendered counts itself even before its stream opens.  `presence-viewers` gives the same as data.
+
+```lisp
+(defclass lobby (component)
+  ((here :initform (make-instance 'presence-list :presence (find-presence "lobby")) :reader here)))
+(defmethod children ((self lobby)) (list (here self)))
+(defmethod render ((self lobby)) (render-component (here self)))
+(with-fresh-applications (("/lobby" 'lobby :mode :deployment))
+  (let ((ada (make-instance 'browser)) (bob (make-instance 'browser)) (sink (make-instance 'sink)))
+    (visit bob "/lobby")
+    (open-stream bob sink)
+    (visit ada "/lobby")
+    (prog1 (list (body-text ada)
+                 (let ((*session* nil)) (presence-viewers (find-presence "lobby"))))
+      (close-event-streams))))
+;; ⇒ ("2 people here You 1 guest" ((:NAME NIL :ACTIVITY NIL :YOU NIL)))
+```
+
+#### `presence-list-presence` `list` — function
+
+The presence `list` shows now.
+
+*Example:* `:presence` may be a function, called each time, for a list that follows what the page shows, such as the wiki page open now.
+
+```lisp
+(defvar *page-name* "Home")
+(let ((list (make-instance 'presence-list :presence (lambda () (find-presence (format nil "wiki:~A" *page-name*))))))
+  (list (eq (presence-list-presence list) (find-presence "wiki:Home"))
+        (let ((*page-name* "Help")) (eq (presence-list-presence list) (find-presence "wiki:Help")))))
+;; ⇒ (T T)
+```
+
 ### Wizards
 
 #### `wizard` — class

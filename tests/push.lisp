@@ -55,3 +55,79 @@
              (close-event-streams)
              (is (wait-for (lambda () (not (sb-thread:thread-alive-p thread)))))))
       (setf littoral-examples::*job-step-seconds* saved))))
+
+;;; Presence: who has a page open, and what they're doing
+
+(defun presence-sessions-gone (presence)
+  "True once no open stream is in PRESENCE (outside any request)."
+  (let ((*session* nil)) (null (presence-viewers presence))))
+
+(test chat-room-presence
+  (littoral-examples:clear-room)
+  (with-fresh-applications (("/chat" 'littoral-examples:chat :mode :deployment))
+    (let ((alice (make-instance 'browser)) (bob (make-instance 'browser))
+          (alice-sink (make-instance 'sink)) (bob-sink (make-instance 'sink))
+          (room (find-presence "chat room")))
+      (join-chat alice "alice")
+      ;; Alice's own page counts her before its stream opens.
+      (is (search "1 person here You" (body-text alice)))
+      (join-chat bob "bob")
+      (open-stream alice alice-sink)
+      (open-stream bob bob-sink)
+      ;; Bob arriving re-renders Alice's list, by push, with his name.
+      (is (wait-for (lambda () (search "bob" (sink-text alice-sink)))))
+      (is (search "2 people here" (sink-text alice-sink)))
+      (visit alice (browser-url alice))
+      (is (search "2 people here You bob" (body-text alice)))
+      (close-event-streams)
+      (is (wait-for (lambda () (presence-sessions-gone room)))))))
+
+(test wiki-editing-presence
+  (with-fresh-applications (("/wiki" 'littoral-examples:wiki :mode :deployment))
+    (let ((reader (make-instance 'browser)) (editor (make-instance 'browser))
+          (reader-sink (make-instance 'sink)) (editor-sink (make-instance 'sink)))
+      (visit reader "/wiki")
+      (visit editor "/wiki")
+      (open-stream reader reader-sink)
+      ;; The other one edits the page: still on it, and editing.
+      (click editor "Edit")
+      (is (has-text-p editor "Editing FrontPage"))
+      (open-stream editor editor-sink)
+      (is (wait-for (lambda () (search "editing" (sink-text reader-sink)))))
+      (visit reader (browser-url reader))
+      (is (search "2 people here You A guest editing" (body-text reader)))
+      (close-event-streams)
+      (is (wait-for (lambda () (presence-sessions-gone (find-presence "wiki:FrontPage"))))))))
+
+(defvar *toggle-channel* (make-channel "presence toggle test"))
+(defvar *toggle-presence* (find-presence "presence toggle test"))
+
+(defclass presence-toggle (component updatable)
+  ((shown :initform nil :accessor toggle-shown)
+   (list :initform (make-instance 'presence-list :presence *toggle-presence*) :reader toggle-list))
+  (:documentation "Shows a presence list or not, switched by AJAX; always listens."))
+
+(defmethod subscriptions ((self presence-toggle)) (list *toggle-channel*))
+(defmethod children ((self presence-toggle)) (when (toggle-shown self) (list (toggle-list self))))
+(defmethod render ((self presence-toggle))
+  (button (:on-click (ajax :callback (lambda () (setf (toggle-shown self) (not (toggle-shown self)))) :update self))
+    "Toggle")
+  (when (toggle-shown self) (render-component (toggle-list self))))
+
+(test presence-follows-ajax-changes
+  (with-fresh-applications (("/toggle" 'presence-toggle :mode :deployment))
+    (let ((b (make-instance 'browser)) (sink (make-instance 'sink)))
+      (visit b "/toggle")
+      (open-stream b sink)
+      (is (presence-sessions-gone *toggle-presence*))
+      (let ((spec (first (ajax-specs b "on-click"))))
+        (is (search "1 person here" (ajax-request b (first spec) (rest spec))))
+        (is (not (presence-sessions-gone *toggle-presence*)) "Shown by AJAX: the page is in it")
+        (ajax-request b (first spec) (rest spec))
+        (is (presence-sessions-gone *toggle-presence*) "Hidden again: it isn't"))
+      (close-event-streams))))
+
+(test presence-names-come-from-sign-ins
+  (is (functionp *presence-name-function*) "littoral/auth names signed-in users")
+  (let ((*session* nil) (*presence-name-function* (lambda () "never asked")))
+    (is (null (presence-name (make-instance 'littoral::session))) "Not in that session's request")))

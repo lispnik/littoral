@@ -20,7 +20,7 @@
   ;; Dialogs
   ("OK" "OK") ("Yes" "Oui") ("No" "Non") ("Cancel" "Annuler") ("Continue" "Continuer")
   ("Answer" "Réponse") ("Choice" "Choix") ("Username" "Nom d'utilisateur") ("Password" "Mot de passe")
-  ("Log in" "Se connecter") ("Close" "Fermer") ("Save" "Enregistrer") ("Breadcrumbs" "Fil d’Ariane") ("Edit ~A" "Modifier : ~A") ("Create" "Créer")
+  ("Log in" "Se connecter") ("Close" "Fermer") ("Save" "Enregistrer") ("~D person here" "~D personne ici" "~D personnes ici") ("You" "Vous") ("A guest" "Un invité") ("~D guest" "~D invité" "~D invités") ("Breadcrumbs" "Fil d’Ariane") ("Edit ~A" "Modifier : ~A") ("Create" "Créer")
   ("Your session expired, so you are starting again from the beginning."
    "Votre session a expiré : vous recommencez depuis le début.")
   ;; Widgets
@@ -121,7 +121,7 @@ Le lien ne sert qu'une fois, pendant une heure.  Si ce n'était pas vous, ignore
   ;; Dialogs
   ("OK" "OK") ("Yes" "Ja") ("No" "Nein") ("Cancel" "Abbrechen") ("Continue" "Weiter")
   ("Answer" "Antwort") ("Choice" "Auswahl") ("Username" "Benutzername") ("Password" "Passwort")
-  ("Log in" "Anmelden") ("Close" "Schließen") ("Save" "Speichern") ("Breadcrumbs" "Brotkrümelpfad") ("Edit ~A" "~A bearbeiten") ("Create" "Anlegen")
+  ("Log in" "Anmelden") ("Close" "Schließen") ("Save" "Speichern") ("~D person here" "~D Person hier" "~D Personen hier") ("You" "Sie") ("A guest" "Ein Gast") ("~D guest" "~D Gast" "~D Gäste") ("Breadcrumbs" "Brotkrümelpfad") ("Edit ~A" "~A bearbeiten") ("Create" "Anlegen")
   ("Your session expired, so you are starting again from the beginning."
    "Ihre Sitzung ist abgelaufen, daher beginnen Sie wieder von vorn.")
   ;; Widgets
@@ -222,7 +222,7 @@ Der Link funktioniert einmal, eine Stunde lang.  Falls Sie das nicht waren, igno
   ;; Dialogs
   ("OK" "Aceptar") ("Yes" "Sí") ("No" "No") ("Cancel" "Cancelar") ("Continue" "Continuar")
   ("Answer" "Respuesta") ("Choice" "Opción") ("Username" "Usuario") ("Password" "Contraseña")
-  ("Log in" "Entrar") ("Close" "Cerrar") ("Save" "Guardar") ("Breadcrumbs" "Ruta de navegación") ("Edit ~A" "Editar: ~A") ("Create" "Crear")
+  ("Log in" "Entrar") ("Close" "Cerrar") ("Save" "Guardar") ("~D person here" "~D persona aquí" "~D personas aquí") ("You" "Usted") ("A guest" "Un invitado") ("~D guest" "~D invitado" "~D invitados") ("Breadcrumbs" "Ruta de navegación") ("Edit ~A" "Editar: ~A") ("Create" "Crear")
   ("Your session expired, so you are starting again from the beginning."
    "Su sesión ha caducado, así que empieza de nuevo desde el principio.")
   ;; Widgets

@@ -76,6 +76,9 @@
    #:ajax #:ajax-update #:periodical #:execute-script
    #:channel #:make-channel #:subscriptions #:publish #:notify #:close-event-streams #:*keepalive-seconds*
    #:with-session #:*source-editor* #:*async-stream-opener*
+   ;; Presence
+   #:presence #:find-presence #:presences #:presence-activity #:presence-name #:*presence-name-function*
+   #:presence-viewers #:presence-list #:presence-list-presence
    ;; Wizards
    #:wizard #:make-wizard #:wizard-step
    ;; More widgets

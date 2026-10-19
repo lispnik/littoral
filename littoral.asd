@@ -54,6 +54,7 @@
                              (:file "ajax")
                              (:file "dispatcher")
                              (:file "push")
+                             (:file "presence")
                              (:file "jobs")
                              (:file "observe")
                              (:file "endpoints")

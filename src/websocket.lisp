@@ -166,6 +166,7 @@ from another site, 503 beyond the stream limits."
          (base-path littoral::*base-path*)
          (stream (make-instance 'littoral::event-stream :session session :continuation continuation
                                                         :base-path base-path)))
+    (littoral::note-stream-presences stream)
     (labels ((send (string)
                (sb-thread:with-recursive-lock (lock)
                  (when (eq (wsd:ready-state socket) :open)

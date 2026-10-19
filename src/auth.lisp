@@ -710,6 +710,11 @@ looked at no more often than *AUTH-SESSION-CHECK-SECONDS*."
          (let ((user (find-user-by-id id)))
            (and user (user-active-p user) user)))))
 
+(setf littoral:*presence-name-function*
+      (lambda ()
+        (let ((user (current-user)))
+          (and user (user-name user)))))
+
 (defun signed-in-p ()
   "True when someone is signed in to this session."
   (and (current-user) t))

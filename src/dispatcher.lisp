@@ -422,6 +422,8 @@ posts and WebSocket messages alike."
     (unless (or *redirect* (string= key (session-key session)))
       (setf *redirect* (page-url session (new-continuation session))))
     (setf (continuation-snapshot continuation) (take-snapshot root))
+    ;; What the page shows may have changed, and with it the presences it's in.
+    (note-session-presences session)
     (let ((*render-context* (make-instance 'render-context
                                            :callbacks callbacks
                                            :action-url (page-url session continuation)
