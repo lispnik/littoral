@@ -663,7 +663,7 @@
   }
   function openPalette(palette) {
     palette.setAttribute("open", "");
-    var box = palette.querySelector("input");
+    var box = palette.querySelector("input[type=search]");
     if (box) { box.focus(); box.select(); }
   }
   document.addEventListener("keydown", function (event) {
@@ -678,7 +678,7 @@
     if (!within) return;
     var links = paletteLinks(within);
     var at = links.indexOf(document.activeElement);
-    var box = within.querySelector("input");
+    var box = within.querySelector("input[type=search]");
     if (event.key === "Escape") {
       event.preventDefault();
       within.removeAttribute("open");
@@ -697,7 +697,7 @@
   document.addEventListener("toggle", function (event) {
     var palette = event.target;
     if (!(palette.matches && palette.matches("details.lt-palette[open]"))) return;
-    var box = palette.querySelector("input");
+    var box = palette.querySelector("input[type=search]");
     if (box && document.activeElement !== box) box.focus();
   }, true);
   document.addEventListener("click", function (event) {
