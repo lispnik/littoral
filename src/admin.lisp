@@ -43,9 +43,9 @@ PLURAL \"Shelves\"."
                  (class-fields class)))
 
 (defun filter-fields (class)
-  "CLASS's fields offered as filters: choices and yes/no."
+  "CLASS's fields offered as filters: single choices and yes/no."
   (remove-if-not (lambda (f) (and (typep f '(or choice-field boolean-field))
-                                  (not (typep f 'reference-field))))
+                                  (not (typep f '(or reference-field multiple-choice-field)))))
                  (class-fields class)))
 
 (defun referring-fields (class)

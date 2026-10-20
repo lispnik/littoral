@@ -241,7 +241,26 @@ It's an ordinary component, so a flow can `call` it. `/examples/wizard` signs so
                                (palette-command "Help" "/help" :keywords '("docs" "manual"))))
 ```
 
-They're in the widgets example. Its Breadcrumbs tab has the breadcrumbs and the in-place editor, in a pantry to browse; the Forms tab has the field kinds, the Menus tab the menus, accordions and disclosures, and the Tools tab a lazy panel and a diff view. Its heading has a command palette over the tabs and the other examples. The report example's chart is a lazy panel, and the wiki's history shows each revision's changes. `/examples/monitoring` charts the server's own metrics live.
+- **Still more field kinds**, each working without JavaScript:
+  - `:stepper`, a number between − and + buttons, and `:range`, a slider with its number beside it. Both go in steps of `:step` within `:min` and `:max`.
+  - `:rating`, 1 to `:max` stars (5), which are radio buttons drawn as stars.
+  - `:color`, a code like `"#3366cc"`, with the browser's colour picker and a box for the code that can be cleared.
+  - `:multiple-choice`, any number of the `:choices` in a list box, held as a list, and `:transfer`, the same as two lists with buttons that move the selected items between them, for roles and permissions. `:min` and `:max` bound how many.
+  - `:new-password`, a password with a strength meter that littoral.js keeps up to date as it's typed, from `password-strength` on the server. `:min-strength` (0 to 4) refuses weaker ones. littoral/auth's reset form has the meter too, counting the person's own name and address for little.
+- **`with-popover`** writes a button that opens the browser's own popover, which needs no script and closes on Escape or a click elsewhere. **`with-tooltip`** shows a tip while what it wraps has the pointer or the focus; littoral.js makes the tip that element's description, and Escape hides it.
+- **`drawer`** slides a panel in from the side over the page. Its button opens it, and its close button, Escape or a click outside closes it. The focus goes in and comes back, and whether it's open is kept on the server.
+- **`split-pane`** puts two components side by side, such as a list and the detail of what's chosen, with a divider that can be dragged or moved with the arrow keys. The share is kept on the server, and on a phone the panes stack.
+
+```lisp
+(define-description party
+  ((guests :type :stepper :min 1 :max 30) (volume :type :range :step 5) (rating :type :rating)
+   (helpers :type :transfer :choices '("Ada" "Grace" "Alan"))
+   (password :type :new-password :min-strength 2)))
+(with-popover ("Shipping") (p () "Free over €50."))
+(make-instance 'split-pane :first message-list :second message-view :position 35)
+```
+
+They're in the widgets example. Its Breadcrumbs tab has the breadcrumbs and the in-place editor, in a pantry to browse; the Forms and Inputs tabs have the field kinds, the Menus tab the menus, accordions and disclosures, the Layout tab a popover, a tooltip, a drawer and a split pane, and the Tools tab a lazy panel and a diff view. Its heading has a command palette over the tabs and the other examples. The report example's chart is a lazy panel, and the wiki's history shows each revision's changes. `/examples/monitoring` charts the server's own metrics live.
 
 ### Request cycle
 
@@ -873,7 +892,7 @@ In the members demo, the bell is beside the signed-in user's name: ada making bo
         (is (has-text-p b "Buy milk"))))))
 ```
 
-`with-fresh-applications` gives a test its own registry of applications. `ajax-request` and `ajax-specs` exercise AJAX; `open-stream`, `sink-text` and `wait-for` exercise server push. The API reference lists everything.
+`select-option` chooses from a drop-down and `select-options` several items from a list box. `with-fresh-applications` gives a test its own registry of applications. `ajax-request` and `ajax-specs` exercise AJAX; `open-stream`, `sink-text` and `wait-for` exercise server push. The API reference lists everything.
 
 ### In a real browser
 

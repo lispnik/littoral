@@ -6250,6 +6250,572 @@ Reads the query of a command-palette.
 ;; ⇒ (("New project" "Go to projects" "Search the docs for \"proj\"") ("/projects/new" "Projects" NIL) 16 NIL)
 ```
 
+### More field kinds
+
+#### `range-field` — class
+
+A whole number from `:min` to `:max` (0 and 100 by default), in
+steps of `:step`, entered with a slider; the number beside it follows the
+slider as it moves.  A slider always has a value, so a field left blank
+starts from the middle.
+
+*Example:* `:stepper` puts − and + buttons either side of a number box; `:range` is a slider with the number beside it.  Both go in steps of `:step` within `:min` and `:max`.  Without JavaScript the buttons submit the form, and the page comes back with the number changed, kept within its limits.
+
+```lisp
+(defclass order ()
+  ((copies :initarg :copies)
+   (volume :initarg :volume :initform 6)))
+(define-description order
+  ((copies :type :stepper :min 1 :max 5)
+   (volume :type :range :max 10 :step 2)))
+(defclass order-page (component)
+  ((editor :initform (make-editor (make-instance 'order :copies 4)) :reader editor)))
+(defmethod children ((self order-page)) (list (editor self)))
+(defmethod render ((self order-page)) (render-component (editor self)))
+(with-fresh-applications (("/order" 'order-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/order")
+    (press b "+")
+    (press b "+")
+    (fill-in b "volume" "7")
+    (press b "Save")
+    (list (cl-ppcre:register-groups-bind (n) ("id=\"copies\" value=\"(\\d+)\"" (browser-html b)) n)
+          (cl-ppcre:register-groups-bind (n) ("<output[^>]*>(\\d+)</output>" (browser-html b)) n)
+          (body-text b))))
+;; ⇒ ("5" "7" "Copies − + Volume 7 Volume must go in steps of 2. Save Cancel")
+```
+
+#### `stepper-field` — class
+
+A whole number in a box between − and + buttons, which
+change it by `:step`, within `:min` and `:max`.  Without JavaScript the buttons
+submit the form, and the page comes back with the number changed.
+
+*Example:* `:stepper` puts − and + buttons either side of a number box; `:range` is a slider with the number beside it.  Both go in steps of `:step` within `:min` and `:max`.  Without JavaScript the buttons submit the form, and the page comes back with the number changed, kept within its limits.
+
+```lisp
+(defclass order ()
+  ((copies :initarg :copies)
+   (volume :initarg :volume :initform 6)))
+(define-description order
+  ((copies :type :stepper :min 1 :max 5)
+   (volume :type :range :max 10 :step 2)))
+(defclass order-page (component)
+  ((editor :initform (make-editor (make-instance 'order :copies 4)) :reader editor)))
+(defmethod children ((self order-page)) (list (editor self)))
+(defmethod render ((self order-page)) (render-component (editor self)))
+(with-fresh-applications (("/order" 'order-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/order")
+    (press b "+")
+    (press b "+")
+    (fill-in b "volume" "7")
+    (press b "Save")
+    (list (cl-ppcre:register-groups-bind (n) ("id=\"copies\" value=\"(\\d+)\"" (browser-html b)) n)
+          (cl-ppcre:register-groups-bind (n) ("<output[^>]*>(\\d+)</output>" (browser-html b)) n)
+          (body-text b))))
+;; ⇒ ("5" "7" "Copies − + Volume 7 Volume must go in steps of 2. Save Cancel")
+```
+
+#### `rating-field` — class
+
+A rating from 1 to `:max` stars (5 by default), held as a
+whole number and entered with radio buttons drawn as stars, so it works
+without JavaScript.  Unless the field is required, a No rating choice
+stands for `nil`.
+
+*Example:* `:rating` is a number of stars, 1 to `:max` (5), chosen with radio buttons drawn as stars; a field that isn't required offers No rating too, for `nil`.  Shown, it is stars with the count for screen readers.
+
+```lisp
+(defclass review ()
+  ((stars :initarg :stars)))
+(define-description review
+  ((stars :type :rating)))
+(let ((field (find-field 'review 'stars)))
+  (list (parse-field field "4")
+        (parse-field field "0")
+        (handler-case (parse-field field "6") (field-error (e) (princ-to-string e)))
+        (with-canvas-to-string () (render-field-value field 3))))
+;; ⇒ (4 NIL "Stars must be from 1 to 5." "<span class=\"lt-stars\" role=\"img\" aria-label=\"3 out of 5\">★★★<span class=\"lt-stars-empty\">☆☆</span></span>")
+```
+
+#### `color-field` — class
+
+A colour, held as its code: text like "#3366cc" (#36c
+is taken as #3366cc).  It is entered with the browser's colour picker and a
+box for the code beside it; clearing the box leaves no colour, which the
+picker alone can't.
+
+*Example:* `:color` holds a colour code, entered with the browser's picker and a box for the code beside it, which may be cleared.  `normalize-color` reads a code as the field does.
+
+```lisp
+(defclass theme ()
+  ((accent :initarg :accent)))
+(define-description theme
+  ((accent :type :color)))
+(let ((field (find-field 'theme 'accent)))
+  (list (normalize-color "#36C")
+        (normalize-color "teal")
+        (parse-field field "0E7490")
+        (with-canvas-to-string () (render-field-value field "#0e7490"))))
+;; ⇒ ("#3366cc" NIL "#0e7490" "<span class=\"lt-swatch\" style=\"background: #0e7490\" aria-hidden=\"true\"></span><code>#0e7490</code>")
+```
+
+#### `normalize-color` `string` — function
+
+`string` as a colour code, #rrggbb in lower case, or `nil` when it is not
+#rgb or #rrggbb (the # may be left out).
+
+*Example:* `:color` holds a colour code, entered with the browser's picker and a box for the code beside it, which may be cleared.  `normalize-color` reads a code as the field does.
+
+```lisp
+(defclass theme ()
+  ((accent :initarg :accent)))
+(define-description theme
+  ((accent :type :color)))
+(let ((field (find-field 'theme 'accent)))
+  (list (normalize-color "#36C")
+        (normalize-color "teal")
+        (parse-field field "0E7490")
+        (with-canvas-to-string () (render-field-value field "#0e7490"))))
+;; ⇒ ("#3366cc" NIL "#0e7490" "<span class=\"lt-swatch\" style=\"background: #0e7490\" aria-hidden=\"true\"></span><code>#0e7490</code>")
+```
+
+#### `multiple-choice-field` — class
+
+Any number of `:choices`, held as a list in the choices'
+order and entered with a list box that takes several (Ctrl- or ⌘-click, or
+Shift for a run).  `:min` and `:max` bound how many; `:required` means at least
+one.  As text, the chosen labels are written one to a line.
+
+*Example:* `:multiple-choice` takes any number of the `:choices`, entered with a list box, and holds them as a list in the choices' order; `:min` and `:max` bound how many.  As text, they're written one to a line.  In tests, `select-options` chooses several, as Ctrl-clicking them would.
+
+```lisp
+(defclass meeting ()
+  ((days :initarg :days :initform '())))
+(define-description meeting
+  ((days :type :multiple-choice :choices '(:mon :tue :wed :thu :fri) :labels #'string-capitalize :min 1)))
+(defclass meeting-page (component)
+  ((meeting :initform (make-instance 'meeting :days '(:tue)) :reader meeting)
+   (editor :reader editor)))
+(defmethod initialize-instance :after ((self meeting-page) &key)
+  (setf (slot-value self 'editor) (make-editor (meeting self))))
+(defmethod children ((self meeting-page)) (list (editor self)))
+(defmethod render ((self meeting-page))
+  (render-component (editor self))
+  (p () (text (format nil "Meets on ~S" (slot-value (meeting self) 'days)))))
+(with-fresh-applications (("/meeting" 'meeting-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/meeting")
+    (select-options b "days" '("Fri" "Mon"))
+    (press b "Save")
+    (body-text b)))
+;; ⇒ "Days Mon Tue Wed Thu Fri Hold Ctrl or ⌘ to choose several. Save Cancel Meets on (:MON :FRI)"
+```
+
+#### `transfer-field` — class
+
+Like `:multiple-choice`, but entered with two lists side
+by side, the choices left (`:available-label`, "Available") and those
+chosen (`:chosen-label`, "Chosen"), and buttons that move what is selected
+from one to the other: for roles, permissions and the like.  littoral.js
+moves them in place, and a double click moves one; without it, the
+buttons submit the form and the page comes back with them moved.
+
+*Example:* `:transfer` is a multiple choice entered with two lists, what's left and what's chosen, and buttons moving the selected items across: littoral.js moves them in place, and without it the buttons submit the form.  `:available-label` and `:chosen-label` head the lists.
+
+```lisp
+(defclass account ()
+  ((roles :initarg :roles)))
+(define-description account
+  ((roles :type :transfer :choices '("reader" "writer" "editor" "admin") :chosen-label "Granted")))
+(defclass account-page (component)
+  ((editor :initform (make-editor (make-instance 'account :roles '("reader"))) :reader editor)))
+(defmethod children ((self account-page)) (list (editor self)))
+(defmethod render ((self account-page)) (render-component (editor self)))
+(with-fresh-applications (("/account" 'account-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/account")
+    (select-options b "roles" '("editor" "writer"))
+    (press b "Add")
+    (body-text b)))
+;; ⇒ "Roles Available admin Add → ← Remove Granted reader writer editor Save Cancel"
+```
+
+#### `new-password-field` — class
+
+A password being chosen: a password field with a meter
+beneath it that littoral.js keeps up to date as it is typed, from
+`password-strength` on the server.  With `:min-strength` (0 to 4), weaker
+passwords are refused.
+
+*Example:* `:new-password` is a password field with a strength meter beneath it, kept up to date over AJAX as the password is typed; `:min-strength` refuses weaker ones.  `render-new-password-input` writes the input and meter anywhere, as littoral/auth's reset form does.
+
+```lisp
+(defclass wifi ()
+  ((password :initarg :password :initform nil)))
+(define-description wifi
+  ((password :type :new-password :min-strength 3)))
+(defclass wifi-page (component)
+  ((editor :initform (make-editor (make-instance 'wifi)) :reader editor)))
+(defmethod children ((self wifi-page)) (list (editor self)))
+(defmethod render ((self wifi-page)) (render-component (editor self)))
+(with-fresh-applications (("/wifi" 'wifi-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/wifi")
+    (let* ((typing (first (ajax-specs b "on-input")))
+           (verdict (ajax-request b (car typing) (cdr typing) :fields '(("_lt_value" . "hunter22")))))
+      (fill-in b "password" "elephant42")
+      (press b "Save")
+      (list verdict (body-text b)))))
+;; ⇒ ("{\"fragments\":{},\"missing\":[],\"value\":{\"score\":0,\"length\":8,\"text\":\"Very weak. This is one of the most common passwords.\"},\"scripts\":[]}" "Password Password is too easy to guess. Add another word or two: longer is better. Save Cancel")
+```
+
+#### `password-strength` `password &key words` — function
+
+How hard `password` would be to guess, from 0 (very weak) to 4 (strong),
+and a list of hints (translated sentences) for doing better.  A rough
+estimate, not a promise: common passwords, repeated characters, runs like
+abc or 123, and `words` (such as the person's name and email address) count
+for little; length counts for most.  The meter of a `:new-password` field
+shows it as the password is typed.
+
+*Example:* A rough estimate of how hard a password would be to guess, 0 to 4, and hints for a better one.  Common passwords, repeats, runs like abc and the person's own name (`:words`) count for little; length counts for most.
+
+```lisp
+(list (multiple-value-list (password-strength "Password1"))
+      (password-strength "elephant")
+      (password-strength "correct horse battery staple")
+      (nth-value 1 (password-strength "grace-hopper-1906" :words '("Grace Hopper")))
+      (password-strength-label 2)
+      (and (member "letmein" *common-passwords* :test #'string=) t))
+;; ⇒ ((0 ("This is one of the most common passwords.")) 1 4 ("Avoid words from your name or email address." "Add another word or two: longer is better.") "Fair" T)
+```
+
+#### `password-strength-label` `score` — function
+
+The word for a `password-strength` score, translated.
+
+*Example:* A rough estimate of how hard a password would be to guess, 0 to 4, and hints for a better one.  Common passwords, repeats, runs like abc and the person's own name (`:words`) count for little; length counts for most.
+
+```lisp
+(list (multiple-value-list (password-strength "Password1"))
+      (password-strength "elephant")
+      (password-strength "correct horse battery staple")
+      (nth-value 1 (password-strength "grace-hopper-1906" :words '("Grace Hopper")))
+      (password-strength-label 2)
+      (and (member "letmein" *common-passwords* :test #'string=) t))
+;; ⇒ ((0 ("This is one of the most common passwords.")) 1 4 ("Avoid words from your name or email address." "Add another word or two: longer is better.") "Fair" T)
+```
+
+#### `render-new-password-input` `id callback &key required words` — function
+
+Write a password input with the element id `id`, for choosing a new
+password, and a strength meter beneath it.  `callback` receives what is
+submitted.  As the password is typed, littoral.js asks the server for its
+`password-strength`, with `words` (a list of texts, or a function returning
+one, such as the person's name and email address), and shows the verdict;
+without JavaScript, the meter stays hidden.
+
+*Example:* `:new-password` is a password field with a strength meter beneath it, kept up to date over AJAX as the password is typed; `:min-strength` refuses weaker ones.  `render-new-password-input` writes the input and meter anywhere, as littoral/auth's reset form does.
+
+```lisp
+(defclass wifi ()
+  ((password :initarg :password :initform nil)))
+(define-description wifi
+  ((password :type :new-password :min-strength 3)))
+(defclass wifi-page (component)
+  ((editor :initform (make-editor (make-instance 'wifi)) :reader editor)))
+(defmethod children ((self wifi-page)) (list (editor self)))
+(defmethod render ((self wifi-page)) (render-component (editor self)))
+(with-fresh-applications (("/wifi" 'wifi-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/wifi")
+    (let* ((typing (first (ajax-specs b "on-input")))
+           (verdict (ajax-request b (car typing) (cdr typing) :fields '(("_lt_value" . "hunter22")))))
+      (fill-in b "password" "elephant42")
+      (press b "Save")
+      (list verdict (body-text b)))))
+;; ⇒ ("{\"fragments\":{},\"missing\":[],\"value\":{\"score\":0,\"length\":8,\"text\":\"Very weak. This is one of the most common passwords.\"},\"scripts\":[]}" "Password Password is too easy to guess. Add another word or two: longer is better. Save Cancel")
+```
+
+#### `*common-passwords*` — variable
+
+Passwords too common to be any good, in lower case.  `password-strength`
+rates them, and them with digits or symbols added at either end, as weak as
+can be.
+
+*Example:* A rough estimate of how hard a password would be to guess, 0 to 4, and hints for a better one.  Common passwords, repeats, runs like abc and the person's own name (`:words`) count for little; length counts for most.
+
+```lisp
+(list (multiple-value-list (password-strength "Password1"))
+      (password-strength "elephant")
+      (password-strength "correct horse battery staple")
+      (nth-value 1 (password-strength "grace-hopper-1906" :words '("Grace Hopper")))
+      (password-strength-label 2)
+      (and (member "letmein" *common-passwords* :test #'string=) t))
+;; ⇒ ((0 ("This is one of the most common passwords.")) 1 4 ("Avoid words from your name or email address." "Add another word or two: longer is better.") "Fair" T)
+```
+
+### Popovers, tooltips, drawers and split panes
+
+#### `with-popover` `(label &key id class) &body body` — macro
+
+Write a button, `label` (translated), that opens a popover holding `body`,
+written as a tag's body is.  It is the browser's own popover: it opens and
+closes without a round trip, Escape or a click elsewhere closes it, and it
+needs no script, though littoral.js places it beside its button.  `id` names
+the popover element and `class` is added to its classes.  What `body` writes is
+there from the start, so its links and fields work as any others.
+
+*Example:* A button that opens a popover: the browser's own, which opens and closes without a round trip and closes on Escape or a click elsewhere.  littoral.js places it beside its button.
+
+```lisp
+(with-canvas-to-string ()
+  (with-popover ("Shipping" :id "shipping")
+    (p () "Free over €50.")))
+;; ⇒ "<button type=\"button\" class=\"lt-popover-button\" popovertarget=\"shipping\">Shipping</button><div id=\"shipping\" popover=\"auto\" class=\"lt-popover\"><p>Free over €50.</p></div>"
+```
+
+#### `with-tooltip` `(tip &key id) &body body` — macro
+
+Write `body`, written as a tag's body is, with `tip` (translated) shown above
+it while the pointer is over it or it has the focus.  littoral.js makes the
+tip describe the first thing in `body` that takes the focus (or `body` itself,
+made focusable), and Escape hides it.  `id` names the tip's element.
+
+*Example:* A tip shown above what it wraps while that has the pointer or the focus.  littoral.js makes the tip describe the first thing inside that takes the focus, and Escape hides it.
+
+```lisp
+(with-canvas-to-string ()
+  (with-tooltip ("Saves a copy" :id "tip")
+    (button () "Duplicate")))
+;; ⇒ "<span class=\"lt-tooltip\"><button type=\"button\">Duplicate</button><span id=\"tip\" role=\"tooltip\" class=\"lt-tooltip-text\">Saves a copy</span></span>"
+```
+
+#### `drawer` — class
+
+A panel that slides in over the page from its `:side`
+(`:left` or `:right`) holding `:content`, a component.  A button, `:label`,
+opens it, and its close button, Escape or a click outside closes it.
+Whether it is open is kept on the server, so the page comes back as it was
+left; opening and closing go over AJAX, or are ordinary links without
+JavaScript.  Focus moves into it as it opens and back to its button when
+it closes.
+
+*Example:* A panel that slides in from the side over the page.  Its button opens it and its × closes it, over AJAX or as plain links; whether it's open is kept on the server.  `toggle-drawer` opens or closes it from code.
+
+```lisp
+(defclass filters (component) ())
+(defmethod render ((self filters)) (p () "Only in stock"))
+(defclass shop-page (component)
+  ((drawer :initform (make-instance 'drawer :label "Filters" :side :right :content (make-instance 'filters))
+           :reader drawer)))
+(defmethod children ((self shop-page)) (list (drawer self)))
+(defmethod render ((self shop-page)) (render-component (drawer self)))
+(with-fresh-applications (("/shop" 'shop-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/shop")
+    (let ((closed (body-text b)))
+      (click b "Filters")
+      (list closed (body-text b)))))
+;; ⇒ ("Filters" "Filters Filters × Only in stock")
+(let ((drawer (make-instance 'drawer :content (make-instance 'filters))))
+  (list (drawer-open-p drawer)
+        (progn (toggle-drawer drawer) (drawer-open-p drawer))
+        (progn (toggle-drawer drawer nil) (drawer-open-p drawer))
+        (typep (drawer-content drawer) 'filters)))
+;; ⇒ (NIL T NIL T)
+```
+
+#### `drawer-content` `object` — generic function
+
+Reads the content of a drawer.  The component shown in the drawer.
+
+*Example:* A panel that slides in from the side over the page.  Its button opens it and its × closes it, over AJAX or as plain links; whether it's open is kept on the server.  `toggle-drawer` opens or closes it from code.
+
+```lisp
+(defclass filters (component) ())
+(defmethod render ((self filters)) (p () "Only in stock"))
+(defclass shop-page (component)
+  ((drawer :initform (make-instance 'drawer :label "Filters" :side :right :content (make-instance 'filters))
+           :reader drawer)))
+(defmethod children ((self shop-page)) (list (drawer self)))
+(defmethod render ((self shop-page)) (render-component (drawer self)))
+(with-fresh-applications (("/shop" 'shop-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/shop")
+    (let ((closed (body-text b)))
+      (click b "Filters")
+      (list closed (body-text b)))))
+;; ⇒ ("Filters" "Filters Filters × Only in stock")
+(let ((drawer (make-instance 'drawer :content (make-instance 'filters))))
+  (list (drawer-open-p drawer)
+        (progn (toggle-drawer drawer) (drawer-open-p drawer))
+        (progn (toggle-drawer drawer nil) (drawer-open-p drawer))
+        (typep (drawer-content drawer) 'filters)))
+;; ⇒ (NIL T NIL T)
+```
+
+#### `drawer-open-p` `object` — generic function
+
+Reads the open of a drawer.
+
+*Example:* A panel that slides in from the side over the page.  Its button opens it and its × closes it, over AJAX or as plain links; whether it's open is kept on the server.  `toggle-drawer` opens or closes it from code.
+
+```lisp
+(defclass filters (component) ())
+(defmethod render ((self filters)) (p () "Only in stock"))
+(defclass shop-page (component)
+  ((drawer :initform (make-instance 'drawer :label "Filters" :side :right :content (make-instance 'filters))
+           :reader drawer)))
+(defmethod children ((self shop-page)) (list (drawer self)))
+(defmethod render ((self shop-page)) (render-component (drawer self)))
+(with-fresh-applications (("/shop" 'shop-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/shop")
+    (let ((closed (body-text b)))
+      (click b "Filters")
+      (list closed (body-text b)))))
+;; ⇒ ("Filters" "Filters Filters × Only in stock")
+(let ((drawer (make-instance 'drawer :content (make-instance 'filters))))
+  (list (drawer-open-p drawer)
+        (progn (toggle-drawer drawer) (drawer-open-p drawer))
+        (progn (toggle-drawer drawer nil) (drawer-open-p drawer))
+        (typep (drawer-content drawer) 'filters)))
+;; ⇒ (NIL T NIL T)
+```
+
+#### `toggle-drawer` `drawer &optional (open (not (drawer-open-p drawer)))` — function
+
+Open `drawer`, or close it, or with `open` true or false, open or close it.
+
+*Example:* A panel that slides in from the side over the page.  Its button opens it and its × closes it, over AJAX or as plain links; whether it's open is kept on the server.  `toggle-drawer` opens or closes it from code.
+
+```lisp
+(defclass filters (component) ())
+(defmethod render ((self filters)) (p () "Only in stock"))
+(defclass shop-page (component)
+  ((drawer :initform (make-instance 'drawer :label "Filters" :side :right :content (make-instance 'filters))
+           :reader drawer)))
+(defmethod children ((self shop-page)) (list (drawer self)))
+(defmethod render ((self shop-page)) (render-component (drawer self)))
+(with-fresh-applications (("/shop" 'shop-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/shop")
+    (let ((closed (body-text b)))
+      (click b "Filters")
+      (list closed (body-text b)))))
+;; ⇒ ("Filters" "Filters Filters × Only in stock")
+(let ((drawer (make-instance 'drawer :content (make-instance 'filters))))
+  (list (drawer-open-p drawer)
+        (progn (toggle-drawer drawer) (drawer-open-p drawer))
+        (progn (toggle-drawer drawer nil) (drawer-open-p drawer))
+        (typep (drawer-content drawer) 'filters)))
+;; ⇒ (NIL T NIL T)
+```
+
+#### `split-pane` — class
+
+Two components side by side, `:first` and `:second`, such as
+a list and the detail of what is chosen in it, with a divider between them.
+Dragging the divider, or focusing it and using the arrow keys (Home and End
+for the limits), shares the width differently, between `:min` and `:max`
+percent; `:position` is the first pane's share.  The share is kept on the
+server, so the page comes back as it was left.  On narrow screens the
+panes are stacked.
+
+*Example:* Two components side by side with a divider that can be dragged, or moved with the arrow keys, to share the width; `:position` is the first's share in percent, kept between `:min` (15) and `:max` (85).  littoral.js posts each new share, which is kept on the server.
+
+```lisp
+(defclass words (component) ((text :initarg :text :reader words-text)))
+(defmethod render ((self words)) (p () (text (words-text self))))
+(let ((pane (make-instance 'split-pane :first (make-instance 'words :text "Inbox")
+                                       :second (make-instance 'words :text "Message")
+                                       :position 30)))
+  (list (words-text (split-first pane)) (words-text (split-second pane))
+        (split-position pane)
+        (set-split-position pane 95)
+        (set-split-position pane 3)))
+;; ⇒ ("Inbox" "Message" 30 85 15)
+```
+
+#### `split-first` `object` — generic function
+
+Reads the first of a split-pane.  The component on the left.
+
+*Example:* Two components side by side with a divider that can be dragged, or moved with the arrow keys, to share the width; `:position` is the first's share in percent, kept between `:min` (15) and `:max` (85).  littoral.js posts each new share, which is kept on the server.
+
+```lisp
+(defclass words (component) ((text :initarg :text :reader words-text)))
+(defmethod render ((self words)) (p () (text (words-text self))))
+(let ((pane (make-instance 'split-pane :first (make-instance 'words :text "Inbox")
+                                       :second (make-instance 'words :text "Message")
+                                       :position 30)))
+  (list (words-text (split-first pane)) (words-text (split-second pane))
+        (split-position pane)
+        (set-split-position pane 95)
+        (set-split-position pane 3)))
+;; ⇒ ("Inbox" "Message" 30 85 15)
+```
+
+#### `split-second` `object` — generic function
+
+Reads the second of a split-pane.  The component on the right.
+
+*Example:* Two components side by side with a divider that can be dragged, or moved with the arrow keys, to share the width; `:position` is the first's share in percent, kept between `:min` (15) and `:max` (85).  littoral.js posts each new share, which is kept on the server.
+
+```lisp
+(defclass words (component) ((text :initarg :text :reader words-text)))
+(defmethod render ((self words)) (p () (text (words-text self))))
+(let ((pane (make-instance 'split-pane :first (make-instance 'words :text "Inbox")
+                                       :second (make-instance 'words :text "Message")
+                                       :position 30)))
+  (list (words-text (split-first pane)) (words-text (split-second pane))
+        (split-position pane)
+        (set-split-position pane 95)
+        (set-split-position pane 3)))
+;; ⇒ ("Inbox" "Message" 30 85 15)
+```
+
+#### `split-position` `object` — generic function
+
+Reads the position of a split-pane.  The left pane's share of the width, in percent.
+
+*Example:* Two components side by side with a divider that can be dragged, or moved with the arrow keys, to share the width; `:position` is the first's share in percent, kept between `:min` (15) and `:max` (85).  littoral.js posts each new share, which is kept on the server.
+
+```lisp
+(defclass words (component) ((text :initarg :text :reader words-text)))
+(defmethod render ((self words)) (p () (text (words-text self))))
+(let ((pane (make-instance 'split-pane :first (make-instance 'words :text "Inbox")
+                                       :second (make-instance 'words :text "Message")
+                                       :position 30)))
+  (list (words-text (split-first pane)) (words-text (split-second pane))
+        (split-position pane)
+        (set-split-position pane 95)
+        (set-split-position pane 3)))
+;; ⇒ ("Inbox" "Message" 30 85 15)
+```
+
+#### `set-split-position` `pane percent` — function
+
+Give `pane`'s first pane `percent` of the width, kept within its limits.
+
+*Example:* Two components side by side with a divider that can be dragged, or moved with the arrow keys, to share the width; `:position` is the first's share in percent, kept between `:min` (15) and `:max` (85).  littoral.js posts each new share, which is kept on the server.
+
+```lisp
+(defclass words (component) ((text :initarg :text :reader words-text)))
+(defmethod render ((self words)) (p () (text (words-text self))))
+(let ((pane (make-instance 'split-pane :first (make-instance 'words :text "Inbox")
+                                       :second (make-instance 'words :text "Message")
+                                       :position 30)))
+  (list (words-text (split-first pane)) (words-text (split-second pane))
+        (split-position pane)
+        (set-split-position pane 95)
+        (set-split-position pane 3)))
+;; ⇒ ("Inbox" "Message" 30 85 15)
+```
+
 ### JSON endpoints
 
 #### `define-endpoint` `application-path method pattern (&rest parameters) &body body` — macro
@@ -11340,6 +11906,38 @@ Returns `browser`.
     (press b "Choose")
     (body-text b)))
 ;; ⇒ "Post Courier Collect Choose Shipping by courier"
+```
+
+#### `select-options` `browser id labels` — function
+
+Select exactly the options labelled `labels` (a list of texts) in the
+multiple select with `dom` id `id`, or else with label `id` (see `element-name`),
+as Ctrl-clicking them would; an error when one is missing.  Returns
+`browser`.
+
+*Example:* `:multiple-choice` takes any number of the `:choices`, entered with a list box, and holds them as a list in the choices' order; `:min` and `:max` bound how many.  As text, they're written one to a line.  In tests, `select-options` chooses several, as Ctrl-clicking them would.
+
+```lisp
+(defclass meeting ()
+  ((days :initarg :days :initform '())))
+(define-description meeting
+  ((days :type :multiple-choice :choices '(:mon :tue :wed :thu :fri) :labels #'string-capitalize :min 1)))
+(defclass meeting-page (component)
+  ((meeting :initform (make-instance 'meeting :days '(:tue)) :reader meeting)
+   (editor :reader editor)))
+(defmethod initialize-instance :after ((self meeting-page) &key)
+  (setf (slot-value self 'editor) (make-editor (meeting self))))
+(defmethod children ((self meeting-page)) (list (editor self)))
+(defmethod render ((self meeting-page))
+  (render-component (editor self))
+  (p () (text (format nil "Meets on ~S" (slot-value (meeting self) 'days)))))
+(with-fresh-applications (("/meeting" 'meeting-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/meeting")
+    (select-options b "days" '("Fri" "Mon"))
+    (press b "Save")
+    (body-text b)))
+;; ⇒ "Days Mon Tue Wed Thu Fri Hold Ctrl or ⌘ to choose several. Save Cancel Meets on (:MON :FRI)"
 ```
 
 #### `choose-radio` `browser label` — function

@@ -283,6 +283,84 @@ try {
   check("and loads once it is seen", await waitFor(`!!document.querySelector("figure svg") && document.body.innerText.includes("Standard atomic weights")`));
   await send("Emulation.clearDeviceMetricsOverride");
 
+  // Inputs: the slider's number follows it, + steps in place, the colour's
+  // code moves its picker, a star rating colours the stars up to the one
+  // chosen, the transfer list moves items without a round trip, and the
+  // strength meter asks the server as the password is typed.
+  await go("/examples/widgets");
+  await clickLink("Inputs");
+  await evaluate("window.__inputs = 1");
+  await evaluate(`(() => { const r = document.getElementById("volume"); r.value = 75;
+    r.dispatchEvent(new Event("input", { bubbles: true })); })()`);
+  check("the slider's number follows it", await evaluate(`document.getElementById("volume-value").textContent`) === "75");
+  await evaluate(`document.querySelector(".lt-stepper-up").click()`);
+  check("+ steps in place", await evaluate(`document.getElementById("guests").value`) === "9" && await evaluate("window.__inputs") === 1);
+  await evaluate(`(() => { const c = document.querySelector(".lt-color-code"); c.value = "#36c";
+    c.dispatchEvent(new Event("input", { bubbles: true })); })()`);
+  check("a colour code moves the picker", await evaluate(`document.getElementById("colour").value`) === "#3366cc");
+  await evaluate(`document.querySelector("label[for=rating-2]").click()`);
+  check("stars up to the one chosen are coloured", await evaluate(`(() => {
+    const color = (n) => getComputedStyle(document.querySelector("label[for=rating-" + n + "]")).color;
+    return document.getElementById("rating-2").checked && color(1) === color(2) && color(2) !== color(3); })()`));
+  await evaluate(`(() => { for (const o of document.getElementById("helpers").options) o.selected = ["Ada", "Alan"].includes(o.textContent);
+    document.querySelector("[data-lt-move=add]").click(); })()`);
+  check("the transfer list moves in place", await evaluate(`[...document.getElementById("helpers-chosen").options].map(o => o.textContent).join(",")`) === "Ada,Grace,Alan"
+        && await evaluate(`document.querySelector(".lt-transfer-value").value`) === "0,1,4" && await evaluate("window.__inputs") === 1,
+        await evaluate(`document.querySelector(".lt-transfer-value").value`));
+  await evaluate(`[...document.getElementById("helpers-chosen").options].find(o => o.textContent === "Grace")
+    .dispatchEvent(new MouseEvent("dblclick", { bubbles: true }))`);
+  check("a double click moves one back", await evaluate(`document.querySelector(".lt-transfer-value").value`) === "0,4");
+  await evaluate(`(() => { const p = document.getElementById("password"); p.focus(); p.value = "letmein";
+    p.dispatchEvent(new Event("input", { bubbles: true })); })()`);
+  check("the strength meter asks the server", await waitFor(`!document.getElementById("password-strength").hidden &&
+    document.querySelector("#password-strength .lt-strength-text").textContent.startsWith("Very weak")`));
+  await evaluate(`(() => { const p = document.getElementById("password"); p.value = "correct horse battery staple";
+    p.dispatchEvent(new Event("input", { bubbles: true })); })()`);
+  check("and shows a better one's", await waitFor(`document.querySelector("#password-strength meter").value === 4`));
+  await clickButton("Save", true);
+  const party = await evaluate(`document.querySelector(".party-saved").innerText`);
+  check("the inputs are saved", ["9", "75", "★★☆☆☆", "#3366cc", "Ada, Alan", "Saturday"].every((s) => party.includes(s)), party);
+
+  // Layout: a popover opens beside its button, a tooltip describes what it
+  // wraps and Escape hides it, a drawer takes the focus and gives it back,
+  // and a split pane's divider moves and is remembered.
+  await go("/examples/widgets");
+  await clickLink("Layout");
+  await evaluate("window.__layout = 1");
+  await evaluate(`document.querySelector(".lt-popover-button").click()`);
+  check("a popover opens", await evaluate(`document.querySelector(".lt-popover").matches(":popover-open")`));
+  check("below its button", await evaluate(`document.querySelector(".lt-popover").getBoundingClientRect().top >=
+    document.querySelector(".lt-popover-button").getBoundingClientRect().bottom`));
+  await evaluate(`document.querySelector(".lt-popover-button").click()`);
+  check("and its button closes it", await evaluate(`!document.querySelector(".lt-popover").matches(":popover-open")`));
+  await evaluate(`[...document.querySelectorAll("button")].find(b => b.textContent === "Copy the link").focus()`);
+  check("a tooltip shows on focus", await evaluate(`getComputedStyle(document.querySelector(".lt-tooltip-text")).display`) === "block");
+  check("and describes what it wraps", await evaluate(`document.activeElement.getAttribute("aria-describedby") === document.querySelector(".lt-tooltip-text").id`));
+  await keydown("Escape");
+  check("Escape hides it", await evaluate(`getComputedStyle(document.querySelector(".lt-tooltip-text")).display`) === "none");
+  await evaluate(`document.querySelector(".lt-drawer-toggle").click()`);
+  check("a drawer opens with the focus in it", await waitFor(`!!document.querySelector(".lt-drawer") &&
+    document.activeElement.classList.contains("lt-drawer-close")`));
+  await keydown("Escape");
+  check("Escape closes it and the focus goes back", await waitFor(`!document.querySelector(".lt-drawer") &&
+    document.activeElement.classList.contains("lt-drawer-toggle")`));
+  await evaluate(`document.querySelector(".lt-drawer-toggle").click()`);
+  await waitFor(`!!document.querySelector(".lt-drawer-backdrop")`);
+  await evaluate(`document.querySelector(".lt-drawer-backdrop").click()`);
+  check("so does a click outside", await waitFor(`!document.querySelector(".lt-drawer")`) && await evaluate("window.__layout") === 1);
+  await evaluate(`document.querySelector(".lt-split-divider").focus()`);
+  await keydown("ArrowRight"); await keydown("ArrowRight");
+  check("the arrow keys move a split pane's divider", await evaluate(`document.querySelector(".lt-split-divider").getAttribute("aria-valuenow")`) === "34");
+  await evaluate(`(() => { const d = document.querySelector(".lt-split-divider"), r = d.parentNode.getBoundingClientRect();
+    const at = (type, x) => d.dispatchEvent(new PointerEvent(type, { bubbles: true, button: 0, pointerId: 1, clientX: x, clientY: r.top + 10 }));
+    at("pointerdown", r.left + r.width * 0.34); at("pointermove", r.left + r.width / 2); at("pointerup", r.left + r.width / 2); })()`);
+  check("so does dragging it", await evaluate(`document.querySelector(".lt-split-divider").getAttribute("aria-valuenow")`) === "50");
+  await sleep(700);
+  await send("Page.reload"); await waitLoad();
+  check("and where it was left is remembered", await evaluate(`document.querySelector(".lt-split-divider").getAttribute("aria-valuenow")`) === "50");
+  await evaluate(`[...document.querySelectorAll(".planet-list a")].find(a => a.textContent === "Mars").click()`);
+  check("the split pane's list shows its choice beside it", await waitFor(`document.body.innerText.includes("Red with iron oxide dust")`));
+
   // JSON endpoints, called from the page with fetch.
   await go("/examples/api");
   await evaluate(`document.getElementById("api-post").click()`); await sleep(700);

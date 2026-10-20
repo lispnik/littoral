@@ -210,13 +210,19 @@ run of whitespace made one space."
       (let ((name (attr (attributes tag) "name")))
         (when name (push (cons name (unescape content)) fields))))
     (cl-ppcre:do-register-groups (tag options) ("(?s)<select\\b([^>]*)>(.*?)</select>" html)
-      (let ((name (attr (attributes tag) "name"))
-            (selected nil) (first nil))
+      (let* ((a (attributes tag))
+             (name (attr a "name"))
+             (multiple (assoc "multiple" a :test #'string=))
+             (selected '()) (first nil))
         (cl-ppcre:do-register-groups (otag) ("<option\\b([^>]*)>" options)
           (let ((a (attributes otag)))
             (unless first (setf first (attr a "value")))
-            (when (assoc "selected" a :test #'string=) (setf selected (attr a "value")))))
-        (when name (push (cons name (or selected first "")) fields))))
+            (when (assoc "selected" a :test #'string=) (push (attr a "value") selected))))
+        (when name
+          (cond (multiple
+                 ;; Every option selected, and none when none is.
+                 (dolist (value (reverse selected)) (push (cons name value) fields)))
+                (t (push (cons name (or (first selected) first "")) fields))))))
     (nreverse fields)))
 
 (defun find-link (browser text)
@@ -302,6 +308,35 @@ Returns BROWSER."
                            (remove name (browser-fields browser) :key #'car :test #'string=)))
               (return-from select-option browser)))))))
   (error "No option ~S in ~S" label id))
+
+(defun select-options (browser id labels)
+  "Select exactly the options labelled LABELS (a list of texts) in the
+multiple select with DOM id ID, or else with label ID (see ELEMENT-NAME),
+as Ctrl-clicking them would; an error when one is missing.  Returns
+BROWSER."
+  (let ((found nil))
+    (cl-ppcre:do-register-groups (tag options) ("(?s)<select\\b([^>]*)>(.*?)</select>" (browser-html browser))
+      (let ((a (attributes tag)))
+        (cond ((equal (attr a "id") id) (setf found (cons a options)) (return))
+              ((and (null found) (equal (unescape (or (attr a "aria-label") "")) id))
+               (setf found (cons a options)))
+              (t nil))))
+    (unless found (error "No select ~S" id))
+    (destructuring-bind (a . options) found
+      (let ((name (attr a "name")) (values '()))
+        (dolist (label labels)
+          (let ((value nil))
+            (cl-ppcre:do-register-groups (otag text) ("<option\\b([^>]*)>(.*?)</option>" options)
+              (when (and (null value) (string= (unescape (strip-tags text)) label))
+                (setf value (attr (attributes otag) "value"))))
+            (unless value (error "No option ~S in ~S" label id))
+            (push value values)))
+        ;; A blank first, as a multiple select's hidden twin posts.
+        (setf (browser-fields browser)
+              (append (remove name (browser-fields browser) :key #'car :test #'string=)
+                      (list (cons name ""))
+                      (mapcar (lambda (v) (cons name v)) (nreverse values))))
+        browser))))
 
 (defun choose-radio (browser label)
   "Choose the radio button labelled exactly LABEL (the text of its

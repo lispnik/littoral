@@ -3,13 +3,15 @@
 ;;;; Every link, field and button carries the id of a closure registered
 ;;;; here while the page renders.  A request names those ids as parameter
 ;;;; keys; value callbacks (fields) run first, in the order they were
-;;;; rendered, then the single action callback (a link or button).
+;;;; rendered, then the single action callback (a link or button).  A
+;;;; :VALUES callback is a field posting several values under one name (a
+;;;; multiple select): it receives them all, as a list.
 
 (in-package #:littoral)
 
 (defstruct (callback (:constructor make-callback (id kind function)))
   id
-  (kind :action :type (member :action :value :cancel :default))
+  (kind :action :type (member :action :value :values :cancel :default))
   function)
 
 (defclass callback-registry ()
@@ -43,9 +45,12 @@ value callbacks (in render order) and the action callbacks."
                ;; A field may appear more than once (a checkbox follows its
                ;; hidden twin); the last occurrence is the field's value.
                (let ((final (rest (find key parameters :key #'car :test #'string= :from-end t))))
-                 (if (eql (callback-kind callback) :value)
-                     (push (cons callback final) value-pairs)
-                     (push (cons callback final) action-pairs))))
+                 (case (callback-kind callback)
+                   (:value (push (cons callback final) value-pairs))
+                   (:values (push (cons callback (loop for (k . v) in parameters
+                                                       when (string= k key) collect v))
+                                  value-pairs))
+                   (otherwise (push (cons callback final) action-pairs)))))
     (flet ((order (list) (sort list #'< :key (lambda (pair) (parse-integer (callback-id (first pair)))))))
       (values (order value-pairs) (order action-pairs)))))
 
@@ -65,7 +70,8 @@ link named, or failing that the form's default action."
                (funcall (callback-function (first cancel))))
               (t
                (loop for (callback . value) in value-pairs
-                     do (funcall (callback-function callback) (or value "")))
+                     do (funcall (callback-function callback)
+                                 (if (eql (callback-kind callback) :values) value (or value ""))))
                (cond (actions (funcall (callback-function (first (first (last actions))))))
                      (default (funcall (callback-function (first default))))
                      (t nil))))))

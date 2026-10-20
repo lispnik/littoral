@@ -989,8 +989,13 @@ The link works once, for an hour.  If it wasn't you, ignore this mail."
     (form ()
       (div (:class "lt-field")
         (label (:for "new-password") (translate "New password"))
-        (password-input (:id "new-password" :autocomplete "new-password" :required t
-                         :callback (lambda (v) (setf (reset-password self) v)))))
+        ;; Its strength is shown as it's typed, counting the user's own name
+        ;; and address for little.
+        (render-new-password-input "new-password" (lambda (v) (setf (reset-password self) v))
+                                   :required t
+                                   :words (lambda ()
+                                            (let ((user (find-user-by-id (reset-user-id self))))
+                                              (and user (list (user-name user) (user-email user)))))))
       (div (:class "lt-field")
         (label (:for "new-password-again") (translate "Again"))
         (password-input (:id "new-password-again" :autocomplete "new-password" :required t

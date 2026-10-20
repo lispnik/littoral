@@ -94,6 +94,14 @@
    #:text-diff #:diff-view #:diff-view-old #:diff-view-new #:diff-view-layout
    #:command-palette #:palette-command #:palette-command-label #:palette-command-action
    #:palette-command-group #:palette-command-keywords #:palette-match-score #:palette-matches #:palette-query
+   ;; More field kinds
+   #:range-field #:stepper-field #:rating-field #:color-field #:normalize-color
+   #:multiple-choice-field #:transfer-field #:new-password-field
+   #:password-strength #:password-strength-label #:render-new-password-input #:*common-passwords*
+   ;; Popovers, tooltips, drawers and split panes
+   #:with-popover #:with-tooltip
+   #:drawer #:drawer-content #:drawer-open-p #:toggle-drawer
+   #:split-pane #:split-first #:split-second #:split-position #:set-split-position
    ;; JSON endpoints
    #:define-endpoint #:register-endpoint #:endpoint-error #:endpoint-body #:*endpoint-authenticator*
    ;; Health, metrics, request logs

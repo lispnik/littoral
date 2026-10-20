@@ -264,6 +264,125 @@ Some *emphasis*, some **strong** text and `code`.
         (dt () (text (field-label field)))
         (dd () (render-field-value field (field-value field (section-outing self))))))))
 
+;;; More inputs: a stepper, a slider, stars, a colour, multiple choices and a new password
+
+(defclass party ()
+  ((guests :initarg :guests :accessor party-guests)
+   (volume :initarg :volume :accessor party-volume)
+   (rating :initarg :rating :accessor party-rating)
+   (colour :initarg :colour :accessor party-colour)
+   (days :initarg :days :accessor party-days)
+   (helpers :initarg :helpers :accessor party-helpers)
+   (password :initarg :password :initform nil :accessor party-password))
+  (:documentation "A party to plan."))
+
+(define-description party
+  ((guests :type :stepper :min 1 :max 30 :required t)
+   (volume :type :range :min 0 :max 100 :step 5 :label "Music volume")
+   (rating :type :rating :label "Last year's party")
+   (colour :type :color :label "Theme colour")
+   (days :type :multiple-choice :choices '("Friday" "Saturday" "Sunday") :min 1 :label "Possible days")
+   (helpers :type :transfer :choices '("Ada" "Grace" "Barbara" "Edsger" "Alan" "Margaret")
+            :available-label "Friends" :chosen-label "Helping")
+   (password :type :new-password :min-strength 2 :label "Wi-Fi password" :help "For the guests' network.")))
+
+(defclass inputs-section (component)
+  ((party :initform (make-instance 'party :guests 8 :volume 40 :rating 4 :colour "#0e7490"
+                                          :days '("Saturday") :helpers '("Grace"))
+          :reader section-party)
+   (editor :reader section-editor))
+  (:documentation "A description editor using the stepper, range, rating, colour,
+multiple-choice, transfer and new-password field kinds."))
+
+(defmethod initialize-instance :after ((self inputs-section) &key)
+  (setf (slot-value self 'editor) (make-editor (section-party self) :title "A party")))
+
+(defmethod children ((self inputs-section)) (list (section-editor self)))
+
+(defmethod render ((self inputs-section))
+  (h2 () "Sliders, steppers, stars and colours")
+  (p () "Each is a field kind for descriptions, and works without JavaScript. "
+    "The password's strength is checked on the server as you type.")
+  (render-component (section-editor self))
+  (let ((description (find-description 'party)))
+    (dl (:class "party-saved")
+      (dolist (field (description-fields description))
+        (dt () (text (field-label field)))
+        (dd () (render-field-value field (field-value field (section-party self))))))))
+
+;;; Layout: a popover, a tooltip, a drawer and a split pane
+
+(defparameter *planets*
+  '(("Mercury" "The smallest planet, and the closest to the Sun.")
+    ("Venus" "The hottest, under thick clouds of carbon dioxide.")
+    ("Earth" "The only one known to have life.")
+    ("Mars" "Red with iron oxide dust, with the tallest volcano of all.")
+    ("Jupiter" "The largest, a gas giant with a storm wider than the Earth.")
+    ("Saturn" "Known for its rings of ice and rock.")
+    ("Uranus" "Tipped on its side, so each pole faces the Sun in turn.")
+    ("Neptune" "The windiest, and the farthest from the Sun."))
+  "Planets and a line about each, for the split pane.")
+
+(defclass planet-list (component updatable)
+  ((chosen :initform "Earth" :accessor chosen-planet)
+   (detail :accessor planet-detail))
+  (:documentation "The planets, one of them chosen."))
+
+(defclass planet-detail (component updatable)
+  ((list :initarg :list :reader detail-list))
+  (:documentation "The chosen planet."))
+
+(defmethod states ((self planet-list)) (list self))
+
+(defmethod render ((self planet-list))
+  (ul (:class "planet-list")
+    (loop for (name) in *planets*
+          do (let ((name name))
+               (flet ((choose () (setf (chosen-planet self) name)))
+                 (li ()
+                   (anchor (:aria-current (when (string= name (chosen-planet self)) "true")
+                            :callback #'choose
+                            :on-click (ajax :callback #'choose :update (list self (planet-detail self))))
+                     (text name))))))))
+
+(defmethod render ((self planet-detail))
+  (let ((planet (assoc (chosen-planet (detail-list self)) *planets* :test #'string=)))
+    (h3 () (text (first planet)))
+    (p () (text (second planet)))))
+
+(defclass layout-section (component)
+  ((drawer :initform (make-instance 'drawer :label "Open the drawer" :title "A drawer"
+                                            :content (make-instance 'note :text "Drawers hold navigation, filters or settings. Escape, a click outside or × closes this one."))
+           :reader layout-drawer)
+   (split :reader layout-split))
+  (:documentation "A popover, a tooltip, a drawer and a split pane."))
+
+(defmethod initialize-instance :after ((self layout-section) &key)
+  (let* ((list (make-instance 'planet-list))
+         (detail (make-instance 'planet-detail :list list)))
+    (setf (planet-detail list) detail
+          (slot-value self 'split) (make-instance 'split-pane :first list :second detail :position 30
+                                                              :label "Resize the planet list"))))
+
+(defmethod children ((self layout-section)) (list (layout-drawer self) (layout-split self)))
+
+(defmethod render ((self layout-section))
+  (h2 () "Popovers and tooltips")
+  (p () "The popover is the browser's own: it opens and closes without a round trip. "
+    "The tooltip shows while the button has the pointer or the focus; Escape hides it.")
+  (div (:class "layout-row")
+    (with-popover ("What's a popover?")
+      (p () "A box over the page, closed by Escape or a click elsewhere.")
+      (p () (anchor (:href (url-for "/examples")) "All the examples")))
+    (with-tooltip ("Nothing is copied: this only shows a tooltip.")
+      (button () "Copy the link")))
+  (h2 () "Drawer")
+  (p () "Its panel slides in from the side. Whether it's open is kept on the server.")
+  (render-component (layout-drawer self))
+  (h2 () "Split pane")
+  (p () "Drag the divider, or focus it and use the arrow keys.")
+  (render-component (layout-split self)))
+
 ;;; Menus, accordions and disclosures
 
 (defclass menus-section (component)
@@ -457,7 +576,9 @@ Some *emphasis*, some **strong** text and `code`.
                      (cons "Sortable" (make-instance 'sortable-section :list (demo-tasks self)))
                      (cons "Breadcrumbs" (make-instance 'crumbs-section))
                      (cons "Forms" (make-instance 'forms-section))
+                     (cons "Inputs" (make-instance 'inputs-section))
                      (cons "Menus" (make-instance 'menus-section))
+                     (cons "Layout" (make-instance 'layout-section))
                      (cons "Data grid" (make-instance 'grid-section))
                      (cons "Charts" (make-instance 'charts-section))
                      (cons "Calendar" (make-instance 'calendar-section))
@@ -505,7 +626,11 @@ Some *emphasis*, some **strong** text and `code`.
 .tools-texts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 1rem; }
 .tools-texts .lt-buttons { grid-column: 1 / -1; }
 .tools-texts textarea { width: 100%; font-family: ui-monospace, monospace; }
-@media (max-width: 40rem) { .tools-texts { grid-template-columns: minmax(0, 1fr); } }")
+@media (max-width: 40rem) { .tools-texts { grid-template-columns: minmax(0, 1fr); } }
+.layout-row { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; }
+.planet-list { list-style: none; padding: 0; margin: 0; }
+.planet-list a { display: block; padding: .2rem .4rem; border-radius: 4px; }
+.planet-list a[aria-current] { background: var(--lt-panel); font-weight: 600; }")
 
 (defmethod render ((self widget-demo))
   (div (:class "widgets-heading")

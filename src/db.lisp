@@ -263,7 +263,12 @@ when DEFINE-TABLE hasn't defined one."
   (:documentation "The column type that holds FIELD's values.")
   (:method ((field field)) "TEXT")
   (:method ((field integer-field)) "BIGINT")
-  (:method ((field boolean-field)) "INTEGER"))
+  (:method ((field boolean-field)) "INTEGER")
+  (:method ((field rating-field)) "INTEGER"))
+
+(defun choice-sql-text (choice)
+  "How a choice is written to its column: a symbol by its name."
+  (if (symbolp choice) (symbol-name choice) (princ-to-string choice)))
 
 (defgeneric to-sql (field value)
   (:documentation "VALUE as it is written to FIELD's column.")
@@ -275,9 +280,10 @@ when DEFINE-TABLE hasn't defined one."
   (:method ((field littoral::date-range-field) value) (and value (format-field field value)))
   (:method ((field littoral::tags-field) value) (format-field field value))
   (:method ((field choice-field) value)
-    (cond ((null value) nil)
-          ((symbolp value) (symbol-name value))
-          (t (princ-to-string value)))))
+    (and value (choice-sql-text value)))
+  ;; Several choices, each written as a single one is, one to a line.
+  (:method ((field multiple-choice-field) value)
+    (and value (format nil "~{~A~^~%~}" (mapcar #'choice-sql-text value)))))
 
 (defgeneric from-sql (field value)
   (:documentation "The value FIELD holds, from what its column held.")
@@ -293,9 +299,12 @@ when DEFINE-TABLE hasn't defined one."
     (and value (not (eq value :null)) (parse-field field value)))
   (:method ((field choice-field) value)
     (and value (not (eq value :null))
-         (find value (field-choices field)
-               :key (lambda (choice) (if (symbolp choice) (symbol-name choice) (princ-to-string choice)))
-               :test #'string=))))
+         (find value (field-choices field) :key #'choice-sql-text :test #'string=)))
+  (:method ((field multiple-choice-field) value)
+    (and value (not (eq value :null))
+         (let ((names (cl-ppcre:split "\\r?\\n" value)))
+           (remove-if-not (lambda (choice) (member (choice-sql-text choice) names :test #'string=))
+                          (field-choices field))))))
 
 ;;; References between tables
 

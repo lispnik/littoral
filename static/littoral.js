@@ -16,6 +16,10 @@
     if (!el.name) return;
     if (el.type === "checkbox") {
       params.append(el.name, el.checked ? "on" : "off");
+    } else if (el.type === "select-multiple") {
+      // A blank first, as the field's hidden twin sends, so none is news too.
+      params.append(el.name, "");
+      Array.prototype.forEach.call(el.selectedOptions, function (o) { params.append(el.name, o.value); });
     } else {
       params.append(el.name, el.value);
     }
@@ -323,7 +327,17 @@
       return send(params).then(function (data) { apply(data); return data.value; });
     },
     // How AJAX requests travel just now: "websocket" or "fetch".
-    transport: function () { return socket && socket.readyState === 1 ? "websocket" : "fetch"; }
+    transport: function () { return socket && socket.readyState === 1 ? "websocket" : "fetch"; },
+    // A new password's strength meter: the server's verdict on what was
+    // typed, unless more has been typed since.
+    strength: function (input, verdict) {
+      var box = document.getElementById(input.id + "-strength");
+      if (!box || !verdict || verdict.length !== input.value.length) return;
+      box.hidden = !input.value;
+      box.setAttribute("data-lt-score", verdict.score);
+      box.querySelector("meter").value = verdict.score;
+      box.querySelector(".lt-strength-text").textContent = verdict.text;
+    }
   };
 
   // Sortable lists: drag an item over its siblings; on release, post the
@@ -706,6 +720,198 @@
     });
   });
 
+  // Sliders (input[data-lt-range]): the number beside one follows it.
+  // Colour fields (.lt-color): the picker and the code box follow each other.
+  document.addEventListener("input", function (event) {
+    var el = event.target;
+    var output = el.getAttribute && el.getAttribute("data-lt-range");
+    if (output) {
+      var out = document.getElementById(output);
+      if (out) out.textContent = el.value;
+      return;
+    }
+    var box = el.closest ? el.closest(".lt-color") : null;
+    if (!box) return;
+    var picker = box.querySelector("input[type=color]"), code = box.querySelector(".lt-color-code");
+    if (el === picker) {
+      code.value = picker.value;
+    } else if (el === code) {
+      var v = code.value.trim();
+      if (v && v.charAt(0) !== "#") v = "#" + v;
+      if (/^#[0-9a-f]{3}$/i.test(v)) v = "#" + v[1] + v[1] + v[2] + v[2] + v[3] + v[3];
+      if (/^#[0-9a-f]{6}$/i.test(v)) picker.value = v.toLowerCase();
+    }
+  });
+
+  // Steppers (.lt-stepper): − and + change the number in place.
+  document.addEventListener("click", function (event) {
+    var button = event.target.closest ? event.target.closest(".lt-stepper [data-lt-step]") : null;
+    var input = button && button.parentNode.querySelector("input[type=number]");
+    if (!input) return;
+    event.preventDefault();
+    try {
+      if (+button.getAttribute("data-lt-step") > 0) input.stepUp(); else input.stepDown();
+    } catch (e) { return; }
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+
+  // Transfer lists (.lt-transfer): the buttons, or a double click, move the
+  // selected items across in place, in the choices' order; the hidden field
+  // carries what is chosen.
+  function transferMove(box, toChosen) {
+    var source = box.querySelector(toChosen ? ".lt-transfer-available" : ".lt-transfer-chosen");
+    var target = box.querySelector(toChosen ? ".lt-transfer-chosen" : ".lt-transfer-available");
+    var moving = Array.prototype.filter.call(source.options, function (o) { return o.selected; });
+    moving.forEach(function (o) {
+      o.selected = false;
+      var before = Array.prototype.filter.call(target.options, function (t) { return +t.value > +o.value; })[0];
+      target.insertBefore(o, before || null);
+    });
+    box.querySelector(".lt-transfer-value").value =
+      Array.prototype.map.call(box.querySelector(".lt-transfer-chosen").options, function (o) { return o.value; }).join(",");
+    var status = box.querySelector(".lt-transfer-status");
+    var heading = box.querySelector("label[for='" + target.id + "']");
+    if (status && moving.length && heading)
+      status.textContent = heading.textContent + ": " + moving.map(function (o) { return o.textContent; }).join(", ");
+  }
+  document.addEventListener("click", function (event) {
+    var button = event.target.closest ? event.target.closest(".lt-transfer [data-lt-move]") : null;
+    if (!button) return;
+    event.preventDefault();
+    transferMove(button.closest(".lt-transfer"), button.getAttribute("data-lt-move") === "add");
+  });
+  document.addEventListener("dblclick", function (event) {
+    var option = event.target.closest ? event.target.closest(".lt-transfer option") : null;
+    if (!option) return;
+    Array.prototype.forEach.call(option.parentNode.options, function (o) { o.selected = o === option; });
+    transferMove(option.closest(".lt-transfer"), option.parentNode.classList.contains("lt-transfer-available"));
+  });
+
+  // Tooltips (.lt-tooltip): the tip describes the first thing inside that
+  // takes the focus, or the wrapper, made focusable; Escape hides it until
+  // the pointer or the focus leaves.
+  function setupTooltips() {
+    document.querySelectorAll(".lt-tooltip:not([data-lt-tooltip-ready])").forEach(function (wrap) {
+      var tip = wrap.querySelector(".lt-tooltip-text");
+      if (!tip) return;
+      wrap.setAttribute("data-lt-tooltip-ready", "");
+      var target = wrap.querySelector("a[href], button, input, select, textarea, [tabindex]");
+      if (!target) { target = wrap; wrap.tabIndex = 0; }
+      var ids = (target.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean);
+      if (ids.indexOf(tip.id) < 0) ids.push(tip.id);
+      target.setAttribute("aria-describedby", ids.join(" "));
+    });
+  }
+  document.addEventListener("littoral:updated", setupTooltips);
+  document.addEventListener("keydown", function (event) {
+    if (event.key !== "Escape") return;
+    document.querySelectorAll(".lt-tooltip:hover, .lt-tooltip:focus-within").forEach(function (wrap) {
+      wrap.classList.add("lt-tooltip-dismissed");
+    });
+  });
+  function undismiss(event) {
+    var wrap = event.target.closest ? event.target.closest(".lt-tooltip-dismissed") : null;
+    if (wrap && !wrap.contains(event.relatedTarget)) wrap.classList.remove("lt-tooltip-dismissed");
+  }
+  document.addEventListener("focusout", undismiss);
+  document.addEventListener("mouseout", undismiss);
+
+  // Popovers (.lt-popover): placed below their button (above, when there's
+  // no room below), within the window.
+  document.addEventListener("toggle", function (event) {
+    var pop = event.target;
+    if (!(pop.matches && pop.matches(".lt-popover")) || event.newState !== "open") return;
+    var button = document.querySelector("[popovertarget='" + pop.id + "']");
+    if (!button) return;
+    var r = button.getBoundingClientRect();
+    pop.style.position = "fixed";
+    pop.style.inset = "auto";
+    pop.style.margin = "0";
+    var left = Math.max(8, Math.min(r.left, window.innerWidth - pop.offsetWidth - 8));
+    var top = r.bottom + 6;
+    if (top + pop.offsetHeight > window.innerHeight - 8 && r.top - pop.offsetHeight - 6 >= 8)
+      top = r.top - pop.offsetHeight - 6;
+    pop.style.left = left + "px";
+    pop.style.top = top + "px";
+  }, true);
+
+  // Drawers (.lt-drawer): Escape or a click outside closes one, and the
+  // focus goes back to its button.  (Opening, the close link has autofocus.)
+  function closeDrawer(drawer) {
+    var close = drawer.querySelector(".lt-drawer-close");
+    if (close) close.click();
+  }
+  document.addEventListener("keydown", function (event) {
+    if (event.key !== "Escape" || event.defaultPrevented) return;
+    var drawer = document.querySelector(".lt-drawer");
+    if (!drawer) return;
+    var active = document.activeElement;
+    if (active && active !== document.body && !drawer.parentNode.contains(active)) return;
+    event.preventDefault();
+    closeDrawer(drawer);
+  });
+  document.addEventListener("click", function (event) {
+    document.querySelectorAll(".lt-drawer").forEach(function (drawer) {
+      if (!drawer.contains(event.target) && !drawer.parentNode.contains(event.target)) closeDrawer(drawer);
+      else if (event.target.classList && event.target.classList.contains("lt-drawer-backdrop")) closeDrawer(drawer);
+    });
+  });
+  document.addEventListener("littoral:updated", function (event) {
+    ((event.detail && event.detail.ids) || []).forEach(function (id) {
+      var wrapper = document.getElementById(id);
+      var toggle = wrapper && wrapper.querySelector(":scope > .lt-drawer-toggle");
+      var active = document.activeElement;
+      if (toggle && toggle.getAttribute("aria-expanded") === "false" && (!active || active === document.body))
+        toggle.focus();
+    });
+  });
+
+  // Split panes (.lt-split): drag the divider, or focus it and use the
+  // arrow keys (Shift for bigger steps; Home and End for the limits).  The
+  // new share is posted once the move ends.
+  function splitSet(divider, percent) {
+    var min = +divider.getAttribute("aria-valuemin"), max = +divider.getAttribute("aria-valuemax");
+    var value = Math.round(Math.max(min, Math.min(max, percent)));
+    divider.setAttribute("aria-valuenow", value);
+    divider.setAttribute("aria-valuetext", value + "%");
+    divider.parentNode.style.setProperty("--lt-split", value + "%");
+  }
+  document.addEventListener("pointerdown", function (event) {
+    var divider = event.target.closest ? event.target.closest(".lt-split-divider") : null;
+    if (!divider || event.button !== 0) return;
+    event.preventDefault();
+    divider.focus();
+    var split = divider.parentNode;
+    split.classList.add("lt-split-dragging");
+    try { divider.setPointerCapture(event.pointerId); } catch (e) {}
+    function move(e) {
+      var r = split.getBoundingClientRect();
+      splitSet(divider, 100 * (e.clientX - r.left) / r.width);
+    }
+    function up() {
+      divider.removeEventListener("pointermove", move);
+      divider.removeEventListener("pointerup", up);
+      divider.removeEventListener("pointercancel", up);
+      split.classList.remove("lt-split-dragging");
+      trigger(divider, "data-lt-split", null);
+    }
+    divider.addEventListener("pointermove", move);
+    divider.addEventListener("pointerup", up);
+    divider.addEventListener("pointercancel", up);
+  });
+  document.addEventListener("keydown", function (event) {
+    var divider = event.target.closest ? event.target.closest(".lt-split-divider") : null;
+    if (!divider) return;
+    var now = +divider.getAttribute("aria-valuenow"), step = event.shiftKey ? 10 : 2;
+    var to = { ArrowLeft: now - step, ArrowRight: now + step, Home: -Infinity, End: Infinity }[event.key];
+    if (to === undefined) return;
+    event.preventDefault();
+    splitSet(divider, to);
+    clearTimeout(divider.ltSave);
+    divider.ltSave = setTimeout(function () { trigger(divider, "data-lt-split", null); }, 400);
+  });
+
   var timers = [];
   function scanPeriodicals() {
     timers.forEach(clearInterval);
@@ -740,6 +946,7 @@
   document.addEventListener("DOMContentLoaded", function () {
     setupTags();
     setupPalettes();
+    setupTooltips();
     scanLazy();
     scanPeriodicals();
     listen();

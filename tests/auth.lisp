@@ -157,6 +157,11 @@
           (let ((other (make-instance 'browser)))
             (visit other link)
             (is (has-text-p other "Choose a new password"))
+            ;; Its strength meter counts bob's own name for little.
+            (is (search "id=\"new-password-strength\"" (browser-html other)))
+            (let ((spec (first (ajax-specs other "on-input"))))
+              (is (search "Avoid words from your name or email address."
+                          (ajax-request other (car spec) (cdr spec) :fields '(("_lt_value" . "bob-example-org"))))))
             (fill-in other "new-password" "short")
             (fill-in other "new-password-again" "short")
             (press other "Save and sign in")

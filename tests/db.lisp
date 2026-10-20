@@ -369,3 +369,34 @@ meanwhile; true if the commit went through.  OPTIONS go into the spec."
          (is (equal '((2026 11 6) . (2026 11 8)) (slot-value found 'dates)))
          (is (equal '(nil nil nil) (list (slot-value blank 'tags) (slot-value blank 'meet) (slot-value blank 'dates)))))
     (littoral.db:drop-table 'trip)))
+
+(defclass gathering (littoral.db:persistent)
+  ((days :initarg :days :initform nil)
+   (helpers :initarg :helpers :initform nil)
+   (stars :initarg :stars :initform nil)
+   (colour :initarg :colour :initform nil)
+   (volume :initarg :volume :initform nil)))
+
+(define-description gathering
+  ((days :type :multiple-choice :choices '(:fri :sat :sun))
+   (helpers :type :transfer :choices '("Ada" "Grace" "Alan"))
+   (stars :type :rating)
+   (colour :type :color)
+   (volume :type :range)))
+
+(littoral.db:define-table gathering)
+
+(test multiple-choices-ratings-and-colours-are-stored
+  (connect-test-database)
+  (littoral.db:drop-table 'gathering)
+  (littoral.db:create-table 'gathering)
+  (unwind-protect
+       (let* ((saved (littoral.db:db-save (make-instance 'gathering :days '(:fri :sun) :helpers '("Grace")
+                                                                    :stars 4 :colour "#0e7490" :volume 30)))
+              (found (littoral.db:db-find 'gathering (littoral.db:object-id saved)))
+              (blank (littoral.db:db-find 'gathering (littoral.db:object-id (littoral.db:db-save (make-instance 'gathering))))))
+         (is (equal '((:fri :sun) ("Grace") 4 "#0e7490" 30)
+                    (mapcar (lambda (slot) (slot-value found slot)) '(days helpers stars colour volume))))
+         (is (equal '(nil nil nil nil nil)
+                    (mapcar (lambda (slot) (slot-value blank slot)) '(days helpers stars colour volume)))))
+    (littoral.db:drop-table 'gathering)))
