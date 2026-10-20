@@ -204,13 +204,25 @@ bell on their open pages hears of by server push."
                        (anchor (:callback (lambda () (toggle-active user)))
                          (text (if (littoral.auth:user-active-p user) "Deactivate" "Activate"))))))))))))
 
+(defun describe-members-event (event)
+  "What the activity feed says of this demo's own events; NIL for the rest."
+  (cdr (assoc (littoral.audit:audit-event-action event)
+              '(("user.activated" . "switched on the account of") ("user.deactivated" . "switched off the account of"))
+              :test #'string=)))
+
 (defclass audit-box (littoral.auth:restricted component)
-  ((view :initform (make-instance 'littoral.audit:audit-log-view) :reader audit-box-view))
-  (:documentation "For admins: the audit log."))
+  ((feed :initform (make-instance 'littoral.audit:activity-feed :batch-size 8 :describe #'describe-members-event)
+         :reader audit-box-feed)
+   (view :initform (make-instance 'littoral.audit:audit-log-view) :reader audit-box-view))
+  (:documentation "For admins: what's happened lately, and the audit log."))
 
 (defmethod littoral.auth:required-role ((self audit-box)) :admin)
-(defmethod children ((self audit-box)) (list (audit-box-view self)))
-(defmethod render ((self audit-box)) (render-component (audit-box-view self)))
+(defmethod children ((self audit-box)) (list (audit-box-feed self) (audit-box-view self)))
+(defmethod render ((self audit-box))
+  (h3 () "Recent activity")
+  (render-component (audit-box-feed self))
+  (h3 () "Audit log")
+  (render-component (audit-box-view self)))
 
 (defclass members-root (littoral.auth:auth-root component)
   ((account :initform (make-instance 'account-box) :reader root-account)
@@ -240,7 +252,8 @@ bell on their open pages hears of by server push."
     (li () "Five wrong passwords for a name lock it for a minute.")
     (li () "Forgot a password? Ask for a link for bob@example.org; it arrives in the demo mailbox below, through the outbox.")
     (li () "Or sign in with DemoID, a pretend OAuth provider, as carol. Her account is created on first sign-in.")
-    (li () "As ada, the audit log under Admins shows who signed in, who failed and why, and every change.")))
+    (li () "As ada, Recent activity under Admins shows what's happened as it happens, and the audit log "
+      "who signed in, who failed and why, and every change.")))
 
 (defgeneric page-heading (root)
   (:method ((root members-root)) "Members"))
@@ -266,7 +279,6 @@ bell on their open pages hears of by server push."
   (section ()
     (h2 () "Admins")
     (render-component (root-console self))
-    (h3 () "Audit log")
     (render-component (root-audit self)))
   (render-component (root-mailbox self)))
 

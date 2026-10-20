@@ -5,6 +5,7 @@
 ;;;;                         :details '(:to "ada@example.org"))
 ;;;;   (audit-events :action "sign-in" :limit 20)
 ;;;;   (make-instance 'audit-log-view)          ; a page to look through them
+;;;;   (make-instance 'activity-feed)           ; what's happened lately, as it happens
 ;;;;
 ;;;; Each event is a row in audit_log: when, who (the signed-in user, as
 ;;;; *AUDIT-ACTOR* finds them, unless given), the action, what it was done
@@ -26,7 +27,8 @@ and when, kept in the database.")
            #:audit-event #:audit-event-id #:audit-event-time #:audit-event-actor-id #:audit-event-actor-name
            #:audit-event-action #:audit-event-subject #:audit-event-subject-label #:audit-event-details
            #:audit-event-address
-           #:audit-log-view))
+           #:audit-log-view
+           #:*audit-channel* #:activity-feed #:*activity-phrases* #:activity-phrase))
 
 (in-package #:littoral.audit)
 
@@ -59,6 +61,10 @@ and when, kept in the database.")
   (littoral.db:forget-migrations :littoral-audit))
 
 ;;; Recording
+
+(defvar *audit-channel* (make-channel "audit log")
+  "The channel published when an event is recorded in this process, once
+its transaction commits.  An ACTIVITY-FEED subscribes to it.")
 
 (defvar *audit-actor* (constantly nil)
   "A function of no arguments: the id and name (two values, strings or NIL)
@@ -101,6 +107,7 @@ event is written only where AUDIT-ENABLED-P, and passed to *AUDIT-HOOK*."
                        :details details
                        :address (and littoral:*request* (ignore-errors (littoral::client-address))))))
       (when (audit-enabled-p)
+        (littoral.db:after-commit (lambda () (publish *audit-channel*)))
         (littoral.db:db-execute "INSERT INTO audit_log (at, actor_id, actor_name, action, subject, subject_label, details, address)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
                                 (getf event :time) (getf event :actor-id) (getf event :actor-name) action
@@ -258,3 +265,78 @@ who or what.  Shows everything: put it where only those who may see it can."))
 .lt-audit-table td { vertical-align: top; }
 .lt-audit-time { white-space: nowrap; }
 .lt-audit-log { overflow-x: auto; }")
+
+;;; What's happened lately
+
+(defparameter *activity-phrases*
+  '(("sign-in" . "signed in") ("sign-in.failed" . "failed to sign in as") ("sign-out" . "signed out")
+    ("sign-out.everywhere" . "signed out everywhere") ("session.revoked" . "ended a session of")
+    ("password.changed" . "changed the password of")
+    ("password.reset-requested" . "asked to reset the password of")
+    ("role.granted" . "gave a role to") ("role.revoked" . "took a role from")
+    ("permission.granted" . "gave a permission to") ("permission.revoked" . "took a permission from")
+    ("api-token.created" . "made an API token for") ("api-tokens.revoked" . "revoked the API tokens of")
+    ("recovery-codes.created" . "made recovery codes for")
+    ("second-factor.added" . "added a second factor for") ("second-factor.removed" . "removed a second factor of")
+    ("record.created" . "created") ("record.updated" . "changed") ("record.deleted" . "deleted")
+    ("job.retried" . "retried") ("job.cancelled" . "cancelled") ("job.cancel-requested" . "asked to cancel"))
+  "(ACTION . PHRASE) for the actions Littoral records: what an ACTIVITY-FEED
+says someone did, before what they did it to.  Add an application's own
+actions, or give the feed :DESCRIBE.")
+
+(defun activity-phrase (action)
+  "The phrase *ACTIVITY-PHRASES* has for ACTION, translated, or NIL."
+  (let ((phrase (cdr (assoc action *activity-phrases* :test #'string=))))
+    (and phrase (translate-label phrase))))
+
+(defclass activity-feed (component)
+  ((action :initarg :action :initform nil :reader feed-action
+           :documentation "Only events of this action and those under it, or NIL for all.")
+   (actor :initarg :actor :initform nil :reader feed-actor :documentation "Only this actor's events, by id.")
+   (subject :initarg :subject :initform nil :reader feed-subject :documentation "Only events on this subject.")
+   (describe :initarg :describe :initform nil :reader feed-describe
+             :documentation "A function of an event giving what was done, or NIL to use ACTIVITY-PHRASE.")
+   (list :reader feed-list))
+  (:documentation "What has happened lately, from the audit log: newest
+first, who did what to what and how long ago, a batch at a time with a
+button for older events.  Events recorded in this process appear on open
+pages as they happen.  :ACTION, :ACTOR and :SUBJECT narrow it as for
+AUDIT-EVENTS, and :BATCH-SIZE is how many it shows at once (20).  Each
+event is described by :DESCRIBE, a function of an event, or else by
+ACTIVITY-PHRASE, or failing both by its action.  Shows whatever it's
+given: put it where those who see it may know these things."))
+
+(defmethod initialize-instance :after ((self activity-feed) &key (batch-size 20))
+  (setf (slot-value self 'list)
+        (make-instance 'load-more-list
+                       :batch-size batch-size :subscriptions (list *audit-channel*)
+                       :label "Older activity" :list-label "Recent activity"
+                       :fetch (lambda (start count)
+                                (audit-events :action (feed-action self) :actor (feed-actor self)
+                                              :subject (feed-subject self) :limit count :offset start))
+                       :render-item (lambda (event) (render-activity self event)))))
+
+(defmethod children ((self activity-feed)) (list (feed-list self)))
+
+(defun render-activity (feed event)
+  "Write what FEED says of EVENT: who, what they did, to what, and when."
+  (let ((what (or (and (feed-describe feed) (funcall (feed-describe feed) event))
+                  (activity-phrase (audit-event-action event))))
+        (who (or (audit-event-actor-name event) (audit-event-actor-id event)))
+        (subject (or (audit-event-subject-label event) (audit-event-subject event))))
+    (div (:class "lt-activity-item")
+      (strong (:class "lt-activity-actor") (text (or who (translate "Someone"))))
+      (text " ")
+      (if what
+          (text what)
+          (code () (text (audit-event-action event))))
+      ;; Signing in names the user, who is the actor already.
+      (when (and subject (not (equal subject who)))
+        (text " ")
+        (span (:class "lt-activity-subject") (text subject)))
+      (text " ")
+      (time-ago (audit-event-time event) :class "lt-activity-time"))))
+
+(defmethod render ((self activity-feed))
+  (div (:class "lt-activity")
+    (render-component (feed-list self))))

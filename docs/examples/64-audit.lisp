@@ -129,3 +129,33 @@
                    (not (null (search "Zoë invoice.sent Invoice 42" (body-text b))))))))
     (littoral.audit:drop-audit-tables)))
 ;; ⇒ (T T)
+
+;;;; Example: littoral.audit:activity-feed littoral.audit:*audit-channel*
+;;; What's happened lately, newest first, a batch at a time with a button for older events: who did what to what, and how long ago.  Events recorded in this process reach open pages as they happen, through `*audit-channel*`.  `:action`, `:actor` and `:subject` narrow it, and `:describe` says what was done in your own words.
+(defclass recent-page (component)
+  ((feed :reader feed :initform (make-instance 'littoral.audit:activity-feed :batch-size 2))))
+(defmethod children ((self recent-page)) (list (feed self)))
+(defmethod render ((self recent-page)) (render-component (feed self)))
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.audit:create-audit-tables)
+  (unwind-protect
+       (progn
+         (littoral.audit:audit "record.created" :subject-label "Invoice 42" :actor-id "1" :actor-name "Ada")
+         (littoral.audit:audit "record.updated" :subject-label "Invoice 42" :actor-id "2" :actor-name "Grace")
+         (littoral.audit:audit "invoice.sent" :subject-label "Invoice 42" :actor-id "1" :actor-name "Ada")
+         (with-fresh-applications (("/recent" 'recent-page :mode :deployment))
+           (let ((b (make-instance 'browser)))
+             (visit b "/recent")
+             (list (body-text b)
+                   (typep littoral.audit:*audit-channel* 'channel)))))
+    (littoral.audit:drop-audit-tables)))
+;; ⇒ ("Ada invoice.sent Invoice 42 just now Grace changed Invoice 42 just now Older activity Showing 2." T)
+
+;;;; Example: littoral.audit:activity-phrase littoral.audit:*activity-phrases*
+;;; The words an activity feed uses for an action, translated; `*activity-phrases*` holds them for the actions Littoral records, and an application can add its own.
+(let ((littoral.audit:*activity-phrases* (acons "invoice.sent" "sent" littoral.audit:*activity-phrases*)))
+  (list (littoral.audit:activity-phrase "invoice.sent")
+        (littoral.audit:activity-phrase "sign-in")
+        (let ((littoral::*language* "es")) (littoral.audit:activity-phrase "sign-in"))
+        (littoral.audit:activity-phrase "something.else")))
+;; ⇒ ("sent" "signed in" "ha iniciado sesión" NIL)

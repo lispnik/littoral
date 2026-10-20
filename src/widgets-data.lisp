@@ -26,6 +26,8 @@
           :documentation "The position of the first item of the batch the button loaded last, which can take the focus.")
    (move-focus :initform nil :accessor load-more-move-focus-p
                :documentation "True when that item takes the focus as the page arrives: after the button, not scrolling.")
+   (subscriptions :initarg :subscriptions :initform '() :reader load-more-subscriptions
+                  :documentation "Channels whose PUBLISH draws the list again, as its items change.")
    (body :reader load-more-body)
    (status :reader load-more-status))
   (:documentation "A long list shown a batch at a time, with a Load more
@@ -35,7 +37,8 @@ stays for keyboards and for pages without JavaScript.  :ITEMS is a list, or
 a function returning one, called on every render; or :FETCH, a function of
 a start and a count, returns just the items wanted, for a database to page
 through (it is asked for one more than it shows, to tell whether there are
-more).  :BATCH-SIZE is 20 by default.  :RENDER-ITEM, a function of an item,
+more).  :SUBSCRIPTIONS, channels, draw it again on open pages when they are
+published, as when its items change.  :BATCH-SIZE is 20 by default.  :RENDER-ITEM, a function of an item,
 writes each one inside its li (as text by default).  How many are shown is
 kept on the server, so the page comes back as it was left.  After the
 button loads a batch, the focus moves to the first new item, and a status
@@ -63,6 +66,7 @@ line says how many are shown."))
         (slot-value self 'status) (make-instance 'load-more-status :owner self)))
 
 (defmethod states ((self load-more-list)) (list self))
+(defmethod subscriptions ((self load-more-part)) (load-more-subscriptions (part-owner self)))
 (defmethod children ((self load-more-list)) (list (load-more-body self) (load-more-status self)))
 
 (defun load-more-window (list)

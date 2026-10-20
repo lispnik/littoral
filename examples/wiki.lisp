@@ -38,9 +38,13 @@
   "The names of every page, alphabetically."
   (sort (sb-thread:with-mutex (*wiki-lock*) (alexandria:hash-table-keys *wiki*)) #'string-lessp))
 
+(defvar *wiki-comments* (make-instance 'memory-comment-store)
+  "The comments on the wiki's pages.")
+
 (defun reset-wiki ()
-  "Start the wiki over with its welcome pages."
+  "Start the wiki over with its welcome pages, and no comments."
   (sb-thread:with-mutex (*wiki-lock*) (clrhash *wiki*))
+  (setf *wiki-comments* (make-instance 'memory-comment-store))
   (save-page "FrontPage"
              (format nil "= Welcome~%~%This wiki is a littoral example. Every page has its own URL, ~
 so you can bookmark [[Littoral]] or [[Sandbox]].~%~%- Click *Edit* to change a page.~%~
@@ -173,7 +177,8 @@ so you can bookmark [[Littoral]] or [[Sandbox]].~%~%- Click *Edit* to change a p
    (query :initform "" :accessor wiki-query)
    (results :initform nil :accessor wiki-results)
    (trail :initform '() :accessor wiki-trail :documentation "Pages visited, newest first.")
-   (readers :reader wiki-readers :documentation "Who else has this page open."))
+   (readers :reader wiki-readers :documentation "Who else has this page open.")
+   (comments :reader wiki-comments :documentation "The comments on the page shown."))
   (:documentation "The wiki: one page at a time, with search, editing and history."))
 
 (defun page-presence (name)
@@ -182,9 +187,12 @@ so you can bookmark [[Littoral]] or [[Sandbox]].~%~%- Click *Edit* to change a p
 
 (defmethod initialize-instance :after ((self wiki) &key)
   (setf (slot-value self 'readers)
-        (make-instance 'presence-list :presence (lambda () (page-presence (wiki-page self))))))
+        (make-instance 'presence-list :presence (lambda () (page-presence (wiki-page self))))
+        (slot-value self 'comments)
+        (make-instance 'live-comment-thread :thread (lambda () (format nil "wiki:~A" (wiki-page self)))
+                                       :store (lambda () *wiki-comments*) :ask-name t :markdown t)))
 
-(defmethod children ((self wiki)) (list (wiki-readers self)))
+(defmethod children ((self wiki)) (list (wiki-readers self) (wiki-comments self)))
 
 ;; Someone editing a page is still on it, and says so.
 (defmethod presences ((self wiki-editor)) (list (page-presence (editor-page self))))
@@ -270,6 +278,7 @@ so you can bookmark [[Littoral]] or [[Sandbox]].~%~%- Click *Edit* to change a p
           (let ((page page))
             (anchor (:callback (lambda () (visit-page self page))) (text page))
             (text " ")))))
+    (render-component (wiki-comments self))
     (when (wiki-trail self)
       (p (:class "wiki-trail") "Recently: "
         (loop for page in (subseq (wiki-trail self) 0 (min 5 (length (wiki-trail self))))

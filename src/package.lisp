@@ -108,6 +108,13 @@
    #:add-filter-condition #:remove-filter-condition #:clear-filter-conditions #:data-grid-filter
    #:pie-chart #:stacked-bar-chart #:scatter-chart
    #:event-calendar #:event-calendar-view #:event-calendar-date
+   ;; Times ago and comment threads
+   #:time-ago #:time-ago-text
+   #:live-comment-thread #:thread-comment #:thread-comment-id #:thread-comment-thread #:thread-comment-author
+   #:thread-comment-body #:thread-comment-time #:thread-comment-origin
+   #:thread-comments #:add-thread-comment #:delete-thread-comment #:comment-thread-channel
+   #:*comment-store* #:memory-comment-store
+   #:store-thread-comments #:store-add-comment #:store-delete-comment #:call-after-store-change
    ;; JSON endpoints
    #:define-endpoint #:register-endpoint #:endpoint-error #:endpoint-body #:*endpoint-authenticator*
    ;; Health, metrics, request logs

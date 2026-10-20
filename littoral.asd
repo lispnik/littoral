@@ -53,6 +53,7 @@
                              (:file "widgets-data")
                              (:file "widgets-charts")
                              (:file "widgets-schedule")
+                             (:file "widgets-live")
                              (:file "wizard")
                              (:file "session")
                              (:file "application")
@@ -153,6 +154,7 @@
                #:littoral/jobs
                #:littoral/audit
                #:littoral/notifications
+               #:littoral/comments
                #:littoral/parenscript-demo
                #:littoral/websocket
                #:littoral/generator
@@ -210,12 +212,14 @@
                              (:file "widgets-inputs")
                              (:file "widgets-layout")
                              (:file "widgets-data")
+                             (:file "widgets-live")
                              (:file "notifications")
                              (:file "wizard")
                              (:file "second-factor")
                              (:file "mail")
                              (:file "durable-jobs")
                              (:file "audit")
+                             (:file "comments")
                              (:file "migrations"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
@@ -230,7 +234,7 @@
 (asdf:defsystem #:littoral/docs
   :description "Writes docs/API.md from the docstrings: make docs."
   :depends-on (#:littoral #:littoral/test #:littoral/browser-test #:littoral/mail #:littoral/jobs #:littoral/audit
-               #:littoral/auth #:littoral/admin #:littoral/db #:littoral/storage #:littoral/oauth #:littoral/notifications
+               #:littoral/auth #:littoral/admin #:littoral/db #:littoral/storage #:littoral/oauth #:littoral/notifications #:littoral/comments
                #:littoral/websocket #:littoral/parenscript #:littoral/woo #:littoral/generator
                #:littoral/doc-examples #:sb-introspect)
   :components ((:module "tools" :components ((:file "api-docs")))))
@@ -323,6 +327,13 @@
   :license "MIT"
   :depends-on (#:littoral #:littoral/db)
   :components ((:module "src" :serial t :components ((:file "durable-jobs") (:file "durable-job-view")))))
+
+(asdf:defsystem #:littoral/comments
+  :description "Comment threads kept in the database."
+  :author "Matthew Kennedy"
+  :license "MIT"
+  :depends-on (#:littoral #:littoral/db)
+  :components ((:module "src" :components ((:file "comments")))))
 
 (asdf:defsystem #:littoral/notifications
   :description "Notifications for users, kept until read, with a bell that counts them as they arrive."

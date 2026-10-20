@@ -6836,7 +6836,8 @@ stays for keyboards and for pages without JavaScript.  `:items` is a list, or
 a function returning one, called on every render; or `:fetch`, a function of
 a start and a count, returns just the items wanted, for a database to page
 through (it is asked for one more than it shows, to tell whether there are
-more).  `:batch-size` is 20 by default.  `:render-item`, a function of an item,
+more).  `:subscriptions`, channels, draw it again on open pages when they are
+published, as when its items change.  `:batch-size` is 20 by default.  `:render-item`, a function of an item,
 writes each one inside its li (as text by default).  How many are shown is
 kept on the server, so the page comes back as it was left.  After the
 button loads a batch, the focus moves to the first new item, and a status
@@ -7349,6 +7350,411 @@ Reads the date of an event-calendar.  The day shown, or a day of the week shown,
             (event-calendar-date (calendar page))
             (cl-ppcre:scan-to-strings "Dentist Wed, [^,]*, 2026, [0-9:–]+" (body-text b))))))
 ;; ⇒ ((2026 10 21 9 30) :WEEK (2026 10 19) "Dentist Wed, October 21, 2026, 09:30–10:00")
+```
+
+### Times ago and comment threads
+
+#### `time-ago` `time &key class` — function
+
+Write `time`, a universal time, as a time element saying how long ago it
+was (see `time-ago-text`), with the date and time as its title.
+littoral.js keeps the words up to date while the page is open, in the
+page's language.  `class` is added to its classes.
+
+*Example:* Writes a time element saying how long ago the time was, with the date and time as its title.  littoral.js keeps the words up to date while the page stays open, so "just now" becomes "5 minutes ago".
+
+```lisp
+(let ((time (- (get-universal-time) 120)))
+  (cl-ppcre:regex-replace-all " (datetime|title|data-lt-date)=\"[^\"]*\"" (with-canvas-to-string () (time-ago time)) ""))
+;; ⇒ "<time class=\"lt-relative-time\" data-lt-relative data-lt-now=\"just now\">2 minutes ago</time>"
+```
+
+#### `time-ago-text` `time &optional (now (get-universal-time))` — function
+
+How long before `now` `time` was, both universal times, for people: "just
+now", "3 minutes ago", "2 hours ago", "4 days ago", and after a week
+the date.
+
+*Example:* How long ago a time was, in words, in the current language: under a minute is just now, then minutes, hours and days, and after a week the date.
+
+```lisp
+(let ((now (encode-universal-time 0 0 12 19 10 2026)))
+  (list (time-ago-text (- now 20) now)
+        (time-ago-text (- now 600) now)
+        (time-ago-text (- now (* 5 3600)) now)
+        (time-ago-text (- now (* 3 86400)) now)
+        (time-ago-text (- now (* 30 86400)) now)
+        (let ((littoral::*language* "de")) (time-ago-text (- now 600) now))))
+;; ⇒ ("just now" "10 minutes ago" "5 hours ago" "3 days ago" "September 19, 2026" "vor 10 Minuten")
+```
+
+#### `live-comment-thread` — class
+
+The comments on something, such as a wiki page or an
+order, and a box for adding one.  `:thread` names it with a string (or a
+function returning one).  A comment posted appears at once on every page
+showing the thread, and is announced to screen readers there; while someone
+has written something not yet posted, the others see that they're writing.
+Comments are kept in `:store` (`*comment-store*`, in memory, unless given; see
+littoral/comments for a database), or a function returning one.  They are
+posted under the name `:author` (a function) gives, by default `presence-name`,
+or as a guest; `:ask-name` T asks for a name, which becomes the poster's
+`presence-name`.
+`:markdown` T writes them as Markdown.  `:can-delete`, a function of a
+comment, says who may delete which.  Posting goes over AJAX, or is an
+ordinary form without JavaScript.
+
+*Example:* The comments on something, with a box for adding one.  `:thread` names it.  A comment posted shows at once on every page showing the thread (by server push), and is announced to screen readers there; while someone has written a comment but not posted it, the others see that they're writing.  `:author` names who posts; by default it's their `presence-name`, or with `:ask-name t` a name they give.
+
+```lisp
+(defclass order-page (component)
+  ((comments :reader comments
+             :initform (make-instance 'live-comment-thread :thread "order:7" :author (constantly "Ada")))))
+(defmethod children ((self order-page)) (list (comments self)))
+(defmethod render ((self order-page)) (render-component (comments self)))
+(let ((*comment-store* (make-instance 'memory-comment-store)))
+  (with-fresh-applications (("/order" 'order-page :mode :deployment))
+    (let ((b (make-instance 'browser)))
+      (visit b "/order")
+      (fill-in b (cl-ppcre:register-groups-bind (id) ("<textarea[^>]* id=\"([^\"]+)\"" (browser-html b)) id)
+               "Shipped today.")
+      (press b "Post")
+      (list (body-text b)
+            (mapcar (lambda (c) (list (thread-comment-author c) (thread-comment-body c)))
+                    (thread-comments "order:7"))))))
+;; ⇒ ("Comments 1 comment Ada just now Shipped today. Add a comment Post Posting as Ada" (("Ada" "Shipped today.")))
+```
+
+#### `thread-comment` — class
+
+A comment in a thread.
+
+*Example:* A store of your own implements these generics, returning `thread-comment` objects; `call-after-store-change` says when its change is final, such as after a database commit (littoral/comments has one for littoral.db).
+
+```lisp
+(defclass list-store () ((comments :initform '() :accessor stored)))
+(defmethod store-thread-comments ((store list-store) thread)
+  (reverse (remove thread (stored store) :key #'thread-comment-thread :test-not #'equal)))
+(defmethod store-add-comment ((store list-store) thread author body time origin)
+  (let ((comment (make-instance 'thread-comment :id (length (stored store)) :thread thread :author author
+                                                :body body :time time :origin origin)))
+    (push comment (stored store))
+    comment))
+(defmethod store-delete-comment ((store list-store) thread id)
+  (setf (stored store) (remove id (stored store) :key #'thread-comment-id)))
+(let ((store (make-instance 'list-store)))
+  (add-thread-comment "x" "Alan" "Hello" :store store)
+  (mapcar #'thread-comment-body (thread-comments "x" :store store)))
+;; ⇒ ("Hello")
+```
+
+#### `thread-comment-id` `object` — generic function
+
+Reads the id of a thread-comment.  Its store's id for it.
+
+*Example:* Comments can be added and removed from code too, as from a job, and pages showing the thread hear of it.  A `memory-comment-store` keeps them in this process; `*comment-store*` is the one threads use unless given another.
+
+```lisp
+(let ((store (make-instance 'memory-comment-store)))
+  (let ((first (add-thread-comment "doc:1" "Ada" "One" :store store :origin "job")))
+    (add-thread-comment "doc:1" "Grace" "Two" :store store)
+    (delete-thread-comment "doc:1" (thread-comment-id first) :store store)
+    (list (thread-comment-thread first) (thread-comment-origin first) (integerp (thread-comment-time first))
+          (mapcar #'thread-comment-body (thread-comments "doc:1" :store store)))))
+;; ⇒ ("doc:1" "job" T ("Two"))
+```
+
+#### `thread-comment-thread` `object` — generic function
+
+Reads the thread of a thread-comment.  The thread it is in.
+
+*Example:* Comments can be added and removed from code too, as from a job, and pages showing the thread hear of it.  A `memory-comment-store` keeps them in this process; `*comment-store*` is the one threads use unless given another.
+
+```lisp
+(let ((store (make-instance 'memory-comment-store)))
+  (let ((first (add-thread-comment "doc:1" "Ada" "One" :store store :origin "job")))
+    (add-thread-comment "doc:1" "Grace" "Two" :store store)
+    (delete-thread-comment "doc:1" (thread-comment-id first) :store store)
+    (list (thread-comment-thread first) (thread-comment-origin first) (integerp (thread-comment-time first))
+          (mapcar #'thread-comment-body (thread-comments "doc:1" :store store)))))
+;; ⇒ ("doc:1" "job" T ("Two"))
+```
+
+#### `thread-comment-author` `object` — generic function
+
+Reads the author of a thread-comment.  Who wrote it, named for people.
+
+*Example:* The comments on something, with a box for adding one.  `:thread` names it.  A comment posted shows at once on every page showing the thread (by server push), and is announced to screen readers there; while someone has written a comment but not posted it, the others see that they're writing.  `:author` names who posts; by default it's their `presence-name`, or with `:ask-name t` a name they give.
+
+```lisp
+(defclass order-page (component)
+  ((comments :reader comments
+             :initform (make-instance 'live-comment-thread :thread "order:7" :author (constantly "Ada")))))
+(defmethod children ((self order-page)) (list (comments self)))
+(defmethod render ((self order-page)) (render-component (comments self)))
+(let ((*comment-store* (make-instance 'memory-comment-store)))
+  (with-fresh-applications (("/order" 'order-page :mode :deployment))
+    (let ((b (make-instance 'browser)))
+      (visit b "/order")
+      (fill-in b (cl-ppcre:register-groups-bind (id) ("<textarea[^>]* id=\"([^\"]+)\"" (browser-html b)) id)
+               "Shipped today.")
+      (press b "Post")
+      (list (body-text b)
+            (mapcar (lambda (c) (list (thread-comment-author c) (thread-comment-body c)))
+                    (thread-comments "order:7"))))))
+;; ⇒ ("Comments 1 comment Ada just now Shipped today. Add a comment Post Posting as Ada" (("Ada" "Shipped today.")))
+```
+
+#### `thread-comment-body` `object` — generic function
+
+Reads the body of a thread-comment.  What it says.
+
+*Example:* The comments on something, with a box for adding one.  `:thread` names it.  A comment posted shows at once on every page showing the thread (by server push), and is announced to screen readers there; while someone has written a comment but not posted it, the others see that they're writing.  `:author` names who posts; by default it's their `presence-name`, or with `:ask-name t` a name they give.
+
+```lisp
+(defclass order-page (component)
+  ((comments :reader comments
+             :initform (make-instance 'live-comment-thread :thread "order:7" :author (constantly "Ada")))))
+(defmethod children ((self order-page)) (list (comments self)))
+(defmethod render ((self order-page)) (render-component (comments self)))
+(let ((*comment-store* (make-instance 'memory-comment-store)))
+  (with-fresh-applications (("/order" 'order-page :mode :deployment))
+    (let ((b (make-instance 'browser)))
+      (visit b "/order")
+      (fill-in b (cl-ppcre:register-groups-bind (id) ("<textarea[^>]* id=\"([^\"]+)\"" (browser-html b)) id)
+               "Shipped today.")
+      (press b "Post")
+      (list (body-text b)
+            (mapcar (lambda (c) (list (thread-comment-author c) (thread-comment-body c)))
+                    (thread-comments "order:7"))))))
+;; ⇒ ("Comments 1 comment Ada just now Shipped today. Add a comment Post Posting as Ada" (("Ada" "Shipped today.")))
+```
+
+#### `thread-comment-time` `object` — generic function
+
+Reads the time of a thread-comment.  When it was posted, a universal time.
+
+*Example:* Comments can be added and removed from code too, as from a job, and pages showing the thread hear of it.  A `memory-comment-store` keeps them in this process; `*comment-store*` is the one threads use unless given another.
+
+```lisp
+(let ((store (make-instance 'memory-comment-store)))
+  (let ((first (add-thread-comment "doc:1" "Ada" "One" :store store :origin "job")))
+    (add-thread-comment "doc:1" "Grace" "Two" :store store)
+    (delete-thread-comment "doc:1" (thread-comment-id first) :store store)
+    (list (thread-comment-thread first) (thread-comment-origin first) (integerp (thread-comment-time first))
+          (mapcar #'thread-comment-body (thread-comments "doc:1" :store store)))))
+;; ⇒ ("doc:1" "job" T ("Two"))
+```
+
+#### `thread-comment-origin` `object` — generic function
+
+Reads the origin of a thread-comment.  The session key of whoever posted it, or `nil`.
+
+*Example:* Comments can be added and removed from code too, as from a job, and pages showing the thread hear of it.  A `memory-comment-store` keeps them in this process; `*comment-store*` is the one threads use unless given another.
+
+```lisp
+(let ((store (make-instance 'memory-comment-store)))
+  (let ((first (add-thread-comment "doc:1" "Ada" "One" :store store :origin "job")))
+    (add-thread-comment "doc:1" "Grace" "Two" :store store)
+    (delete-thread-comment "doc:1" (thread-comment-id first) :store store)
+    (list (thread-comment-thread first) (thread-comment-origin first) (integerp (thread-comment-time first))
+          (mapcar #'thread-comment-body (thread-comments "doc:1" :store store)))))
+;; ⇒ ("doc:1" "job" T ("Two"))
+```
+
+#### `thread-comments` `thread &key (store *comment-store*)` — function
+
+`thread`'s comments, oldest first.
+
+*Example:* The comments on something, with a box for adding one.  `:thread` names it.  A comment posted shows at once on every page showing the thread (by server push), and is announced to screen readers there; while someone has written a comment but not posted it, the others see that they're writing.  `:author` names who posts; by default it's their `presence-name`, or with `:ask-name t` a name they give.
+
+```lisp
+(defclass order-page (component)
+  ((comments :reader comments
+             :initform (make-instance 'live-comment-thread :thread "order:7" :author (constantly "Ada")))))
+(defmethod children ((self order-page)) (list (comments self)))
+(defmethod render ((self order-page)) (render-component (comments self)))
+(let ((*comment-store* (make-instance 'memory-comment-store)))
+  (with-fresh-applications (("/order" 'order-page :mode :deployment))
+    (let ((b (make-instance 'browser)))
+      (visit b "/order")
+      (fill-in b (cl-ppcre:register-groups-bind (id) ("<textarea[^>]* id=\"([^\"]+)\"" (browser-html b)) id)
+               "Shipped today.")
+      (press b "Post")
+      (list (body-text b)
+            (mapcar (lambda (c) (list (thread-comment-author c) (thread-comment-body c)))
+                    (thread-comments "order:7"))))))
+;; ⇒ ("Comments 1 comment Ada just now Shipped today. Add a comment Post Posting as Ada" (("Ada" "Shipped today.")))
+```
+
+#### `add-thread-comment` `thread author body &key (store *comment-store*) origin` — function
+
+Add a comment saying `body` by `author` (a name) to `thread`, in `store`, and
+return it.  Every page showing the thread shows it at once.  `origin` is the
+session key of whoever posted it, so their own pages don't announce it to
+them; by default the current session's.
+
+*Example:* Comments can be added and removed from code too, as from a job, and pages showing the thread hear of it.  A `memory-comment-store` keeps them in this process; `*comment-store*` is the one threads use unless given another.
+
+```lisp
+(let ((store (make-instance 'memory-comment-store)))
+  (let ((first (add-thread-comment "doc:1" "Ada" "One" :store store :origin "job")))
+    (add-thread-comment "doc:1" "Grace" "Two" :store store)
+    (delete-thread-comment "doc:1" (thread-comment-id first) :store store)
+    (list (thread-comment-thread first) (thread-comment-origin first) (integerp (thread-comment-time first))
+          (mapcar #'thread-comment-body (thread-comments "doc:1" :store store)))))
+;; ⇒ ("doc:1" "job" T ("Two"))
+```
+
+#### `delete-thread-comment` `thread id &key (store *comment-store*)` — function
+
+Remove the comment with `id` from `thread`, in `store`.
+
+*Example:* Comments can be added and removed from code too, as from a job, and pages showing the thread hear of it.  A `memory-comment-store` keeps them in this process; `*comment-store*` is the one threads use unless given another.
+
+```lisp
+(let ((store (make-instance 'memory-comment-store)))
+  (let ((first (add-thread-comment "doc:1" "Ada" "One" :store store :origin "job")))
+    (add-thread-comment "doc:1" "Grace" "Two" :store store)
+    (delete-thread-comment "doc:1" (thread-comment-id first) :store store)
+    (list (thread-comment-thread first) (thread-comment-origin first) (integerp (thread-comment-time first))
+          (mapcar #'thread-comment-body (thread-comments "doc:1" :store store)))))
+;; ⇒ ("doc:1" "job" T ("Two"))
+```
+
+#### `comment-thread-channel` `thread` — function
+
+The channel published when `thread`'s comments change in this process.
+
+*Example:* Each thread has a channel, published when its comments change; a component of your own can subscribe to it, to show a count, say.
+
+```lisp
+(list (eq (comment-thread-channel "doc:1") (comment-thread-channel "doc:1"))
+      (typep *comment-store* 'memory-comment-store))
+;; ⇒ (T T)
+```
+
+#### `*comment-store*` — variable
+
+Where comments are kept unless a thread names another store: a
+`memory-comment-store`, or littoral/comments' `database-comment-store`.
+
+*Example:* Each thread has a channel, published when its comments change; a component of your own can subscribe to it, to show a count, say.
+
+```lisp
+(list (eq (comment-thread-channel "doc:1") (comment-thread-channel "doc:1"))
+      (typep *comment-store* 'memory-comment-store))
+;; ⇒ (T T)
+```
+
+#### `memory-comment-store` — class
+
+Comments kept in this process, until it ends.  The
+littoral/comments system keeps them in a database instead.
+
+*Example:* Comments can be added and removed from code too, as from a job, and pages showing the thread hear of it.  A `memory-comment-store` keeps them in this process; `*comment-store*` is the one threads use unless given another.
+
+```lisp
+(let ((store (make-instance 'memory-comment-store)))
+  (let ((first (add-thread-comment "doc:1" "Ada" "One" :store store :origin "job")))
+    (add-thread-comment "doc:1" "Grace" "Two" :store store)
+    (delete-thread-comment "doc:1" (thread-comment-id first) :store store)
+    (list (thread-comment-thread first) (thread-comment-origin first) (integerp (thread-comment-time first))
+          (mapcar #'thread-comment-body (thread-comments "doc:1" :store store)))))
+;; ⇒ ("doc:1" "job" T ("Two"))
+```
+
+#### `store-thread-comments` `store thread` — generic function
+
+The comments in `thread` (a string) that `store` keeps, oldest first.
+
+*Example:* A store of your own implements these generics, returning `thread-comment` objects; `call-after-store-change` says when its change is final, such as after a database commit (littoral/comments has one for littoral.db).
+
+```lisp
+(defclass list-store () ((comments :initform '() :accessor stored)))
+(defmethod store-thread-comments ((store list-store) thread)
+  (reverse (remove thread (stored store) :key #'thread-comment-thread :test-not #'equal)))
+(defmethod store-add-comment ((store list-store) thread author body time origin)
+  (let ((comment (make-instance 'thread-comment :id (length (stored store)) :thread thread :author author
+                                                :body body :time time :origin origin)))
+    (push comment (stored store))
+    comment))
+(defmethod store-delete-comment ((store list-store) thread id)
+  (setf (stored store) (remove id (stored store) :key #'thread-comment-id)))
+(let ((store (make-instance 'list-store)))
+  (add-thread-comment "x" "Alan" "Hello" :store store)
+  (mapcar #'thread-comment-body (thread-comments "x" :store store)))
+;; ⇒ ("Hello")
+```
+
+#### `store-add-comment` `store thread author body time origin` — generic function
+
+Keep a new comment in `thread` in `store` and return it as a `thread-comment`.
+
+*Example:* A store of your own implements these generics, returning `thread-comment` objects; `call-after-store-change` says when its change is final, such as after a database commit (littoral/comments has one for littoral.db).
+
+```lisp
+(defclass list-store () ((comments :initform '() :accessor stored)))
+(defmethod store-thread-comments ((store list-store) thread)
+  (reverse (remove thread (stored store) :key #'thread-comment-thread :test-not #'equal)))
+(defmethod store-add-comment ((store list-store) thread author body time origin)
+  (let ((comment (make-instance 'thread-comment :id (length (stored store)) :thread thread :author author
+                                                :body body :time time :origin origin)))
+    (push comment (stored store))
+    comment))
+(defmethod store-delete-comment ((store list-store) thread id)
+  (setf (stored store) (remove id (stored store) :key #'thread-comment-id)))
+(let ((store (make-instance 'list-store)))
+  (add-thread-comment "x" "Alan" "Hello" :store store)
+  (mapcar #'thread-comment-body (thread-comments "x" :store store)))
+;; ⇒ ("Hello")
+```
+
+#### `store-delete-comment` `store thread id` — generic function
+
+Forget the comment in `thread` with `id`, if `store` has it.
+
+*Example:* A store of your own implements these generics, returning `thread-comment` objects; `call-after-store-change` says when its change is final, such as after a database commit (littoral/comments has one for littoral.db).
+
+```lisp
+(defclass list-store () ((comments :initform '() :accessor stored)))
+(defmethod store-thread-comments ((store list-store) thread)
+  (reverse (remove thread (stored store) :key #'thread-comment-thread :test-not #'equal)))
+(defmethod store-add-comment ((store list-store) thread author body time origin)
+  (let ((comment (make-instance 'thread-comment :id (length (stored store)) :thread thread :author author
+                                                :body body :time time :origin origin)))
+    (push comment (stored store))
+    comment))
+(defmethod store-delete-comment ((store list-store) thread id)
+  (setf (stored store) (remove id (stored store) :key #'thread-comment-id)))
+(let ((store (make-instance 'list-store)))
+  (add-thread-comment "x" "Alan" "Hello" :store store)
+  (mapcar #'thread-comment-body (thread-comments "x" :store store)))
+;; ⇒ ("Hello")
+```
+
+#### `call-after-store-change` `store function` — generic function
+
+Call `function` once `store`'s change is final: at once, or for
+a database, once its transaction commits.
+
+*Example:* A store of your own implements these generics, returning `thread-comment` objects; `call-after-store-change` says when its change is final, such as after a database commit (littoral/comments has one for littoral.db).
+
+```lisp
+(defclass list-store () ((comments :initform '() :accessor stored)))
+(defmethod store-thread-comments ((store list-store) thread)
+  (reverse (remove thread (stored store) :key #'thread-comment-thread :test-not #'equal)))
+(defmethod store-add-comment ((store list-store) thread author body time origin)
+  (let ((comment (make-instance 'thread-comment :id (length (stored store)) :thread thread :author author
+                                                :body body :time time :origin origin)))
+    (push comment (stored store))
+    comment))
+(defmethod store-delete-comment ((store list-store) thread id)
+  (setf (stored store) (remove id (stored store) :key #'thread-comment-id)))
+(let ((store (make-instance 'list-store)))
+  (add-thread-comment "x" "Alan" "Hello" :store store)
+  (mapcar #'thread-comment-body (thread-comments "x" :store store)))
+;; ⇒ ("Hello")
 ```
 
 ### JSON endpoints
@@ -16319,6 +16725,100 @@ who or what.  Shows everything: put it where only those who may see it can.
 ;; ⇒ (T T)
 ```
 
+#### `*audit-channel*` — variable
+
+The channel published when an event is recorded in this process, once
+its transaction commits.  An `activity-feed` subscribes to it.
+
+*Example:* What's happened lately, newest first, a batch at a time with a button for older events: who did what to what, and how long ago.  Events recorded in this process reach open pages as they happen, through `*audit-channel*`.  `:action`, `:actor` and `:subject` narrow it, and `:describe` says what was done in your own words.
+
+```lisp
+(defclass recent-page (component)
+  ((feed :reader feed :initform (make-instance 'littoral.audit:activity-feed :batch-size 2))))
+(defmethod children ((self recent-page)) (list (feed self)))
+(defmethod render ((self recent-page)) (render-component (feed self)))
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.audit:create-audit-tables)
+  (unwind-protect
+       (progn
+         (littoral.audit:audit "record.created" :subject-label "Invoice 42" :actor-id "1" :actor-name "Ada")
+         (littoral.audit:audit "record.updated" :subject-label "Invoice 42" :actor-id "2" :actor-name "Grace")
+         (littoral.audit:audit "invoice.sent" :subject-label "Invoice 42" :actor-id "1" :actor-name "Ada")
+         (with-fresh-applications (("/recent" 'recent-page :mode :deployment))
+           (let ((b (make-instance 'browser)))
+             (visit b "/recent")
+             (list (body-text b)
+                   (typep littoral.audit:*audit-channel* 'channel)))))
+    (littoral.audit:drop-audit-tables)))
+;; ⇒ ("Ada invoice.sent Invoice 42 just now Grace changed Invoice 42 just now Older activity Showing 2." T)
+```
+
+#### `activity-feed` — class
+
+What has happened lately, from the audit log: newest
+first, who did what to what and how long ago, a batch at a time with a
+button for older events.  Events recorded in this process appear on open
+pages as they happen.  `:action`, `:actor` and `:subject` narrow it as for
+`audit-events`, and `:batch-size` is how many it shows at once (20).  Each
+event is described by `:describe`, a function of an event, or else by
+`activity-phrase`, or failing both by its action.  Shows whatever it's
+given: put it where those who see it may know these things.
+
+*Example:* What's happened lately, newest first, a batch at a time with a button for older events: who did what to what, and how long ago.  Events recorded in this process reach open pages as they happen, through `*audit-channel*`.  `:action`, `:actor` and `:subject` narrow it, and `:describe` says what was done in your own words.
+
+```lisp
+(defclass recent-page (component)
+  ((feed :reader feed :initform (make-instance 'littoral.audit:activity-feed :batch-size 2))))
+(defmethod children ((self recent-page)) (list (feed self)))
+(defmethod render ((self recent-page)) (render-component (feed self)))
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.audit:create-audit-tables)
+  (unwind-protect
+       (progn
+         (littoral.audit:audit "record.created" :subject-label "Invoice 42" :actor-id "1" :actor-name "Ada")
+         (littoral.audit:audit "record.updated" :subject-label "Invoice 42" :actor-id "2" :actor-name "Grace")
+         (littoral.audit:audit "invoice.sent" :subject-label "Invoice 42" :actor-id "1" :actor-name "Ada")
+         (with-fresh-applications (("/recent" 'recent-page :mode :deployment))
+           (let ((b (make-instance 'browser)))
+             (visit b "/recent")
+             (list (body-text b)
+                   (typep littoral.audit:*audit-channel* 'channel)))))
+    (littoral.audit:drop-audit-tables)))
+;; ⇒ ("Ada invoice.sent Invoice 42 just now Grace changed Invoice 42 just now Older activity Showing 2." T)
+```
+
+#### `*activity-phrases*` — variable
+
+(`action` . `phrase`) for the actions Littoral records: what an `activity-feed`
+says someone did, before what they did it to.  Add an application's own
+actions, or give the feed `:describe`.
+
+*Example:* The words an activity feed uses for an action, translated; `*activity-phrases*` holds them for the actions Littoral records, and an application can add its own.
+
+```lisp
+(let ((littoral.audit:*activity-phrases* (acons "invoice.sent" "sent" littoral.audit:*activity-phrases*)))
+  (list (littoral.audit:activity-phrase "invoice.sent")
+        (littoral.audit:activity-phrase "sign-in")
+        (let ((littoral::*language* "es")) (littoral.audit:activity-phrase "sign-in"))
+        (littoral.audit:activity-phrase "something.else")))
+;; ⇒ ("sent" "signed in" "ha iniciado sesión" NIL)
+```
+
+#### `activity-phrase` `action` — function
+
+The phrase `*activity-phrases*` has for `action`, translated, or `nil`.
+
+*Example:* The words an activity feed uses for an action, translated; `*activity-phrases*` holds them for the actions Littoral records, and an application can add its own.
+
+```lisp
+(let ((littoral.audit:*activity-phrases* (acons "invoice.sent" "sent" littoral.audit:*activity-phrases*)))
+  (list (littoral.audit:activity-phrase "invoice.sent")
+        (littoral.audit:activity-phrase "sign-in")
+        (let ((littoral::*language* "es")) (littoral.audit:activity-phrase "sign-in"))
+        (littoral.audit:activity-phrase "something.else")))
+;; ⇒ ("sent" "signed in" "ha iniciado sesión" NIL)
+```
+
 ## Package `littoral.notifications`
 
 Load it with `(asdf:load-system :littoral/notifications)`.  Notifications for
@@ -16704,6 +17204,72 @@ elsewhere.
           (visit b (browser-url b))
           (list before (body-text b)))))))
 ;; ⇒ ("Notifications 1 1 unread Notifications Mark all as read Unread: Your order has shipped. just now" "Notifications 0 unread Notifications Your order has shipped. just now")
+```
+
+## Package `littoral.comments`
+
+Load it with `(asdf:load-system :littoral/comments)`.  Comment threads kept in the
+database, for LIVE-COMMENT-THREAD.
+
+### General
+
+#### `create-comment-tables` — function
+
+Create or bring up to date the comments table (migrations
+`:littoral-comments`) in the current database.
+
+*Example:* Comments kept in the comments table, which `create-comment-tables` makes.  Give a thread `:store` this, or make it `*comment-store*`.  Pages showing a thread hear of a change once its transaction commits.
+
+```lisp
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.comments:create-comment-tables)
+  (unwind-protect
+       (let ((store (make-instance 'littoral.comments:database-comment-store)))
+         (add-thread-comment "invoice:42" "Ada" "Sent today." :store store)
+         (add-thread-comment "invoice:42" "Grace" "Paid." :store store)
+         (mapcar (lambda (c) (format nil "~A: ~A" (thread-comment-author c) (thread-comment-body c)))
+                 (thread-comments "invoice:42" :store store)))
+    (littoral.comments:drop-comment-tables)))
+;; ⇒ ("Ada: Sent today." "Grace: Paid.")
+```
+
+#### `drop-comment-tables` — function
+
+Drop the comments table.
+
+*Example:* Comments kept in the comments table, which `create-comment-tables` makes.  Give a thread `:store` this, or make it `*comment-store*`.  Pages showing a thread hear of a change once its transaction commits.
+
+```lisp
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.comments:create-comment-tables)
+  (unwind-protect
+       (let ((store (make-instance 'littoral.comments:database-comment-store)))
+         (add-thread-comment "invoice:42" "Ada" "Sent today." :store store)
+         (add-thread-comment "invoice:42" "Grace" "Paid." :store store)
+         (mapcar (lambda (c) (format nil "~A: ~A" (thread-comment-author c) (thread-comment-body c)))
+                 (thread-comments "invoice:42" :store store)))
+    (littoral.comments:drop-comment-tables)))
+;; ⇒ ("Ada: Sent today." "Grace: Paid.")
+```
+
+#### `database-comment-store` — class
+
+Comments kept in the comments table of the current
+database (`littoral.db:*database*`), which `create-comment-tables` makes.
+
+*Example:* Comments kept in the comments table, which `create-comment-tables` makes.  Give a thread `:store` this, or make it `*comment-store*`.  Pages showing a thread hear of a change once its transaction commits.
+
+```lisp
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.comments:create-comment-tables)
+  (unwind-protect
+       (let ((store (make-instance 'littoral.comments:database-comment-store)))
+         (add-thread-comment "invoice:42" "Ada" "Sent today." :store store)
+         (add-thread-comment "invoice:42" "Grace" "Paid." :store store)
+         (mapcar (lambda (c) (format nil "~A: ~A" (thread-comment-author c) (thread-comment-body c)))
+                 (thread-comments "invoice:42" :store store)))
+    (littoral.comments:drop-comment-tables)))
+;; ⇒ ("Ada: Sent today." "Grace: Paid.")
 ```
 
 ## Package `littoral.auth`

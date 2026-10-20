@@ -167,6 +167,7 @@ documentation, and the functions, macros and classes that lack examples."
                        ("littoral.jobs" "src/durable-jobs.lisp")
                        ("littoral.audit" "src/audit.lisp")
                        ("littoral.notifications" "src/notifications.lisp")
+                       ("littoral.comments" "src/comments.lisp")
                        ("littoral.auth" "src/auth.lisp")
                        ("littoral.admin" "src/admin.lisp")
                        ("littoral.db" "src/db.lisp")

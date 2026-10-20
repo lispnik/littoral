@@ -193,7 +193,8 @@
         var holder = document.createElement("div");
         holder.innerHTML = data.fragments[id];
         var replacement = holder.firstElementChild;
-        if (replacement) {
+        // Unchanged, it's left alone: rewriting it would announce it again.
+        if (replacement && old.innerHTML !== replacement.innerHTML) {
           old.innerHTML = replacement.innerHTML;
           old.className = replacement.className;
         }
@@ -1033,6 +1034,33 @@
     }
   }, true);
 
+  // Relative times (time[data-lt-relative]): "3 minutes ago", kept up to
+  // date in the page's language.  Under a minute it's the server's "just
+  // now"; after a week, the date it gave.
+  var relativeFormat;
+  function relativeText(el) {
+    var seconds = Math.max(0, (Date.now() - Date.parse(el.getAttribute("datetime"))) / 1000);
+    if (isNaN(seconds)) return null;
+    if (seconds < 60) return el.getAttribute("data-lt-now");
+    if (seconds >= 7 * 86400) return el.getAttribute("data-lt-date");
+    if (relativeFormat === undefined) {
+      try { relativeFormat = new Intl.RelativeTimeFormat(document.documentElement.lang || undefined, { numeric: "always" }); }
+      catch (e) { relativeFormat = null; }
+    }
+    if (!relativeFormat) return null;
+    if (seconds < 3600) return relativeFormat.format(-Math.floor(seconds / 60), "minute");
+    if (seconds < 86400) return relativeFormat.format(-Math.floor(seconds / 3600), "hour");
+    return relativeFormat.format(-Math.floor(seconds / 86400), "day");
+  }
+  function updateRelativeTimes() {
+    document.querySelectorAll("time[data-lt-relative]").forEach(function (el) {
+      var words = relativeText(el);
+      if (words && el.textContent !== words) el.textContent = words;
+    });
+  }
+  setInterval(updateRelativeTimes, 30000);
+  document.addEventListener("littoral:updated", updateRelativeTimes);
+
   var timers = [];
   function scanPeriodicals() {
     timers.forEach(clearInterval);
@@ -1069,6 +1097,7 @@
     setupPalettes();
     setupTooltips();
     setupVirtual();
+    updateRelativeTimes();
     scanLazy();
     scanPeriodicals();
     listen();

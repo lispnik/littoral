@@ -389,6 +389,22 @@ A presence is a place pages can be in, such as one wiki page, and `find-presence
 
 The chat lists who's in the room by nickname, and each wiki page shows who's reading it and who's editing it.
 
+#### Comment threads
+
+A `live-comment-thread` shows the comments on something, such as a wiki page or an order, and a box for adding one:
+
+```lisp
+(make-instance 'live-comment-thread :thread (lambda () (format nil "wiki:~A" (page-name self)))
+                                    :markdown t :ask-name t)
+```
+
+- **Live.** A comment posted shows at once on every page showing the thread, by server push, and is announced to screen readers there (not to the person who posted it). While someone has written a comment but not posted it, the others see "Ada is writing a comment…", from presence.
+- **Who posts.** Comments go under the name `:author` (a function) gives, by default the poster's `presence-name`, or "A guest". `:ask-name t` asks for a name, which becomes their presence name too.
+- **Where they're kept.** `*comment-store*` is a `memory-comment-store`, kept until the process ends. `littoral/comments` has `database-comment-store`, a `comments` table that `create-comment-tables` makes; there, pages hear of a comment once its transaction commits. A store of your own implements `store-thread-comments`, `store-add-comment` and `store-delete-comment`.
+- **From code.** `add-thread-comment` and `delete-thread-comment` change a thread as a job might, and `thread-comments` reads it. `:can-delete`, a function of a comment, offers Delete on the ones it allows.
+
+The comments use `time-ago`, which writes a time as "3 minutes ago" and has littoral.js keep the words up to date in the page's language while it stays open. The notification bell and the activity feed use it too. Each wiki page has a comment thread.
+
 ### Files people upload
 
 `littoral/storage` keeps uploads on disk or in S3, and gives descriptions file fields:
@@ -865,7 +881,9 @@ Applications record their own events:
 - **Without the table.** Events are recorded only where `create-audit-tables` (or `create-auth-tables`) has run in the process, so an application without the table works as before. `*audit-hook*` sees every event either way, if you also want to send them to a log.
 - **Looking through it.** `audit-events` filters by action (`"sign-in"` also matches `"sign-in.failed"`), actor, subject, text and time. The admin gets an "Audit log" page, and `audit-log-view` is a component you can put on an admins-only page of your own. `purge-audit-log` deletes old events, by default those more than a year old (`:older-than` takes seconds). Nothing calls it for you, except the nightly job of generated apps.
 
-The members demo shows the log to ada, under Admins.
+An `activity-feed` shows what's happened lately, from the log: who did what to what, and how long ago, newest first, a batch at a time with a button for older events. Events recorded in this process reach open pages as they happen, through `*audit-channel*`, published once their transaction commits. `:action`, `:actor` and `:subject` narrow it. The words come from `*activity-phrases*` (signed in, created, changed and so on, translated), or from `:describe`, a function of an event. Like `audit-log-view`, it shows whatever it's given, so put it where those who see it may know these things.
+
+The members demo shows ada the recent activity and the log, under Admins.
 
 ### Notifications
 

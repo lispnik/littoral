@@ -518,6 +518,33 @@ try {
   check("push did not reload", await evaluate("window.__chat") === 1);
   await other.close();
 
+  // Comments: another reader sees someone writing, then the comment, by
+  // push, announced to screen readers; times ago keep up.
+  await go("/examples/wiki");
+  await evaluate("window.__comments = 1");
+  const reader = await openTab();
+  await reader.go("/examples/wiki");
+  await reader.evaluate("window.__comments = 1");
+  await sleep(500);                                    // let both streams settle
+  await evaluate(`(() => { const t = document.querySelector(".lt-comment-composer textarea"); t.focus();
+    t.value = "Hello from Chrome"; t.dispatchEvent(new Event("input", { bubbles: true })); })()`);
+  const readerSees = async (expr) => { for (let i = 0; i < 100; i++) { try { if (await reader.evaluate(expr)) return true; } catch {} await sleep(100); } return false; };
+  check("another reader sees someone writing a comment", await readerSees(`document.querySelector(".lt-comment-writing").textContent.includes("is writing a comment")`));
+  await evaluate(`(() => { document.querySelector(".lt-comment-name input").value = "Ada";
+    [...document.querySelectorAll(".lt-comment-composer button")].find(b => b.textContent === "Post").click(); })()`);
+  check("and then the comment, by push", await readerSees(`[...document.querySelectorAll(".lt-comment")].some(c =>
+    c.innerText.includes("Ada") && c.innerText.includes("Hello from Chrome"))`));
+  check("announced to screen readers", await reader.evaluate(`document.querySelector(".lt-comments [role=status]").textContent`) === "Ada commented: Hello from Chrome");
+  check("no one's writing any more", await readerSees(`!document.querySelector(".lt-comment-writing").textContent.trim()`));
+  check("without a reload", await reader.evaluate("window.__comments") === 1 && await evaluate("window.__comments") === 1);
+  check("the box is emptied, keeping the focus", await waitFor(`document.activeElement.tagName === "TEXTAREA" && document.activeElement.value === ""`));
+  await reader.close();
+  await evaluate(`(() => { const t = document.querySelector(".lt-comment time");
+    t.setAttribute("datetime", new Date(Date.now() - 5 * 60000).toISOString());
+    document.dispatchEvent(new CustomEvent("littoral:updated", { detail: { ids: [] } })); })()`);
+  check("times ago keep up", await evaluate(`document.querySelector(".lt-comment time").textContent`) === "5 minutes ago",
+        await evaluate(`document.querySelector(".lt-comment time").textContent`));
+
   // A background job reports progress through notify.
   await go("/examples/progress");
   await evaluate(`document.querySelector("button").click()`);
