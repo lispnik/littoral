@@ -69,7 +69,7 @@
 (defmethod render ((self inbox-page))
   (render-component (bell self))
   (unless (littoral.auth:current-user)
-    (anchor (:callback (lambda () (show self (make-instance 'littoral.auth:sign-in)))) "Sign in")))
+    (h:anchor (:callback (lambda () (show self (make-instance 'littoral.auth:sign-in)))) "Sign in")))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
       (littoral.auth:*pbkdf2-iterations* 1000))
   (littoral.auth:create-auth-tables)

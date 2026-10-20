@@ -5,7 +5,7 @@
 ;;;;   (define-mail welcome-mail (user)
 ;;;;     :to (user-email user)
 ;;;;     :subject (format nil "Welcome, ~A" (user-name user))
-;;;;     :html ((p () "We're glad you're here.")))
+;;;;     :html ((h:p () "We're glad you're here.")))
 ;;;;   (queue-mail (welcome-mail user))      ; sent by the outbox, retried until it goes
 ;;;;
 ;;;; A mail is MAKE-MAIL's object; MAIL-STRING writes it as MIME, through the

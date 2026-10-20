@@ -29,8 +29,8 @@
 (defmethod render ((self oauth-club))
   (let ((user (littoral.auth:current-user)))
     (if user
-        (p () (text (format nil "Hello, ~A." (littoral.auth:user-name user))))
-        (anchor (:callback (lambda () (show self (make-instance 'littoral.auth:sign-in)))) "Sign in"))))
+        (h:p () (h:text (format nil "Hello, ~A." (littoral.auth:user-name user))))
+        (h:anchor (:callback (lambda () (show self (make-instance 'littoral.auth:sign-in)))) "Sign in"))))
 (littoral.oauth:define-oauth-provider :fakeid
   :label "FakeID"
   :authorize-url "https://id.example/authorize"

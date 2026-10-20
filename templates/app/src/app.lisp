@@ -17,12 +17,12 @@ sign-in form shows in its place."))
 
 (defmethod render ((self account-box))
   (let ((user (littoral.auth:current-user)))
-    (p (:class "account")
+    (h:p (:class "account")
       (if user
-          (progn (text "Signed in as ") (strong () (text (littoral.auth:user-name user)))
-                 (text " · ")
+          (progn (h:text "Signed in as ") (h:strong () (h:text (littoral.auth:user-name user)))
+                 (h:text " · ")
                  (littoral.auth:sign-out-link))
-          (anchor (:callback (lambda () (show self (make-instance 'littoral.auth:sign-in))))
+          (h:anchor (:callback (lambda () (show self (make-instance 'littoral.auth:sign-in))))
             "Sign in")))))
 
 ;;; The notes
@@ -42,9 +42,9 @@ signs in."))
                                         (list (column "" nil :sortable nil
                                                       :render (lambda (note value)
                                                                 (declare (ignore value))
-                                                                (anchor (:callback (lambda () (edit-note self note))) "edit")
-                                                                (text " ")
-                                                                (anchor (:callback (lambda () (remove-note self note))) "remove"))))))))
+                                                                (h:anchor (:callback (lambda () (edit-note self note))) "edit")
+                                                                (h:text " ")
+                                                                (h:anchor (:callback (lambda () (remove-note self note))) "remove"))))))))
 
 (defmethod children ((self notes-page))
   (list (notes-report self)))
@@ -73,10 +73,10 @@ signs in."))
                        (toast "Note removed.")))))
 
 (defmethod render ((self notes-page))
-  (p () (anchor (:callback (lambda () (add-note self))) "Add a note"))
+  (h:p () (h:anchor (:callback (lambda () (add-note self))) "Add a note"))
   (if (my-notes)
       (render-component (notes-report self))
-      (p (:class "empty") "No notes yet.")))
+      (h:p (:class "empty") "No notes yet.")))
 
 ;;; The page
 
@@ -90,8 +90,8 @@ reset links and brings back sign-ins kept from before a restart."))
   (list (root-account self) (root-notes self)))
 
 (defmethod render ((self app-root))
-  (header (:class "top")
-    (h1 () "{{title}}")
+  (h:header (:class "top")
+    (h:h1 () "{{title}}")
     (render-component (root-account self)))
   (render-component (root-notes self)))
 

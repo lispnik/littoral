@@ -31,7 +31,8 @@ A littoral application is a tree of **components**. A component is a CLOS object
 
 ```lisp
 (defpackage #:reading-list
-  (:use #:cl #:littoral #:littoral.html)
+  (:use #:cl #:littoral)
+  (:local-nicknames (#:h #:littoral.html))
   (:export #:reading-list #:hello #:counter #:register)
   (:documentation "The application the Littoral tutorial builds."))
 
@@ -41,10 +42,10 @@ A littoral application is a tree of **components**. A component is a CLOS object
   (:documentation "The smallest application."))
 
 (defmethod render ((self hello))
-  (h1 () "Hello, world"))
+  (h:h1 () "Hello, world"))
 ```
 
-`littoral.html` holds the tags (`h1`, `div`, `p` and the rest) and `littoral` holds everything else; a package normally uses both. `in-package` makes `reading-list` the REPL's current package, so the code in the next steps goes into it too. A tag's first argument is its attributes, written as a plist like `(:class "intro")`. You can leave it out, or write `()`. A literal string in a tag's body is written as escaped text.
+`littoral.html` holds the tags (`h1`, `div`, `p` and every other HTML element) and `littoral` holds everything else. The package uses `littoral` and gives `littoral.html` the nickname `h`, so tags are written `h:h1`, `h:div` and `h:p`: element names such as `time`, `map` and `label` would otherwise clash with CL's and your own. `in-package` makes `reading-list` the REPL's current package, so the code in the next steps goes into it too. A tag's first argument is its attributes, written as a plist like `(:class "intro")`. You can leave it out, or write `()`. A literal string in a tag's body is written as escaped text.
 
 To serve the component, register it at a path and start the server:
 
@@ -68,13 +69,13 @@ Links don't point at URLs you design. They carry closures, called **callbacks**:
   (list self))
 
 (defmethod render ((self counter))
-  (h1 () (text (count-of self)))
-  (anchor (:callback (lambda () (incf (count-of self)))) "++")
-  (text " ")
-  (anchor (:callback (lambda () (decf (count-of self)))) "--"))
+  (h:h1 () (h:text (count-of self)))
+  (h:anchor (:callback (lambda () (incf (count-of self)))) "++")
+  (h:text " ")
+  (h:anchor (:callback (lambda () (decf (count-of self)))) "--"))
 ```
 
-`(anchor (:callback …) "++")` writes a link. Clicking it runs the closure, which changes this visitor's own counter, and then the page is drawn again. Use `text` to write a value that isn't a literal string; it escapes the value too.
+`(h:anchor (:callback …) "++")` writes a link. Clicking it runs the closure, which changes this visitor's own counter, and then the page is drawn again. Use `h:text` to write a value that isn't a literal string; it escapes the value too.
 
 The server is already running, so registering the counter is enough:
 
@@ -129,16 +130,16 @@ Forms work the same way as links. A field's `:callback` receives what was typed,
 ```lisp
 ;; The first version; step 10 replaces it.
 (defmethod render ((self reading-list))
-  (h1 () "Reading list")
-  (ul (:class "books")
+  (h:h1 () "Reading list")
+  (h:ul (:class "books")
     (dolist (book (books self))
-      (li ()
-        (strong () (text (book-title book)))
-        (when (book-author book) (text (format nil " by ~A" (book-author book)))))))
-  (form ()
-    (text-input (:id "new-title" :value (new-title self) :placeholder "Add a title" :label "Title to add"
+      (h:li ()
+        (h:strong () (h:text (book-title book)))
+        (when (book-author book) (h:text (format nil " by ~A" (book-author book)))))))
+  (h:form ()
+    (h:text-input (:id "new-title" :value (new-title self) :placeholder "Add a title" :label "Title to add"
                  :callback (lambda (v) (setf (new-title self) v))))
-    (submit-button (:callback (lambda () (add-quickly self))) "Add")))
+    (h:submit-button (:callback (lambda () (add-quickly self))) "Add")))
 ```
 
 `:label` gives the field an accessible name, for screen readers, where there's no visible label. Register the list and open <http://127.0.0.1:8080/tutorial/reading-list>:
@@ -168,17 +169,17 @@ Each book on the finished list is drawn by a component of its own, a `book-row`:
 (defmethod render ((self book-row))
   (let ((book (row-book self)))
     ;; Step 8: ticking the box updates this row in place.
-    (checkbox (:value (book-finished-p book)
+    (h:checkbox (:value (book-finished-p book)
                :label (format nil "Finished ~A" (book-title book))
                :callback (lambda (finished) (setf (book-finished-p book) finished))
                :on-change (ajax :callback (lambda () (book-changed book)) :update self)))
-    (text " ")
-    (strong () (text (book-title book)))
-    (when (book-author book) (text (format nil " by ~A" (book-author book))))
-    (text " ")
-    (anchor (:callback (lambda () (edit-book (row-list self) book))) "edit")
-    (text " ")
-    (anchor (:callback (lambda () (remove-book (row-list self) book))) "remove")))
+    (h:text " ")
+    (h:strong () (h:text (book-title book)))
+    (when (book-author book) (h:text (format nil " by ~A" (book-author book))))
+    (h:text " ")
+    (h:anchor (:callback (lambda () (edit-book (row-list self) book))) "edit")
+    (h:text " ")
+    (h:anchor (:callback (lambda () (remove-book (row-list self) book))) "remove")))
 ```
 
 The row's checkbox and its two links call `book-changed`, `edit-book` and `remove-book`, which steps 9, 6 and 5 write.
@@ -203,10 +204,10 @@ The rows are drawn by a `shelf`, the part of the page that lists the books. `row
 (defmethod render ((self shelf))
   (let ((books (matching-books (shelf-list self))))
     (if books
-        (ul (:class "books")
+        (h:ul (:class "books")
           (dolist (book books)
             (render-component (row-for (shelf-list self) book))))
-        (p () (em () "Nothing matches.")))))
+        (h:p () (h:em () "Nothing matches.")))))
 ```
 
 A parent draws a child with `render-component`. It must not call the child's `render` directly. The parent also lists its children in a `children` method, so that littoral can find them for backtracking, AJAX and the development tools. `matching-books` (step 8) gives the books that match the search box, which is all of them until you search.
@@ -285,7 +286,7 @@ Under the hood, `define-flow` rewrites the body in continuation-passing style, s
 
 Two parts of the finished page update without reloading it. The checkbox on each row updates just that row (see step 4). `book-row` mixes in **`updatable`**, and its checkbox has an `:on-change (ajax …)` that runs a callback and re-renders the row.
 
-The search box filters the list as you type. In step 10, the list draws it as a `text-input` with `:on-input (ajax-update (shelf self))`. On each keystroke, the field's callback stores the query, and the shelf is drawn again and swapped into the page. The shelf draws only the books that match:
+The search box filters the list as you type. In step 10, the list draws it as an `h:text-input` with `:on-input (ajax-update (shelf self))`. On each keystroke, the field's callback stores the query, and the shelf is drawn again and swapped into the page. The shelf draws only the books that match:
 
 ```lisp
 (defun matching-books (list)
@@ -326,8 +327,8 @@ When anyone finishes a book, every open reading list should hear about it straig
 
 (defmethod render ((self recently-finished))
   (when *recently-finished*
-    (p (:class "recent") "Recently finished by readers here: "
-      (text (format nil "~{~A~^; ~}" *recently-finished*)))))
+    (h:p (:class "recent") "Recently finished by readers here: "
+      (h:text (format nil "~{~A~^; ~}" *recently-finished*)))))
 ```
 
 Pages showing a subscriber open a server-sent event stream. After `publish`, littoral renders the subscribers on each of those pages and swaps them in. Note that `*recently-finished*` is shared by every session and kept out of backtracking: going back shows an older list, never an older history of what people read.
@@ -361,18 +362,18 @@ The `states` method from step 3 still applies. The list's children are the recen
   (list (ticker self) (shelf self)))
 
 (defmethod render ((self reading-list))
-  (h1 () "Reading list")
+  (h:h1 () "Reading list")
   (render-component (ticker self))
-  (p (:class "search")
-    (text-input (:id "query" :value (query self) :placeholder "Search" :label "Search"
+  (h:p (:class "search")
+    (h:text-input (:id "query" :value (query self) :placeholder "Search" :label "Search"
                  :callback (lambda (v) (setf (query self) v))
                  :on-input (ajax-update (shelf self)))))
   (render-component (shelf self))
-  (form ()
-    (text-input (:id "new-title" :value (new-title self) :placeholder "Add a title" :label "Title to add"
+  (h:form ()
+    (h:text-input (:id "new-title" :value (new-title self) :placeholder "Add a title" :label "Title to add"
                  :callback (lambda (v) (setf (new-title self) v))))
-    (submit-button (:callback (lambda () (add-quickly self))) "Add"))
-  (p () (anchor (:callback (lambda () (add-with-questions self))) "Add a book, step by step")))
+    (h:submit-button (:callback (lambda () (add-quickly self))) "Add"))
+  (h:p () (h:anchor (:callback (lambda () (add-with-questions self))) "Add a book, step by step")))
 
 (defmethod style ((self reading-list))
   ".books { list-style: none; padding: 0; } .books li { margin: .3rem 0; }
@@ -494,7 +495,8 @@ The stored list is a new application, in a package of its own:
 
 ```lisp
 (defpackage #:my-books
-  (:use #:cl #:littoral #:littoral.html)
+  (:use #:cl #:littoral)
+  (:local-nicknames (#:h #:littoral.html))
   (:export #:my-books #:open-database #:register)
   (:documentation "The tutorial's reading list, kept in a database, one list per reader."))
 
@@ -582,26 +584,26 @@ The text a reader sees goes through `translate`, ready for step 15. Until there 
 
 ```lisp
 (defmethod render ((self my-books))
-  (h1 () (translate "My books"))
+  (h:h1 () (translate "My books"))
   (let ((books (shelf-books)))
     (if books
-        (ul (:class "books")
+        (h:ul (:class "books")
           (dolist (book books)
-            (li ()
-              (strong () (text (book-title book)))
+            (h:li ()
+              (h:strong () (h:text (book-title book)))
               (when (book-author book)
-                (text " ")
-                (text (translate "by ~A" (book-author book))))
-              (text " ")
-              (anchor (:callback (lambda () (edit-stored-book self book))) (translate "edit"))
-              (text " ")
-              (anchor (:callback (lambda () (remove-stored-book self book))) (translate "remove")))))
-        (p () (em () (translate "No books yet.")))))
-  (form ()
-    (text-input (:id "new-title" :value (new-title self)
+                (h:text " ")
+                (h:text (translate "by ~A" (book-author book))))
+              (h:text " ")
+              (h:anchor (:callback (lambda () (edit-stored-book self book))) (translate "edit"))
+              (h:text " ")
+              (h:anchor (:callback (lambda () (remove-stored-book self book))) (translate "remove")))))
+        (h:p () (h:em () (translate "No books yet.")))))
+  (h:form ()
+    (h:text-input (:id "new-title" :value (new-title self)
                  :placeholder (translate "Add a title") :label (translate "Title to add")
                  :callback (lambda (v) (setf (new-title self) v))))
-    (submit-button (:callback (lambda () (add-stored-book self))) (translate "Add"))))
+    (h:submit-button (:callback (lambda () (add-stored-book self))) (translate "Add"))))
 ```
 
 ```lisp
@@ -671,9 +673,9 @@ The page should say who is signed in, with a link to sign out. A `:before` metho
 
 ```lisp
 (defmethod render :before ((self my-books))
-  (p (:class "who")
-    (text (translate "Signed in as ~A." (littoral.auth:user-name (littoral.auth:current-user))))
-    (text " ")
+  (h:p (:class "who")
+    (h:text (translate "Signed in as ~A." (littoral.auth:user-name (littoral.auth:current-user))))
+    (h:text " ")
     (littoral.auth:sign-out-link)))
 ```
 

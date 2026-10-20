@@ -40,25 +40,25 @@
 
 (defmethod render ((self api-demo))
   (let ((base (url-for "/examples/api")))
-    (h1 () "JSON endpoints")
-    (p () "This application answers JSON at " (code () (text (format nil "~A/notes" base)))
+    (h:h1 () "JSON endpoints")
+    (h:p () "This application answers JSON at " (h:code () (h:text (format nil "~A/notes" base)))
       " as well as serving this page. The endpoints share the application's database and "
       "sign-in, but not its sessions: they suit mobile apps, scripts and webhooks.")
-    (pre (:class "api-code" :tabindex "0")
-      (text (format nil "(define-endpoint \"/examples/api\" :post \"/notes\" ()
+    (h:pre (:class "api-code" :tabindex "0")
+      (h:text (format nil "(define-endpoint \"/examples/api\" :post \"/notes\" ()
   (let ((text (gethash \"text\" (endpoint-body))))
     (values (create-note text) 201)))
 
 curl ~A/notes
 curl -X POST -H 'Content-Type: application/json' -d '{\"text\":\"hi\"}' ~A/notes" base base)))
-    (h2 () "Try it")
-    (div (:class "api-form")
-      (label (:for "api-text") "Note")
+    (h:h2 () "Try it")
+    (h:div (:class "api-form")
+      (h:label (:for "api-text") "Note")
       (littoral::emit-tag "input" (list :id "api-text" :type "text" :value "Hello from the browser") nil)
-      (littoral::emit-tag "button" (list :type "button" :id "api-post") (lambda () (text "POST /notes")))
-      (littoral::emit-tag "button" (list :type "button" :id "api-get") (lambda () (text "GET /notes"))))
-    (p (:role "status") (strong () "Response: ") (code (:id "api-status") "—"))
-    (pre (:id "api-output" :class "api-code" :tabindex "0") "Press a button.")))
+      (littoral::emit-tag "button" (list :type "button" :id "api-post") (lambda () (h:text "POST /notes")))
+      (littoral::emit-tag "button" (list :type "button" :id "api-get") (lambda () (h:text "GET /notes"))))
+    (h:p (:role "status") (h:strong () "Response: ") (h:code (:id "api-status") "—"))
+    (h:pre (:id "api-output" :class "api-code" :tabindex "0") "Press a button.")))
 
 (defmethod script ((self api-demo))
   ;; Plain fetch calls: this script carries the page's nonce.

@@ -95,12 +95,12 @@
   (:documentation "Saves two projects per click; the second save can fail."))
 
 (defmethod render ((self project-maker))
-  (p () (text (format nil "~D projects" (littoral.db:db-count 'project))))
-  (anchor (:callback (lambda ()
+  (h:p () (h:text (format nil "~D projects" (littoral.db:db-count 'project))))
+  (h:anchor (:callback (lambda ()
                        (littoral.db:db-save (make-instance 'project :name "one"))
                        (littoral.db:db-save (make-instance 'project :name "two"))))
     "make two")
-  (anchor (:callback (lambda ()
+  (h:anchor (:callback (lambda ()
                        (littoral.db:db-save (make-instance 'project :name "one"))
                        (error "Something went wrong after the first save")))
     "make two badly"))
@@ -126,9 +126,9 @@
 
 (defmethod render ((self project-editor-page))
   (let ((project (littoral.db:db-find 'project (page-project-id self))))
-    (when (page-message self) (p (:class "message") (text (page-message self))))
-    (p () "Project: " (text (slot-value project 'name)))
-    (anchor (:callback
+    (when (page-message self) (h:p (:class "message") (h:text (page-message self))))
+    (h:p () "Project: " (h:text (slot-value project 'name)))
+    (h:anchor (:callback
              (lambda ()
                (show self (make-editor (littoral.db:db-find 'project (page-project-id self)))
                      :on-answer (lambda (edited)

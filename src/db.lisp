@@ -24,7 +24,8 @@
 ;;;; reserved words such as USER and ORDER for tables and columns.
 
 (defpackage #:littoral.db
-  (:use #:cl #:littoral #:littoral.html)
+  (:use #:cl #:littoral)
+  (:local-nicknames (#:h #:littoral.html))
   (:documentation "Load with `(asdf:load-system :littoral/db)` and a cl-dbi driver, such as
 `:dbd-sqlite3` or `:dbd-postgres`.  Keeps described objects in a SQL database
 (SQLite or PostgreSQL): tables, queries, full-text search, transactions,
@@ -530,12 +531,12 @@ TEXT that start with one of QUERY's words."
                      (when (some (lambda (w) (and (<= (length w) (- end i))
                                                   (string-equal w text :start2 i :end2 (+ i (length w)))))
                                  words)
-                       (write-string (html-escape (subseq text start i)) out)
-                       (format out "<mark>~A</mark>" (html-escape (subseq text i end)))
+                       (write-string (h:html-escape (subseq text start i)) out)
+                       (format out "<mark>~A</mark>" (h:html-escape (subseq text i end)))
                        (setf start end))
                      (setf i end))
                    (incf i)))
-      (write-string (html-escape (subseq text start)) out))))
+      (write-string (h:html-escape (subseq text start)) out))))
 
 (defun row-value (row column)
   "COLUMN's value in ROW, a plist from cl-dbi."

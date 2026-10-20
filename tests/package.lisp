@@ -1,7 +1,8 @@
 ;;;; package.lisp
 
 (defpackage #:littoral/tests
-  (:use #:cl #:littoral #:littoral.html #:littoral.test #:fiveam)
+  (:use #:cl #:littoral #:littoral.test #:fiveam)
+  (:local-nicknames (#:h #:littoral.html))
   (:export #:littoral)
   (:documentation "The FiveAM suite for Littoral."))
 

@@ -4,7 +4,7 @@ The examples are tested: the suite runs every one on its own and checks each res
 
 ```lisp
 (asdf:load-system :littoral/test)
-(defpackage #:try-littoral (:use #:cl #:littoral #:littoral.html #:littoral.test))
+(defpackage #:try-littoral (:use #:cl #:littoral #:littoral.test) (:local-nicknames (#:h #:littoral.html)))
 (in-package #:try-littoral)
 ```
 

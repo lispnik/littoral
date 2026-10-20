@@ -5,6 +5,7 @@
 ;;; shadow the symbol here first.  littoral.db and littoral.auth are used
 ;;; with their prefixes.
 (defpackage #:{{name}}
-  (:use #:cl #:littoral #:littoral.html)
+  (:use #:cl #:littoral)
+  (:local-nicknames (#:h #:littoral.html))
   (:export #:app-root #:note #:register-app #:serve #:toplevel #:create-user #:database-spec #:tidy-up)
   (:documentation "{{title}}, a Littoral application with a database and signing in."))

@@ -58,7 +58,7 @@
   ((view :initform (make-instance 'job-view) :reader view)))
 (defmethod children ((self exporter)) (list (view self)))
 (defmethod render ((self exporter))
-  (anchor (:callback (lambda ()
+  (h:anchor (:callback (lambda ()
                        (let ((job (submit-job (lambda ()
                                                 (sb-thread:wait-on-semaphore *go* :timeout 5)
                                                 (job-progress 1/2 "Exporting")

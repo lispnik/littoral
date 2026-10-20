@@ -19,7 +19,7 @@ Version 0.4.0 documents the API with an example for nearly every export, each ru
 
 ```lisp
 (asdf:load-system :littoral)
-(defpackage #:hello (:use #:cl #:littoral #:littoral.html))
+(defpackage #:hello (:use #:cl #:littoral) (:local-nicknames (#:h #:littoral.html)))
 (in-package #:hello)
 
 (defclass counter (component)
@@ -28,9 +28,9 @@ Version 0.4.0 documents the API with an example for nearly every export, each ru
 (defmethod states ((self counter)) (list self))   ; backtrack COUNT
 
 (defmethod render ((self counter))
-  (h1 () (text (count-of self)))
-  (anchor (:callback (lambda () (incf (count-of self)))) "++")
-  (anchor (:callback (lambda () (decf (count-of self)))) "--"))
+  (h:h1 () (h:text (count-of self)))
+  (h:anchor (:callback (lambda () (incf (count-of self)))) "++")
+  (h:anchor (:callback (lambda () (decf (count-of self)))) "--"))
 
 (register-application "/counter" 'counter)
 (start :port 8080)
@@ -111,9 +111,9 @@ The smaller examples include counter, multi-counter, login, todo, guess (a task)
 | Seaside                         | Littoral                                        |
 |---------------------------------|-------------------------------------------------|
 | `renderContentOn: html`         | `(defmethod render ((self c)) …)`               |
-| `html div class: 'x'; with: […]` | `(div (:class "x") …)`                          |
-| `html anchor callback: […]; with: 'go'` | `(anchor (:callback (lambda () …)) "go")` |
-| `html textInput on: #name of: self` | `(text-input (:value … :callback (lambda (v) …)))` |
+| `html div class: 'x'; with: […]` | `(h:div (:class "x") …)`                          |
+| `html anchor callback: […]; with: 'go'` | `(h:anchor (:callback (lambda () …)) "go")` |
+| `html textInput on: #name of: self` | `(h:text-input (:value … :callback (lambda (v) …)))` |
 | `html render: child`            | `(render-component child)`                      |
 | `children`, `states`            | `children`, `states` generics                   |
 | `self call: c` / `self answer: x` | `(call self c)` / `(answer c x)`              |
@@ -124,18 +124,26 @@ The smaller examples include counter, multi-counter, login, todo, guess (a task)
 | `updateRoot:`, `style`, `script` | `update-root`, `style`, `script`                |
 | jQuery `load html:`             | `:on-click (ajax :callback … :update component)` |
 | `updateUrl:`, `initialRequest:` | `update-url`, `initial-request`, `request-extra-path` |
-| `html fileUpload callback:`     | `(file-input (:callback (lambda (file) …)))`    |
+| `html fileUpload callback:`     | `(h:file-input (:callback (lambda (file) …)))`    |
 | `WABatchedList`, `WATableReport` | `batched-list`, `report` + `column`            |
 
 ### HTML
 
-The tag and brush macros are in the `littoral.html` package. They live in their own package because names such as `main`, `header`, `label` and `table` are too common to push onto every package that uses `littoral`. A tag's first argument is its attribute plist, and you can omit it. Literal strings in a tag body are written as escaped text. To write any other value, call `text` (escaped) or `raw` (unescaped).
+The tag and brush macros are in the `littoral.html` package, which has a macro for every element in the HTML standard, each under the element's own name: `h:time`, `h:map`, `h:search`, `h:var`, `h:data`, `h:option` and the rest. Several of those names are CL's or are common in programs, so don't `:use` the package; give it a local nickname, as above, and write `h:` before each tag:
 
-The brushes are `anchor`, `form`, `text-input`, `password-input`, `number-input`, `hidden-input`, `text-area`, `checkbox`, `select-list`, `radio-group`, `file-input`, `submit-button`, `cancel-button` and `button`. Links, fields and the submit and cancel buttons take a `:callback`; a `button` submits nothing, so give it an AJAX `:on-click` (see "AJAX"). When a form is submitted, the field callbacks run first, in render order, and the button's action runs after them.
+```lisp
+(defpackage #:my-app
+  (:use #:cl #:littoral)
+  (:local-nicknames (#:h #:littoral.html)))
+```
 
-A `file-input` needs its form to be `(form (:multipart t) …)`. Its callback receives an `uploaded-file`, with `file-name`, `file-content-type` and `file-contents` (octets), and is not called when no file was chosen.
+A tag's first argument is its attribute plist, and you can omit it. Literal strings in a tag body are written as escaped text. To write any other value, call `h:text` (escaped) or `h:raw` (unescaped). `(h:tag name …)` writes an element whose name is computed, or one outside HTML, such as SVG's.
 
-A `cancel-button` runs its callback and nothing else: what was typed into the form is not applied. `(form (:default-action thunk) …)` runs the thunk when the form is submitted without a button.
+The brushes are `h:anchor`, `h:form`, `h:text-input`, `h:password-input`, `h:number-input`, `h:hidden-input`, `h:text-area`, `h:checkbox`, `h:select-list`, `h:radio-group`, `h:file-input`, `h:submit-button`, `h:cancel-button` and `h:button`. Links, fields and the submit and cancel buttons take a `:callback`; an `h:button` submits nothing, so give it an AJAX `:on-click` (see "AJAX"). When a form is submitted, the field callbacks run first, in render order, and the button's action runs after them. The plain `h:a`, `h:input`, `h:select`, `h:textarea` and `h:option` write those elements with no callback, for forms that post elsewhere.
+
+An `h:file-input` needs its form to be `(h:form (:multipart t) …)`. Its callback receives an `h:uploaded-file`, with `h:file-name`, `h:file-content-type` and `h:file-contents` (octets), and is not called when no file was chosen.
+
+An `h:cancel-button` runs its callback and nothing else: what was typed into the form is not applied. `(h:form (:default-action thunk) …)` runs the thunk when the form is submitted without a button.
 
 Rendering must not change state. Calling `call`, `show`, `answer` or `home` while a page renders signals `render-phase-error`; do it in a callback instead.
 
@@ -178,7 +186,7 @@ A `report` is a table. Clicking a column heading sorts by that column, and click
                  (column "" nil :sortable nil
                          :render (lambda (row value)
                                    (declare (ignore value))
-                                   (anchor (:callback (lambda () (open-order row))) "open")))))
+                                   (h:anchor (:callback (lambda () (open-order row))) "open")))))
 ```
 
 ### Wizards
@@ -270,7 +278,7 @@ It's an ordinary component, so a flow can `call` it. `/examples/wizard` signs so
   ((guests :type :stepper :min 1 :max 30) (volume :type :range :step 5) (rating :type :rating)
    (helpers :type :transfer :choices '("Ada" "Grace" "Alan"))
    (password :type :new-password :min-strength 2)))
-(with-popover ("Shipping") (p () "Free over €50."))
+(with-popover ("Shipping") (h:p () "Free over €50."))
 (make-instance 'split-pane :first message-list :second message-view :position 35)
 (make-instance 'data-grid :description 'shipment :rows shipments :virtual 12 :conditions t)
 (pie-chart '(("Email" . 41) ("Chat" . 23) ("Phone" . 9)) :title "Support requests" :donut t)
@@ -339,7 +347,7 @@ To make a component re-renderable in place, mix `updatable` into its class. Then
 - `(execute-script "…")`, called from a callback, runs JavaScript once the updates are in place.
 
 ```lisp
-(button (:on-click (ajax :value "this.dataset.size"
+(h:button (:on-click (ajax :value "this.dataset.size"
                          :callback (lambda (size) (price-for size))
                          :on-complete "document.getElementById('price').textContent = value"))
   "Price it")
@@ -516,8 +524,8 @@ Jobs live in memory, so a restart forgets them; for work that must not be lost, 
 (littoral.mail:define-mail order-shipped (order)
   :to (order-email order)
   :subject (translate "Your order ~A is on its way" (order-number order))
-  :html ((p () "It left the warehouse today.")
-         (p () (anchor (:href (tracking-url order)) "Track it"))))
+  :html ((h:p () "It left the warehouse today.")
+         (h:p () (h:anchor (:href (tracking-url order)) "Track it"))))
 
 (littoral.mail:create-mail-tables)
 (littoral.mail:start-mail-delivery)   ; a job runner sends the outbox
@@ -565,18 +573,18 @@ For changes the watcher can't see, such as a helper function or a stylesheet, ca
 ```lisp
 (asdf:load-system :littoral/parenscript)
 (defpackage #:my-app
-  (:use #:cl #:littoral #:littoral.html #:parenscript #:littoral.parenscript)
-  (:shadowing-import-from #:littoral #:call)          ; Parenscript exports these too
-  (:shadowing-import-from #:littoral.html #:label))
+  (:use #:cl #:littoral #:parenscript #:littoral.parenscript)
+  (:local-nicknames (#:h #:littoral.html))
+  (:shadowing-import-from #:littoral #:call))         ; Parenscript exports CALL too
 (in-package #:my-app)
 
 (defclass buttons (updatable component) ())
 
 (defmethod render ((self buttons))
-  (button (:on-click (in-browser (ps (chain this class-list (toggle "on")))))
+  (h:button (:on-click (in-browser (ps (chain this class-list (toggle "on")))))
     "Toggle")                                        ; runs in the browser only
   (let ((shout (client-callback (lambda (text) (string-upcase text)) :update self)))
-    (button (:on-click (in-browser (ps (chain littoral (call (lisp shout) "hi")
+    (h:button (:on-click (in-browser (ps (chain littoral (call (lisp shout) "hi")
                                               (then (lambda (answer) (alert answer)))))))
       "Ask the server")))
 
@@ -668,9 +676,9 @@ Write strings in English and pass them through `translate`. A language's catalog
   ("~D contact" "~D contact" "~D contacts"))        ; one form per plural form
 
 (defmethod render ((self contacts-app))
-  (h1 () (translate "Contacts"))                    ; written as text, like a literal
-  (p () (translate-plural (length (contacts self)) "~D contact" "~D contacts"))
-  (anchor (:callback …) (translate "Add a contact")))
+  (h:h1 () (translate "Contacts"))                    ; written as text, like a literal
+  (h:p () (translate-plural (length (contacts self)) "~D contact" "~D contacts"))
+  (h:anchor (:callback …) (translate "Add a contact")))
 
 (register-application "/contacts" 'contacts-app :languages '("fr" "de"))
 ```
@@ -984,7 +992,7 @@ The fake browser doesn't run JavaScript. For drag and drop, the back button with
   - The origins of an application's own external scripts and stylesheets are allowed automatically.
   - `:content-security-policy` on `register-application` takes `:strict`, your own policy string (with `{nonce}` for the nonce), or `nil`.
   - `/examples/csp` writes typed HTML into the page unescaped, on purpose, and shows the policy stopping the script in it. CI fails if any other example page breaks its policy.
-- **Escaping.** Text and attribute values are escaped; `raw` is the one way around that. `:href` is written as given, so don't pass it a URL you haven't checked (it could be `javascript:`). An upload's `file-name` comes from the browser; don't use it as a path.
+- **Escaping.** Text and attribute values are escaped; `h:raw` is the one way around that. `:href` is written as given, so don't pass it a URL you haven't checked (it could be `javascript:`). An upload's `file-name` comes from the browser; don't use it as a path.
 
 ## Deployment and scale
 

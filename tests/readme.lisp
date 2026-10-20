@@ -22,8 +22,10 @@
     (first found)))
 
 (defun fresh-readme-package ()
-  (make-package (format nil "README-BLOCK-~D" (random (expt 10 9)))
-                :use '(#:cl #:littoral #:littoral.html #:littoral.test)))
+  (let ((package (make-package (format nil "README-BLOCK-~D" (random (expt 10 9)))
+                               :use '(#:cl #:littoral #:littoral.test))))
+    (sb-ext:add-package-local-nickname '#:h '#:littoral.html package)
+    package))
 
 (defun littoral-package-name-p (name)
   (let ((name (string-upcase (string name))))

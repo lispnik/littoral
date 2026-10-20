@@ -9,8 +9,8 @@
   (:documentation "Signed-in users only."))
 
 (defmethod render ((self members-area))
-  (p () "Members' news")
-  (anchor (:callback (lambda () (littoral.auth:require-role :admin))) "admin action"))
+  (h:p () "Members' news")
+  (h:anchor (:callback (lambda () (littoral.auth:require-role :admin))) "admin action"))
 
 (defclass admin-area (littoral.auth:restricted component) ()
   (:documentation "Admins only."))
@@ -18,7 +18,7 @@
 (defmethod littoral.auth:required-role ((self admin-area)) :admin)
 
 (defmethod render ((self admin-area))
-  (p () "Admin console"))
+  (h:p () "Admin console"))
 
 (defclass members-app (littoral.auth:auth-root component)
   ((members :initform (make-instance 'members-area) :reader app-members)
@@ -30,7 +30,7 @@
 
 (defmethod render ((self members-app))
   (let ((user (littoral.auth:current-user)))
-    (p (:class "who") (text (if user (format nil "Signed in as ~A" (littoral.auth:user-name user)) "Not signed in")))
+    (h:p (:class "who") (h:text (if user (format nil "Signed in as ~A" (littoral.auth:user-name user)) "Not signed in")))
     (when user (littoral.auth:sign-out-link)))
   (render-component (app-members self))
   (render-component (app-admin self)))
@@ -428,7 +428,7 @@ and that URL."
 
 (defclass editors-desk (littoral.auth:restricted component) ())
 (defmethod littoral.auth:required-permission ((self editors-desk)) :edit-posts)
-(defmethod render ((self editors-desk)) (p () "The editor's desk"))
+(defmethod render ((self editors-desk)) (h:p () "The editor's desk"))
 
 (test roles-and-permissions
   (with-auth (b)
@@ -569,7 +569,7 @@ and that URL."
   (:documentation "Shows the roles of the user ada in the application's database."))
 
 (defmethod render ((self roles-of-ada))
-  (p () (text (format nil "~{~(~A~)~^ ~}" (littoral.auth:user-roles (littoral.auth:find-user "ada"))))))
+  (h:p () (h:text (format nil "~{~(~A~)~^ ~}" (littoral.auth:user-roles (littoral.auth:find-user "ada"))))))
 
 (test cached-roles-belong-to-their-database
   ;; Two applications, each with its own database whose user 1 is ada: one

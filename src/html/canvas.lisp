@@ -4,9 +4,9 @@
 ;;;; the canvas is the stream in *CANVAS* and brushes are macros that write
 ;;;; to it, so a render method reads like the markup it produces:
 ;;;;
-;;;;   (div (:class "counter")
-;;;;     (h1 () (text (count-of self)))
-;;;;     (anchor (:callback (lambda () (incf (count-of self)))) "++"))
+;;;;   (h:div (:class "counter")
+;;;;     (h:h1 () (h:text (count-of self)))
+;;;;     (h:anchor (:callback (lambda () (incf (count-of self)))) "++"))
 ;;;;
 ;;;; The first argument of a tag is its attribute plist, whose values are
 ;;;; evaluated.  It may be omitted when the tag has no attributes and its
@@ -16,18 +16,18 @@
 
 (in-package #:littoral)
 
-(defvar *canvas* (make-broadcast-stream)
+(defvar h:*canvas* (make-broadcast-stream)
   "The stream render methods write HTML to.  Outside rendering (and
 WITH-CANVAS-TO-STRING) it discards what is written.")
 
-(defun text (thing)
+(defun h:text (thing)
   "Write THING, printed with PRINC and HTML-escaped."
-  (write-string (html-escape thing) *canvas*)
+  (write-string (h:html-escape thing) h:*canvas*)
   nil)
 
-(defun raw (string)
+(defun h:raw (string)
   "Write STRING verbatim."
-  (write-string string *canvas*)
+  (write-string string h:*canvas*)
   nil)
 
 (defgeneric emit-attribute (key value stream)
@@ -36,7 +36,7 @@ WITH-CANVAS-TO-STRING) it discards what is written.")
     (format stream " ~(~A~)" key)
     (unless (eq value t)
       (write-string "=\"" stream)
-      (write-string (html-escape (if (and (listp value) (eq key :class))
+      (write-string (h:html-escape (if (and (listp value) (eq key :class))
                                      (join-strings (remove nil value))
                                      value))
                     stream)
@@ -66,7 +66,7 @@ control they are waiting for."
 (defun emit-tag (name attributes body &key (void (member name *void-elements* :test #'string-equal)))
   "Write element NAME with ATTRIBUTES around the output of the thunk BODY.
 Void elements such as input and br get no closing tag."
-  (let ((stream *canvas*)
+  (let ((stream h:*canvas*)
         (attributes (take-field-attributes name attributes)))
     (write-char #\< stream)
     (write-string name stream)
@@ -90,7 +90,7 @@ TRANSLATE-PLURAL forms, turned into TEXT calls."
        ,@(mapcar (lambda (form)
                    (if (or (stringp form)
                            (and (consp form) (member (car form) '(translate translate-plural))))
-                       `(text ,form)
+                       `(h:text ,form)
                        form))
                  body))))
 
@@ -100,12 +100,12 @@ TRANSLATE-PLURAL forms, turned into TEXT calls."
       (values (first arguments) (rest arguments))
       (values nil arguments)))
 
-(defmacro with-canvas-to-string (() &body body)
+(defmacro h:with-canvas-to-string (() &body body)
   "Evaluate BODY with *CANVAS* collecting into a string, which is returned."
-  `(with-output-to-string (*canvas*)
+  `(with-output-to-string (h:*canvas*)
      ,@body))
 
-(defmacro tag (name &rest arguments)
+(defmacro h:tag (name &rest arguments)
   "Write an element whose NAME (a string) is computed.  As for every tag,
 the first of ARGUMENTS may be a plist of attributes, whose values are
 evaluated: NIL leaves an attribute out, T writes it bare, a :CLASS list is

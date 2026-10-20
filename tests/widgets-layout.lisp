@@ -17,7 +17,7 @@ whose start tag matches PATTERN, a regular expression."
   (is (equal (concatenate 'string
                           "<button type=\"button\" class=\"lt-popover-button\" popovertarget=\"more\">More</button>"
                           "<div id=\"more\" popover=\"auto\" class=\"lt-popover wide\"><p>Hidden until asked for.</p></div>")
-             (with-canvas-to-string () (with-popover ("More" :id "more" :class "wide") (p () "Hidden until asked for.")))))
+             (h:with-canvas-to-string () (with-popover ("More" :id "more" :class "wide") (h:p () "Hidden until asked for.")))))
   (with-widgets (b)
     (click b "Layout")
     (let* ((html (browser-html b))
@@ -28,7 +28,7 @@ whose start tag matches PATTERN, a regular expression."
   (is (equal (concatenate 'string
                           "<span class=\"lt-tooltip\"><button type=\"button\">Copy</button>"
                           "<span id=\"tip\" role=\"tooltip\" class=\"lt-tooltip-text\">Copies the link</span></span>")
-             (with-canvas-to-string () (with-tooltip ("Copies the link" :id "tip") (button () "Copy")))))
+             (h:with-canvas-to-string () (with-tooltip ("Copies the link" :id "tip") (h:button () "Copy")))))
   (with-widgets (b)
     (click b "Layout")
     (is (search "class=\"lt-tooltip-text\">Nothing is copied: this only shows a tooltip.</span>" (browser-html b)))))

@@ -52,11 +52,11 @@
                         (column "Weight" #'fourth :class "number"
                                 :render (lambda (row value)
                                           (declare (ignore row))
-                                          (text (format nil "~,3F" value))))
+                                          (h:text (format nil "~,3F" value))))
                         (column "" nil :sortable nil
                                 :render (lambda (row value)
                                           (declare (ignore value))
-                                          (anchor (:callback (lambda () (setf (selected-element self) row)))
+                                          (h:anchor (:callback (lambda () (setf (selected-element self) row)))
                                             "select")))))))
 
 (defmethod states ((self element-table))
@@ -66,13 +66,13 @@
   (list (element-report self) (element-chart self)))
 
 (defmethod render ((self element-table))
-  (h1 () "Elements")
-  (p () "Click a heading to sort; click it again to reverse.")
+  (h:h1 () "Elements")
+  (h:p () "Click a heading to sort; click it again to reverse.")
   (render-component (element-report self))
   (when (selected-element self)
-    (p () "Selected: " (strong () (text (third (selected-element self))))))
-  (h2 () "Weights")
-  (p () "This chart is a lazy panel: it is filled in once you scroll to it, so the table above doesn't wait for it.")
+    (h:p () "Selected: " (h:strong () (h:text (third (selected-element self))))))
+  (h:h2 () "Weights")
+  (h:p () "This chart is a lazy panel: it is filled in once you scroll to it, so the table above doesn't wait for it.")
   (render-component (element-chart self)))
 
 (defmethod style ((self element-table))

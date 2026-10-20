@@ -5,8 +5,8 @@
 (defclass likes (component updatable)
   ((count :initform 0 :accessor like-count)))
 (defmethod render ((self likes))
-  (text (format nil "~D likes " (like-count self)))
-  (button (:on-click (ajax :callback (lambda () (incf (like-count self))) :update self))
+  (h:text (format nil "~D likes " (like-count self)))
+  (h:button (:on-click (ajax :callback (lambda () (incf (like-count self))) :update self))
     "Like"))
 (with-fresh-applications (("/likes" 'likes :mode :deployment))
   (let ((b (make-instance 'browser)))
@@ -20,7 +20,7 @@
 ;;; :VALUE is JavaScript the browser evaluates; the callback gets its result as a string, and what the callback returns goes back to the :ON-COMPLETE snippet as value.  :CONFIRM asks the user first.  Here the request carries the value the browser would have sent.
 (defclass size-probe (component) ())
 (defmethod render ((self size-probe))
-  (button (:on-click (ajax :value "window.innerWidth + 'x' + window.innerHeight"
+  (h:button (:on-click (ajax :value "window.innerWidth + 'x' + window.innerHeight"
                            :callback (lambda (size) (format nil "The server saw ~A." size))
                            :on-complete "document.title = value"
                            :confirm "Send your window size?"))
@@ -44,9 +44,9 @@
   (setf (slot-value self 'preview) (make-instance 'search-preview :box self)))
 (defmethod children ((self search-box)) (list (preview self)))
 (defmethod render ((self search-preview))
-  (p () (text (format nil "Searching for ~S" (query (box self))))))
+  (h:p () (h:text (format nil "Searching for ~S" (query (box self))))))
 (defmethod render ((self search-box))
-  (text-input (:id "q" :label "Search" :value (query self)
+  (h:text-input (:id "q" :label "Search" :value (query self)
                :callback (lambda (v) (setf (query self) v))
                :on-input (ajax-update (preview self))))
   (render-component (preview self)))
@@ -64,8 +64,8 @@
 (defclass ticker (component updatable)
   ((ticks :initform 0 :accessor ticks)))
 (defmethod render ((self ticker))
-  (span (:periodical (periodical 5 :callback (lambda () (incf (ticks self))) :update self))
-    (text (format nil "Ticks: ~D" (ticks self)))))
+  (h:span (:periodical (periodical 5 :callback (lambda () (incf (ticks self))) :update self))
+    (h:text (format nil "Ticks: ~D" (ticks self)))))
 (with-fresh-applications (("/ticker" 'ticker :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/ticker")
@@ -80,7 +80,7 @@
 ;;; From an AJAX callback, queue JavaScript for the browser to run once the updates are in.  Outside an AJAX request it does nothing.
 (defclass retitler (component) ())
 (defmethod render ((self retitler))
-  (button (:on-click (ajax :callback (lambda () (execute-script "document.title = 'Saved'"))))
+  (h:button (:on-click (ajax :callback (lambda () (execute-script "document.title = 'Saved'"))))
     "Save"))
 (with-fresh-applications (("/retitle" 'retitler :mode :deployment))
   (let ((b (make-instance 'browser)))

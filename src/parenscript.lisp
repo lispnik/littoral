@@ -1,12 +1,14 @@
 ;;;; parenscript.lisp — browser behaviour written in Lisp, beside RENDER
 ;;;;
-;;;;   (defpackage #:my-app (:use #:cl #:littoral #:littoral.html
-;;;;                              #:parenscript #:littoral.parenscript))
+;;;;   (defpackage #:my-app
+;;;;     (:use #:cl #:littoral #:parenscript #:littoral.parenscript)
+;;;;     (:local-nicknames (#:h #:littoral.html))
+;;;;     (:shadowing-import-from #:littoral #:call))
 ;;;;
-;;;;   (button (:on-click (in-browser (ps (chain this class-list (toggle "on")))))
+;;;;   (h:button (:on-click (in-browser (ps (chain this class-list (toggle "on")))))
 ;;;;     "Toggle")                                   ; runs in the browser only
 ;;;;
-;;;;   (button (:on-click (in-browser (ps (chain littoral
+;;;;   (h:button (:on-click (in-browser (ps (chain littoral
 ;;;;                                         (call (lisp (client-callback (lambda (v) (string-upcase v))))
 ;;;;                                               "hello")
 ;;;;                                         (then (lambda (answer) (alert answer)))))))
@@ -20,12 +22,12 @@
 ;;;; DEFINE-SCRIPT gives a component page-level JavaScript.
 
 (defpackage #:littoral.parenscript
-  (:use #:cl #:littoral #:littoral.html)
+  (:use #:cl #:littoral)
+  (:local-nicknames (#:h #:littoral.html))
   (:documentation "Load with `(asdf:load-system :littoral/parenscript)`.  Writes Littoral
 components' browser behaviour in Parenscript.  A package using both this and
-parenscript must shadow one CALL and one LABEL, as the parenscript demo does
-with (:shadowing-import-from #:littoral #:call) and
-(:shadowing-import-from #:littoral.html #:label).")
+parenscript must shadow one CALL, as the parenscript demo does with
+(:shadowing-import-from #:littoral #:call).")
   (:export #:in-browser #:client-callback #:define-script))
 
 (in-package #:littoral.parenscript)
@@ -45,7 +47,7 @@ only names it, so use it while rendering.")
   ;; data-lt-on-click-js="@ID": littoral.js runs the code the page defined
   ;; under ID, with THIS and EVENT.
   (format stream " data-lt-~(~A~)-js=\"~A\"" key
-          (html-escape (littoral::client-code (client-handler-code value) '("event")))))
+          (h:html-escape (littoral::client-code (client-handler-code value) '("event")))))
 
 (defun client-callback (function &key update)
   "Register FUNCTION, of the string the browser sends (\"\" when it sends

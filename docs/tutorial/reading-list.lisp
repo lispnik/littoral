@@ -9,7 +9,8 @@
 ;;; Step 1: a package and a component
 
 (defpackage #:reading-list
-  (:use #:cl #:littoral #:littoral.html)
+  (:use #:cl #:littoral)
+  (:local-nicknames (#:h #:littoral.html))
   (:export #:reading-list #:hello #:counter #:register)
   (:documentation "The application the Littoral tutorial builds."))
 
@@ -19,7 +20,7 @@
   (:documentation "The smallest application."))
 
 (defmethod render ((self hello))
-  (h1 () "Hello, world"))
+  (h:h1 () "Hello, world"))
 
 ;;; Step 2: callbacks and the back button
 
@@ -31,10 +32,10 @@
   (list self))
 
 (defmethod render ((self counter))
-  (h1 () (text (count-of self)))
-  (anchor (:callback (lambda () (incf (count-of self)))) "++")
-  (text " ")
-  (anchor (:callback (lambda () (decf (count-of self)))) "--"))
+  (h:h1 () (h:text (count-of self)))
+  (h:anchor (:callback (lambda () (incf (count-of self)))) "++")
+  (h:text " ")
+  (h:anchor (:callback (lambda () (decf (count-of self)))) "--"))
 
 ;;; Step 3: the model and a form (the list's first version is only in the tutorial)
 
@@ -65,17 +66,17 @@
 (defmethod render ((self book-row))
   (let ((book (row-book self)))
     ;; Step 8: ticking the box updates this row in place.
-    (checkbox (:value (book-finished-p book)
+    (h:checkbox (:value (book-finished-p book)
                :label (format nil "Finished ~A" (book-title book))
                :callback (lambda (finished) (setf (book-finished-p book) finished))
                :on-change (ajax :callback (lambda () (book-changed book)) :update self)))
-    (text " ")
-    (strong () (text (book-title book)))
-    (when (book-author book) (text (format nil " by ~A" (book-author book))))
-    (text " ")
-    (anchor (:callback (lambda () (edit-book (row-list self) book))) "edit")
-    (text " ")
-    (anchor (:callback (lambda () (remove-book (row-list self) book))) "remove")))
+    (h:text " ")
+    (h:strong () (h:text (book-title book)))
+    (when (book-author book) (h:text (format nil " by ~A" (book-author book))))
+    (h:text " ")
+    (h:anchor (:callback (lambda () (edit-book (row-list self) book))) "edit")
+    (h:text " ")
+    (h:anchor (:callback (lambda () (remove-book (row-list self) book))) "remove")))
 
 (defclass shelf (component updatable)
   ((owner :initarg :owner :reader shelf-list))
@@ -92,10 +93,10 @@
 (defmethod render ((self shelf))
   (let ((books (matching-books (shelf-list self))))
     (if books
-        (ul (:class "books")
+        (h:ul (:class "books")
           (dolist (book books)
             (render-component (row-for (shelf-list self) book))))
-        (p () (em () "Nothing matches.")))))
+        (h:p () (h:em () "Nothing matches.")))))
 
 ;;; Step 5: call and answer
 
@@ -173,8 +174,8 @@
 
 (defmethod render ((self recently-finished))
   (when *recently-finished*
-    (p (:class "recent") "Recently finished by readers here: "
-      (text (format nil "~{~A~^; ~}" *recently-finished*)))))
+    (h:p (:class "recent") "Recently finished by readers here: "
+      (h:text (format nil "~{~A~^; ~}" *recently-finished*)))))
 
 ;;; Step 10: the whole list
 
@@ -201,18 +202,18 @@
   (list (ticker self) (shelf self)))
 
 (defmethod render ((self reading-list))
-  (h1 () "Reading list")
+  (h:h1 () "Reading list")
   (render-component (ticker self))
-  (p (:class "search")
-    (text-input (:id "query" :value (query self) :placeholder "Search" :label "Search"
+  (h:p (:class "search")
+    (h:text-input (:id "query" :value (query self) :placeholder "Search" :label "Search"
                  :callback (lambda (v) (setf (query self) v))
                  :on-input (ajax-update (shelf self)))))
   (render-component (shelf self))
-  (form ()
-    (text-input (:id "new-title" :value (new-title self) :placeholder "Add a title" :label "Title to add"
+  (h:form ()
+    (h:text-input (:id "new-title" :value (new-title self) :placeholder "Add a title" :label "Title to add"
                  :callback (lambda (v) (setf (new-title self) v))))
-    (submit-button (:callback (lambda () (add-quickly self))) "Add"))
-  (p () (anchor (:callback (lambda () (add-with-questions self))) "Add a book, step by step")))
+    (h:submit-button (:callback (lambda () (add-quickly self))) "Add"))
+  (h:p () (h:anchor (:callback (lambda () (add-with-questions self))) "Add a book, step by step")))
 
 (defmethod style ((self reading-list))
   ".books { list-style: none; padding: 0; } .books li { margin: .3rem 0; }

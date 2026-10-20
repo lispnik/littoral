@@ -151,8 +151,8 @@
    (via :initarg :via :initform :editor :reader page-via)))
 
 (defmethod render ((self locker-page))
-  (p () "Code: " (text (or (locker-code (page-locker self)) "none")))
-  (anchor (:callback (lambda ()
+  (h:p () "Code: " (h:text (or (locker-code (page-locker self)) "none")))
+  (h:anchor (:callback (lambda ()
                        (show self (ecase (page-via self)
                                     (:editor (make-editor (page-locker self)))
                                     (:wizard (make-wizard (page-locker self)

@@ -14,7 +14,7 @@
 ;;; CONFIGURE-APPLICATION changes only the settings it is given, and keeps the application's sessions.  For a path with no application it registers one, so it needs :ROOT-CLASS then.
 (defclass storefront (component) ())
 (defmethod render ((self storefront))
-  (h1 () "Welcome"))
+  (h:h1 () "Welcome"))
 (with-fresh-applications (("/shop" 'storefront :title "Fish Shop" :mode :deployment))
   (visit (make-instance 'browser) "/shop")
   (configure-application "/shop" :title "Fish & Chip Shop")

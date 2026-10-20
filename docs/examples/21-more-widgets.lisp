@@ -24,7 +24,7 @@
   (list (grid self)))
 (defmethod render ((self people))
   (render-component (grid self))
-  (when (saved self) (p () "Saved " (text (saved self)))))
+  (when (saved self) (h:p () "Saved " (h:text (saved self)))))
 (with-fresh-applications (("/people" 'people :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/people")
@@ -63,7 +63,7 @@
 
 ;;;; Example: littoral:bar-chart
 ;;; A bar chart is SVG in a figure, captioned by `title`, with the data as a table for screen readers.  Each bar's title gives its label and value, written by `:format-value`.
-(let ((html (with-canvas-to-string ()
+(let ((html (h:with-canvas-to-string ()
               (bar-chart '(("Mon" . 3) ("Tue" . 7) ("Wed" . 5))
                          :title "Orders"
                          :format-value (lambda (n) (format nil "~D orders" n))))))
@@ -73,7 +73,7 @@
 
 ;;;; Example: littoral:line-chart
 ;;; One line per series, each a name and its values; `:x-labels` name the points.  With more than one series the chart has a legend.
-(let ((html (with-canvas-to-string ()
+(let ((html (h:with-canvas-to-string ()
               (line-chart '(("Visits" 10 40 25) ("Sign-ups" 1 4 2))
                           :title "This week" :x-labels '("Mon" "Tue" "Wed")))))
   (list (length (cl-ppcre:all-matches-as-strings "<polyline" html))
@@ -82,7 +82,7 @@
 
 ;;;; Example: littoral:sparkline
 ;;; A small line with no axes, labelled for screen readers.
-(with-canvas-to-string ()
+(h:with-canvas-to-string ()
   (sparkline '(1 3 2) :label "Errors this hour" :width 40 :height 10))
 ;; ⇒ "<svg class=\"lt-sparkline\" width=\"40\" height=\"10\" viewBox=\"0 0 40 10\" role=\"img\" aria-label=\"Errors this hour\"><polyline points=\"1.0,6.3 20.0,1.0 39.0,3.7\"/></svg>"
 
@@ -90,7 +90,7 @@
 ;;; A month of days with their events, Monday first.  `:year` and `:month` default to the current month.
 (let* ((calendar (make-instance 'calendar :year 2026 :month 10
                                           :events '(((2026 10 9) . "Release"))))
-       (html (with-canvas-to-string () (render calendar))))
+       (html (h:with-canvas-to-string () (render calendar))))
   (list (calendar-year calendar) (calendar-month calendar)
         (not (null (search "October 2026" html)))
         (not (null (search "<li>Release</li>" html)))))
@@ -111,7 +111,7 @@
   (list (planner-calendar self)))
 (defmethod render ((self planner))
   (render-component (planner-calendar self))
-  (when (day self) (p (:id "chosen") (text (format nil "Chose ~{~D-~2,'0D-~2,'0D~}" (day self))))))
+  (when (day self) (h:p (:id "chosen") (h:text (format nil "Chose ~{~D-~2,'0D-~2,'0D~}" (day self))))))
 (with-fresh-applications (("/planner" 'planner :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/planner")
@@ -164,7 +164,7 @@ Bring *two* copies of the **form**.
 (define-description announcement
   ((body :type :markdown)))
 (let ((field (find-field 'announcement 'body)))
-  (with-canvas-to-string ()
+  (h:with-canvas-to-string ()
     (render-field-value field (field-value field (make-instance 'announcement)))))
 ;; ⇒ "<div class=\"lt-markdown\"><p>Doors open at <strong>seven</strong>.</p></div>"
 
@@ -174,9 +174,9 @@ Bring *two* copies of the **form**.
 (defclass letter (component) ())
 (defmethod breadcrumb-label ((self letter)) "Hello, Ada")
 (defmethod render ((self inbox))
-  (anchor (:callback (lambda () (show self (make-instance 'letter)))) "Open"))
+  (h:anchor (:callback (lambda () (show self (make-instance 'letter)))) "Open"))
 (defmethod render ((self letter))
-  (p () "Dear Ada,"))
+  (h:p () "Dear Ada,"))
 (defclass mail-page (component)
   ((inbox :initform (make-instance 'inbox) :reader inbox)
    (trail :reader trail)))
@@ -258,7 +258,7 @@ Bring *two* copies of the **form**.
 ;;;; Example: littoral:disclosure littoral:disclosure-open-p
 ;;; A line that opens and closes a component beneath it.  It is an HTML details element, so it works without JavaScript; with it, opening goes over AJAX and is remembered.
 (defclass small-print (component) ())
-(defmethod render ((self small-print)) (p () "No refunds after 30 days."))
+(defmethod render ((self small-print)) (h:p () "No refunds after 30 days."))
 (defclass terms (component)
   ((more :initform (make-instance 'disclosure :summary "Small print" :content (make-instance 'small-print))
          :reader more)))
@@ -279,7 +279,7 @@ Bring *two* copies of the **form**.
 ;;;; Example: littoral:accordion littoral:accordion-sections littoral:accordion-open
 ;;; Sections that open one at a time (or several, with `:multiple t`).  ACCORDION-OPEN lists the indexes open.
 (defclass answer-text (component) ((words :initarg :words :reader words)))
-(defmethod render ((self answer-text)) (p () (text (words self))))
+(defmethod render ((self answer-text)) (h:p () (h:text (words self))))
 (defun open-sections (html)
   "The titles of the accordion sections open in HTML."
   (let ((titles '()))
@@ -329,7 +329,7 @@ Bring *two* copies of the **form**.
 (defclass slow-total (component)
   ((total :initarg :total :reader total)))
 (defmethod render ((self slow-total))
-  (p () (text (format nil "Total: ~D" (total self)))))
+  (h:p () (h:text (format nil "Total: ~D" (total self)))))
 (defvar *made* 0)
 (defclass ledger (component)
   ((panel :initform (make-instance 'lazy-panel
@@ -404,7 +404,7 @@ Bring *two* copies of the **form**.
 (defmethod children ((self editor-page)) (list (palette self)))
 (defmethod render ((self editor-page))
   (render-component (palette self))
-  (when (saved self) (p () "Saved.")))
+  (when (saved self) (h:p () "Saved.")))
 (with-fresh-applications (("/edit" 'editor-page :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/edit")

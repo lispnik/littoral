@@ -216,31 +216,31 @@ current order, each field as the grid shows it."
   "Write GRID's row for ROW, as an editor when it is the row being edited.
 INDEX, when given, is its aria-rowindex."
   (if (and (grid-editing grid) (same-row-p grid row (grid-editing grid)))
-      (tr (:class "lt-grid-editing" :aria-rowindex index)
+      (h:tr (:class "lt-grid-editing" :aria-rowindex index)
         (dolist (field fields)
           (let* ((name (field-name field))
                  (problem (cdr (assoc name (grid-problems grid)))))
-            (td ()
+            (h:td ()
               (let ((*next-field-attributes* (list :aria-label (translate (field-label field))
                                                    :aria-invalid (when problem "true"))))
                 (render-field-input field (format nil "grid-~(~A~)" name)
                                     (or (cdr (assoc name (grid-texts grid))) "")
                                     (lambda (text) (setf (grid-texts grid)
                                                          (acons name text (remove name (grid-texts grid) :key #'car))))))
-              (when problem (div (:class "lt-validation-error") (text problem))))))
-        (td (:class "lt-grid-actions")
+              (when problem (h:div (:class "lt-validation-error") (h:text problem))))))
+        (h:td (:class "lt-grid-actions")
           (let ((problem (cdr (assoc :row (grid-problems grid)))))
-            (when problem (div (:class "lt-validation-error") (text problem))))
-          (submit-button (:callback (lambda () (save-grid-row grid))) (translate "Save"))
-          (cancel-button (:callback (lambda () (setf (grid-editing grid) nil))) (translate "Cancel"))))
-      (tr (:aria-rowindex index)
+            (when problem (h:div (:class "lt-validation-error") (h:text problem))))
+          (h:submit-button (:callback (lambda () (save-grid-row grid))) (translate "Save"))
+          (h:cancel-button (:callback (lambda () (setf (grid-editing grid) nil))) (translate "Cancel"))))
+      (h:tr (:aria-rowindex index)
         (dolist (field fields)
-          (td () (render-field-value field (field-value field row))))
-        (td (:class "lt-grid-actions")
-          (anchor (:callback (lambda () (edit-grid-row grid row))) (translate "Edit"))))))
+          (h:td () (render-field-value field (field-value field row))))
+        (h:td (:class "lt-grid-actions")
+          (h:anchor (:callback (lambda () (edit-grid-row grid row))) (translate "Edit"))))))
 
 (defun render-nothing-row (fields)
-  (tr () (td (:colspan (princ-to-string (1+ (length fields)))) (translate "Nothing matches."))))
+  (h:tr () (h:td (:colspan (princ-to-string (1+ (length fields)))) (translate "Nothing matches."))))
 
 ;;; A virtual grid's rows: only those near the ones on screen are written
 
@@ -273,21 +273,21 @@ INDEX, when given, is its aria-rowindex."
          (columns (princ-to-string (1+ (length fields)))))
     (multiple-value-bind (start end) (grid-rows-span self total)
       ;; Spacers stand for the rows not written, so the scroll bar is right.
-      (tr (:class "lt-grid-spacer" :aria-hidden "true" :style (spacer-style start)
+      (h:tr (:class "lt-grid-spacer" :aria-hidden "true" :style (spacer-style start)
            :data-lt-start start :data-lt-total total :data-lt-window (grid-window grid)
            :data-lt-visible (grid-virtual grid)
            :virtual (ajax :callback (lambda (value)
                                       (let ((n (ignore-errors (parse-integer value))))
                                         (when n (setf (rows-start self) (max 0 n)))))
                           :update self :value "this.getAttribute('data-lt-want')"))
-        (td (:colspan columns)))
+        (h:td (:colspan columns)))
       (if (zerop total)
           (render-nothing-row fields)
           (loop for row in (subseq rows start end)
                 for index from (+ start 3)
                 do (render-grid-row grid row fields index)))
-      (tr (:class "lt-grid-spacer" :aria-hidden "true" :style (spacer-style (- total end)))
-        (td (:colspan columns))))))
+      (h:tr (:class "lt-grid-spacer" :aria-hidden "true" :style (spacer-style (- total end)))
+        (h:td (:colspan columns))))))
 
 (defun render-virtual-pager (grid total)
   "Links to the rows before and after, for pages without JavaScript, which
@@ -296,16 +296,16 @@ can't scroll a virtual grid to them."
     (multiple-value-bind (start end) (grid-rows-span part total)
       (emit-tag "noscript" '()
                 (lambda ()
-                  (raw "<style>.lt-grid-spacer { display: none; }</style>")
+                  (h:raw "<style>.lt-grid-spacer { display: none; }</style>")
                   (when (plusp total)
-                    (text (format nil " ~A " (translate "Rows ~D–~D of ~D" (1+ start) end total))))
+                    (h:text (format nil " ~A " (translate "Rows ~D–~D of ~D" (1+ start) end total))))
                   (when (plusp start)
-                    (anchor (:callback (lambda () (setf (rows-start part) (max 0 (- start (grid-window grid)))))
+                    (h:anchor (:callback (lambda () (setf (rows-start part) (max 0 (- start (grid-window grid)))))
                              :rel "prev")
                       (translate "« Previous")))
                   (when (< end total)
-                    (text " ")
-                    (anchor (:callback (lambda () (setf (rows-start part) end)) :rel "next")
+                    (h:text " ")
+                    (h:anchor (:callback (lambda () (setf (rows-start part) end)) :rel "next")
                       (translate "Next »"))))))))
 
 (defmethod render ((self data-grid))
@@ -316,57 +316,57 @@ can't scroll a virtual grid to them."
          (page (min (grid-page self) (1- pages))))
     (when (data-grid-filter self)
       (render-component (data-grid-filter self)))
-    (form (:class "lt-grid")
-      (div (:class (list "lt-grid-scroll" (when virtual "lt-grid-virtual"))
+    (h:form (:class "lt-grid")
+      (h:div (:class (list "lt-grid-scroll" (when virtual "lt-grid-virtual"))
             :style (when virtual (format nil "--lt-grid-visible: ~D" virtual))
             :tabindex "0" :role "region" :aria-label (translate "Table"))
-        (table (:class "lt-table" :aria-rowcount (when virtual (+ 2 (length rows))))
-          (thead ()
-            (tr (:aria-rowindex (when virtual 1))
+        (h:table (:class "lt-table" :aria-rowcount (when virtual (+ 2 (length rows))))
+          (h:thead ()
+            (h:tr (:aria-rowindex (when virtual 1))
               (dolist (field fields)
                 (let ((name (field-name field)))
-                  (th (:aria-sort (when (eq name (grid-sort-field self))
+                  (h:th (:aria-sort (when (eq name (grid-sort-field self))
                                     (if (grid-descending-p self) "descending" "ascending")))
-                    (anchor (:on-click (ajax :callback (lambda () (sort-grid self name)) :update self)
+                    (h:anchor (:on-click (ajax :callback (lambda () (sort-grid self name)) :update self)
                              :href "#")
-                      (text (translate (field-label field)))
+                      (h:text (translate (field-label field)))
                       (when (eq name (grid-sort-field self))
-                        (text (if (grid-descending-p self) " ▼" " ▲")))))))
-              (th () (span (:class "lt-visually-hidden") (translate "Actions"))))
-            (tr (:class "lt-grid-filters" :aria-rowindex (when virtual 2))
+                        (h:text (if (grid-descending-p self) " ▼" " ▲")))))))
+              (h:th () (h:span (:class "lt-visually-hidden") (translate "Actions"))))
+            (h:tr (:class "lt-grid-filters" :aria-rowindex (when virtual 2))
               (dolist (field fields)
                 (let ((name (field-name field)))
-                  (td ()
-                    (text-input (:value (or (cdr (assoc name (grid-filters self))) "")
+                  (h:td ()
+                    (h:text-input (:value (or (cdr (assoc name (grid-filters self))) "")
                                  :label (translate "Filter ~A" (translate (field-label field)))
                                  :placeholder (translate "Filter")
                                  :callback (lambda (v) (set-grid-filter self name v))
                                  :on-input (ajax-update self))))))
-              (td ())))
+              (h:td ())))
           (if virtual
               (render-component (grid-rows-part self))
               (let ((shown (subseq rows (min (length rows) (* page (grid-page-size self)))
                                    (min (length rows) (* (1+ page) (grid-page-size self))))))
-                (tbody ()
+                (h:tbody ()
                   (if (null shown)
                       (render-nothing-row fields)
                       (dolist (row shown) (render-grid-row self row fields))))))))
-      (div (:class "lt-batch")
-        (text (translate-plural (length rows) "~D row" "~D rows"))
+      (h:div (:class "lt-batch")
+        (h:text (translate-plural (length rows) "~D row" "~D rows"))
         (when (grid-csv-filename self)
-          (text " ")
-          (anchor (:class "lt-csv"
+          (h:text " ")
+          (h:anchor (:class "lt-csv"
                    :callback (lambda () (send-download (data-grid-csv self) :filename (grid-csv-filename self)
                                                                             :content-type "text/csv; charset=utf-8")))
             (translate "Download CSV")))
         (cond (virtual (render-virtual-pager self (length rows)))
               ((> pages 1)
                (when (plusp page)
-                 (anchor (:on-click (ajax :callback (lambda () (setf (grid-page self) (1- page))) :update self) :href "#")
+                 (h:anchor (:on-click (ajax :callback (lambda () (setf (grid-page self) (1- page))) :update self) :href "#")
                    (translate "« Previous")))
-               (text (format nil " ~D / ~D " (1+ page) pages))
+               (h:text (format nil " ~D / ~D " (1+ page) pages))
                (when (< page (1- pages))
-                 (anchor (:on-click (ajax :callback (lambda () (setf (grid-page self) (1+ page))) :update self) :href "#")
+                 (h:anchor (:on-click (ajax :callback (lambda () (setf (grid-page self) (1+ page))) :update self) :href "#")
                    (translate "Next »")))))))))
 
 ;;; Charts, as inline SVG
@@ -389,24 +389,24 @@ can't scroll a virtual grid to them."
 
 (defun chart-key (names)
   "Write a key matching each of NAMES to its series' colour."
-  (ul (:class "lt-chart-key")
+  (h:ul (:class "lt-chart-key")
     (loop for name in names for n from 0
-          do (li () (span (:class (list "lt-chart-swatch" (series-class n)))) (text (princ-to-string name))))))
+          do (h:li () (h:span (:class (list "lt-chart-swatch" (series-class n)))) (h:text (princ-to-string name))))))
 
 (defun chart-figure (title data-table body &optional key)
   "A figure holding an SVG chart, its TITLE, and its data as a table for
 screen readers (and anyone who opens it).  KEY, when given, is a thunk
 writing the chart's key."
   (let ((id (format nil "lt-chart-~D" (incf *chart-counter*))))
-    (figure (:class "lt-chart")
-      (raw (funcall body id))
+    (h:figure (:class "lt-chart")
+      (h:raw (funcall body id))
       (when key (funcall key))
-      (figcaption (:id id) (text title))
-      (details (:class "lt-chart-data")
-        (summary () (translate "Data"))
-        (table (:class "lt-table")
+      (h:figcaption (:id id) (h:text title))
+      (h:details (:class "lt-chart-data")
+        (h:summary () (translate "Data"))
+        (h:table (:class "lt-table")
           (dolist (row data-table)
-            (tr () (th () (text (first row))) (dolist (cell (rest row)) (td () (text cell))))))))))
+            (h:tr () (h:th () (h:text (first row))) (dolist (cell (rest row)) (h:td () (h:text cell))))))))))
 
 (defun bar-chart (data &key (title "") (width 480) (height 220) (format-value #'princ-to-string))
   "Write a bar chart of DATA, a list of (LABEL . VALUE) with VALUE a
@@ -429,16 +429,16 @@ axis.  WIDTH and HEIGHT are in SVG units; the chart scales to fit."
                for y = (+ above (* plot-h (- 1 (/ tick top))))
                do (format out "<line class=\"lt-chart-grid\" x1=\"~A\" x2=\"~A\" y1=\"~A\" y2=\"~A\"/><text class=\"lt-chart-axis\" x=\"~A\" y=\"~A\" text-anchor=\"end\">~A</text>"
                           left (- width right) (svg-number y) (svg-number y) (- left 6) (svg-number (+ y 4))
-                          (html-escape (funcall format-value tick))))
+                          (h:html-escape (funcall format-value tick))))
          (loop for (label . value) in data
                for i from 0
                for h = (* plot-h (/ (max 0 value) top))
                for x = (+ left (* i slot) (* slot 0.15))
                do (format out "<rect class=\"lt-chart-bar\" x=\"~A\" y=\"~A\" width=\"~A\" height=\"~A\" rx=\"2\"><title>~A: ~A</title></rect>"
                           (svg-number x) (svg-number (- (+ above plot-h) h)) (svg-number (* slot 0.7)) (svg-number h)
-                          (html-escape (princ-to-string label)) (html-escape (funcall format-value value)))
+                          (h:html-escape (princ-to-string label)) (h:html-escape (funcall format-value value)))
                   (format out "<text class=\"lt-chart-axis\" x=\"~A\" y=\"~A\" text-anchor=\"middle\">~A</text>"
-                          (svg-number (+ x (* slot 0.35))) (- height 8) (html-escape (princ-to-string label))))
+                          (svg-number (+ x (* slot 0.35))) (- height 8) (h:html-escape (princ-to-string label))))
          (format out "</svg>"))))))
 
 (defun line-chart (series &key (title "") (width 480) (height 220) x-labels (format-value #'princ-to-string))
@@ -466,22 +466,22 @@ gets a legend."
                  for yy = (y tick)
                  do (format out "<line class=\"lt-chart-grid\" x1=\"~A\" x2=\"~A\" y1=\"~A\" y2=\"~A\"/><text class=\"lt-chart-axis\" x=\"~A\" y=\"~A\" text-anchor=\"end\">~A</text>"
                             left (- width right) (svg-number yy) (svg-number yy) (- left 6) (svg-number (+ yy 4))
-                            (html-escape (funcall format-value tick))))
+                            (h:html-escape (funcall format-value tick))))
            (when x-labels
              (let ((every (max 1 (ceiling count 8))))
                (loop for label in x-labels for i from 0
                      when (zerop (mod i every))
                        do (format out "<text class=\"lt-chart-axis\" x=\"~A\" y=\"~A\" text-anchor=\"middle\">~A</text>"
-                                  (svg-number (x i)) (- height 8) (html-escape (princ-to-string label))))))
+                                  (svg-number (x i)) (- height 8) (h:html-escape (princ-to-string label))))))
            (loop for (name . values) in series for n from 0
                  do (format out "<polyline class=\"lt-chart-line ~A\" points=\"~{~A~^ ~}\"><title>~A</title></polyline>"
                             (series-class n)
                             (loop for v in values for i from 0 collect (format nil "~A,~A" (svg-number (x i)) (svg-number (y v))))
-                            (html-escape (princ-to-string name))))
+                            (h:html-escape (princ-to-string name))))
            (when (> (length series) 1)
              (loop for (name) in series for n from 0
                    do (format out "<text class=\"lt-chart-legend ~A\" x=\"~A\" y=\"~A\">● ~A</text>"
-                              (series-class n) (+ left 6 (* n 110)) (+ above 12) (html-escape (princ-to-string name)))))
+                              (series-class n) (+ left 6 (* n 110)) (+ above 12) (h:html-escape (princ-to-string name)))))
            (format out "</svg>")))))))
 
 (defun sparkline (values &key (label "") (width 120) (height 28))
@@ -489,8 +489,8 @@ gets a legend."
 HEIGHT pixels, with LABEL for screen readers.  No axes, no figure."
   (let* ((top (max 1 (reduce #'max values :initial-value 0)))
          (count (length values)))
-    (raw (format nil "<svg class=\"lt-sparkline\" width=\"~D\" height=\"~D\" viewBox=\"0 0 ~D ~D\" role=\"img\" aria-label=\"~A\"><polyline points=\"~{~A~^ ~}\"/></svg>"
-                 width height width height (html-escape label)
+    (h:raw (format nil "<svg class=\"lt-sparkline\" width=\"~D\" height=\"~D\" viewBox=\"0 0 ~D ~D\" role=\"img\" aria-label=\"~A\"><polyline points=\"~{~A~^ ~}\"/></svg>"
+                 width height width height (h:html-escape label)
                  (loop for v in values for i from 0
                        collect (format nil "~A,~A" (svg-number (if (> count 1) (+ 1 (* (- width 2) (/ i (1- count)))) 1))
                                        (svg-number (+ 1 (* (- height 2) (- 1 (/ (max 0 v) top)))))))))))
@@ -543,39 +543,39 @@ pairs, DATE as (YEAR MONTH DAY): a list, or a function returning one.  With
                   (declare (ignore s m h)) (list y mo d)))
          (first (weekday year month 1))
          (days (days-in year month)))
-    (div (:class "lt-calendar")
-      (div (:class "lt-calendar-head")
-        (anchor (:callback (lambda () (shift-month self -1)) :aria-label (translate "Previous month")) "‹")
-        (h3 () (text (format nil "~:(~A~) ~D" (nth (1- month) (language-months language)) year)))
-        (anchor (:callback (lambda () (shift-month self 1)) :aria-label (translate "Next month")) "›"))
-      (table (:class "lt-calendar-grid")
-        (thead () (tr () (dolist (name *weekday-names*) (th (:scope "col") (translate name)))))
-        (tbody ()
+    (h:div (:class "lt-calendar")
+      (h:div (:class "lt-calendar-head")
+        (h:anchor (:callback (lambda () (shift-month self -1)) :aria-label (translate "Previous month")) "‹")
+        (h:h3 () (h:text (format nil "~:(~A~) ~D" (nth (1- month) (language-months language)) year)))
+        (h:anchor (:callback (lambda () (shift-month self 1)) :aria-label (translate "Next month")) "›"))
+      (h:table (:class "lt-calendar-grid")
+        (h:thead () (h:tr () (dolist (name *weekday-names*) (h:th (:scope "col") (translate name)))))
+        (h:tbody ()
           (loop for week from 0
                 while (< (- (* 7 week) first) days)
-                do (tr ()
+                do (h:tr ()
                      (dotimes (column 7)
                        (let ((day (1+ (- (+ (* 7 week) column) first))))
                          (if (<= 1 day days)
                              (let* ((date (list year month day))
                                     (todays (remove-if-not (lambda (e) (equal (car e) date)) events)))
-                               (td (:class (list (when (equal date today) "lt-today") (when todays "lt-busy")))
+                               (h:td (:class (list (when (equal date today) "lt-today") (when todays "lt-busy")))
                                  (if (calendar-on-select self)
-                                     (anchor (:class "lt-calendar-day"
+                                     (h:anchor (:class "lt-calendar-day"
                                               :callback (lambda () (funcall (calendar-on-select self) date)))
-                                       (text day))
-                                     (span (:class "lt-calendar-day") (text day)))
+                                       (h:text day))
+                                     (h:span (:class "lt-calendar-day") (h:text day)))
                                  (when todays
-                                   (ul (:class "lt-calendar-events")
-                                     (dolist (event todays) (li () (text (cdr event))))))))
-                             (td (:class "lt-calendar-blank"))))))))))))
+                                   (h:ul (:class "lt-calendar-events")
+                                     (dolist (event todays) (h:li () (h:text (cdr event))))))))
+                             (h:td (:class "lt-calendar-blank"))))))))))))
 
 ;;; A kanban board
 
 (defclass kanban (component updatable)
   ((columns :initarg :columns :initform '() :accessor kanban-columns
             :documentation "(TITLE . ITEMS) for each column, replaced on every move.")
-   (render-card :initarg :render-card :initform (lambda (item) (text item)) :reader kanban-card-renderer)
+   (render-card :initarg :render-card :initform (lambda (item) (h:text item)) :reader kanban-card-renderer)
    (on-move :initarg :on-move :initform nil :reader kanban-on-move
             :documentation "Called with ITEM, the titles of the columns it left and joined, and its new position."))
   (:documentation "Columns of cards to drag between, or move with the arrow
@@ -626,29 +626,29 @@ or FROM-INDEX is out of range."
                 (loop for (title . items) in columns
                       for c from 0
                       do (let ((c c))
-                           (section (:class "lt-kanban-column" :aria-label title)
-                             (h3 () (text title) (span (:class "lt-kanban-count") (text (format nil " ~D" (length items)))))
+                           (h:section (:class "lt-kanban-column" :aria-label title)
+                             (h:h3 () (h:text title) (h:span (:class "lt-kanban-count") (h:text (format nil " ~D" (length items)))))
                              (emit-tag "ol" (list :data-lt-column c :class "lt-kanban-cards")
                                        (lambda ()
                                          (loop for item in items for i from 0
                                                do (let ((i i))
-                                                    (li (:draggable "true" :data-lt-index i)
-                                                      (div (:class "lt-kanban-card") (funcall (kanban-card-renderer self) item))
-                                                      (span (:class "lt-kanban-buttons")
+                                                    (h:li (:draggable "true" :data-lt-index i)
+                                                      (h:div (:class "lt-kanban-card") (funcall (kanban-card-renderer self) item))
+                                                      (h:span (:class "lt-kanban-buttons")
                                                         (when (plusp c)
-                                                          (anchor (:aria-label (translate "Move to ~A" (first (nth (1- c) columns)))
+                                                          (h:anchor (:aria-label (translate "Move to ~A" (first (nth (1- c) columns)))
                                                                    :callback (lambda () (move-card self c i (1- c) 0)))
                                                             "←"))
                                                         (when (plusp i)
-                                                          (anchor (:aria-label (translate "Move up")
+                                                          (h:anchor (:aria-label (translate "Move up")
                                                                    :callback (lambda () (move-card self c i c (1- i))))
                                                             "↑"))
                                                         (when (< i (1- (length items)))
-                                                          (anchor (:aria-label (translate "Move down")
+                                                          (h:anchor (:aria-label (translate "Move down")
                                                                    :callback (lambda () (move-card self c i c (1+ i))))
                                                             "↓"))
                                                         (when (< c (1- count))
-                                                          (anchor (:aria-label (translate "Move to ~A" (first (nth (1+ c) columns)))
+                                                          (h:anchor (:aria-label (translate "Move to ~A" (first (nth (1+ c) columns)))
                                                                    :callback (lambda () (move-card self c i (1+ c) 0)))
                                                             "→")))))))))))))))
 
@@ -700,7 +700,7 @@ at h3 for #, so they sit under a page's own."
              (flush () (flush-paragraph) (close-list)))
       (loop with code = nil
             for raw in lines
-            for line = (html-escape raw)
+            for line = (h:html-escape raw)
             do (cond (code
                       (if (cl-ppcre:scan "^\\s*```" raw)
                           (progn (format out "</code></pre>") (setf code nil))
@@ -734,12 +734,12 @@ at h3 for #, so they sit under a page's own."
 MARKDOWN-HTML): the description field kind :MARKDOWN."))
 
 (defmethod render-field-input ((field markdown-field) id text callback)
-  (text-area (:id id :value text :rows 6 :callback callback))
-  (div (:class "lt-help") (translate "Markdown: **strong**, *emphasis*, `code`, [links](https://…), - lists, # headings.")))
+  (h:text-area (:id id :value text :rows 6 :callback callback))
+  (h:div (:class "lt-help") (translate "Markdown: **strong**, *emphasis*, `code`, [links](https://…), - lists, # headings.")))
 
 (defmethod render-field-value ((field markdown-field) value)
   (when value
-    (div (:class "lt-markdown") (raw (markdown-html value)))))
+    (h:div (:class "lt-markdown") (h:raw (markdown-html value)))))
 
 (push '(:markdown . markdown-field) *field-kinds*)
 
@@ -848,7 +848,7 @@ and say what happened."
     (if (in-place-editing-p self)
         (let ((problem (in-place-problem self))
               (id (format nil "~A-input" (component-id self))))
-          (form (:class "lt-in-place lt-in-place-editing"
+          (h:form (:class "lt-in-place lt-in-place-editing"
                  :on-submit (ajax :callback (lambda () (save-in-place-edit self))
                                   :update (cons self (in-place-update self))))
             (let ((*next-field-attributes* (list :aria-label label :autofocus t
@@ -856,14 +856,14 @@ and say what happened."
                                                  :aria-describedby (when problem (format nil "~A-problem" id)))))
               (render-field-input field id (in-place-text self)
                                   (lambda (text) (setf (in-place-text self) text))))
-            (button (:type "submit") (translate "Save"))
-            (button (:on-click (ajax :callback (lambda () (setf (in-place-editing-p self) nil)) :update self))
+            (h:button (:type "submit") (translate "Save"))
+            (h:button (:on-click (ajax :callback (lambda () (setf (in-place-editing-p self) nil)) :update self))
               (translate "Cancel"))
             (when problem
-              (div (:class "lt-validation-error" :id (format nil "~A-problem" id)) (text problem)))))
-        (span (:class "lt-in-place")
+              (h:div (:class "lt-validation-error" :id (format nil "~A-problem" id)) (h:text problem)))))
+        (h:span (:class "lt-in-place")
           (render-field-value field (field-value field (in-place-object self)))
           " "
-          (button (:class "lt-in-place-edit" :aria-label (translate "Edit ~A" label)
+          (h:button (:class "lt-in-place-edit" :aria-label (translate "Edit ~A" label)
                    :on-click (ajax :callback (lambda () (start-in-place-edit self)) :update self))
             (translate "Edit"))))))

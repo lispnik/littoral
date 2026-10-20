@@ -9,27 +9,27 @@
 (defun render-dialog-message (dialog)
   "Write DIALOG's message, if it has one."
   (when (dialog-message dialog)
-    (p (:class "lt-dialog-message") (text (dialog-message dialog)))))
+    (h:p (:class "lt-dialog-message") (h:text (dialog-message dialog)))))
 
 (defclass message-dialog (dialog) ()
   (:documentation "Shows its :MESSAGE with an OK button; answers T."))
 
 (defmethod render ((self message-dialog))
-  (div (:class "lt-dialog")
+  (h:div (:class "lt-dialog")
     (render-dialog-message self)
-    (form ()
-      (submit-button (:callback (lambda () (answer self t))) (translate "OK")))))
+    (h:form ()
+      (h:submit-button (:callback (lambda () (answer self t))) (translate "OK")))))
 
 (defclass confirm-dialog (dialog) ()
   (:documentation "Asks the yes/no question in its :MESSAGE; answers T for Yes
 or NIL for No."))
 
 (defmethod render ((self confirm-dialog))
-  (div (:class "lt-dialog")
+  (h:div (:class "lt-dialog")
     (render-dialog-message self)
-    (form ()
-      (submit-button (:callback (lambda () (answer self t))) (translate "Yes"))
-      (submit-button (:callback (lambda () (answer self nil))) (translate "No")))))
+    (h:form ()
+      (h:submit-button (:callback (lambda () (answer self t))) (translate "Yes"))
+      (h:submit-button (:callback (lambda () (answer self nil))) (translate "No")))))
 
 (defclass input-dialog (dialog)
   ((value :initarg :value :initform "" :accessor dialog-value))
@@ -37,13 +37,13 @@ or NIL for No."))
 :VALUE (default \"\") as the text to start from; answers the string."))
 
 (defmethod render ((self input-dialog))
-  (div (:class "lt-dialog")
+  (h:div (:class "lt-dialog")
     (render-dialog-message self)
-    (form ()
-      (text-input (:value (dialog-value self) :label (or (dialog-message self) (translate "Answer"))
+    (h:form ()
+      (h:text-input (:value (dialog-value self) :label (or (dialog-message self) (translate "Answer"))
                    :callback (lambda (v) (setf (dialog-value self) v))
                    :autofocus t))
-      (submit-button (:callback (lambda () (answer self (dialog-value self)))) (translate "OK")))))
+      (h:submit-button (:callback (lambda () (answer self (dialog-value self)))) (translate "OK")))))
 
 (defclass choice-dialog (dialog)
   ((items :initarg :items :initform '() :reader dialog-items)
@@ -54,15 +54,15 @@ the prompt; answers the item, or NIL on Cancel.  :LABELS is a function
 giving each item's label (default PRINC-TO-STRING)."))
 
 (defmethod render ((self choice-dialog))
-  (div (:class "lt-dialog")
+  (h:div (:class "lt-dialog")
     (render-dialog-message self)
-    (form ()
-      (select-list (:items (dialog-items self) :label (or (dialog-message self) (translate "Choice"))
+    (h:form ()
+      (h:select-list (:items (dialog-items self) :label (or (dialog-message self) (translate "Choice"))
                     :labels (dialog-labels self)
                     :selected (dialog-selected self)
                     :callback (lambda (item) (setf (dialog-selected self) item))))
-      (submit-button (:callback (lambda () (answer self (dialog-selected self)))) (translate "OK"))
-      (cancel-button (:callback (lambda () (answer self nil))) (translate "Cancel")))))
+      (h:submit-button (:callback (lambda () (answer self (dialog-selected self)))) (translate "OK"))
+      (h:cancel-button (:callback (lambda () (answer self nil))) (translate "Cancel")))))
 
 (defclass login-dialog (dialog)
   ((username :initform "" :accessor dialog-username)
@@ -72,20 +72,20 @@ cons (USERNAME . PASSWORD), or NIL on Cancel.  Its fields have the DOM ids
 username and password."))
 
 (defmethod render ((self login-dialog))
-  (div (:class "lt-dialog lt-login")
+  (h:div (:class "lt-dialog lt-login")
     (render-dialog-message self)
-    (form ()
-      (label () (translate "Username") " "
-        (text-input (:id "username" :value (dialog-username self)
+    (h:form ()
+      (h:label () (translate "Username") " "
+        (h:text-input (:id "username" :value (dialog-username self)
                      :callback (lambda (v) (setf (dialog-username self) v)))))
-      (label () (translate "Password") " "
-        (password-input (:id "password"
+      (h:label () (translate "Password") " "
+        (h:password-input (:id "password"
                          :callback (lambda (v) (setf (dialog-password self) v)))))
-      (submit-button (:callback (lambda ()
+      (h:submit-button (:callback (lambda ()
                                   (answer self (cons (dialog-username self)
                                                      (dialog-password self)))))
         (translate "Log in"))
-      (cancel-button (:callback (lambda () (answer self nil))) (translate "Cancel")))))
+      (h:cancel-button (:callback (lambda () (answer self nil))) (translate "Cancel")))))
 
 ;;; Seaside's inform:, confirm:, request: and chooseFrom:
 
@@ -119,7 +119,7 @@ Items are labelled with PRINC-TO-STRING.  A CALL.")
 session expired and answers when its Continue button is pressed."))
 
 (defmethod render ((self session-expired-notice))
-  (div (:class "lt-dialog lt-expired")
+  (h:div (:class "lt-dialog lt-expired")
     (render-dialog-message self)
-    (form ()
-      (submit-button (:callback (lambda () (answer self t))) (translate "Continue")))))
+    (h:form ()
+      (h:submit-button (:callback (lambda () (answer self t))) (translate "Continue")))))

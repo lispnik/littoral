@@ -40,7 +40,7 @@ request (to a string, in a test)."
                      (strip-attributes attributes :callback :href))
               body)))
 
-(defmacro anchor (&rest arguments)
+(defmacro h:anchor (&rest arguments)
   "A link.  :CALLBACK is a thunk run when it is followed; :HREF a plain URL.
 With neither, an AJAX :ON-CLICK gets the href \"#\".  :LABEL becomes the
 aria-label; other attributes are written as given."
@@ -63,7 +63,7 @@ aria-label; other attributes are written as given."
                   (emit-tag "input" (list :type "hidden" :name (register :default default) :value "1") nil))
                 (when body (funcall body))))))
 
-(defmacro form (&rest arguments)
+(defmacro h:form (&rest arguments)
   "A form posting back to the session.  Its fields' callbacks run before
 the action of the button that submitted it.  :DEFAULT-ACTION is a thunk run
 when the form is submitted without a button; :MULTIPART T allows FILE-INPUT."
@@ -85,12 +85,12 @@ when the form is submitted without a button; :MULTIPART T allows FILE-INPUT."
                    (strip-attributes attributes :callback :name :value :type))
             nil))
 
-(defmacro text-input (&optional attributes)
+(defmacro h:text-input (&optional attributes)
   "A text field showing :VALUE.  :CALLBACK receives the submitted string;
 without one, the field is named :NAME."
   `(%input "text" (list ,@attributes)))
 
-(defmacro password-input (&optional attributes)
+(defmacro h:password-input (&optional attributes)
   "A password field, empty unless given a :VALUE.  :CALLBACK receives the
 submitted string."
   `(%input "password" (list ,@attributes)))
@@ -99,12 +99,12 @@ submitted string."
   (handler-case (let ((n (parse-integer string :junk-allowed nil))) n)
     (error () nil)))
 
-(defmacro number-input (&optional attributes)
+(defmacro h:number-input (&optional attributes)
   "An integer field.  :CALLBACK receives an integer, or NIL when the
 submission does not parse."
   `(%input "number" (list ,@attributes) #'parse-number-or-nil))
 
-(defmacro hidden-input (&optional attributes)
+(defmacro h:hidden-input (&optional attributes)
   "A hidden field.  :CALLBACK receives its :VALUE when the form is submitted."
   `(%input "hidden" (list ,@attributes)))
 
@@ -113,9 +113,9 @@ submission does not parse."
     (emit-tag "textarea"
               (list* :name (or (field-callback-name attributes) (getf attributes :name))
                      (strip-attributes attributes :callback :name :value))
-              (lambda () (when value (text value))))))
+              (lambda () (when value (h:text value))))))
 
-(defmacro text-area (&optional attributes)
+(defmacro h:text-area (&optional attributes)
   "A multi-line text field showing :VALUE.  :CALLBACK receives the submitted string."
   `(%text-area (list ,@attributes)))
 
@@ -131,7 +131,7 @@ submission does not parse."
                      (strip-attributes attributes :callback :value))
               nil)))
 
-(defmacro checkbox (&optional attributes)
+(defmacro h:checkbox (&optional attributes)
   "A checkbox.  :VALUE is its state; :CALLBACK receives T or NIL."
   `(%checkbox (list ,@attributes)))
 
@@ -164,9 +164,9 @@ submission does not parse."
                                    (list :value index
                                          :selected (and selected (funcall test item selected)))
                                    (let ((item item))
-                                     (lambda () (text (item-label attributes item))))))))))
+                                     (lambda () (h:text (item-label attributes item))))))))))
 
-(defmacro select-list (&optional attributes)
+(defmacro h:select-list (&optional attributes)
   "A drop-down of :ITEMS shown through :LABELS (a function, default PRINC).
 :CALLBACK receives the chosen item, or NIL when the submission names none;
 :SELECTED is the current one, compared with :TEST (default EQL)."
@@ -190,27 +190,27 @@ submission does not parse."
                                                  (list :type "radio" :name name :value index
                                                        :checked (and selected (funcall test item selected)))
                                                  nil)
-                                       (text (item-label attributes item))))))))))
+                                       (h:text (item-label attributes item))))))))))
 
-(defmacro radio-group (&optional attributes)
+(defmacro h:radio-group (&optional attributes)
   "Radio buttons, one per item of :ITEMS; otherwise like SELECT-LIST."
   `(%radio-group (list ,@attributes)))
 
 ;;; File upload
 
-(defclass uploaded-file ()
-  ((filename :initarg :filename :reader file-name
+(defclass h:uploaded-file ()
+  ((filename :initarg :filename :reader h:file-name
              :documentation "The name the browser gave, without directories.")
-   (content-type :initarg :content-type :reader file-content-type
+   (content-type :initarg :content-type :reader h:file-content-type
                  :documentation "The MIME type the browser gave.")
-   (contents :initarg :contents :reader file-contents
+   (contents :initarg :contents :reader h:file-contents
              :documentation "The file's bytes, an (UNSIGNED-BYTE 8) vector."))
   (:documentation "A file submitted through FILE-INPUT."))
 
-(defmethod print-object ((file uploaded-file) stream)
+(defmethod print-object ((file h:uploaded-file) stream)
   (print-unreadable-object (file stream :type t)
-    (format stream "~S ~A ~D bytes" (file-name file) (file-content-type file)
-            (length (file-contents file)))))
+    (format stream "~S ~A ~D bytes" (h:file-name file) (h:file-content-type file)
+            (length (h:file-contents file)))))
 
 (defun read-octets (stream)
   (let ((out (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0))
@@ -225,7 +225,7 @@ submission does not parse."
 no file was chosen."
   (when (and (consp value) (streamp (first value))
              (second value) (string/= (second value) ""))
-    (make-instance 'uploaded-file
+    (make-instance 'h:uploaded-file
                    :filename (second value)
                    :content-type (or (third value) "application/octet-stream")
                    :contents (read-octets (first value)))))
@@ -241,7 +241,7 @@ no file was chosen."
                      (strip-attributes attributes :callback :name))
               nil)))
 
-(defmacro file-input (&optional attributes)
+(defmacro h:file-input (&optional attributes)
   "A file chooser.  :CALLBACK receives an UPLOADED-FILE, and is not called
 when no file was chosen.  The enclosing FORM needs :MULTIPART T."
   `(%file-input (list ,@attributes)))
@@ -257,7 +257,7 @@ when no file was chosen.  The enclosing FORM needs :MULTIPART T."
                      (strip-attributes attributes :callback))
               body)))
 
-(defmacro submit-button (&rest arguments)
+(defmacro h:submit-button (&rest arguments)
   "A button submitting its form, then running the thunk :CALLBACK."
   (multiple-value-bind (attributes body) (split-tag-arguments arguments)
     `(%submit-button (list ,@attributes) ,(body-thunk body))))
@@ -271,13 +271,13 @@ when no file was chosen.  The enclosing FORM needs :MULTIPART T."
                      (strip-attributes attributes :callback))
               body)))
 
-(defmacro cancel-button (&rest arguments)
+(defmacro h:cancel-button (&rest arguments)
   "A button that runs the thunk :CALLBACK and nothing else: the form's
 fields are not applied."
   (multiple-value-bind (attributes body) (split-tag-arguments arguments)
     `(%cancel-button (list ,@attributes) ,(body-thunk body))))
 
-(defmacro button (&rest arguments)
+(defmacro h:button (&rest arguments)
   "A button that submits nothing; give it an AJAX :ON-CLICK."
   (multiple-value-bind (attributes body) (split-tag-arguments arguments)
     `(let ((attributes (list ,@attributes)))

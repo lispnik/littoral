@@ -114,7 +114,7 @@ has no request of its own: only its parameters."
   (list :method (if *request* (string (lack/request:request-method *request*)) "WEBSOCKET")
         :uri (if *request* (lack/request:request-uri *request*) "")
         :parameters (ignore-errors
-                     (remove-if (lambda (pair) (typep (cdr pair) 'uploaded-file)) (current-parameters)))))
+                     (remove-if (lambda (pair) (typep (cdr pair) 'h:uploaded-file)) (current-parameters)))))
 
 (defun retry-form (request)
   "A form sending REQUEST again, as an ordinary request even if it was AJAX."
@@ -126,12 +126,12 @@ has no request of its own: only its parameters."
                                 (getf request :parameters)))
          (get-p (string-equal (getf request :method) "GET")))
     (if get-p
-        (format nil "<a class=\"lt-debugger-button\" href=\"~A\">Retry</a>" (html-escape uri))
+        (format nil "<a class=\"lt-debugger-button\" href=\"~A\">Retry</a>" (h:html-escape uri))
         (with-output-to-string (out)
-          (format out "<form method=\"post\" action=\"~A\" class=\"lt-debugger-retry\">" (html-escape uri))
+          (format out "<form method=\"post\" action=\"~A\" class=\"lt-debugger-retry\">" (h:html-escape uri))
           (loop for (name . value) in parameters
                 do (format out "<input type=\"hidden\" name=\"~A\" value=\"~A\">"
-                           (html-escape name) (html-escape (princ-to-string value))))
+                           (h:html-escape name) (h:html-escape (princ-to-string value))))
           (format out "<button type=\"submit\" class=\"lt-debugger-button\" autofocus>Retry</button></form>")))))
 
 (defun page-link ()
@@ -145,13 +145,13 @@ has no request of its own: only its parameters."
 (defun render-frame (frame open)
   (with-output-to-string (out)
     (format out "<details class=\"lt-frame~:[~; lt-library~]\"~:[~; open~]><summary><code>~A</code>~@[ <span class=\"lt-frame-source\">~A</span>~]</summary>"
-            (getf frame :library) open (html-escape (getf frame :call))
-            (and (getf frame :source) (html-escape (getf frame :source))))
+            (getf frame :library) open (h:html-escape (getf frame :call))
+            (and (getf frame :source) (h:html-escape (getf frame :source))))
     (if (getf frame :locals)
         (progn
           (format out "<table class=\"lt-table lt-locals\">")
           (loop for (name . value) in (getf frame :locals)
-                do (format out "<tr><th>~A</th><td><code>~A</code></td></tr>" (html-escape name) (html-escape value)))
+                do (format out "<tr><th>~A</th><td><code>~A</code></td></tr>" (h:html-escape name) (h:html-escape value)))
           (format out "</table>"))
         (format out "<p class=\"lt-help\">No local variables recorded (compile with (debug 2) or more for them).</p>"))
     (format out "</details>")))
@@ -181,15 +181,15 @@ has no request of its own: only its parameters."
 .lt-locals th { width: 12rem; font-weight: 500; }
 .lt-debugger section { margin-top: 1.5rem; }
 </style></head><body class=\"lt-debugger\">"
-              (html-escape (printed (type-of condition) 120)) (static-url "littoral.css"))
+              (h:html-escape (printed (type-of condition) 120)) (static-url "littoral.css"))
       (format out "<h1>~A</h1><p class=\"lt-condition\">~A</p>"
-              (html-escape (string-downcase (printed (type-of condition) 120)))
-              (html-escape (handler-case (princ-to-string condition) (error () (printed condition)))))
+              (h:html-escape (string-downcase (printed (type-of condition) 120)))
+              (h:html-escape (handler-case (princ-to-string condition) (error () (printed condition)))))
       (format out "<div class=\"lt-debugger-actions\">~A~@[<a class=\"lt-debugger-button\" href=\"~A\">Back to the page</a>~]~
 <a class=\"lt-debugger-button\" href=\"~A\">New session</a>~
 <span class=\"lt-help\">Fix the code, recompile it, then retry: the request runs again.</span></div>"
-              (retry-form request) (and back (html-escape back))
-              (html-escape (url-for (application-path *application*))))
+              (retry-form request) (and back (h:html-escape back))
+              (h:html-escape (url-for (application-path *application*))))
       (format out "<section><h2>Backtrace</h2>")
       (dolist (frame frames)
         (let ((open (and (not (getf frame :library)) (< shown-open 3))))
@@ -199,14 +199,14 @@ has no request of its own: only its parameters."
       (when restarts
         (format out "<section><h2>Restarts on offer</h2><ul>~{<li><code>~A</code></li>~}</ul>~
 <p class=\"lt-help\">They lapse with the request; set <code>littoral:*debug-errors*</code> to use them in the Lisp debugger.</p></section>"
-                (mapcar #'html-escape restarts)))
+                (mapcar #'h:html-escape restarts)))
       (format out "<section><h2>Request</h2><p><code>~A ~A</code></p>"
-              (html-escape (getf request :method)) (html-escape (getf request :uri)))
+              (h:html-escape (getf request :method)) (h:html-escape (getf request :uri)))
       (when (getf request :parameters)
         (format out "<table class=\"lt-table\">")
         (loop for (name . value) in (getf request :parameters)
               do (format out "<tr><th>~A</th><td><code>~A</code></td></tr>"
-                         (html-escape name) (html-escape (printed value 200))))
+                         (h:html-escape name) (h:html-escape (printed value 200))))
         (format out "</table>"))
       (format out "</section></body></html>"))))
 
@@ -220,4 +220,4 @@ get it marked, for littoral.js to show in place of the page."
               (list html))
         (simple-page 500 "Internal Server Error"
                      (format nil "<p class=\"lt-error\">~A</p><pre>~A</pre>"
-                             (html-escape (printed condition)) (html-escape (backtrace-string)))))))
+                             (h:html-escape (printed condition)) (h:html-escape (backtrace-string)))))))

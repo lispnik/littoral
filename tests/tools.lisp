@@ -281,9 +281,9 @@
       (setf *last-denominator* denominator))))
 
 (defmethod render ((self broken-page))
-  (p () (text (format nil "count=~D" (broken-count self))))
-  (anchor (:callback (lambda () (incf (broken-count self) (risky-division 42)))) "Divide")
-  (button (:on-click (ajax :callback (lambda () (risky-division 7)) :update self)) "Ajax divide"))
+  (h:p () (h:text (format nil "count=~D" (broken-count self))))
+  (h:anchor (:callback (lambda () (incf (broken-count self) (risky-division 42)))) "Divide")
+  (h:button (:on-click (ajax :callback (lambda () (risky-division 7)) :update self)) "Ajax divide"))
 
 (test errors-in-development-show-the-debugger
   (let ((*broken* t))

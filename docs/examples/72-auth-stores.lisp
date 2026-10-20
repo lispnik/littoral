@@ -105,7 +105,7 @@
 ;;; Give one application its own store, by binding *USER-STORE* around its requests.
 (defclass who-is-ada (component) ())
 (defmethod render ((self who-is-ada))
-  (p () (text (littoral.auth:user-email (littoral.auth:find-user "ada")))))
+  (h:p () (h:text (littoral.auth:user-email (littoral.auth:find-user "ada")))))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
   (littoral.db:db-execute "CREATE TABLE members (id INTEGER PRIMARY KEY, name TEXT, email TEXT, password_hash TEXT)")
   (littoral.db:db-execute "INSERT INTO members (name, email) VALUES ('ada', 'ada@members.example')")

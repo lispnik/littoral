@@ -219,7 +219,7 @@ the scheme alone doesn't say.")
   (html-response
    (format nil "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>~A</title>~
 <link rel=\"stylesheet\" href=\"~A\"></head><body><h1>~A</h1>~A</body></html>"
-           (html-escape title) (static-url "littoral.css") (html-escape title) message)
+           (h:html-escape title) (static-url "littoral.css") (h:html-escape title) message)
    :status status))
 
 (defun serve-static (name)
@@ -294,38 +294,38 @@ BODY-HTML.  Second value: its Content-Security-Policy, or NIL."
     (setf html (with-output-to-string (out)
       (format out "<!DOCTYPE html>~%<html lang=\"~A\"><head><meta charset=\"utf-8\">~
 <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">~
-<title>~A</title>~%" (html-escape (current-language)) (html-escape (root-title root)))
+<title>~A</title>~%" (h:html-escape (current-language)) (h:html-escape (root-title root)))
       (loop for (key . content) in (reverse (root-metas root))
             do (format out "<meta ~A=\"~A\" content=\"~A\">~%"
                        (if (meta-property-p key) "property" "name")
-                       (html-escape key) (html-escape content)))
+                       (h:html-escape key) (h:html-escape content)))
       (loop for (rel href . attributes) in (reverse (root-links root))
             do (format out "<link rel=\"~A\" href=\"~A\"~:{ ~(~A~)=\"~A\"~}>~%"
-                       (html-escape rel) (html-escape href)
+                       (h:html-escape rel) (h:html-escape href)
                        (loop for (key value) on attributes by #'cddr
-                             collect (list key (html-escape (princ-to-string value))))))
+                             collect (list key (h:html-escape (princ-to-string value))))))
       (dolist (url (append (list (static-url "littoral.css"))
                            (application-stylesheets app)
                            (reverse (root-stylesheets root))))
-        (format out "<link rel=\"stylesheet\" href=\"~A\">~%" (html-escape url)))
+        (format out "<link rel=\"stylesheet\" href=\"~A\">~%" (h:html-escape url)))
       (when (root-styles root)
         (format out "<style>~%~{~A~%~}</style>~%" (reverse (root-styles root))))
       (dolist (url (append (list (static-url "littoral.js"))
                            (application-scripts app)
                            (reverse (root-scripts root))))
-        (format out "<script src=\"~A\" defer~@[ nonce=\"~A\"~]></script>~%" (html-escape url) *csp-nonce*))
+        (format out "<script src=\"~A\" defer~@[ nonce=\"~A\"~]></script>~%" (h:html-escape url) *csp-nonce*))
       (format out "</head>~%<body data-lt-action=\"~A\"~@[ data-lt-events=\"~A\"~]~@[ data-lt-ws=\"~A\"~]~@[ data-lt-live=\"~A\"~]>~%"
-              (html-escape action-url)
+              (h:html-escape action-url)
               (when (page-listens-p session)
-                (html-escape (concatenate 'string action-url "&_lt_events=1")))
+                (h:html-escape (concatenate 'string action-url "&_lt_events=1")))
               ;; One WebSocket for AJAX and push, where the page has push and
               ;; the server gives each connection a thread anyway; the events
               ;; URL above stays as the fallback.
               (when (and (page-listens-p session) *websocket-handler*
                          (application-websockets-p app) (not (async-socket *request*)))
-                (html-escape (concatenate 'string action-url "&_lt_ws=1")))
+                (h:html-escape (concatenate 'string action-url "&_lt_ws=1")))
               (when (page-polls-p session)
-                (html-escape (format nil "~A&_lt_live=~D" action-url *code-version*))))
+                (h:html-escape (format nil "~A&_lt_live=~D" action-url *code-version*))))
       (write-string body-html out)
       (let ((code (and *render-context* (render-client-code *render-context*))))
         (when (or code (root-inline-scripts root))
@@ -350,7 +350,7 @@ BODY-HTML.  Second value: its Content-Security-Policy, or NIL."
                                             :action-url action-url
                                             :halos-p (and (development-p app)
                                                           (session-halos-p session))))
-           (body (with-canvas-to-string ()
+           (body (h:with-canvas-to-string ()
                    (let ((*rendering* t))
                      (render-component (session-root session)))
                    (when (development-p app)
@@ -517,8 +517,8 @@ so it should use plain links."
     (html-response
      (format nil "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>~A</title>~
 <link rel=\"stylesheet\" href=\"~A\"></head><body>~A</body></html>"
-             (html-escape title) (static-url "littoral.css")
-             (with-canvas-to-string () (render component)))
+             (h:html-escape title) (static-url "littoral.css")
+             (h:with-canvas-to-string () (render component)))
      :status status)))
 
 (defun custom-error-page (app condition)
@@ -543,7 +543,7 @@ the handler falls back to the standard page."
                                   (or (and (typep condition 'forbidden)
                                            (simple-page 403 "Forbidden"
                                                         (format nil "<p>~A</p>"
-                                                                (html-escape (forbidden-message condition)))))
+                                                                (h:html-escape (forbidden-message condition)))))
                                       (custom-error-page app condition)
                                    (if (development-p app)
                                       ;; While the stack is still there.
@@ -642,9 +642,9 @@ request couldn't use.  NIL for other requests."
                (format nil "<ul>~{~A~}</ul>"
                        (loop for app in (list-applications)
                              collect (format nil "<li><a href=\"~A\">~A</a> — ~A</li>"
-                                             (html-escape (application-base-url app))
-                                             (html-escape (application-path app))
-                                             (html-escape (or (application-title app) "")))))))
+                                             (h:html-escape (application-base-url app))
+                                             (h:html-escape (application-path app))
+                                             (h:html-escape (or (application-title app) "")))))))
 
 (defun oversized-response (env)
   "413 or 411 when ENV's body may not be read, else NIL.  Checked before

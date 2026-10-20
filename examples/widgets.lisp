@@ -8,7 +8,7 @@
   (:documentation "A paragraph, for showing in tabs."))
 
 (defmethod render ((self note))
-  (p () (text (note-text self))))
+  (h:p () (h:text (note-text self))))
 
 (defun condition-subclasses (class)
   "The direct subclasses of CLASS that live in the COMMON-LISP package."
@@ -48,26 +48,26 @@
 (defmethod states ((self grid-section)) (list self))
 
 (defmethod render ((self grid-section))
-  (h2 () "Data grid")
-  (p () "The contacts example's description, as a grid: type in a column's filter box, sort by a heading, "
+  (h:h2 () "Data grid")
+  (h:p () "The contacts example's description, as a grid: type in a column's filter box, sort by a heading, "
     "and edit a row in place, with the description's own inputs and checks.")
   (render-component (section-grid self))
   (when (section-saved self)
-    (p (:role "status") (text (format nil "Saved ~A." (section-saved self))))))
+    (h:p (:role "status") (h:text (format nil "Saved ~A." (section-saved self))))))
 
 ;;; Charts
 
 (defclass charts-section (component) ())
 
 (defmethod render ((self charts-section))
-  (h2 () "Charts")
-  (p () "Inline SVG, each with its data as a table behind it for screen readers.")
+  (h:h2 () "Charts")
+  (h:p () "Inline SVG, each with its data as a table behind it for screen readers.")
   (bar-chart '(("Mon" . 12) ("Tue" . 19) ("Wed" . 7) ("Thu" . 23) ("Fri" . 15) ("Sat" . 4) ("Sun" . 2))
              :title "Orders this week")
   (line-chart '(("Visits" 120 180 150 220 260 240 300) ("Sign-ups" 12 20 18 30 34 28 41))
               :title "Visits and sign-ups" :x-labels '("Jan" "Feb" "Mar" "Apr" "May" "Jun" "Jul"))
-  (p () "A sparkline, inline: " (sparkline '(3 5 2 8 6 9 4 11 7 12) :label "Ten days of support tickets"))
-  (div (:class "chart-row")
+  (h:p () "A sparkline, inline: " (sparkline '(3 5 2 8 6 9 4 11 7 12) :label "Ten days of support tickets"))
+  (h:div (:class "chart-row")
     (pie-chart '(("Email" . 41) ("Chat" . 23) ("Phone" . 9) ("Forum" . 6)) :title "Support requests by channel" :donut t)
     (pie-chart '(("Lisp" . 62) ("JavaScript" . 25) ("CSS" . 13)) :title "This repository's lines"))
   (stacked-bar-chart '(("Opened" 14 22 18 30) ("Answered" 9 15 19 24) ("Closed" 4 8 12 21))
@@ -109,12 +109,12 @@
 (defmethod states ((self calendar-section)) (list self))
 
 (defmethod render ((self calendar-section))
-  (h2 () "Calendar")
+  (h:h2 () "Calendar")
   (render-component (section-calendar self))
   (when (section-chosen self)
-    (p (:role "status") "You chose " (text (apply #'localized-date (section-chosen self))) "."))
-  (h2 () "This week")
-  (p () "Drag an event to another time or day, or choose it for buttons that move it.")
+    (h:p (:role "status") "You chose " (h:text (apply #'localized-date (section-chosen self))) "."))
+  (h:h2 () "This week")
+  (h:p () "Drag an event to another time or day, or choose it for buttons that move it.")
   (render-component (section-week self)))
 
 ;;; A week of events, moved by dragging
@@ -194,8 +194,8 @@
 (defmethod children ((self big-table-section)) (list (section-grid self)))
 
 (defmethod render ((self big-table-section))
-  (h2 () "Big table")
-  (p () "Ten thousand shipments in a grid that writes only the rows near those on screen, "
+  (h:h2 () "Big table")
+  (h:p () "Ten thousand shipments in a grid that writes only the rows near those on screen, "
     "fetching more as it scrolls. Add conditions above it, such as a weight of at least 30 "
     "or a date before 2026-05-01.")
   (render-component (section-grid self)))
@@ -207,13 +207,13 @@
             :initform (make-instance 'load-more-list
                                      :items (lambda () (cl-symbols-starting ""))
                                      :batch-size 25 :automatic t :list-label "Common Lisp symbols"
-                                     :render-item (lambda (symbol) (code () (text (string-downcase symbol))))))))
+                                     :render-item (lambda (symbol) (h:code () (h:text (string-downcase symbol))))))))
 
 (defmethod children ((self load-more-section)) (list (section-symbols self)))
 
 (defmethod render ((self load-more-section))
-  (h2 () "Load more")
-  (p () "Every external symbol of Common Lisp, 25 at a time. More arrive as the end of the list "
+  (h:h2 () "Load more")
+  (h:p () "Every external symbol of Common Lisp, 25 at a time. More arrive as the end of the list "
     "scrolls into view, and the button is there for keyboards and pages without JavaScript.")
   (render-component (section-symbols self)))
 
@@ -228,8 +228,8 @@
 (defmethod children ((self kanban-section)) (list (section-board self)))
 
 (defmethod render ((self kanban-section))
-  (h2 () "Kanban")
-  (p () "Drag cards between columns, or use the arrows on each card.")
+  (h:h2 () "Kanban")
+  (h:p () "Drag cards between columns, or use the arrows on each card.")
   (render-component (section-board self)))
 
 ;;; Markdown
@@ -248,16 +248,16 @@ Some *emphasis*, some **strong** text and `code`.
 (defmethod states ((self markdown-section)) (list self))
 
 (defmethod render ((self markdown-section))
-  (h2 () "Markdown")
-  (p () "The " (code () ":markdown") " field kind shows text written in Markdown as safe HTML: "
+  (h:h2 () "Markdown")
+  (h:p () "The " (h:code () ":markdown") " field kind shows text written in Markdown as safe HTML: "
     "any HTML in it is escaped, and links go only to http(s), mailto or this site.")
-  (div (:class "markdown-demo")
-    (form ()
-      (text-area (:id "markdown-source" :label "Markdown" :rows 9 :value (section-source self)
+  (h:div (:class "markdown-demo")
+    (h:form ()
+      (h:text-area (:id "markdown-source" :label "Markdown" :rows 9 :value (section-source self)
                   :callback (lambda (v) (setf (section-source self) v))
                   :on-input (ajax-update self))))
-    (div (:class "lt-markdown markdown-preview" :aria-label "Preview")
-      (raw (markdown-html (section-source self))))))
+    (h:div (:class "lt-markdown markdown-preview" :aria-label "Preview")
+      (h:raw (markdown-html (section-source self))))))
 
 ;;; Breadcrumbs and in-place editing: a pantry to look through
 
@@ -301,29 +301,29 @@ Some *emphasis*, some **strong** text and `code`.
 (defmethod children ((self item-page)) (page-editors self))
 
 (defmethod render ((self pantry-page))
-  (ul ()
+  (h:ul ()
     (loop for (name . items) in (pantry-shelves self)
           do (let ((name name) (items items))
-               (li () (anchor (:callback (lambda ()
+               (h:li () (h:anchor (:callback (lambda ()
                                            (show self (make-instance 'shelf-page :name name :items items
                                                                                  :trail (level-trail self)))))
-                        (text name)))))))
+                        (h:text name)))))))
 
 (defmethod render ((self shelf-page))
-  (ul ()
+  (h:ul ()
     (dolist (item (shelf-items self))
       (let ((item item))
-        (li () (anchor (:callback (lambda ()
+        (h:li () (h:anchor (:callback (lambda ()
                                     (show self (make-instance 'item-page :item item :trail (level-trail self)))))
-                 (text (pantry-item-name item)))))))
-  (p () (anchor (:callback (lambda () (answer self))) "Back to the pantry")))
+                 (h:text (pantry-item-name item)))))))
+  (h:p () (h:anchor (:callback (lambda () (answer self))) "Back to the pantry")))
 
 (defmethod render ((self item-page))
-  (dl (:class "pantry-item")
+  (h:dl (:class "pantry-item")
     (loop for editor in (page-editors self)
           for label in '("Name" "In stock")
-          do (dt () (text label))
-             (dd () (render-component editor)))))
+          do (h:dt () (h:text label))
+             (h:dd () (render-component editor)))))
 
 (defclass crumbs-section (component)
   ((pantry :reader section-pantry)
@@ -343,8 +343,8 @@ Some *emphasis*, some **strong** text and `code`.
 (defmethod children ((self crumbs-section)) (list (section-trail self) (section-pantry self)))
 
 (defmethod render ((self crumbs-section))
-  (h2 () "Breadcrumbs and in-place editing")
-  (p () "Open a shelf, then an item. The trail follows the calls, and its links go back to that level. "
+  (h:h2 () "Breadcrumbs and in-place editing")
+  (h:p () "Open a shelf, then an item. The trail follows the calls, and its links go back to that level. "
     "An item's fields are edited where they are shown.")
   (render-component (section-trail self))
   (render-component (section-pantry self)))
@@ -377,14 +377,14 @@ Some *emphasis*, some **strong** text and `code`.
 (defmethod children ((self forms-section)) (list (section-editor self)))
 
 (defmethod render ((self forms-section))
-  (h2 () "Tags, times and date ranges")
-  (p () "Tags turn into chips as you type (Enter or a comma adds one); without JavaScript they're a comma-separated list.")
+  (h:h2 () "Tags, times and date ranges")
+  (h:p () "Tags turn into chips as you type (Enter or a comma adds one); without JavaScript they're a comma-separated list.")
   (render-component (section-editor self))
   (let ((description (find-description 'outing)))
-    (dl (:class "outing-saved")
+    (h:dl (:class "outing-saved")
       (dolist (field (description-fields description))
-        (dt () (text (field-label field)))
-        (dd () (render-field-value field (field-value field (section-outing self))))))))
+        (h:dt () (h:text (field-label field)))
+        (h:dd () (render-field-value field (field-value field (section-outing self))))))))
 
 ;;; More inputs: a stepper, a slider, stars, a colour, multiple choices and a new password
 
@@ -422,15 +422,15 @@ multiple-choice, transfer and new-password field kinds."))
 (defmethod children ((self inputs-section)) (list (section-editor self)))
 
 (defmethod render ((self inputs-section))
-  (h2 () "Sliders, steppers, stars and colours")
-  (p () "Each is a field kind for descriptions, and works without JavaScript. "
+  (h:h2 () "Sliders, steppers, stars and colours")
+  (h:p () "Each is a field kind for descriptions, and works without JavaScript. "
     "The password's strength is checked on the server as you type.")
   (render-component (section-editor self))
   (let ((description (find-description 'party)))
-    (dl (:class "party-saved")
+    (h:dl (:class "party-saved")
       (dolist (field (description-fields description))
-        (dt () (text (field-label field)))
-        (dd () (render-field-value field (field-value field (section-party self))))))))
+        (h:dt () (h:text (field-label field)))
+        (h:dd () (render-field-value field (field-value field (section-party self))))))))
 
 ;;; Layout: a popover, a tooltip, a drawer and a split pane
 
@@ -457,20 +457,20 @@ multiple-choice, transfer and new-password field kinds."))
 (defmethod states ((self planet-list)) (list self))
 
 (defmethod render ((self planet-list))
-  (ul (:class "planet-list")
+  (h:ul (:class "planet-list")
     (loop for (name) in *planets*
           do (let ((name name))
                (flet ((choose () (setf (chosen-planet self) name)))
-                 (li ()
-                   (anchor (:aria-current (when (string= name (chosen-planet self)) "true")
+                 (h:li ()
+                   (h:anchor (:aria-current (when (string= name (chosen-planet self)) "true")
                             :callback #'choose
                             :on-click (ajax :callback #'choose :update (list self (planet-detail self))))
-                     (text name))))))))
+                     (h:text name))))))))
 
 (defmethod render ((self planet-detail))
   (let ((planet (assoc (chosen-planet (detail-list self)) *planets* :test #'string=)))
-    (h3 () (text (first planet)))
-    (p () (text (second planet)))))
+    (h:h3 () (h:text (first planet)))
+    (h:p () (h:text (second planet)))))
 
 (defclass layout-section (component)
   ((drawer :initform (make-instance 'drawer :label "Open the drawer" :title "A drawer"
@@ -489,20 +489,20 @@ multiple-choice, transfer and new-password field kinds."))
 (defmethod children ((self layout-section)) (list (layout-drawer self) (layout-split self)))
 
 (defmethod render ((self layout-section))
-  (h2 () "Popovers and tooltips")
-  (p () "The popover is the browser's own: it opens and closes without a round trip. "
+  (h:h2 () "Popovers and tooltips")
+  (h:p () "The popover is the browser's own: it opens and closes without a round trip. "
     "The tooltip shows while the button has the pointer or the focus; Escape hides it.")
-  (div (:class "layout-row")
+  (h:div (:class "layout-row")
     (with-popover ("What's a popover?")
-      (p () "A box over the page, closed by Escape or a click elsewhere.")
-      (p () (anchor (:href (url-for "/examples")) "All the examples")))
+      (h:p () "A box over the page, closed by Escape or a click elsewhere.")
+      (h:p () (h:anchor (:href (url-for "/examples")) "All the examples")))
     (with-tooltip ("Nothing is copied: this only shows a tooltip.")
-      (button () "Copy the link")))
-  (h2 () "Drawer")
-  (p () "Its panel slides in from the side. Whether it's open is kept on the server.")
+      (h:button () "Copy the link")))
+  (h:h2 () "Drawer")
+  (h:p () "Its panel slides in from the side. Whether it's open is kept on the server.")
   (render-component (layout-drawer self))
-  (h2 () "Split pane")
-  (p () "Drag the divider, or focus it and use the arrow keys.")
+  (h:h2 () "Split pane")
+  (h:p () "Drag the divider, or focus it and use the arrow keys.")
   (render-component (layout-split self)))
 
 ;;; Menus, accordions and disclosures
@@ -546,10 +546,10 @@ multiple-choice, transfer and new-password field kinds."))
 (defmethod states ((self menus-section)) (list self))
 
 (defmethod render ((self menus-section))
-  (h2 () "Menus, accordions and disclosures")
+  (h:h2 () "Menus, accordions and disclosures")
   (render-component (menus-bar self))
-  (p () (render-component (menus-actions self))
-    (when (menus-chosen self) (text " ") (span (:class "menus-chosen" :role "status") (text (format nil "You chose ~A." (menus-chosen self))))))
+  (h:p () (render-component (menus-actions self))
+    (when (menus-chosen self) (h:text " ") (h:span (:class "menus-chosen" :role "status") (h:text (format nil "You chose ~A." (menus-chosen self))))))
   (render-component (menus-faq self))
   (render-component (menus-more self)))
 
@@ -563,7 +563,7 @@ multiple-choice, transfer and new-password field kinds."))
   (:documentation "Primes, which took a while to find."))
 
 (defmethod render ((self primes-note))
-  (p () (text (format nil "The first ~D primes, found after the page arrived: ~{~D~^, ~}."
+  (h:p () (h:text (format nil "The first ~D primes, found after the page arrived: ~{~D~^, ~}."
                       (length (note-primes self)) (note-primes self)))))
 
 (defun first-primes (count)
@@ -595,19 +595,19 @@ multiple-choice, transfer and new-password field kinds."))
 (defmethod states ((self tools-section)) (list self))
 
 (defmethod render ((self tools-section))
-  (h2 () "Lazy panel")
-  (p () "This part of the page was left out when it was sent, then filled in over AJAX.")
+  (h:h2 () "Lazy panel")
+  (h:p () "This part of the page was left out when it was sent, then filled in over AJAX.")
   (render-component (tools-lazy self))
-  (h2 () "Differences")
-  (form (:class "tools-texts")
-    (div (:class "lt-field")
-      (label (:for "diff-old") "Monday's list")
-      (text-area (:id "diff-old" :rows 6 :value (tools-old self) :callback (lambda (v) (setf (tools-old self) v)))))
-    (div (:class "lt-field")
-      (label (:for "diff-new") "Tuesday's list")
-      (text-area (:id "diff-new" :rows 6 :value (tools-new self) :callback (lambda (v) (setf (tools-new self) v)))))
-    (div (:class "lt-buttons")
-      (submit-button (:callback (lambda ()
+  (h:h2 () "Differences")
+  (h:form (:class "tools-texts")
+    (h:div (:class "lt-field")
+      (h:label (:for "diff-old") "Monday's list")
+      (h:text-area (:id "diff-old" :rows 6 :value (tools-old self) :callback (lambda (v) (setf (tools-old self) v)))))
+    (h:div (:class "lt-field")
+      (h:label (:for "diff-new") "Tuesday's list")
+      (h:text-area (:id "diff-new" :rows 6 :value (tools-new self) :callback (lambda (v) (setf (tools-new self) v)))))
+    (h:div (:class "lt-buttons")
+      (h:submit-button (:callback (lambda ()
                                   (setf (diff-view-old (tools-diff self)) (tools-old self)
                                         (diff-view-new (tools-diff self)) (tools-new self))))
         "Compare")))
@@ -637,12 +637,12 @@ multiple-choice, transfer and new-password field kinds."))
 (defmethod children ((self tree-section)) (list (section-tree self)))
 
 (defmethod render ((self tree-section))
-  (h2 () "Tree")
-  (p () "Common Lisp's condition types.")
+  (h:h2 () "Tree")
+  (h:p () "Common Lisp's condition types.")
   (render-component (section-tree self))
   (let ((c (selected-condition (section-demo self))))
     (when c
-      (p () "Selected: " (code () (text (string-downcase (class-name c))))))))
+      (h:p () "Selected: " (h:code () (h:text (string-downcase (class-name c))))))))
 
 (defclass autocomplete-section (component)
   ((demo :initarg :demo :reader section-demo)
@@ -661,13 +661,13 @@ multiple-choice, transfer and new-password field kinds."))
 (defmethod children ((self autocomplete-section)) (list (section-field self)))
 
 (defmethod render ((self autocomplete-section))
-  (h2 () "Autocomplete")
+  (h:h2 () "Autocomplete")
   (render-component (section-field self))
   (let ((s (chosen-symbol (section-demo self))))
     (when s
-      (p () "Chose " (code () (text (string-downcase (symbol-name s))))
+      (h:p () "Chose " (h:code () (h:text (string-downcase (symbol-name s))))
         (let ((doc (or (documentation s 'function) (documentation s 'variable))))
-          (when doc (text (format nil ": ~A" (first (cl-ppcre:split "\\n" doc))))))))))
+          (when doc (h:text (format nil ": ~A" (first (cl-ppcre:split "\\n" doc))))))))))
 
 (defclass sortable-section (component)
   ((list :initarg :list :reader section-list))
@@ -676,10 +676,10 @@ multiple-choice, transfer and new-password field kinds."))
 (defmethod children ((self sortable-section)) (list (section-list self)))
 
 (defmethod render ((self sortable-section))
-  (h2 () "Sortable list")
-  (p () "Drag the items, or use the arrows.")
+  (h:h2 () "Sortable list")
+  (h:p () "Drag the items, or use the arrows.")
   (render-component (section-list self))
-  (p () "Order: " (text (format nil "~{~A~^, ~}" (sortable-items (section-list self))))))
+  (h:p () "Order: " (h:text (format nil "~{~A~^, ~}" (sortable-items (section-list self))))))
 
 (defmethod initialize-instance :after ((self widget-demo) &key)
   (setf (slot-value self 'tasks)
@@ -758,7 +758,7 @@ multiple-choice, transfer and new-password field kinds."))
 .chart-row { display: flex; flex-wrap: wrap; gap: 0 2rem; }")
 
 (defmethod render ((self widget-demo))
-  (div (:class "widgets-heading")
-    (h1 () "Widgets")
+  (h:div (:class "widgets-heading")
+    (h:h1 () "Widgets")
     (render-component (demo-palette self)))
   (render-component (demo-navigation self)))

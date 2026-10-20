@@ -13,4 +13,4 @@
 (defmethod render ((self multi-counter))
   (dolist (counter (counters self))
     (render-component counter)
-    (hr ())))
+    (h:hr ())))

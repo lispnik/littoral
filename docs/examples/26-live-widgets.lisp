@@ -14,7 +14,7 @@
 ;;;; Example: littoral:time-ago
 ;;; Writes a time element saying how long ago the time was, with the date and time as its title.  littoral.js keeps the words up to date while the page stays open, so "just now" becomes "5 minutes ago".
 (let ((time (- (get-universal-time) 120)))
-  (cl-ppcre:regex-replace-all " (datetime|title|data-lt-date)=\"[^\"]*\"" (with-canvas-to-string () (time-ago time)) ""))
+  (cl-ppcre:regex-replace-all " (datetime|title|data-lt-date)=\"[^\"]*\"" (h:with-canvas-to-string () (time-ago time)) ""))
 ;; ⇒ "<time class=\"lt-relative-time\" data-lt-relative data-lt-now=\"just now\">2 minutes ago</time>"
 
 ;;;; Example: littoral:live-comment-thread littoral:thread-comments littoral:thread-comment-author littoral:thread-comment-body

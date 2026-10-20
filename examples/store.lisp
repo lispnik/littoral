@@ -87,11 +87,11 @@
 
 (defun render-lines (lines)
   "A table of cart LINES with their prices."
-  (table (:class "lt-table cart-lines")
+  (h:table (:class "lt-table cart-lines")
     (dolist (line lines)
-      (tr () (td () (text (rest line)) " × ")
-        (td () (text (dish-name (first line))))
-        (td (:class "number") (text (money (* (rest line) (dish-price (first line))))))))))
+      (h:tr () (h:td () (h:text (rest line)) " × ")
+        (h:td () (h:text (dish-name (first line))))
+        (h:td (:class "number") (h:text (money (* (rest line) (dish-price (first line))))))))))
 
 (defclass cart-review (component)
   ((cart :initarg :cart :reader review-cart))
@@ -99,24 +99,24 @@
 
 (defmethod render ((self cart-review))
   (let ((cart (review-cart self)))
-    (h2 () "Your order")
-    (form ()
-      (table (:class "lt-table cart-lines")
+    (h:h2 () "Your order")
+    (h:form ()
+      (h:table (:class "lt-table cart-lines")
         (dolist (line (cart-lines cart))
           (let ((dish (first line)))
-            (tr ()
-              (td () (number-input (:value (rest line) :min 0 :class "qty"
+            (h:tr ()
+              (h:td () (h:number-input (:value (rest line) :min 0 :class "qty"
                                     :label (format nil "How many ~A" (dish-name dish))
                                     :callback (lambda (n) (set-quantity cart dish n)))))
-              (td () (text (dish-name dish)))
-              (td (:class "number") (text (money (* (rest line) (dish-price dish)))))))))
-      (p () "Total: " (strong () (text (money (cart-total cart)))))
-      (div (:class "lt-buttons")
-        (submit-button () "Update")
-        (submit-button (:callback (lambda ()
+              (h:td () (h:text (dish-name dish)))
+              (h:td (:class "number") (h:text (money (* (rest line) (dish-price dish)))))))))
+      (h:p () "Total: " (h:strong () (h:text (money (cart-total cart)))))
+      (h:div (:class "lt-buttons")
+        (h:submit-button () "Update")
+        (h:submit-button (:callback (lambda ()
                                     (unless (null (cart-lines cart)) (answer self t))))
           "Continue to delivery")
-        (submit-button (:callback (lambda () (answer self nil))) "Back to the menu")))))
+        (h:submit-button (:callback (lambda () (answer self nil))) "Back to the menu")))))
 
 (defclass receipt (component)
   ((order :initarg :order :reader receipt-order))
@@ -125,15 +125,15 @@
 (defmethod render ((self receipt))
   (let* ((order (receipt-order self))
          (a (order-address order)))
-    (div (:class "lt-dialog receipt")
-      (h2 () "Thank you! Order #" (text (order-number order)))
+    (h:div (:class "lt-dialog receipt")
+      (h:h2 () "Thank you! Order #" (h:text (order-number order)))
       (render-lines (order-lines order))
-      (p () "Total " (strong () (text (money (order-total order)))) ", "
-        (text (string-downcase (order-payment order))) ".")
-      (p () "Delivering on " (strong () (text (format-date (order-date order)))) " to "
-        (text (format nil "~A, ~A, ~A ~A" (address-name a) (address-street a)
+      (h:p () "Total " (h:strong () (h:text (money (order-total order)))) ", "
+        (h:text (string-downcase (order-payment order))) ".")
+      (h:p () "Delivering on " (h:strong () (h:text (format-date (order-date order)))) " to "
+        (h:text (format nil "~A, ~A, ~A ~A" (address-name a) (address-street a)
                       (address-city a) (address-postcode a))) ".")
-      (form () (submit-button (:callback (lambda () (answer self t))) "Back to the menu")))))
+      (h:form () (h:submit-button (:callback (lambda () (answer self t))) "Back to the menu")))))
 
 ;;; The checkout task
 
@@ -181,18 +181,18 @@
 
 (defmethod render ((self cart-view))
   (let ((cart (view-cart self)))
-    (aside (:class "cart")
-      (h2 () "Cart")
+    (h:aside (:class "cart")
+      (h:h2 () "Cart")
       (cond ((null (cart-lines cart))
-             (p (:class "empty") "Nothing yet."))
+             (h:p (:class "empty") "Nothing yet."))
             (t
-             (ul ()
+             (h:ul ()
                (dolist (line (cart-lines cart))
                  (let ((dish (first line)))
-                   (li () (text (rest line)) " × " (text (dish-name dish)) " "
-                     (anchor (:callback (lambda () (set-quantity cart dish 0)) :title "Remove") "✕")))))
-             (p () "Total " (strong () (text (money (cart-total cart)))))
-             (anchor (:class "checkout" :callback (lambda () (start-checkout (view-store self))))
+                   (h:li () (h:text (rest line)) " × " (h:text (dish-name dish)) " "
+                     (h:anchor (:callback (lambda () (set-quantity cart dish 0)) :title "Remove") "✕")))))
+             (h:p () "Total " (h:strong () (h:text (money (cart-total cart)))))
+             (h:anchor (:class "checkout" :callback (lambda () (start-checkout (view-store self))))
                "Checkout »"))))))
 
 (defclass store (component)
@@ -216,11 +216,11 @@
                         (column "Price" #'dish-price :class "number"
                                 :render (lambda (row price)
                                           (declare (ignore row))
-                                          (text (money price))))
+                                          (h:text (money price))))
                         (column "" nil :sortable nil
                                 :render (lambda (dish value)
                                           (declare (ignore value))
-                                          (anchor (:class "add"
+                                          (h:anchor (:class "add"
                                                    :callback (lambda ()
                                                                (add-to-cart (store-cart self) dish)
                                                                (setf (store-notice self) nil)))
@@ -243,24 +243,24 @@
                              (format nil "Order #~D is on its way." (order-number order)))))))
 
 (defmethod render ((self store))
-  (header (:class "store-header")
-    (h1 () "Sushi Store")
-    (span (:class "cart-count")
-      (text (format nil "~D item~:P in your cart" (cart-quantity (store-cart self))))))
+  (h:header (:class "store-header")
+    (h:h1 () "Sushi Store")
+    (h:span (:class "cart-count")
+      (h:text (format nil "~D item~:P in your cart" (cart-quantity (store-cart self))))))
   (when (store-notice self)
-    (p (:class "lt-message notice") (text (store-notice self))))
-  (div (:class "store-body")
-    (section (:class "menu")
+    (h:p (:class "lt-message notice") (h:text (store-notice self))))
+  (h:div (:class "store-body")
+    (h:section (:class "menu")
       (render-component (store-catalog self)))
     (render-component (store-cart-view self)))
   (when (store-orders self)
-    (section (:class "orders")
-      (h2 () "Your orders")
-      (ul ()
+    (h:section (:class "orders")
+      (h:h2 () "Your orders")
+      (h:ul ()
         (dolist (order (store-orders self))
-          (li () "#" (text (order-number order)) " — "
-            (text (money (order-total order))) ", "
-            (text (format-date (order-date order)))))))))
+          (h:li () "#" (h:text (order-number order)) " — "
+            (h:text (money (order-total order))) ", "
+            (h:text (format-date (order-date order)))))))))
 
 (defmethod style ((self store))
   ".store-header { display: flex; flex-wrap: wrap; gap: .4rem 1rem; justify-content: space-between; align-items: baseline; }

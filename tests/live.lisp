@@ -9,13 +9,13 @@
   (:documentation "A component whose render method the test redefines."))
 
 (defmethod render ((self live-thing))
-  (p () "version one"))
+  (h:p () "version one"))
 
 (defclass bystander (component) ()
   (:documentation "A component on another page, which must not reload."))
 
 (defmethod render ((self bystander))
-  (p () "unchanged"))
+  (h:p () "unchanged"))
 
 (defun live-poll (browser)
   "What the page's live-reload poll answers."
@@ -38,7 +38,7 @@
            (is (not (search "data-lt-events" (browser-html b))))
            (is (not (live-poll b)))
            ;; As recompiling it in Emacs would.
-           (eval '(defmethod render ((self live-thing)) (p () "version two")))
+           (eval '(defmethod render ((self live-thing)) (h:p () "version two")))
            (is (wait-for (lambda () (live-poll b)) 3))
            (is (not (live-poll o)))
            ;; The reloaded page draws its state with the new method.
@@ -49,7 +49,7 @@
            (reload-pages)
            (is (live-poll o))))
     (stop-live-watcher)
-    (eval '(defmethod render ((self live-thing)) (p () "version one")))))
+    (eval '(defmethod render ((self live-thing)) (h:p () "version one")))))
 
 (test pages-with-streams-reload-through-them
   (with-fresh-applications (("/progress" 'littoral-examples:progress-demo :mode :development))

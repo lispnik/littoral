@@ -13,23 +13,23 @@
 the policy stopping the script in it."))
 
 (defmethod render ((self csp-demo))
-  (h1 () "Content security policy")
-  (p () "Every page carries a " (code () "Content-Security-Policy") " header that lets scripts run only if "
+  (h:h1 () "Content security policy")
+  (h:p () "Every page carries a " (h:code () "Content-Security-Policy") " header that lets scripts run only if "
     "they carry the page's nonce, a random value new for each page. Littoral's own browser code is "
     "defined by the page's script and named by id in attributes, so even markup injected into a page "
     "can't bring code with it.")
-  (p () "Below, whatever you type is written into the page " (strong () "unescaped") ", with "
-    (code () "raw") ": the classic mistake behind cross-site scripting. Each attack tries to change "
+  (h:p () "Below, whatever you type is written into the page " (h:strong () "unescaped") ", with "
+    (h:code () "raw") ": the classic mistake behind cross-site scripting. Each attack tries to change "
     "this tab's title to \"hacked\".")
-  (form ()
-    (text-area (:id "markup" :label "HTML written into the page" :rows 5 :value (demo-markup self)
+  (h:form ()
+    (h:text-area (:id "markup" :label "HTML written into the page" :rows 5 :value (demo-markup self)
                 :callback (lambda (v) (setf (demo-markup self) v))))
-    (submit-button () "Write it into the page"))
-  (div (:class "csp-sandbox")
-    (raw (demo-markup self)))
-  (p (:id "csp-report" :role "status") "Nothing blocked yet.")
-  (p () "Applications choose with " (code () ":content-security-policy") ": "
-    (code () ":strict") " (the default), their own policy string, or " (code () "nil") "."))
+    (h:submit-button () "Write it into the page"))
+  (h:div (:class "csp-sandbox")
+    (h:raw (demo-markup self)))
+  (h:p (:id "csp-report" :role "status") "Nothing blocked yet.")
+  (h:p () "Applications choose with " (h:code () ":content-security-policy") ": "
+    (h:code () ":strict") " (the default), their own policy string, or " (h:code () "nil") "."))
 
 (defmethod script ((self csp-demo))
   ;; This script carries the nonce, so it runs; it reports what the policy stops.

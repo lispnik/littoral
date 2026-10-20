@@ -16,7 +16,7 @@
           :documentation "Instead of :ITEMS, a function of START and COUNT returning at most COUNT items from START.")
    (batch-size :initarg :batch-size :initform 20 :reader load-more-batch-size)
    (shown :accessor load-more-shown :documentation "How many items are shown.")
-   (render-item :initarg :render-item :initform (lambda (item) (text item)) :reader load-more-renderer)
+   (render-item :initarg :render-item :initform (lambda (item) (h:text item)) :reader load-more-renderer)
    (automatic :initarg :automatic :initform nil :reader load-more-automatic-p
               :documentation "True to load the next batch as the end of the list is scrolled into view.")
    (label :initarg :label :initform "Load more" :reader load-more-label)
@@ -96,7 +96,7 @@ first new item takes the focus once it is shown."
         (load-more-move-focus-p list) nil))
 
 (defmethod render ((self load-more-list))
-  (div (:class "lt-load-more")
+  (h:div (:class "lt-load-more")
     (render-component (load-more-body self))
     (render-component (load-more-status self))))
 
@@ -106,27 +106,27 @@ first new item takes the focus once it is shown."
       (let ((focus (load-more-focus list))
             (move (load-more-move-focus-p list))
             (targets (children list)))
-        (ul (:class "lt-load-more-items"
+        (h:ul (:class "lt-load-more-items"
              :aria-label (when (load-more-list-label list) (translate-label (load-more-list-label list))))
           (loop for item in items for i from 0
                 do (let ((here (eql i focus)))
-                     (li (:tabindex (when here "-1") :autofocus (and here move))
+                     (h:li (:tabindex (when here "-1") :autofocus (and here move))
                        (funcall (load-more-renderer list) item)))))
         (when more
-          (anchor (:class "lt-load-more-button"
+          (h:anchor (:class "lt-load-more-button"
                    :callback (lambda () (load-more list))
                    :on-click (ajax :callback (lambda () (load-more list)) :update targets)
                    :lazy (when (load-more-automatic-p list)
                            (ajax :callback (lambda () (load-more list :focus nil)) :update targets))
                    :data-lt-lazy-visible (load-more-automatic-p list))
-            (text (translate-label (load-more-label list)))))))))
+            (h:text (translate-label (load-more-label list)))))))))
 
 (defmethod render ((self load-more-status))
   (multiple-value-bind (items more total) (load-more-window (part-owner self))
     (declare (ignore more))
     (if total
-        (text (translate "Showing ~D of ~D." (length items) total))
-        (text (translate "Showing ~D." (length items))))))
+        (h:text (translate "Showing ~D of ~D." (length items) total))
+        (h:text (translate "Showing ~D." (length items))))))
 
 ;;; Filter builders: conditions on a description's fields
 
@@ -352,7 +352,7 @@ VALUE.  A new field keeps the operator when the field allows it."
                          (loop for choice in choices for i from 0
                                do (let ((choice choice))
                                     (emit-tag "option" (list :value i :selected (eql i chosen))
-                                              (lambda () (text (format-field field choice))))))))))
+                                              (lambda () (h:text (format-field field choice))))))))))
           (t
            (emit-tag "input" (list :type (typecase field
                                             (date-field "date") (time-field "time")
@@ -369,17 +369,17 @@ VALUE.  A new field keeps the operator when the field allows it."
          (conditions (filter-conditions self))
          (focus (filter-focus self)))
     (flet ((add () (add-filter-condition self)))
-      (form (:class "lt-filter" :role "search" :aria-label (translate "Conditions"))
+      (h:form (:class "lt-filter" :role "search" :aria-label (translate "Conditions"))
         (when (> (length conditions) 1)
-          (div (:class "lt-filter-match")
-            (label (:for (format nil "~A-match" id)) (translate "Show what matches"))
-            (text " ")
-            (select-list (:id (format nil "~A-match" id) :items '(:all :any) :selected (filter-match self)
+          (h:div (:class "lt-filter-match")
+            (h:label (:for (format nil "~A-match" id)) (translate "Show what matches"))
+            (h:text " ")
+            (h:select-list (:id (format nil "~A-match" id) :items '(:all :any) :selected (filter-match self)
                           :labels (lambda (m) (translate (if (eq m :all) "all of these conditions" "any of these conditions")))
                           :callback (lambda (m) (when m (setf (filter-match self) m) (filter-changed self)))
                           :on-change (ajax :update targets)))))
         (when conditions
-          (ol (:class "lt-filter-conditions")
+          (h:ol (:class "lt-filter-conditions")
             (loop for condition in conditions for index from 0
                   do (let ((index index))
                        (destructuring-bind (name operator text) condition
@@ -387,26 +387,26 @@ VALUE.  A new field keeps the operator when the field allows it."
                          (let ((field (condition-field self condition))
                                (prefix (format nil "~A-~D" id index)))
                            (when field
-                             (li ()
-                              (div (:role "group" :aria-label (translate "Condition ~D" (1+ index)))
-                               (select-list (:id (format nil "~A-field" prefix) :aria-label (translate "Field")
+                             (h:li ()
+                              (h:div (:role "group" :aria-label (translate "Condition ~D" (1+ index)))
+                               (h:select-list (:id (format nil "~A-field" prefix) :aria-label (translate "Field")
                                              :items fields :selected field :autofocus (eql focus index)
                                              :labels (lambda (f) (translate (field-label f)))
                                              :callback (lambda (f) (when f (change-condition self index :field (field-name f))))
                                              :on-change (ajax :update targets)))
-                               (text " ")
+                               (h:text " ")
                                (let ((operators (filter-operators field)))
-                                 (select-list (:id (format nil "~A-operator" prefix) :aria-label (translate "Comparison")
+                                 (h:select-list (:id (format nil "~A-operator" prefix) :aria-label (translate "Comparison")
                                                :items operators :selected (assoc operator operators)
                                                :labels (lambda (o) (translate (cdr o)))
                                                :callback (lambda (o) (when o (change-condition self index :operator (car o))))
                                                :on-change (ajax :update targets))))
                                (when (operator-takes-value-p operator)
-                                 (text " ")
+                                 (h:text " ")
                                  (render-condition-value self field text (format nil "~A-value" prefix) index))
-                               (text " ")
+                               (h:text " ")
                                (flet ((remove-it () (remove-filter-condition self index)))
-                                 (submit-button (:class "lt-filter-remove" :formnovalidate t
+                                 (h:submit-button (:class "lt-filter-remove" :formnovalidate t
                                                  :aria-label (translate "Remove condition ~D" (1+ index))
                                                  :callback #'remove-it
                                                  :on-click (ajax :callback #'remove-it :update targets))
@@ -414,16 +414,16 @@ VALUE.  A new field keeps the operator when the field allows it."
                                (multiple-value-bind (target problem) (condition-target field operator text)
                                  (declare (ignore target))
                                  (when (stringp problem)
-                                   (div (:class "lt-validation-error") (text problem)))))))))))))
-        (div (:class "lt-buttons")
-          (submit-button (:id (format nil "~A-add" id) :class "lt-filter-add" :formnovalidate t
+                                   (h:div (:class "lt-validation-error") (h:text problem)))))))))))))
+        (h:div (:class "lt-buttons")
+          (h:submit-button (:id (format nil "~A-add" id) :class "lt-filter-add" :formnovalidate t
                           :autofocus (eq focus :add)
                           :callback #'add :on-click (ajax :callback #'add :update targets))
             (translate "Add a condition"))
           (when conditions
             (flet ((clear () (clear-filter-conditions self)))
-              (submit-button (:formnovalidate t :callback #'clear :on-click (ajax :callback #'clear :update targets))
+              (h:submit-button (:formnovalidate t :callback #'clear :on-click (ajax :callback #'clear :update targets))
                 (translate "Clear"))))
           (when conditions
             (emit-tag "noscript" '()
-                      (lambda () (submit-button (:callback (lambda () (filter-changed self))) (translate "Apply"))))))))))
+                      (lambda () (h:submit-button (:callback (lambda () (filter-changed self))) (translate "Apply"))))))))))

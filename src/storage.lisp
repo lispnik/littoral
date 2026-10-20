@@ -19,7 +19,8 @@
 ;;;; :PRIVATE T, files are served only through signed URLs that expire.
 
 (defpackage #:littoral.storage
-  (:use #:cl #:littoral #:littoral.html)
+  (:use #:cl #:littoral)
+  (:local-nicknames (#:h #:littoral.html))
   (:documentation "Load with `(asdf:load-system :littoral/storage)`.  Stores uploaded files on
 disk or in S3, with thumbnails, and gives descriptions the field types :file
 and :image.")
@@ -188,7 +189,7 @@ error when STORAGE is NIL."
 uploaded with; the STORED-FILE.  STORAGE and THUMBNAIL are as for
 STORE-OCTETS."
   (declare (ignore storage thumbnail))
-  (apply #'store-octets (file-contents upload) (file-name upload) options))
+  (apply #'store-octets (h:file-contents upload) (h:file-name upload) options))
 
 (defun delete-stored-file (file &optional (storage *storage*))
   "Delete FILE, a STORED-FILE, and its thumbnail from STORAGE."
@@ -532,16 +533,16 @@ sentence saying why not.")
 (defmethod littoral::render-field-input ((field file-field) id text callback)
   (let ((current (decode-stored-file text)))
     (when current
-      (div (:class "lt-file-current")
+      (h:div (:class "lt-file-current")
         (render-stored-file current field)
-        (label ()
-          (checkbox (:callback (lambda (remove) (when remove (funcall callback "")))))
-          (text " ") (translate "Remove"))))
-    (div (:class "lt-drop")
-    (file-input (:id id
+        (h:label ()
+          (h:checkbox (:callback (lambda (remove) (when remove (funcall callback "")))))
+          (h:text " ") (translate "Remove"))))
+    (h:div (:class "lt-drop")
+    (h:file-input (:id id
                  :accept (when (typep field 'image-field) "image/png,image/jpeg,image/gif,image/webp")
                  :callback (lambda (upload)
-                             (let ((octets (file-contents upload)))
+                             (let ((octets (h:file-contents upload)))
                                (when (plusp (length octets))
                                  ;; Refused uploads are never stored: the
                                  ;; field's text carries the problem instead.
@@ -552,17 +553,17 @@ sentence saying why not.")
                                                 (encode-stored-file
                                                  (store-upload upload :storage (field-store field)
                                                                       :thumbnail (typep field 'image-field)))))))))))
-      (span (:class "lt-drop-hint") (translate "or drop a file here"))
-      (span (:class "lt-drop-files" :aria-live "polite")))))
+      (h:span (:class "lt-drop-hint") (translate "or drop a file here"))
+      (h:span (:class "lt-drop-files" :aria-live "polite")))))
 
 (defun render-stored-file (file field)
   (let* ((storage (field-store field))
          (thumbnail (and storage (stored-file-thumbnail-url file :storage storage))))
     (if (and thumbnail (typep field 'image-field))
-        (anchor (:href (stored-file-url file :storage storage) :class "lt-thumbnail")
-          (img (:src thumbnail :alt (stored-file-name file) :loading "lazy")))
-        (anchor (:href (stored-file-url file :storage storage))
-          (text (format nil "~A (~A)" (stored-file-name file) (human-size (stored-file-size file))))))))
+        (h:anchor (:href (stored-file-url file :storage storage) :class "lt-thumbnail")
+          (h:img (:src thumbnail :alt (stored-file-name file) :loading "lazy")))
+        (h:anchor (:href (stored-file-url file :storage storage))
+          (h:text (format nil "~A (~A)" (stored-file-name file) (human-size (stored-file-size file))))))))
 
 (defun human-size (bytes)
   (cond ((< bytes 1024) (format nil "~D B" bytes))
@@ -570,7 +571,7 @@ sentence saying why not.")
         (t (format nil "~,1F MB" (/ bytes 1024 1024)))))
 
 (defmethod littoral::render-field-value ((field file-field) value)
-  (if value (render-stored-file value field) (text "")))
+  (if value (render-stored-file value field) (h:text "")))
 
 (push '(:file . file-field) littoral::*field-kinds*)
 (push '(:image . image-field) littoral::*field-kinds*)

@@ -14,7 +14,7 @@
 ;;;; Example: littoral:serve-metrics littoral:metrics-text
 ;;; Mount the metrics text at a path for Prometheus to scrape; by default only requests from this machine get it.  Every request is counted by application, kind and status.
 (defclass hello (component) ())
-(defmethod render ((self hello)) (p () "Hello"))
+(defmethod render ((self hello)) (h:p () "Hello"))
 (serve-metrics :path "/hello-metrics")
 (unwind-protect
      (with-fresh-applications (("/hello" 'hello :mode :deployment))
@@ -77,7 +77,7 @@
 ;;;; Example: littoral:metrics-summary
 ;;; Headline numbers for a status page.
 (defclass hello (component) ())
-(defmethod render ((self hello)) (p () "Hello"))
+(defmethod render ((self hello)) (h:p () "Hello"))
 (with-fresh-applications (("/hello" 'hello :mode :deployment))
   (visit (make-instance 'browser) "/hello")
   (let ((summary (metrics-summary)))
@@ -87,7 +87,7 @@
 ;;;; Example: littoral:log-requests-to
 ;;; One line per request, here as JSON into a string.  Binding *REQUEST-LOG* keeps the logging to this example.  Visiting the page is two requests: the first starts the session and redirects.
 (defclass hello (component) ())
-(defmethod render ((self hello)) (p () "Hello"))
+(defmethod render ((self hello)) (h:p () "Hello"))
 (with-fresh-applications (("/hello" 'hello :mode :deployment))
   (let ((*request-log* nil)
         (log (make-string-output-stream)))
@@ -103,7 +103,7 @@
 ;;;; Example: littoral:*request-log*
 ;;; Any function of a plist can take the log: here one that keeps each request's kind and status.
 (defclass hello (component) ())
-(defmethod render ((self hello)) (anchor (:callback (lambda () nil)) "Again"))
+(defmethod render ((self hello)) (h:anchor (:callback (lambda () nil)) "Again"))
 (with-fresh-applications (("/hello" 'hello :mode :deployment))
   (let* ((seen '())
          (*request-log* (lambda (entry) (push (list (getf entry :kind) (getf entry :status)) seen)))

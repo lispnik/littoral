@@ -30,24 +30,24 @@
                  (new-path self) "" (new-class self) "" (new-title self) "")))))
 
 (defmethod render ((self config-root))
-  (div (:class "lt-config")
-    (h1 () "Littoral Configuration")
+  (h:div (:class "lt-config")
+    (h:h1 () "Littoral Configuration")
     (when (config-message self)
-      (p (:class "lt-message") (text (config-message self))))
-    (h2 () "Applications")
-    (table (:class "lt-table")
-      (tr () (th () "Path") (th () "Title") (th () "Root class") (th () "Mode")
-        (th () "Sessions") (th ()))
+      (h:p (:class "lt-message") (h:text (config-message self))))
+    (h:h2 () "Applications")
+    (h:table (:class "lt-table")
+      (h:tr () (h:th () "Path") (h:th () "Title") (h:th () "Root class") (h:th () "Mode")
+        (h:th () "Sessions") (h:th ()))
       (dolist (app (list-applications))
         (let ((app app))
-          (tr ()
-            (td () (anchor (:href (application-base-url app)) (text (application-path app))))
-            (td () (text (or (application-title app) "")))
-            (td () (code () (text (prin1-to-string (application-root-class app)))))
-            (td () (text (string-downcase (application-mode app))))
-            (td () (text (hash-table-count (application-sessions app))))
-            (td ()
-              (anchor (:callback (lambda ()
+          (h:tr ()
+            (h:td () (h:anchor (:href (application-base-url app)) (h:text (application-path app))))
+            (h:td () (h:text (or (application-title app) "")))
+            (h:td () (h:code () (h:text (prin1-to-string (application-root-class app)))))
+            (h:td () (h:text (string-downcase (application-mode app))))
+            (h:td () (h:text (hash-table-count (application-sessions app))))
+            (h:td ()
+              (h:anchor (:callback (lambda ()
                                    (show self (make-instance 'application-editor :application app)
                                          :on-answer (lambda (saved)
                                                       (when saved
@@ -56,11 +56,11 @@
                                                               (format nil "Saved ~A." (application-path app))))))))
                 "configure")
               " "
-              (anchor (:callback (lambda () (show self (make-instance 'session-browser :application app))))
+              (h:anchor (:callback (lambda () (show self (make-instance 'session-browser :application app))))
                 "sessions")
               " "
               (unless (eq app *application*)
-                (anchor (:callback
+                (h:anchor (:callback
                          (lambda ()
                            (show self (make-instance 'confirm-dialog
                                                      :message (format nil "Remove ~A?" (application-path app)))
@@ -71,22 +71,22 @@
                                                 (setf (config-message self)
                                                       (format nil "Removed ~A." (application-path app))))))))
                   "remove")))))))
-    (p (:class "lt-config-file")
+    (h:p (:class "lt-config-file")
       (if *configuration-file*
-          (progn (text "Changes are saved to ") (code () (text (namestring *configuration-file*))) (text "."))
-          (text "Changes last until the image exits: start with :configuration-file to keep them.")))
-    (h2 () "Add an application")
-    (form (:class "lt-add-application")
-      (label () "Path "
-        (text-input (:id "new-path" :value (new-path self) :placeholder "/my-app"
+          (progn (h:text "Changes are saved to ") (h:code () (h:text (namestring *configuration-file*))) (h:text "."))
+          (h:text "Changes last until the image exits: start with :configuration-file to keep them.")))
+    (h:h2 () "Add an application")
+    (h:form (:class "lt-add-application")
+      (h:label () "Path "
+        (h:text-input (:id "new-path" :value (new-path self) :placeholder "/my-app"
                      :callback (lambda (v) (setf (new-path self) v)))))
-      (label () "Root class "
-        (text-input (:id "new-class" :value (new-class self) :placeholder "my-package::my-root"
+      (h:label () "Root class "
+        (h:text-input (:id "new-class" :value (new-class self) :placeholder "my-package::my-root"
                      :callback (lambda (v) (setf (new-class self) v)))))
-      (label () "Title "
-        (text-input (:id "new-title" :value (new-title self)
+      (h:label () "Title "
+        (h:text-input (:id "new-title" :value (new-title self)
                      :callback (lambda (v) (setf (new-title self) v)))))
-      (submit-button (:callback (lambda () (add-application self))) "Add"))))
+      (h:submit-button (:callback (lambda () (add-application self))) "Add"))))
 
 ;;; Editing one application
 
@@ -162,56 +162,56 @@
            (answer self t)))))
 
 (defmacro editor-row (label &body field)
-  `(tr () (th () ,label) (td () ,@field)))
+  `(h:tr () (h:th () ,label) (h:td () ,@field)))
 
 (defmethod render ((self application-editor))
-  (div (:class "lt-application-editor")
-    (h2 () "Configure " (text (application-path (editor-application self))))
+  (h:div (:class "lt-application-editor")
+    (h:h2 () "Configure " (h:text (application-path (editor-application self))))
     (when (editor-error self)
-      (p (:class "lt-validation-error") (text (editor-error self))))
-    (form ()
-      (table (:class "lt-table")
+      (h:p (:class "lt-validation-error") (h:text (editor-error self))))
+    (h:form ()
+      (h:table (:class "lt-table")
         (editor-row "Title"
-          (text-input (:id "title" :value (editor-title self)
+          (h:text-input (:id "title" :value (editor-title self)
                        :callback (lambda (v) (setf (editor-title self) v)))))
         (editor-row "Root class"
-          (text-input (:id "root-class" :value (editor-root-class self) :size 40
+          (h:text-input (:id "root-class" :value (editor-root-class self) :size 40
                        :callback (lambda (v) (setf (editor-root-class self) v)))))
         (editor-row "Mode"
-          (select-list (:id "mode" :items '(:development :deployment)
+          (h:select-list (:id "mode" :items '(:development :deployment)
                         :labels #'string-downcase
                         :selected (editor-mode self)
                         :callback (lambda (v) (when v (setf (editor-mode self) v))))))
         (editor-row "Session timeout (s)"
-          (number-input (:id "timeout" :value (editor-timeout self)
+          (h:number-input (:id "timeout" :value (editor-timeout self)
                          :callback (lambda (v) (setf (editor-timeout self) v)))))
         (editor-row "Pages kept per session"
-          (number-input (:id "max-continuations" :value (editor-max-continuations self)
+          (h:number-input (:id "max-continuations" :value (editor-max-continuations self)
                          :callback (lambda (v) (setf (editor-max-continuations self) v)))))
         (editor-row "Most sessions (blank: no limit)"
-          (number-input (:id "max-sessions" :value (editor-max-sessions self)
+          (h:number-input (:id "max-sessions" :value (editor-max-sessions self)
                          :callback (lambda (v) (setf (editor-max-sessions self) v)))))
         (editor-row "Session in cookie"
-          (checkbox (:id "cookie-sessions" :value (editor-cookie-sessions-p self)
+          (h:checkbox (:id "cookie-sessions" :value (editor-cookie-sessions-p self)
                      :callback (lambda (v) (setf (editor-cookie-sessions-p self) v)))))
         (editor-row "Say when a session expired"
-          (checkbox (:id "expired-notice" :value (editor-expired-notice-p self)
+          (h:checkbox (:id "expired-notice" :value (editor-expired-notice-p self)
                      :callback (lambda (v) (setf (editor-expired-notice-p self) v)))))
         (editor-row "Stylesheets (one URL a line)"
-          (text-area (:id "stylesheets" :rows 3 :cols 50 :value (editor-stylesheets self)
+          (h:text-area (:id "stylesheets" :rows 3 :cols 50 :value (editor-stylesheets self)
                       :callback (lambda (v) (setf (editor-stylesheets self) v)))))
         (editor-row "Scripts (one URL a line)"
-          (text-area (:id "scripts" :rows 3 :cols 50 :value (editor-scripts self)
+          (h:text-area (:id "scripts" :rows 3 :cols 50 :value (editor-scripts self)
                       :callback (lambda (v) (setf (editor-scripts self) v)))))
         (editor-row "Basic auth user (blank: none)"
-          (text-input (:id "user" :value (editor-user self) :autocomplete "off"
+          (h:text-input (:id "user" :value (editor-user self) :autocomplete "off"
                        :callback (lambda (v) (setf (editor-user self) v)))))
         (editor-row "Basic auth password"
-          (password-input (:id "password" :value (editor-password self) :autocomplete "new-password"
+          (h:password-input (:id "password" :value (editor-password self) :autocomplete "new-password"
                            :callback (lambda (v) (setf (editor-password self) v))))))
-      (div (:class "lt-buttons")
-        (submit-button (:callback (lambda () (save-application self))) "Save")
-        (cancel-button (:callback (lambda () (answer self nil))) "Cancel")))))
+      (h:div (:class "lt-buttons")
+        (h:submit-button (:callback (lambda () (save-application self))) "Save")
+        (h:cancel-button (:callback (lambda () (answer self nil))) "Cancel")))))
 
 ;;; Registration
 

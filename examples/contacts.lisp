@@ -60,13 +60,13 @@
                    (list (column "" nil :sortable nil
                                  :render (lambda (contact value)
                                            (declare (ignore value))
-                                           (anchor (:callback (lambda () (show self (make-viewer contact))))
+                                           (h:anchor (:callback (lambda () (show self (make-viewer contact))))
                                              (translate "view"))
-                                           (text " ")
-                                           (anchor (:callback (lambda () (edit-contact self contact)))
+                                           (h:text " ")
+                                           (h:anchor (:callback (lambda () (edit-contact self contact)))
                                              (translate "edit"))
-                                           (text " ")
-                                           (anchor (:callback (lambda () (remove-contact self contact)))
+                                           (h:text " ")
+                                           (h:anchor (:callback (lambda () (remove-contact self contact)))
                                              (translate "remove")))))))))
 
 (defmethod states ((self contacts-app))
@@ -98,8 +98,8 @@
 
 (defmethod render ((self contacts-app))
   (render-component (contacts-chooser self))
-  (h1 () (translate "Contacts"))
-  (p () (anchor (:callback (lambda () (add-contact self))) (translate "Add a contact")))
+  (h:h1 () (translate "Contacts"))
+  (h:p () (h:anchor (:callback (lambda () (add-contact self))) (translate "Add a contact")))
   (render-component (contacts-report self)))
 
 (define-translations "fr"

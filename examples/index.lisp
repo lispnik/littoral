@@ -47,16 +47,16 @@ members and Parenscript examples come in systems of their own."
   (:documentation "A guide to the examples."))
 
 (defmethod render ((self example-index))
-  (h1 () "Littoral examples")
-  (p () "Each example is its own application. In development mode the toolbar at the "
+  (h:h1 () "Littoral examples")
+  (h:p () "Each example is its own application. In development mode the toolbar at the "
     "bottom of every page turns on halos, so you can inspect any component.")
   (loop for (heading . examples) in *example-guide*
-        do (h2 () (text heading))
-           (dl (:class "example-index")
+        do (h:h2 () (h:text heading))
+           (h:dl (:class "example-index")
              (loop for (path title blurb) in examples
                    when (example-registered-p (format nil "/examples/~A" path))
-                   do (dt () (anchor (:href (url-for (format nil "/examples/~A" path))) (text title)))
-                      (dd () (text blurb))))))
+                   do (h:dt () (h:anchor (:href (url-for (format nil "/examples/~A" path))) (h:text title)))
+                      (h:dd () (h:text blurb))))))
 
 (defmethod style ((self example-index))
   ".example-index dt { font-weight: 600; margin-top: .5rem; } .example-index dd { margin-left: 1rem; }")

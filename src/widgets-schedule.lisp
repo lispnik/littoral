@@ -186,15 +186,15 @@ overlapping sit side by side: (EVENT START END COLUMN COLUMNS) lists."
   (let ((day (eq (event-calendar-view schedule) :day)))
     (flet ((link (label thunk &rest attributes)
              (%anchor (list* :callback thunk :on-click (ajax :callback thunk :update schedule) attributes)
-                      (lambda () (text label)))))
-      (div (:class "lt-schedule-head")
+                      (lambda () (h:text label)))))
+      (h:div (:class "lt-schedule-head")
         (link "‹" (lambda () (shift-schedule schedule -1))
               :aria-label (translate (if day "Previous day" "Previous week")))
-        (h3 () (text (schedule-title days)))
+        (h:h3 () (h:text (schedule-title days)))
         (link "›" (lambda () (shift-schedule schedule 1))
               :aria-label (translate (if day "Next day" "Next week")))
         (link (translate "Today") (lambda () (setf (event-calendar-date schedule) (today))))
-        (span (:class "lt-schedule-views" :role "group" :aria-label (translate "View"))
+        (h:span (:class "lt-schedule-views" :role "group" :aria-label (translate "View"))
           (dolist (view '(:week :day))
             (let ((view view))
               (link (translate (if (eq view :week) "Week" "Day")) (lambda () (show-schedule-view schedule view))
@@ -205,21 +205,21 @@ overlapping sit side by side: (EVENT START END COLUMN COLUMNS) lists."
          (step (schedule-step schedule))
          (title (princ-to-string (funcall (schedule-title-of schedule) event))))
     (multiple-value-bind (start end) (event-span schedule event)
-      (div (:class "lt-schedule-move" :role "group" :aria-label (translate "Move ~A" title))
-        (p ()
-          (strong () (text title))
-          (text (format nil " ~A, ~A" (day-label (subseq (minutes-moment start) 0 3)) (event-time-text start end))))
-        (div (:class "lt-buttons")
+      (h:div (:class "lt-schedule-move" :role "group" :aria-label (translate "Move ~A" title))
+        (h:p ()
+          (h:strong () (h:text title))
+          (h:text (format nil " ~A, ~A" (day-label (subseq (minutes-moment start) 0 3)) (event-time-text start end))))
+        (h:div (:class "lt-buttons")
           (loop for (suffix label minutes) in `(("earlier" "Earlier" ,(- step)) ("later" "Later" ,step)
                                                 ("before" "Day before" -1440) ("after" "Day after" 1440))
                 for first = t then nil
                 do (let ((minutes minutes))
                      (flet ((move () (nudge-event schedule minutes)))
-                       (anchor (:id (format nil "~A-~A" id suffix) :class "lt-button" :autofocus first
+                       (h:anchor (:id (format nil "~A-~A" id suffix) :class "lt-button" :autofocus first
                                 :callback #'move :on-click (ajax :callback #'move :update schedule))
-                         (text (translate label))))))
+                         (h:text (translate label))))))
           (flet ((done () (select-event schedule nil)))
-            (anchor (:id (format nil "~A-done" id) :class "lt-button"
+            (h:anchor (:id (format nil "~A-done" id) :class "lt-button"
                      :callback #'done :on-click (ajax :callback #'done :update schedule))
               (translate "Close"))))))))
 
@@ -232,16 +232,16 @@ overlapping sit side by side: (EVENT START END COLUMN COLUMNS) lists."
          (top (max 0 (min from (1- slots))))
          (span (max 1 (- (min to slots) top)))
          (movable (schedule-on-move schedule)))
-    (li (:class (list "lt-schedule-event" (when (equal key (schedule-selected schedule)) "lt-selected"))
+    (h:li (:class (list "lt-schedule-event" (when (equal key (schedule-selected schedule)) "lt-selected"))
          :style (format nil "--lt-from: ~A; --lt-span: ~A; --lt-col: ~D; --lt-cols: ~D"
                         (svg-number top) (svg-number span) column columns))
       (flet ((body ()
-               (span (:class "lt-schedule-time") (text (event-time-text start end)))
-               (text " ")
-               (span (:class "lt-schedule-title") (text title))))
+               (h:span (:class "lt-schedule-time") (h:text (event-time-text start end)))
+               (h:text " ")
+               (h:span (:class "lt-schedule-title") (h:text title))))
         (if movable
             (flet ((choose () (select-event schedule event)))
-              (anchor (:class "lt-schedule-event-link"
+              (h:anchor (:class "lt-schedule-event-link"
                        :autofocus (and (null (schedule-selected schedule))
                                        (equal key (schedule-last-selected schedule)))
                        :aria-current (when (equal key (schedule-selected schedule)) "true")
@@ -251,7 +251,7 @@ overlapping sit side by side: (EVENT START END COLUMN COLUMNS) lists."
                                                  (when moment (move-event schedule event moment))))
                                    :update schedule :value "this.getAttribute('data-lt-to')"))
                 (body)))
-            (span (:class "lt-schedule-event-link") (body)))))))
+            (h:span (:class "lt-schedule-event-link") (body)))))))
 
 (defmethod render ((self event-calendar))
   (let* ((days (schedule-days self))
@@ -264,23 +264,23 @@ overlapping sit side by side: (EVENT START END COLUMN COLUMNS) lists."
          (id (component-id self))
          (events (schedule-events self))
          (selected (and (schedule-selected self) (find-event self (schedule-selected self)))))
-    (div (:class (list "lt-schedule" (format nil "lt-schedule-~(~A~)" (event-calendar-view self))))
+    (h:div (:class (list "lt-schedule" (format nil "lt-schedule-~(~A~)" (event-calendar-view self))))
       (render-schedule-head self days)
       (when (and selected (schedule-on-move self))
         (render-move-buttons self selected))
-      (div (:class "lt-schedule-scroll" :tabindex "0" :role "region"
+      (h:div (:class "lt-schedule-scroll" :tabindex "0" :role "region"
             :aria-label (schedule-title days))
-        (div (:class "lt-schedule-grid"
+        (h:div (:class "lt-schedule-grid"
               :style (format nil "--lt-days: ~D; --lt-slots: ~D; --lt-per-hour: ~A"
                              (length days) slots (svg-number (/ 60 step)))
               :data-lt-step step :data-lt-first first-minute :data-lt-slots slots)
-          (div (:class "lt-schedule-times" :aria-hidden "true")
-            (div (:class "lt-schedule-day-head"))
-            (div (:class "lt-schedule-slots")
+          (h:div (:class "lt-schedule-times" :aria-hidden "true")
+            (h:div (:class "lt-schedule-day-head"))
+            (h:div (:class "lt-schedule-slots")
               (loop for hour from first-hour below last-hour
-                    do (span (:class "lt-schedule-hour"
+                    do (h:span (:class "lt-schedule-hour"
                               :style (format nil "--lt-from: ~A" (svg-number (/ (* 60 (- hour first-hour)) step))))
-                         (text (clock-text (* 60 hour)))))))
+                         (h:text (clock-text (* 60 hour)))))))
           (loop for date in days for n from 0
                 do (let* ((day (day-number date))
                           (heading (format nil "~A-day-~D" id n))
@@ -289,15 +289,15 @@ overlapping sit side by side: (EVENT START END COLUMN COLUMNS) lists."
                                                       (when (= (floor start 1440) day)
                                                         (list (list start end event)))))
                                        #'< :key #'first)))
-                     (section (:class (list "lt-schedule-day" (when (equal date today) "lt-today"))
+                     (h:section (:class (list "lt-schedule-day" (when (equal date today) "lt-today"))
                                :aria-labelledby heading :data-lt-day (iso-date date))
-                       (h4 (:id heading :class "lt-schedule-day-head")
-                         (span (:aria-hidden "true")
-                           (text (format nil "~A ~D" (translate (nth (apply #'weekday date) *weekday-names*)) (third date))))
-                         (span (:class "lt-visually-hidden") (text (day-label date))))
-                       (div (:class "lt-schedule-slots")
+                       (h:h4 (:id heading :class "lt-schedule-day-head")
+                         (h:span (:aria-hidden "true")
+                           (h:text (format nil "~A ~D" (translate (nth (apply #'weekday date) *weekday-names*)) (third date))))
+                         (h:span (:class "lt-visually-hidden") (h:text (day-label date))))
+                       (h:div (:class "lt-schedule-slots")
                          (when spans
-                           (ol (:class "lt-schedule-events")
+                           (h:ol (:class "lt-schedule-events")
                              (loop for (event start end column columns) in (lay-out-day spans)
                                    do (render-schedule-event self event start end column columns
                                                              first-minute slots)))))))))))))

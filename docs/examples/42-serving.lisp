@@ -4,11 +4,11 @@
 ;;; A callback queues a cookie with SET-COOKIE; it goes out with the response, scoped to the application's path unless :PATH says otherwise.  REQUEST-COOKIE reads one the browser sent back.  A :MAX-AGE of 0 deletes it.
 (defclass biscuit-tin (component) ())
 (defmethod render ((self biscuit-tin))
-  (p () (text (format nil "Flavour: ~A" (or (request-cookie "flavour") "none"))))
-  (p ()
-    (anchor (:callback (lambda () (set-cookie "flavour" "oat" :max-age 3600))) "Bake")
+  (h:p () (h:text (format nil "Flavour: ~A" (or (request-cookie "flavour") "none"))))
+  (h:p ()
+    (h:anchor (:callback (lambda () (set-cookie "flavour" "oat" :max-age 3600))) "Bake")
     " or "
-    (anchor (:callback (lambda () (set-cookie "flavour" "" :max-age 0))) "Eat")))
+    (h:anchor (:callback (lambda () (set-cookie "flavour" "" :max-age 0))) "Eat")))
 (with-fresh-applications (("/tin" 'biscuit-tin :mode :deployment))
   (let ((b (visit (make-instance 'browser) "/tin")))
     (multiple-value-bind (status headers) (raw-request b :get (find-link b "Bake"))
@@ -23,8 +23,8 @@
 (defclass tally (component)
   ((count :initform 0 :accessor tally-count)))
 (defmethod render ((self tally))
-  (p () (text (format nil "Count: ~D" (tally-count self))))
-  (anchor (:callback (lambda () (incf (tally-count self)))) "Add one"))
+  (h:p () (h:text (format nil "Count: ~D" (tally-count self))))
+  (h:anchor (:callback (lambda () (incf (tally-count self)))) "Add one"))
 (with-fresh-applications (("/tally" 'tally :mode :deployment))
   (let* ((site (lack:builder
                 (:mount "/apps" (make-lack-app :prefix "/apps"))
@@ -44,7 +44,7 @@
 ;;; The Lack application is a function of a request's environment.  A request for a new session is answered with a redirect to its first page.
 (defclass greeting (component) ())
 (defmethod render ((self greeting))
-  (p () "Hello"))
+  (h:p () "Hello"))
 (with-fresh-applications (("/hello" 'greeting :mode :deployment))
   (destructuring-bind (status headers body) (funcall (make-lack-app) (make-env :get "/hello"))
     (declare (ignore body))
@@ -66,7 +66,7 @@
 ;;; An error in a request normally becomes an error page.  With *DEBUG-ERRORS* true it is not handled, so it reaches the debugger (or, here, the caller).
 (defclass fragile (component) ())
 (defmethod render ((self fragile))
-  (anchor (:callback (lambda () (error "The till is stuck."))) "Pay"))
+  (h:anchor (:callback (lambda () (error "The till is stuck."))) "Pay"))
 (with-fresh-applications (("/till" 'fragile :mode :deployment))
   (list (browser-status (click (visit (make-instance 'browser) "/till") "Pay"))
         (let ((*debug-errors* t))
@@ -78,7 +78,7 @@
 ;;; Each client address may start only so many sessions a minute.  Behind a proxy every request comes from the proxy, so set *TRUST-FORWARDED-FOR* to count the address it reports instead.  (The address here is made up afresh, as the counts last a minute.)
 (defclass greeting (component) ())
 (defmethod render ((self greeting))
-  (p () "Hello"))
+  (h:p () "Hello"))
 (with-fresh-applications (("/hello" 'greeting :mode :deployment))
   (let* ((*new-sessions-per-minute* 1)
          (*trust-forwarded-for* t)
@@ -95,7 +95,7 @@
 (defmethod subscriptions ((self headlines))
   (list *headlines*))
 (defmethod render ((self headlines))
-  (p () "No news yet"))
+  (h:p () "No news yet"))
 (with-fresh-applications (("/news" 'headlines :mode :deployment))
   (let* ((b (visit (make-instance 'browser) "/news"))
          (events (cl-ppcre:register-groups-bind (url) ("data-lt-events=\"([^\"]*)\"" (browser-html b))
@@ -110,7 +110,7 @@
 ;;; START serves the registered applications over HTTP until STOP.  It prints the address it listens on.
 (defclass greeting (component) ())
 (defmethod render ((self greeting))
-  (p () "Hello"))
+  (h:p () "Hello"))
 (register-application "/hello" 'greeting :mode :deployment)
 (unwind-protect
      (progn (start :port 48173)

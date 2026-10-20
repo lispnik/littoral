@@ -30,7 +30,7 @@ specialise RENDER."))
   (:documentation "Write COMPONENT's HTML to *CANVAS*.  Embedded components
 are written with RENDER-COMPONENT, never by calling RENDER on them.")
   (:method ((component component))
-    (text (format nil "~A" (class-name (class-of component))))))
+    (h:text (format nil "~A" (class-name (class-of component))))))
 
 (defgeneric children (component)
   (:documentation "The components COMPONENT renders.  Halos, update-root,

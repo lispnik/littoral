@@ -6,8 +6,8 @@
 (defmethod render ((self reading-room))
   (let ((user (littoral.auth:current-user)))
     (if user
-        (p () (text (format nil "Hello, ~A." (littoral.auth:user-name user))))
-        (anchor (:callback (lambda () (show self (make-instance 'littoral.auth:sign-in)))) "Sign in"))))
+        (h:p () (h:text (format nil "Hello, ~A." (littoral.auth:user-name user))))
+        (h:anchor (:callback (lambda () (show self (make-instance 'littoral.auth:sign-in)))) "Sign in"))))
 (let* ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
        (littoral.auth:*pbkdf2-iterations* 1000)
        (littoral.auth:*public-url* "https://library.example")
@@ -56,7 +56,7 @@
 ;;; How long a reset link works: an hour, unless bound.  Here the link is aged two hours before it is followed.
 (defclass short-links (littoral.auth:auth-root component) ())
 (defmethod render ((self short-links))
-  (anchor (:callback (lambda () (show self (make-instance 'littoral.auth:password-reset-request)))) "Reset"))
+  (h:anchor (:callback (lambda () (show self (make-instance 'littoral.auth:password-reset-request)))) "Reset"))
 (let* ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
        (littoral.auth:*pbkdf2-iterations* 1000)
        (littoral.auth:*public-url* "https://short.example")
@@ -86,7 +86,7 @@
 (littoral.auth:define-auth-path "welcome" (root rest request)
   (show root (make-instance 'message-dialog :message (format nil "Welcome, ~A!" (first rest)))))
 (defclass guest-house (littoral.auth:auth-root component) ())
-(defmethod render ((self guest-house)) (p () "The front page"))
+(defmethod render ((self guest-house)) (h:p () "The front page"))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
   (littoral.auth:create-auth-tables)
   (with-fresh-applications (("/house" 'guest-house :mode :deployment))
@@ -104,7 +104,7 @@
       (littoral.auth:*sign-in-extras*
         (cons (lambda (sign-in)
                 (declare (ignore sign-in))
-                (p () "No account? Ask at the front desk."))
+                (h:p () "No account? Ask at the front desk."))
               littoral.auth:*sign-in-extras*)))
   (with-fresh-applications (("/desk" 'desk-sign-in :mode :deployment))
     (let ((b (make-instance 'browser)))

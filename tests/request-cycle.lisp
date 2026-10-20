@@ -114,7 +114,7 @@
 (defclass broken (component) ()
   (:documentation "A component whose link signals an error."))
 (defmethod render ((self broken))
-  (anchor (:callback (lambda () (error "Kaboom"))) "explode"))
+  (h:anchor (:callback (lambda () (error "Kaboom"))) "explode"))
 
 (test errors-render-a-page
   (with-fresh-applications (("/broken" 'broken :mode :development))
@@ -287,13 +287,13 @@
   (:documentation "A form with save, cancel and default actions that logs which ran."))
 
 (defmethod render ((self cancellable))
-  (p () "Name: " (text (cancellable-name self))
-    " Log: " (text (format nil "~{~A~^,~}" (reverse (cancellable-log self)))))
-  (form (:default-action (lambda () (push :default (cancellable-log self))))
-    (text-input (:id "name" :value (cancellable-name self)
+  (h:p () "Name: " (h:text (cancellable-name self))
+    " Log: " (h:text (format nil "~{~A~^,~}" (reverse (cancellable-log self)))))
+  (h:form (:default-action (lambda () (push :default (cancellable-log self))))
+    (h:text-input (:id "name" :value (cancellable-name self)
                  :callback (lambda (v) (setf (cancellable-name self) v))))
-    (submit-button (:callback (lambda () (push :save (cancellable-log self)))) "Save")
-    (cancel-button (:callback (lambda () (push :cancel (cancellable-log self)))) "Cancel")))
+    (h:submit-button (:callback (lambda () (push :save (cancellable-log self)))) "Save")
+    (h:cancel-button (:callback (lambda () (push :cancel (cancellable-log self)))) "Cancel")))
 
 (test cancel-and-default-action
   (with-fresh-applications (("/c" 'cancellable :mode :deployment))
@@ -313,13 +313,13 @@
 (defclass kaboom (component) ()
   (:documentation "A component whose link signals an error."))
 (defmethod render ((self kaboom))
-  (anchor (:callback (lambda () (error "Kaboom"))) "explode"))
+  (h:anchor (:callback (lambda () (error "Kaboom"))) "explode"))
 
 (defclass sorry (component)
   ((condition :initarg :condition :reader sorry-condition))
   (:documentation "A custom error page."))
 (defmethod render ((self sorry))
-  (h1 () "Sorry") (p () (text (sorry-condition self))) (anchor (:href "/k") "Start again"))
+  (h:h1 () "Sorry") (h:p () (h:text (sorry-condition self))) (h:anchor (:href "/k") "Start again"))
 
 (test custom-error-handler
   (with-fresh-applications (("/k" 'kaboom :mode :deployment
@@ -359,9 +359,9 @@
   (:documentation "Sends the browser elsewhere, or refuses."))
 
 (defmethod render ((self leaver))
-  (anchor (:callback (lambda () (redirect-to "https://example.org/elsewhere"))) "leave")
-  (anchor (:callback (lambda () (error 'forbidden :message "Admins only."))) "forbidden")
-  (button (:id "ajax-leave" :on-click (ajax :callback (lambda () (redirect-to "https://example.org/ajax")))) "go"))
+  (h:anchor (:callback (lambda () (redirect-to "https://example.org/elsewhere"))) "leave")
+  (h:anchor (:callback (lambda () (error 'forbidden :message "Admins only."))) "forbidden")
+  (h:button (:id "ajax-leave" :on-click (ajax :callback (lambda () (redirect-to "https://example.org/ajax")))) "go"))
 
 (test redirect-to-and-forbidden
   (with-fresh-applications (("/l" 'leaver :mode :deployment))
@@ -383,12 +383,12 @@
 (defclass cookie-jar-page (component) ())
 
 (defmethod render ((self cookie-jar-page))
-  (p () (text (format nil "flavour=~A" (or (request-cookie "flavour") "none"))))
-  (anchor (:callback (lambda () (set-cookie "flavour" "oat" :max-age 3600)
+  (h:p () (h:text (format nil "flavour=~A" (or (request-cookie "flavour") "none"))))
+  (h:anchor (:callback (lambda () (set-cookie "flavour" "oat" :max-age 3600)
                              (set-cookie "shape" "round")))
     "Bake")
-  (anchor (:callback (lambda () (set-cookie "flavour" "" :max-age 0))) "Eat")
-  (button (:on-click (ajax :callback (lambda () (set-cookie "flavour" "ginger")) :update self)) "Ajax bake"))
+  (h:anchor (:callback (lambda () (set-cookie "flavour" "" :max-age 0))) "Eat")
+  (h:button (:on-click (ajax :callback (lambda () (set-cookie "flavour" "ginger")) :update self)) "Ajax bake"))
 
 (test callbacks-set-cookies
   (with-fresh-applications (("/jar" 'cookie-jar-page :mode :deployment))
@@ -451,7 +451,7 @@
 (defclass head-test-page (component) ())
 
 (defmethod render ((self head-test-page))
-  (p () "Hello"))
+  (h:p () "Hello"))
 
 (defmethod update-root ((self head-test-page) root)
   (call-next-method)

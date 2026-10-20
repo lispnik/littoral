@@ -21,7 +21,8 @@
 ;;;; USER-PASSWORD-HASH and USER-ROLES.  Passwords: passwords.lisp.
 
 (defpackage #:littoral.auth
-  (:use #:cl #:littoral #:littoral.html #:littoral.db)
+  (:use #:cl #:littoral #:littoral.db)
+  (:local-nicknames (#:h #:littoral.html))
   (:documentation "Users, signing in, roles and password reset for Littoral.  Load it with
 `(asdf:load-system :littoral/auth)`.")
   (:export
@@ -789,11 +790,11 @@ REQUIRED-ROLE; the default lets anyone signed in see it."))
   ;; Showing what it called (the sign-in form, say) is always allowed.
   (if (or (permitted-p component) (littoral::find-decoration component 'delegation))
       (call-next-method)
-      (div (:class "lt-restricted")
+      (h:div (:class "lt-restricted")
         (if (signed-in-p)
-            (p () (translate "You don't have permission to see this."))
-            (p () (translate "Please sign in to see this.") " "
-              (anchor (:callback (lambda () (show component (make-instance 'sign-in))))
+            (h:p () (translate "You don't have permission to see this."))
+            (h:p () (translate "Please sign in to see this.") " "
+              (h:anchor (:callback (lambda () (show component (make-instance 'sign-in))))
                 (translate "Sign in")))))))
 
 (defmethod children :around ((component restricted))
@@ -831,43 +832,43 @@ buttons, from littoral/oauth).")
           (t (log-in user :remember (sign-in-remember self)) (answer self user)))))
 
 (defmethod render ((self sign-in))
-  (div (:class "lt-dialog lt-sign-in")
+  (h:div (:class "lt-dialog lt-sign-in")
    (if (sign-in-pending self)
     (render-second-step self)
     (progn
-    (h2 () (translate "Sign in"))
+    (h:h2 () (translate "Sign in"))
     (when (sign-in-message self)
-      (p (:class "lt-validation-error" :role "alert") (text (sign-in-message self))))
-    (form ()
-      (div (:class "lt-field")
-        (label (:for "sign-in-name") (translate "Name"))
-        (text-input (:id "sign-in-name" :value (sign-in-name self) :autocomplete "username" :required t
+      (h:p (:class "lt-validation-error" :role "alert") (h:text (sign-in-message self))))
+    (h:form ()
+      (h:div (:class "lt-field")
+        (h:label (:for "sign-in-name") (translate "Name"))
+        (h:text-input (:id "sign-in-name" :value (sign-in-name self) :autocomplete "username" :required t
                      :callback (lambda (v) (setf (sign-in-name self) v)))))
-      (div (:class "lt-field")
-        (label (:for "sign-in-password") (translate "Password"))
-        (password-input (:id "sign-in-password" :autocomplete "current-password" :required t
+      (h:div (:class "lt-field")
+        (h:label (:for "sign-in-password") (translate "Password"))
+        (h:password-input (:id "sign-in-password" :autocomplete "current-password" :required t
                          :callback (lambda (v) (setf (sign-in-password self) v)))))
       (when *offer-remember-me*
-        (div (:class "lt-field lt-remember")
-          (checkbox (:id "sign-in-remember" :value (sign-in-remember self)
+        (h:div (:class "lt-field lt-remember")
+          (h:checkbox (:id "sign-in-remember" :value (sign-in-remember self)
                      :callback (lambda (on) (setf (sign-in-remember self) on))))
-          (label (:for "sign-in-remember") (translate "Keep me signed in"))))
-      (div (:class "lt-buttons")
-        (submit-button (:callback (lambda () (try-sign-in self))) (translate "Sign in"))
-        (cancel-button (:callback (lambda () (answer self nil))) (translate "Cancel"))))
-    (p () (anchor (:callback (lambda () (show self (make-instance 'password-reset-request))))
+          (h:label (:for "sign-in-remember") (translate "Keep me signed in"))))
+      (h:div (:class "lt-buttons")
+        (h:submit-button (:callback (lambda () (try-sign-in self))) (translate "Sign in"))
+        (h:cancel-button (:callback (lambda () (answer self nil))) (translate "Cancel"))))
+    (h:p () (h:anchor (:callback (lambda () (show self (make-instance 'password-reset-request))))
             (translate "Forgot your password?")))
     (when *offer-passkeys*
-      (p () (passkey-button :get (assertion-options (sign-in-challenge self))
+      (h:p () (passkey-button :get (assertion-options (sign-in-challenge self))
                             (passkey-signs-in self) (translate "Sign in with a passkey")
                             :status-id "lt-passkey-status"))
-      (p (:id "lt-passkey-status" :role "status")))
+      (h:p (:id "lt-passkey-status" :role "status")))
     (dolist (extra *sign-in-extras*)
       (funcall extra self))))))
 
 (defun sign-out-link (&key (label "Sign out") then)
   "Write a link that signs the user out, then calls THEN, a thunk."
-  (anchor (:callback (lambda () (log-out) (when then (funcall then)))) (text (translate-label label))))
+  (h:anchor (:callback (lambda () (log-out) (when then (funcall then)))) (h:text (translate-label label))))
 
 ;;; Password reset
 
@@ -952,27 +953,27 @@ The link works once, for an hour.  If it wasn't you, ignore this mail."
   (:documentation "Asks for an email address and sends a reset link to it."))
 
 (defmethod render ((self password-reset-request))
-  (div (:class "lt-dialog")
-    (h2 () (translate "Reset your password"))
+  (h:div (:class "lt-dialog")
+    (h:h2 () (translate "Reset your password"))
     (if (reset-sent-p self)
         (progn
           ;; The same answer whether or not the address has an account.
-          (p (:role "status") (translate "If that address belongs to an account, a link to choose a new password is on its way."))
-          (form () (submit-button (:callback (lambda () (answer self nil))) (translate "Back"))))
-        (form ()
-          (div (:class "lt-field")
-            (label (:for "reset-email") (translate "Email"))
+          (h:p (:role "status") (translate "If that address belongs to an account, a link to choose a new password is on its way."))
+          (h:form () (h:submit-button (:callback (lambda () (answer self nil))) (translate "Back"))))
+        (h:form ()
+          (h:div (:class "lt-field")
+            (h:label (:for "reset-email") (translate "Email"))
             (littoral::emit-tag "input" (list :type "email" :id "reset-email" :required t :value (reset-email self)
                                     :name (littoral::register :value (lambda (v) (setf (reset-email self) v))))
                       nil))
-          (div (:class "lt-buttons")
-            (submit-button (:callback (lambda ()
+          (h:div (:class "lt-buttons")
+            (h:submit-button (:callback (lambda ()
                                         (let ((user (find-user-by-email (string-trim " " (reset-email self)))))
                                           (when (and user (user-active-p user) (may-send-reset-p user))
                                             (send-reset-link user)))
                                         (setf (reset-sent-p self) t)))
               (translate "Send me a link"))
-            (cancel-button (:callback (lambda () (answer self nil))) (translate "Cancel")))))))
+            (h:cancel-button (:callback (lambda () (answer self nil))) (translate "Cancel")))))))
 
 (defclass password-reset (component)
   ((user-id :initarg :user-id :reader reset-user-id)
@@ -982,13 +983,13 @@ The link works once, for an hour.  If it wasn't you, ignore this mail."
   (:documentation "Lets the holder of a reset link choose a new password; answers the user."))
 
 (defmethod render ((self password-reset))
-  (div (:class "lt-dialog")
-    (h2 () (translate "Choose a new password"))
+  (h:div (:class "lt-dialog")
+    (h:h2 () (translate "Choose a new password"))
     (when (reset-message self)
-      (p (:class "lt-validation-error" :role "alert") (text (reset-message self))))
-    (form ()
-      (div (:class "lt-field")
-        (label (:for "new-password") (translate "New password"))
+      (h:p (:class "lt-validation-error" :role "alert") (h:text (reset-message self))))
+    (h:form ()
+      (h:div (:class "lt-field")
+        (h:label (:for "new-password") (translate "New password"))
         ;; Its strength is shown as it's typed, counting the user's own name
         ;; and address for little.
         (render-new-password-input "new-password" (lambda (v) (setf (reset-password self) v))
@@ -996,12 +997,12 @@ The link works once, for an hour.  If it wasn't you, ignore this mail."
                                    :words (lambda ()
                                             (let ((user (find-user-by-id (reset-user-id self))))
                                               (and user (list (user-name user) (user-email user)))))))
-      (div (:class "lt-field")
-        (label (:for "new-password-again") (translate "Again"))
-        (password-input (:id "new-password-again" :autocomplete "new-password" :required t
+      (h:div (:class "lt-field")
+        (h:label (:for "new-password-again") (translate "Again"))
+        (h:password-input (:id "new-password-again" :autocomplete "new-password" :required t
                          :callback (lambda (v) (setf (reset-again self) v)))))
-      (div (:class "lt-buttons")
-        (submit-button (:callback
+      (h:div (:class "lt-buttons")
+        (h:submit-button (:callback
                         (lambda ()
                           (cond ((< (length (reset-password self)) 8)
                                  (setf (reset-message self) (translate "Passwords need at least 8 characters.")))

@@ -36,13 +36,13 @@ starts from the middle."))
   (let* ((low (field-min field)) (high (field-max field))
          (value (or (ignore-errors (parse-integer (string-trim " " text)))
                     (+ low (* (field-step field) (round (- high low) (* 2 (field-step field))))))))
-    (span (:class "lt-range")
+    (h:span (:class "lt-range")
       (emit-tag "input" (list :type "range" :id id :value value :min low :max high :step (field-step field)
                               :name (register :value callback)
                               :data-lt-range (format nil "~A-value" id))
                 nil)
       (emit-tag "output" (list :id (format nil "~A-value" id) :for id :class "lt-range-value" :aria-hidden "true")
-                (lambda () (text value))))))
+                (lambda () (h:text value))))))
 
 (defclass stepper-field (stepped-field) ()
   (:documentation "A whole number in a box between − and + buttons, which
@@ -55,8 +55,8 @@ submit the form, and the page comes back with the number changed."))
              (lambda ()
                (let ((n (ignore-errors (parse-integer (string-trim " " typed)))))
                  (funcall callback (princ-to-string (clamp-to-field field (if n (+ n delta) (or (field-min field) 0)))))))))
-      (span (:class "lt-stepper")
-        (submit-button (:class "lt-stepper-down" :data-lt-step "-1" :formnovalidate t
+      (h:span (:class "lt-stepper")
+        (h:submit-button (:class "lt-stepper-down" :data-lt-step "-1" :formnovalidate t
                         :aria-label (translate "Decrease")
                         :callback (step-by (- (field-step field))))
           "−")
@@ -64,7 +64,7 @@ submit the form, and the page comes back with the number changed."))
                                 :step (field-step field) :required (field-required-p field)
                                 :name (register :value (lambda (v) (setf typed v) (funcall callback v))))
                   nil)
-        (submit-button (:class "lt-stepper-up" :data-lt-step "1" :formnovalidate t
+        (h:submit-button (:class "lt-stepper-up" :data-lt-step "1" :formnovalidate t
                         :aria-label (translate "Increase")
                         :callback (step-by (field-step field)))
           "+")))))
@@ -89,9 +89,9 @@ stands for NIL."))
 
 (defmethod render-field-value ((field rating-field) value)
   (when value
-    (span (:class "lt-stars" :role "img" :aria-label (translate "~D out of ~D" value (rating-stars field)))
-      (text (make-string value :initial-element #\★))
-      (span (:class "lt-stars-empty") (text (make-string (max 0 (- (rating-stars field) value)) :initial-element #\☆))))))
+    (h:span (:class "lt-stars" :role "img" :aria-label (translate "~D out of ~D" value (rating-stars field)))
+      (h:text (make-string value :initial-element #\★))
+      (h:span (:class "lt-stars-empty") (h:text (make-string (max 0 (- (rating-stars field) value)) :initial-element #\☆))))))
 
 (defmethod render-field-input ((field rating-field) id text callback)
   ;; The group takes what the editor gives the field's input: the radio
@@ -113,14 +113,14 @@ stands for NIL."))
                   ;; No rating comes first, so the stars after the checked
                   ;; one are those left grey (see littoral.css).
                   (unless (field-required-p field)
-                    (choice 0 "lt-rating-none" (lambda () (text (translate "No rating")))))
+                    (choice 0 "lt-rating-none" (lambda () (h:text (translate "No rating")))))
                   (loop for n from 1 to (rating-stars field)
                         do (let ((n n))
                              (choice n "lt-rating-star"
                                      (lambda ()
-                                       (span (:aria-hidden "true") "★")
-                                       (span (:class "lt-visually-hidden")
-                                         (text (translate-plural n "~D star" "~D stars"))))))))))))
+                                       (h:span (:aria-hidden "true") "★")
+                                       (h:span (:class "lt-visually-hidden")
+                                         (h:text (translate-plural n "~D star" "~D stars"))))))))))))
 
 ;;; Colours: "#rrggbb"
 
@@ -151,14 +151,14 @@ picker alone can't."))
 (defmethod render-field-value ((field color-field) value)
   (let ((code (normalize-color value)))
     (when code
-      (span (:class "lt-swatch" :style (format nil "background: ~A" code) :aria-hidden "true"))
-      (code () (text code)))))
+      (h:span (:class "lt-swatch" :style (format nil "background: ~A" code) :aria-hidden "true"))
+      (h:code () (h:text code)))))
 
 (defmethod render-field-input ((field color-field) id text callback)
   ;; Two inputs, one value: whichever was changed wins.
   (let* ((swatch (or (normalize-color text) "#000000"))
          (picked swatch))
-    (span (:class "lt-color")
+    (h:span (:class "lt-color")
       (emit-tag "input" (list :type "color" :id id :value swatch
                               :name (register :value (lambda (v) (setf picked (string-downcase v)))))
                 nil)
@@ -226,7 +226,7 @@ one.  As text, the chosen labels are written one to a line."))
   (format nil "~{~A~^~%~}" (mapcar (lambda (c) (choice-label field c)) value)))
 
 (defmethod render-field-value ((field multiple-choice-field) value)
-  (text (format nil "~{~A~^, ~}" (mapcar (lambda (c) (choice-label field c)) value))))
+  (h:text (format nil "~{~A~^, ~}" (mapcar (lambda (c) (choice-label field c)) value))))
 
 (defmethod check-field ((field multiple-choice-field) value)
   (or (call-next-method)
@@ -246,7 +246,7 @@ one.  As text, the chosen labels are written one to a line."))
   (let ((choices (field-choices field)))
     (dolist (index indexes)
       (let ((choice (nth index choices)))
-        (emit-tag "option" (list :value index) (lambda () (text (choice-label field choice))))))))
+        (emit-tag "option" (list :value index) (lambda () (h:text (choice-label field choice))))))))
 
 (defmethod render-field-input ((field multiple-choice-field) id text callback)
   (let* ((choices (field-choices field))
@@ -262,8 +262,8 @@ one.  As text, the chosen labels are written one to a line."))
                       for index from 0
                       do (let ((choice choice))
                            (emit-tag "option" (list :value index :selected (and (member index chosen) t))
-                                     (lambda () (text (choice-label field choice))))))))
-    (div (:class "lt-help") (translate "Hold Ctrl or ⌘ to choose several."))))
+                                     (lambda () (h:text (choice-label field choice))))))))
+    (h:div (:class "lt-help") (translate "Hold Ctrl or ⌘ to choose several."))))
 
 ;;; Transfer lists: what's left and what's chosen, side by side
 
@@ -286,12 +286,12 @@ buttons submit the form and the page comes back with them moved."))
          (right-id (format nil "~A-chosen" id)))
     (flet ((save (indexes) (funcall callback (chosen-text field indexes)))
            (list-box (box-id class heading indexes setter)
-             (div (:class "lt-transfer-list")
-               (label (:for box-id) (text (translate-label heading)))
+             (h:div (:class "lt-transfer-list")
+               (h:label (:for box-id) (h:text (translate-label heading)))
                (emit-tag "select" (list :id box-id :class class :multiple t :size (list-box-size field)
                                         :name (register :values (lambda (values) (funcall setter (posted-indexes field values)))))
                          (lambda () (render-choice-options field indexes))))))
-      (div (:class "lt-transfer" :role "group" :aria-label (translate (field-label field)))
+      (h:div (:class "lt-transfer" :role "group" :aria-label (translate (field-label field)))
         ;; What is chosen, as littoral.js leaves it; the buttons' callbacks
         ;; start from it.
         (emit-tag "input" (list :type "hidden" :class "lt-transfer-value" :value (format nil "~{~D~^,~}" chosen)
@@ -302,16 +302,16 @@ buttons submit the form and the page comes back with them moved."))
         (list-box left-id "lt-transfer-available" (transfer-available-label field)
                   (loop for index below count unless (member index chosen) collect index)
                   (lambda (indexes) (setf selected-left indexes)))
-        (div (:class "lt-transfer-buttons")
-          (submit-button (:data-lt-move "add" :formnovalidate t
+        (h:div (:class "lt-transfer-buttons")
+          (h:submit-button (:data-lt-move "add" :formnovalidate t
                           :callback (lambda () (save (union now selected-left))))
-            (translate "Add") (span (:aria-hidden "true") " →"))
-          (submit-button (:data-lt-move "remove" :formnovalidate t
+            (translate "Add") (h:span (:aria-hidden "true") " →"))
+          (h:submit-button (:data-lt-move "remove" :formnovalidate t
                           :callback (lambda () (save (set-difference now selected-right))))
-            (span (:aria-hidden "true") "← ") (translate "Remove")))
+            (h:span (:aria-hidden "true") "← ") (translate "Remove")))
         (list-box right-id "lt-transfer-chosen" (transfer-chosen-label field) chosen
                   (lambda (indexes) (setf selected-right indexes)))
-        (span (:class "lt-visually-hidden lt-transfer-status" :role "status"))))))
+        (h:span (:class "lt-visually-hidden lt-transfer-status" :role "status"))))))
 
 ;;; Password strength
 
@@ -436,11 +436,11 @@ without JavaScript, the meter stays hidden."
                                           :value "this.value"
                                           :on-complete "littoral.strength(this, value)"))
             nil)
-  (div (:id (format nil "~A-strength" id) :class "lt-strength" :hidden t)
+  (h:div (:id (format nil "~A-strength" id) :class "lt-strength" :hidden t)
     (emit-tag "meter" (list :min 0 :max 4 :low 2 :high 3 :optimum 4 :value 0
                             :aria-label (translate "Password strength"))
               nil)
-    (span (:class "lt-strength-text" :aria-live "polite"))))
+    (h:span (:class "lt-strength-text" :aria-live "polite"))))
 
 (defclass new-password-field (password-field)
   ((min-strength :initarg :min-strength :initform nil :reader field-min-strength

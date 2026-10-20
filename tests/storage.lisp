@@ -99,13 +99,13 @@
   ((photos :initform '() :accessor album-photos)))
 
 (defmethod render ((self album))
-  (anchor (:callback (lambda ()
+  (h:anchor (:callback (lambda ()
                        (show self (make-editor (make-instance 'album-photo) :save-label "Upload")
                              :on-answer (lambda (photo) (when photo (push photo (album-photos self)))))))
     "Add a photo")
   (dolist (photo (album-photos self))
-    (div (:class "photo")
-      (p () (text (slot-value photo 'caption)))
+    (h:div (:class "photo")
+      (h:p () (h:text (slot-value photo 'caption)))
       (littoral::render-field-value (littoral::find-field (find-description 'album-photo) 'picture)
                                     (slot-value photo 'picture)))))
 

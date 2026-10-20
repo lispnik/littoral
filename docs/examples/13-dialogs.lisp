@@ -57,8 +57,8 @@
   ((berth :initform nil :accessor berth)))
 (defmethod states ((self berth-picker)) (list self))
 (defmethod render ((self berth-picker))
-  (p () "Berth: " (text (princ-to-string (berth self))))
-  (anchor (:callback (lambda ()
+  (h:p () "Berth: " (h:text (princ-to-string (berth self))))
+  (h:anchor (:callback (lambda ()
                        (show self (make-instance 'choice-dialog
                                                  :message "Which berth?"
                                                  :items '(1 2 3)
@@ -81,8 +81,8 @@
   ((user :initform nil :accessor user)))
 (defmethod states ((self crew-room)) (list self))
 (defmethod render ((self crew-room))
-  (p () "Signed in: " (text (or (user self) "nobody")))
-  (anchor (:callback (lambda ()
+  (h:p () "Signed in: " (h:text (or (user self) "nobody")))
+  (h:anchor (:callback (lambda ()
                        (show self (make-instance 'login-dialog :message "Crew only")
                              :on-answer (lambda (credentials)
                                           (when (and credentials (equal (rest credentials) "knots"))

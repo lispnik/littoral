@@ -305,8 +305,8 @@ comment saying \"step N replaces it\" (or \"them\")."
   (:documentation "Step 2's counter with no STATES method."))
 
 (defmethod render ((self counter-without-states))
-  (h1 () (text (count-without-states self)))
-  (anchor (:callback (lambda () (incf (count-without-states self)))) "++"))
+  (h:h1 () (h:text (count-without-states self)))
+  (h:anchor (:callback (lambda () (incf (count-without-states self)))) "++"))
 
 (test tutorial-steps-1-and-2
   (with-tutorial (b)

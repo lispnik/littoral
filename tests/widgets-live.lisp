@@ -22,7 +22,7 @@
 
 (test time-ago-elements
   (let* ((time (encode-universal-time 0 30 9 19 10 2026 0))
-         (html (with-canvas-to-string () (time-ago time :class "when"))))
+         (html (h:with-canvas-to-string () (time-ago time :class "when"))))
     (is (search "<time datetime=\"2026-10-19T09:30:00Z\" class=\"lt-relative-time when\"" html))
     (is (search "data-lt-relative data-lt-now=\"just now\"" html))
     (multiple-value-bind (s m h day month year) (decode-universal-time time)

@@ -3,7 +3,7 @@
 ;;;; Example: littoral:start-live-watcher littoral:stop-live-watcher
 ;;; While the watcher runs, redefining a render method (as recompiling it in Emacs does) has the open development pages showing that class reload.  A page with no event stream polls the URL in its data-lt-live attribute.
 (defclass banner (component) ())
-(defmethod render ((self banner)) (p () "Welcome"))
+(defmethod render ((self banner)) (h:p () "Welcome"))
 (defun reload-asked-p (browser)
   (let ((url (cl-ppcre:register-groups-bind (u) ("data-lt-live=\"([^\"]*)\"" (browser-html browser))
                (unescape u))))
@@ -14,7 +14,7 @@
        (let ((b (make-instance 'browser)))
          (visit b "/banner")
          (let ((before (reload-asked-p b)))
-           (eval '(defmethod render ((self banner)) (p () "Welcome aboard")))
+           (eval '(defmethod render ((self banner)) (h:p () "Welcome aboard")))
            (list before (wait-for (lambda () (reload-asked-p b)) 3)))))
   (stop-live-watcher))
 ;; ⇒ (NIL T)
@@ -24,7 +24,7 @@
 (defvar *ticks* (make-channel "ticks"))
 (defclass dashboard (component updatable) ())
 (defmethod subscriptions ((self dashboard)) (list *ticks*))
-(defmethod render ((self dashboard)) (p () "Dashboard"))
+(defmethod render ((self dashboard)) (h:p () "Dashboard"))
 (with-fresh-applications (("/dashboard" 'dashboard :mode :development))
   (let* ((b (make-instance 'browser))
          (sink (make-instance 'sink))
@@ -39,7 +39,7 @@
 ;;;; Example: littoral:*live-reload*
 ;;; Pages drawn while it is false don't poll for reloads.  Set globally to NIL, it also stops the watcher reloading pages.
 (defclass banner (component) ())
-(defmethod render ((self banner)) (p () "Welcome"))
+(defmethod render ((self banner)) (h:p () "Welcome"))
 (with-fresh-applications (("/banner" 'banner :mode :development))
   (let ((b (make-instance 'browser)))
     (list (progn (visit b "/banner") (not (null (search "data-lt-live" (browser-html b)))))

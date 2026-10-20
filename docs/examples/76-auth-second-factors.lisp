@@ -7,7 +7,7 @@
 (defmethod children ((self account)) (list (account-security self)))
 (defmethod render ((self account))
   (let ((user (littoral.auth:current-user)))
-    (p () (text (if user (format nil "Hello, ~A." (littoral.auth:user-name user)) "Hello, stranger."))))
+    (h:p () (h:text (if user (format nil "Hello, ~A." (littoral.auth:user-name user)) "Hello, stranger."))))
   (render-component (account-security self)))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
       (littoral.auth:*pbkdf2-iterations* 1000))

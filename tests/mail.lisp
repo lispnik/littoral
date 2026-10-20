@@ -57,8 +57,8 @@
 (littoral.mail:define-mail welcome-mail (name address)
   :to (format nil "~A <~A>" name address)
   :subject (format nil "Welcome, ~A" name)
-  :html ((p () "Hello " (strong () (text name)) ",")
-         (p () (anchor (:href "https://example.org/start") "Get started"))))
+  :html ((h:p () "Hello " (h:strong () (h:text name)) ",")
+         (h:p () (h:anchor (:href "https://example.org/start") "Get started"))))
 
 (test mail-templates
   (let ((mail (welcome-mail "Ada <script>" "ada@example.org")))

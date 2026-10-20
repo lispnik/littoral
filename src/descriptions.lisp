@@ -85,13 +85,13 @@ Methods should call CALL-NEXT-METHOD to keep the general checks.")
 TEXT; CALLBACK receives what is submitted.  Editors, wizards and data grids
 call it.")
   (:method ((field field) id text callback)
-    (text-input (:id id :value text :callback callback
+    (h:text-input (:id id :value text :callback callback
                  :required (field-required-p field)))))
 
 (defgeneric render-field-value (field value)
   (:documentation "Write VALUE for reading, in a viewer or report.")
   (:method ((field field) value)
-    (text (format-field field value))))
+    (h:text (format-field field value))))
 
 ;;; Field kinds
 
@@ -129,12 +129,12 @@ a line break after each."))
       (string-right-trim '(#\Space #\Newline #\Return #\Tab) string)))
 
 (defmethod render-field-input ((field text-field) id text callback)
-  (text-area (:id id :value text :rows 4 :callback callback)))
+  (h:text-area (:id id :value text :rows 4 :callback callback)))
 
 (defmethod render-field-value ((field text-field) value)
   (when value
     (dolist (line (cl-ppcre:split "\\n" value))
-      (text line) (br))))
+      (h:text line) (h:br))))
 
 (defclass password-field (string-field) ()
   (:documentation "Text that is never shown: its input starts empty, its value
@@ -144,10 +144,10 @@ that value."))
 
 (defmethod render-field-input ((field password-field) id text callback)
   (declare (ignore text))
-  (password-input (:id id :callback callback :autocomplete "new-password")))
+  (h:password-input (:id id :callback callback :autocomplete "new-password")))
 
 (defmethod render-field-value ((field password-field) value)
-  (when value (text "••••••")))
+  (when value (h:text "••••••")))
 
 (defclass email-field (string-field) ()
   (:default-initargs :pattern "[^@\\s]+@[^@\\s]+\\.[^@\\s]+")
@@ -177,7 +177,7 @@ that value."))
 
 (defmethod render-field-value ((field url-field) value)
   ;; Only http(s), so a stored value cannot become a javascript: link.
-  (when value (anchor (:href value :rel "noopener") (text value))))
+  (when value (h:anchor (:href value :rel "noopener") (h:text value))))
 
 (defclass integer-field (field)
   ((min :initarg :min :initform nil :reader field-min)
@@ -215,13 +215,13 @@ is an answer."))
   (if value "Yes" "No"))
 
 (defmethod render-field-value ((field boolean-field) value)
-  (text (translate (format-field field value))))
+  (h:text (translate (format-field field value))))
 
 (defmethod check-field ((field boolean-field) value)
   (and (field-validator field) (funcall (field-validator field) value)))
 
 (defmethod render-field-input ((field boolean-field) id text callback)
-  (checkbox (:id id :value (string= text "Yes")
+  (h:checkbox (:id id :value (string= text "Yes")
              :callback (lambda (on) (funcall callback (if on "on" "off"))))))
 
 (defclass choice-field (field)
@@ -265,7 +265,7 @@ required, the select offers a blank option too."))
                       for index from 0
                       do (let ((choice choice))
                            (emit-tag "option" (list :value index :selected (eql index selected))
-                                     (lambda () (text (format-field field choice))))))))))
+                                     (lambda () (h:text (format-field field choice))))))))))
 
 (defclass date-field (field) ()
   (:documentation "A calendar date, held as (YEAR MONTH DAY) and written like
@@ -367,14 +367,14 @@ entered with the browser's time input."))
       (emit-tag "span" (list :class "lt-date-range" :role (when (getf attributes :aria-label) "group")
                              :aria-label (getf attributes :aria-label))
                 (lambda ()
-                  (label (:for id) (translate "From"))
+                  (h:label (:for id) (translate "From"))
                   (let ((*next-field-attributes* (alexandria:remove-from-plist attributes :aria-label)))
                     (emit-tag "input" (list :type "date" :id id :value from
                                             :required (field-required-p field)
                                             :name (register :value (lambda (v) (setf from v)
                                                                      (funcall callback (format nil "~A/~A" from to)))))
                               nil))
-                  (label (:for (format nil "~A-to" id)) (translate "To"))
+                  (h:label (:for (format nil "~A-to" id)) (translate "To"))
                   (emit-tag "input" (list :type "date" :id (format nil "~A-to" id) :value to
                                           :required (field-required-p field)
                                           :name (register :value (lambda (v) (setf to v)
@@ -437,7 +437,7 @@ dropped, ignoring case."))
   (emit-tag "ul" (list :class "lt-tags")
             (lambda ()
               (dolist (tag value)
-                (li () (text tag))))))
+                (h:li () (h:text tag))))))
 
 (defparameter *field-kinds*
   '((:string . string-field) (:text . text-field) (:password . password-field)
@@ -709,31 +709,31 @@ keep the problems to show."
 
 (defmethod render ((self description-editor))
   (let ((problems (editor-problems self)))
-    (div (:class "lt-editor")
-      (when (editor-title self) (h2 () (text (editor-title self))))
+    (h:div (:class "lt-editor")
+      (when (editor-title self) (h:h2 () (h:text (editor-title self))))
       (let ((general (cdr (assoc nil problems))))
-        (when general (p (:class "lt-validation-error" :role "alert") (text general))))
-      (form (:multipart (some #'field-multipart-p (description-fields (editor-description self))))
+        (when general (h:p (:class "lt-validation-error" :role "alert") (h:text general))))
+      (h:form (:multipart (some #'field-multipart-p (description-fields (editor-description self))))
         (dolist (field (remove-if #'field-hidden-p (description-fields (editor-description self))))
           (let* ((name (field-name field))
                  (id (string-downcase (symbol-name name)))
                  (problem (cdr (assoc name problems))))
-            (div (:class (list "lt-field" (when problem "lt-field-invalid")))
-              (label (:for id) (text (translate (field-label field)))
-                (when (field-required-p field) (span (:class "lt-required" :title (translate "required")) " *")))
+            (h:div (:class (list "lt-field" (when problem "lt-field-invalid")))
+              (h:label (:for id) (h:text (translate (field-label field)))
+                (when (field-required-p field) (h:span (:class "lt-required" :title (translate "required")) " *")))
               (if (field-read-only-p field)
-                  (span (:id id :class "lt-read-only")
+                  (h:span (:id id :class "lt-read-only")
                     (render-field-value field (field-value field (editor-object self))))
                   (let ((*next-field-attributes* (list :aria-invalid (when problem "true")
                                                        :aria-describedby (field-description-ids field id problem))))
                     (render-field-input field id (gethash name (editor-texts self))
                                         (lambda (text) (setf (gethash name (editor-texts self)) text)))))
-              (when problem (div (:id (format nil "~A-error" id) :class "lt-validation-error") (text problem)))
+              (when problem (h:div (:id (format nil "~A-error" id) :class "lt-validation-error") (h:text problem)))
               (when (field-help field)
-                (div (:id (format nil "~A-help" id) :class "lt-help") (text (translate-label (field-help field))))))))
-        (div (:class "lt-buttons")
-          (submit-button (:callback (lambda () (save-editor self))) (text (translate (editor-save-label self))))
-          (cancel-button (:callback (lambda () (answer self nil))) (translate "Cancel")))))))
+                (h:div (:id (format nil "~A-help" id) :class "lt-help") (h:text (translate-label (field-help field))))))))
+        (h:div (:class "lt-buttons")
+          (h:submit-button (:callback (lambda () (save-editor self))) (h:text (translate (editor-save-label self))))
+          (h:cancel-button (:callback (lambda () (answer self nil))) (translate "Cancel")))))))
 
 ;;; Viewer and report columns
 
@@ -750,12 +750,12 @@ FIND-DESCRIPTION takes; by default OBJECT's class)."
   (make-instance 'description-viewer :object object :description (find-description description)))
 
 (defmethod render ((self description-viewer))
-  (table (:class "lt-table lt-viewer")
+  (h:table (:class "lt-table lt-viewer")
     (dolist (field (description-fields (viewer-description self)))
       (unless (or (typep field 'password-field) (field-hidden-p field))
-        (tr () (th () (text (translate (field-label field))))
-          (td () (render-field-value field (field-value field (viewer-object self))))))))
-  (p () (anchor (:callback (lambda () (answer self))) (translate "Close"))))
+        (h:tr () (h:th () (h:text (translate (field-label field))))
+          (h:td () (render-field-value field (field-value field (viewer-object self))))))))
+  (h:p () (h:anchor (:callback (lambda () (answer self))) (translate "Close"))))
 
 (defun description-columns (description &rest names)
   "REPORT columns for DESCRIPTION's fields: those named in NAMES, in that

@@ -6,7 +6,8 @@
 ;;; Step 13: keeping the books in a database
 
 (defpackage #:my-books
-  (:use #:cl #:littoral #:littoral.html)
+  (:use #:cl #:littoral)
+  (:local-nicknames (#:h #:littoral.html))
   (:export #:my-books #:open-database #:register)
   (:documentation "The tutorial's reading list, kept in a database, one list per reader."))
 
@@ -48,26 +49,26 @@
 
 ;; The page itself, shown in step 13.
 (defmethod render ((self my-books))
-  (h1 () (translate "My books"))
+  (h:h1 () (translate "My books"))
   (let ((books (shelf-books)))
     (if books
-        (ul (:class "books")
+        (h:ul (:class "books")
           (dolist (book books)
-            (li ()
-              (strong () (text (book-title book)))
+            (h:li ()
+              (h:strong () (h:text (book-title book)))
               (when (book-author book)
-                (text " ")
-                (text (translate "by ~A" (book-author book))))
-              (text " ")
-              (anchor (:callback (lambda () (edit-stored-book self book))) (translate "edit"))
-              (text " ")
-              (anchor (:callback (lambda () (remove-stored-book self book))) (translate "remove")))))
-        (p () (em () (translate "No books yet.")))))
-  (form ()
-    (text-input (:id "new-title" :value (new-title self)
+                (h:text " ")
+                (h:text (translate "by ~A" (book-author book))))
+              (h:text " ")
+              (h:anchor (:callback (lambda () (edit-stored-book self book))) (translate "edit"))
+              (h:text " ")
+              (h:anchor (:callback (lambda () (remove-stored-book self book))) (translate "remove")))))
+        (h:p () (h:em () (translate "No books yet.")))))
+  (h:form ()
+    (h:text-input (:id "new-title" :value (new-title self)
                  :placeholder (translate "Add a title") :label (translate "Title to add")
                  :callback (lambda (v) (setf (new-title self) v))))
-    (submit-button (:callback (lambda () (add-stored-book self))) (translate "Add"))))
+    (h:submit-button (:callback (lambda () (add-stored-book self))) (translate "Add"))))
 
 (defun open-database (file)
   "Keep the books, and the users, in the SQLite database FILE."
@@ -91,9 +92,9 @@
       (setf (new-title list) ""))))
 
 (defmethod render :before ((self my-books))
-  (p (:class "who")
-    (text (translate "Signed in as ~A." (littoral.auth:user-name (littoral.auth:current-user))))
-    (text " ")
+  (h:p (:class "who")
+    (h:text (translate "Signed in as ~A." (littoral.auth:user-name (littoral.auth:current-user))))
+    (h:text " ")
     (littoral.auth:sign-out-link)))
 
 ;;; Step 15: another language

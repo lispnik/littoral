@@ -283,7 +283,7 @@ start tag matches PATTERN."
 ;;; Charts
 
 (test pie-charts
-  (let ((html (with-canvas-to-string () (pie-chart '(("Email" . 3) ("Chat" . 1) ("None" . 0)) :title "Requests"))))
+  (let ((html (h:with-canvas-to-string () (pie-chart '(("Email" . 3) ("Chat" . 1) ("None" . 0)) :title "Requests"))))
     (is (= 2 (count-matches "<path class=\"lt-chart-slice lt-series-[0-9]\"" html)))
     (is (search "<title>Email: 3 (75%)</title>" html))
     (is (search "<title>Chat: 1 (25%)</title>" html))
@@ -291,16 +291,16 @@ start tag matches PATTERN."
     ;; The table has every row, nothing included.
     (is (search "<tr><th>None</th><td>0</td><td>0%</td></tr>" html))
     (is (not (search "lt-chart-total" html))))
-  (let ((html (with-canvas-to-string () (pie-chart '(("All" . 5)) :title "One" :donut t))))
+  (let ((html (h:with-canvas-to-string () (pie-chart '(("All" . 5)) :title "One" :donut t))))
     (is (search "fill-rule=\"evenodd\"" html))
     (is (search "<text class=\"lt-chart-total\"" html))
     (is (search ">5</text>" html)))
-  (let ((html (with-canvas-to-string () (pie-chart '(("A" . 0)) :title "Nothing"))))
+  (let ((html (h:with-canvas-to-string () (pie-chart '(("A" . 0)) :title "Nothing"))))
     (is (search "<circle class=\"lt-chart-grid\"" html))
     (is (not (search "<path" html)))))
 
 (test stacked-bar-charts
-  (let ((html (with-canvas-to-string ()
+  (let ((html (h:with-canvas-to-string ()
                 (stacked-bar-chart '(("Open" 2 0) ("Closed" 3 4)) :title "Tickets" :x-labels '("Q1" "Q2")))))
     ;; No segment for nothing.
     (is (= 3 (count-matches "<rect class=\"lt-chart-segment" html)))
@@ -310,7 +310,7 @@ start tag matches PATTERN."
     (is (search "lt-chart-key" html))))
 
 (test scatter-charts
-  (let ((html (with-canvas-to-string ()
+  (let ((html (h:with-canvas-to-string ()
                 (scatter-chart '(("Oaks" (1 . 2) (3 . 4)) ("Birches" (2 . 1))) :title "Trees"
                                :x-label "Age" :y-label "Height"))))
     (is (search "<circle class=\"lt-chart-point lt-series-0\"" html))
@@ -322,7 +322,7 @@ start tag matches PATTERN."
     (is (search ">Height</text>" html))
     (is (search "lt-chart-key" html)))
   ;; One series, no key; one point still makes axes.
-  (let ((html (with-canvas-to-string () (scatter-chart '(("Only" (5 . 5))) :title "One"))))
+  (let ((html (h:with-canvas-to-string () (scatter-chart '(("Only" (5 . 5))) :title "One"))))
     (is (not (search "lt-chart-key" html)))
     (is (search "lt-chart-grid" html))))
 

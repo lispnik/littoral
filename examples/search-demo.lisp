@@ -6,7 +6,8 @@
 ;;;; you type, best matches first, the words found marked.
 
 (defpackage #:littoral-search-demo
-  (:use #:cl #:littoral #:littoral.html)
+  (:use #:cl #:littoral)
+  (:local-nicknames (#:h #:littoral.html))
   (:documentation "Full-text search over the COMMON-LISP package's documentation.")
   (:export #:register #:search-page))
 
@@ -41,26 +42,26 @@
 (defmethod states ((self search-page)) (list self))
 
 (defmethod render ((self search-page))
-  (h1 () "Search")
-  (p () "Every documented external symbol of " (code () "COMMON-LISP") " ("
-    (text (littoral.db:db-count 'entry)) " entries), kept in SQLite with a full-text index. "
+  (h:h1 () "Search")
+  (h:p () "Every documented external symbol of " (h:code () "COMMON-LISP") " ("
+    (h:text (littoral.db:db-count 'entry)) " entries), kept in SQLite with a full-text index. "
     "Words match the start of words, all of them are required, and the best matches come first.")
-  (form ()
-    (text-input (:id "query" :label "Search the documentation" :value (page-query self)
+  (h:form ()
+    (h:text-input (:id "query" :label "Search the documentation" :value (page-query self)
                  :callback (lambda (v) (setf (page-query self) v))
                  :on-input (ajax-update self) :autofocus t)))
   (let* ((query (page-query self))
          (found (littoral.db:db-search 'entry query :limit 25)))
-    (p (:role "status") (text (cond ((string= (string-trim " " query) "") "Type something to search for.")
+    (h:p (:role "status") (h:text (cond ((string= (string-trim " " query) "") "Type something to search for.")
                                     ((null found) "Nothing found.")
                                     (t (format nil "The best ~D match~:*~[es~;~:;es~]:" (length found))))))
-    (ol (:class "search-results")
+    (h:ol (:class "search-results")
       (dolist (entry found)
-        (li ()
-          (p () (strong () (raw (littoral.db:highlight-matches (entry-name entry) query)))
-            " " (span (:class "search-kind") (text (entry-kind entry))))
-          (p (:class "search-doc")
-            (raw (littoral.db:highlight-matches
+        (h:li ()
+          (h:p () (h:strong () (h:raw (littoral.db:highlight-matches (entry-name entry) query)))
+            " " (h:span (:class "search-kind") (h:text (entry-kind entry))))
+          (h:p (:class "search-doc")
+            (h:raw (littoral.db:highlight-matches
                   (let ((doc (entry-documentation entry)))
                     (if (> (length doc) 280) (concatenate 'string (subseq doc 0 280) "…") doc))
                   query))))))))

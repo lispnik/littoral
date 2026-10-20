@@ -14,8 +14,8 @@
 (defmethod subscriptions ((self ws-counter)) (list *ws-channel*))
 
 (defmethod render ((self ws-counter))
-  (span (:class "ws-count") (text (ws-count self)))
-  (button (:id "ws-plus" :on-click (ajax :callback (lambda () (incf (ws-count self))) :update self)) "+"))
+  (h:span (:class "ws-count") (h:text (ws-count self)))
+  (h:button (:id "ws-plus" :on-click (ajax :callback (lambda () (incf (ws-count self))) :update self)) "+"))
 
 (defun close-client (client)
   "Close a test client.  websocket-driver's client destroys its reader
@@ -298,7 +298,7 @@ openssl: their paths, or NIL without openssl."
   (when (string= (sb-thread:thread-name sb-thread:*current-thread*) "littoral push render")
     (sleep 0.3)
     (sb-thread:with-mutex (*slow-renders-lock*) (push sb-thread:*current-thread* *slow-renders*)))
-  (span () "slow panel"))
+  (h:span () "slow panel"))
 
 (test pushes-render-on-several-threads
   (let ((port (free-port)) (sockets '()))

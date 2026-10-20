@@ -8,7 +8,7 @@ The examples are tested: the suite runs every one on its own and checks each res
 
 ```lisp
 (asdf:load-system :littoral/test)
-(defpackage #:try-littoral (:use #:cl #:littoral #:littoral.html #:littoral.test))
+(defpackage #:try-littoral (:use #:cl #:littoral #:littoral.test) (:local-nicknames (#:h #:littoral.html)))
 (in-package #:try-littoral)
 ```
 
@@ -35,7 +35,7 @@ The lack/request:request being handled.
   (setf (language self)
         (gethash "accept-language" (lack/request:request-headers *request*))))
 (defmethod render ((self greeter))
-  (p () "Your browser prefers " (text (language self)) "."))
+  (h:p () "Your browser prefers " (h:text (language self)) "."))
 (with-fresh-applications (("/greeter" 'greeter :mode :deployment))
   (let ((b (make-instance 'browser :headers '(("accept-language" . "fr")))))
     (visit b "/greeter")
@@ -52,9 +52,9 @@ The `session` owning the current request.
 ```lisp
 (defclass visits (component) ())
 (defmethod render ((self visits))
-  (p () (text (application-title *application*)) ": "
-    (text (princ-to-string (or (session-property :clicks) 0))) " clicks")
-  (anchor (:callback (lambda ()
+  (h:p () (h:text (application-title *application*)) ": "
+    (h:text (princ-to-string (or (session-property :clicks) 0))) " clicks")
+  (h:anchor (:callback (lambda ()
                        (setf (session-property :clicks *session*)
                              (1+ (or (session-property :clicks *session*) 0)))))
     "Click"))
@@ -76,9 +76,9 @@ The `application` the current request was dispatched to.
 ```lisp
 (defclass visits (component) ())
 (defmethod render ((self visits))
-  (p () (text (application-title *application*)) ": "
-    (text (princ-to-string (or (session-property :clicks) 0))) " clicks")
-  (anchor (:callback (lambda ()
+  (h:p () (h:text (application-title *application*)) ": "
+    (h:text (princ-to-string (or (session-property :clicks) 0))) " clicks")
+  (h:anchor (:callback (lambda ()
                        (setf (session-property :clicks *session*)
                              (1+ (or (session-property :clicks *session*) 0)))))
     "Click"))
@@ -111,7 +111,7 @@ The value of the query or body parameter `name` in `request`, or `nil`.
                           (request-parameter-p "loud" request)
                           (request-parameter "missing" request))))
 (defmethod render ((self welcome))
-  (p () (text (prin1-to-string (seen self)))))
+  (h:p () (h:text (prin1-to-string (seen self)))))
 (with-fresh-applications (("/welcome" 'welcome :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/welcome/back?name=Ada&loud")
@@ -134,7 +134,7 @@ True when `request` has the parameter `name`, even with no value (?flag).
                           (request-parameter-p "loud" request)
                           (request-parameter "missing" request))))
 (defmethod render ((self welcome))
-  (p () (text (prin1-to-string (seen self)))))
+  (h:p () (h:text (prin1-to-string (seen self)))))
 (with-fresh-applications (("/welcome" 'welcome :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/welcome/back?name=Ada&loud")
@@ -159,7 +159,7 @@ the application's path.
                           (request-parameter-p "loud" request)
                           (request-parameter "missing" request))))
 (defmethod render ((self welcome))
-  (p () (text (prin1-to-string (seen self)))))
+  (h:p () (h:text (prin1-to-string (seen self)))))
 (with-fresh-applications (("/welcome" 'welcome :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/welcome/back?name=Ada&loud")
@@ -177,7 +177,7 @@ to URL (another site, say) instead of the next page.
 ```lisp
 (defclass exit-page (component) ())
 (defmethod render ((self exit-page))
-  (anchor (:callback (lambda () (redirect-to "https://example.com/bye"))) "Leave"))
+  (h:anchor (:callback (lambda () (redirect-to "https://example.com/bye"))) "Leave"))
 (with-fresh-applications (("/exit" 'exit-page :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/exit")
@@ -196,7 +196,7 @@ showing its `:message`, by default "You are not allowed to do that."
 ```lisp
 (defclass vault (component) ())
 (defmethod render ((self vault))
-  (anchor (:callback (lambda () (error 'forbidden :message "Only the harbour master may open the vault.")))
+  (h:anchor (:callback (lambda () (error 'forbidden :message "Only the harbour master may open the vault.")))
     "Open"))
 (with-fresh-applications (("/vault" 'vault :mode :deployment))
   (let ((b (make-instance 'browser)))
@@ -217,7 +217,7 @@ The explanation a `forbidden` condition shows the user.
 ```lisp
 (defclass vault (component) ())
 (defmethod render ((self vault))
-  (anchor (:callback (lambda () (error 'forbidden :message "Only the harbour master may open the vault.")))
+  (h:anchor (:callback (lambda () (error 'forbidden :message "Only the harbour master may open the vault.")))
     "Open"))
 (with-fresh-applications (("/vault" 'vault :mode :deployment))
   (let ((b (make-instance 'browser)))
@@ -260,7 +260,7 @@ specialise `render`.
 ```lisp
 (defclass greeting (component) ())
 (defmethod render ((self greeting))
-  (h1 () "Hello"))
+  (h:h1 () "Hello"))
 (with-fresh-applications (("/greeting" 'greeting :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/greeting")
@@ -293,7 +293,7 @@ are written with `render-component`, never by calling `render` on them.
 ```lisp
 (defclass greeting (component) ())
 (defmethod render ((self greeting))
-  (h1 () "Hello"))
+  (h:h1 () "Hello"))
 (with-fresh-applications (("/greeting" 'greeting :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/greeting")
@@ -314,16 +314,16 @@ decorations, inside a halo when halos are on.
    (count :initform 0 :accessor counter-count)))
 (defmethod states ((self counter)) (list self))
 (defmethod render ((self counter))
-  (p () (text (counter-label self)) ": " (text (princ-to-string (counter-count self))) " "
-    (anchor (:callback (lambda () (incf (counter-count self))))
-      "more " (text (counter-label self)))))
+  (h:p () (h:text (counter-label self)) ": " (h:text (princ-to-string (counter-count self))) " "
+    (h:anchor (:callback (lambda () (incf (counter-count self))))
+      "more " (h:text (counter-label self)))))
 (defclass tally (component)
   ((counters :initform (list (make-instance 'counter :label "gulls")
                              (make-instance 'counter :label "terns"))
              :reader tally-counters)))
 (defmethod children ((self tally)) (tally-counters self))
 (defmethod render ((self tally))
-  (h1 () "Birds seen")
+  (h:h1 () "Birds seen")
   (dolist (counter (tally-counters self))
     (render-component counter)))
 (with-fresh-applications (("/tally" 'tally :mode :deployment))
@@ -348,16 +348,16 @@ backtracking and AJAX lookups find components through this.
    (count :initform 0 :accessor counter-count)))
 (defmethod states ((self counter)) (list self))
 (defmethod render ((self counter))
-  (p () (text (counter-label self)) ": " (text (princ-to-string (counter-count self))) " "
-    (anchor (:callback (lambda () (incf (counter-count self))))
-      "more " (text (counter-label self)))))
+  (h:p () (h:text (counter-label self)) ": " (h:text (princ-to-string (counter-count self))) " "
+    (h:anchor (:callback (lambda () (incf (counter-count self))))
+      "more " (h:text (counter-label self)))))
 (defclass tally (component)
   ((counters :initform (list (make-instance 'counter :label "gulls")
                              (make-instance 'counter :label "terns"))
              :reader tally-counters)))
 (defmethod children ((self tally)) (tally-counters self))
 (defmethod render ((self tally))
-  (h1 () "Birds seen")
+  (h:h1 () "Birds seen")
   (dolist (counter (tally-counters self))
     (render-component counter)))
 (with-fresh-applications (("/tally" 'tally :mode :deployment))
@@ -382,8 +382,8 @@ itself to make all its slots backtrack.
   ((points :initform 0 :accessor points)))
 (defmethod states ((self score)) (list self))
 (defmethod render ((self score))
-  (p () "Points: " (text (princ-to-string (points self))))
-  (anchor (:callback (lambda () (incf (points self)))) "Score"))
+  (h:p () "Points: " (h:text (princ-to-string (points self))))
+  (h:anchor (:callback (lambda () (incf (points self)))) "Score"))
 (with-fresh-applications (("/score" 'score :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/score")
@@ -418,7 +418,7 @@ page is written, parents first, so a child's title wins.  Call
   (add-style root "h1 { color: navy }")
   (add-script root "/js/charts.js"))
 (defmethod render ((self tide-page))
-  (h1 () "Tides"))
+  (h:h1 () "Tides"))
 (with-fresh-applications (("/tides" 'tide-page :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/tides")
@@ -444,7 +444,7 @@ CSS text this component adds to the page head, or `nil`.
 (defmethod style ((self chart)) ".chart { height: 10rem }")
 (defmethod script ((self chart)) "console.log('chart drawn')")
 (defmethod render ((self chart))
-  (div (:class "chart")))
+  (h:div (:class "chart")))
 (with-fresh-applications (("/chart" 'chart :mode :deployment))
   (let* ((b (make-instance 'browser))
          (html (browser-html (visit b "/chart"))))
@@ -464,7 +464,7 @@ JavaScript text this component adds to the page, or `nil`.
 (defmethod style ((self chart)) ".chart { height: 10rem }")
 (defmethod script ((self chart)) "console.log('chart drawn')")
 (defmethod render ((self chart))
-  (div (:class "chart")))
+  (h:div (:class "chart")))
 (with-fresh-applications (("/chart" 'chart :mode :deployment))
   (let* ((b (make-instance 'browser))
          (html (browser-html (visit b "/chart"))))
@@ -495,11 +495,11 @@ with the request that started it.  A bookmarked URL is read back here with
   (setf (harbour self) (first (request-extra-path))
         (metric self) (request-parameter-p "metric" request)))
 (defmethod render ((self harbours))
-  (p () "Tides for " (text (or (harbour self) "nowhere"))
-    (text (if (metric self) " in metres. " " in feet. ")))
-  (anchor (:callback (lambda () (setf (harbour self) "Dover"))) "Dover")
-  (text " ")
-  (anchor (:callback (lambda () (setf (metric self) t))) "Metric"))
+  (h:p () "Tides for " (h:text (or (harbour self) "nowhere"))
+    (h:text (if (metric self) " in metres. " " in feet. ")))
+  (h:anchor (:callback (lambda () (setf (harbour self) "Dover"))) "Dover")
+  (h:text " ")
+  (h:anchor (:callback (lambda () (setf (metric self) t))) "Metric"))
 (with-fresh-applications (("/tides" 'harbours :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/tides")
@@ -528,8 +528,8 @@ returns "li"; a region whose updates should be announced adds
 (defmethod updatable-wrapper ((self shopping-item))
   (values "li" '(:aria-live "polite")))
 (defmethod render ((self shopping-item))
-  (text (item-name self)))
-(let ((html (with-canvas-to-string ()
+  (h:text (item-name self)))
+(let ((html (h:with-canvas-to-string ()
               (render-component (make-instance 'shopping-item :name "Milk")))))
   (cl-ppcre:regex-replace " id=\"[^\"]*\"" html ""))
 ;; ⇒ "<li class=\"lt-updatable\" aria-live=\"polite\">Milk</li>"
@@ -558,11 +558,11 @@ first; read it back in `initial-request` with `request-extra-path` and
   (setf (harbour self) (first (request-extra-path))
         (metric self) (request-parameter-p "metric" request)))
 (defmethod render ((self harbours))
-  (p () "Tides for " (text (or (harbour self) "nowhere"))
-    (text (if (metric self) " in metres. " " in feet. ")))
-  (anchor (:callback (lambda () (setf (harbour self) "Dover"))) "Dover")
-  (text " ")
-  (anchor (:callback (lambda () (setf (metric self) t))) "Metric"))
+  (h:p () "Tides for " (h:text (or (harbour self) "nowhere"))
+    (h:text (if (metric self) " in metres. " " in feet. ")))
+  (h:anchor (:callback (lambda () (setf (harbour self) "Dover"))) "Dover")
+  (h:text " ")
+  (h:anchor (:callback (lambda () (setf (metric self) t))) "Metric"))
 (with-fresh-applications (("/tides" 'harbours :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/tides")
@@ -601,11 +601,11 @@ add, then the session and page keys.
   (setf (harbour self) (first (request-extra-path))
         (metric self) (request-parameter-p "metric" request)))
 (defmethod render ((self harbours))
-  (p () "Tides for " (text (or (harbour self) "nowhere"))
-    (text (if (metric self) " in metres. " " in feet. ")))
-  (anchor (:callback (lambda () (setf (harbour self) "Dover"))) "Dover")
-  (text " ")
-  (anchor (:callback (lambda () (setf (metric self) t))) "Metric"))
+  (h:p () "Tides for " (h:text (or (harbour self) "nowhere"))
+    (h:text (if (metric self) " in metres. " " in feet. ")))
+  (h:anchor (:callback (lambda () (setf (harbour self) "Dover"))) "Dover")
+  (h:text " ")
+  (h:anchor (:callback (lambda () (setf (metric self) t))) "Metric"))
 (with-fresh-applications (("/tides" 'harbours :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/tides")
@@ -639,11 +639,11 @@ Append `segments` (strings, or anything `princ` prints) to URL's path.
   (setf (harbour self) (first (request-extra-path))
         (metric self) (request-parameter-p "metric" request)))
 (defmethod render ((self harbours))
-  (p () "Tides for " (text (or (harbour self) "nowhere"))
-    (text (if (metric self) " in metres. " " in feet. ")))
-  (anchor (:callback (lambda () (setf (harbour self) "Dover"))) "Dover")
-  (text " ")
-  (anchor (:callback (lambda () (setf (metric self) t))) "Metric"))
+  (h:p () "Tides for " (h:text (or (harbour self) "nowhere"))
+    (h:text (if (metric self) " in metres. " " in feet. ")))
+  (h:anchor (:callback (lambda () (setf (harbour self) "Dover"))) "Dover")
+  (h:text " ")
+  (h:anchor (:callback (lambda () (setf (metric self) t))) "Metric"))
 (with-fresh-applications (("/tides" 'harbours :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/tides")
@@ -677,11 +677,11 @@ Add the query parameter `key` (with `value`, unless `nil`) to URL.
   (setf (harbour self) (first (request-extra-path))
         (metric self) (request-parameter-p "metric" request)))
 (defmethod render ((self harbours))
-  (p () "Tides for " (text (or (harbour self) "nowhere"))
-    (text (if (metric self) " in metres. " " in feet. ")))
-  (anchor (:callback (lambda () (setf (harbour self) "Dover"))) "Dover")
-  (text " ")
-  (anchor (:callback (lambda () (setf (metric self) t))) "Metric"))
+  (h:p () "Tides for " (h:text (or (harbour self) "nowhere"))
+    (h:text (if (metric self) " in metres. " " in feet. ")))
+  (h:anchor (:callback (lambda () (setf (harbour self) "Dover"))) "Dover")
+  (h:text " ")
+  (h:anchor (:callback (lambda () (setf (metric self) t))) "Metric"))
 (with-fresh-applications (("/tides" 'harbours :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/tides")
@@ -745,11 +745,11 @@ The decoded path segments of `request` after `app`'s path.
   (setf (harbour self) (first (request-extra-path))
         (metric self) (request-parameter-p "metric" request)))
 (defmethod render ((self harbours))
-  (p () "Tides for " (text (or (harbour self) "nowhere"))
-    (text (if (metric self) " in metres. " " in feet. ")))
-  (anchor (:callback (lambda () (setf (harbour self) "Dover"))) "Dover")
-  (text " ")
-  (anchor (:callback (lambda () (setf (metric self) t))) "Metric"))
+  (h:p () "Tides for " (h:text (or (harbour self) "nowhere"))
+    (h:text (if (metric self) " in metres. " " in feet. ")))
+  (h:anchor (:callback (lambda () (setf (harbour self) "Dover"))) "Dover")
+  (h:text " ")
+  (h:anchor (:callback (lambda () (setf (metric self) t))) "Metric"))
 (with-fresh-applications (("/tides" 'harbours :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/tides")
@@ -777,8 +777,8 @@ use `show` with `:on-answer` there to act on it.
 ```lisp
 (defclass inbox (component) ())
 (defmethod render ((self inbox))
-  (p () "Inbox")
-  (anchor (:callback (lambda ()
+  (h:p () "Inbox")
+  (h:anchor (:callback (lambda ()
                        (call self (make-instance 'message-dialog :message "No new mail."))))
     "Check mail"))
 (with-fresh-applications (("/inbox" 'inbox :mode :deployment))
@@ -803,8 +803,8 @@ Signals `render-phase-error` while rendering.
 ```lisp
 (defclass inbox (component) ())
 (defmethod render ((self inbox))
-  (p () "Inbox")
-  (anchor (:callback (lambda ()
+  (h:p () "Inbox")
+  (h:anchor (:callback (lambda ()
                        (call self (make-instance 'message-dialog :message "No new mail."))))
     "Check mail"))
 (with-fresh-applications (("/inbox" 'inbox :mode :deployment))
@@ -822,17 +822,17 @@ Signals `render-phase-error` while rendering.
 ```lisp
 (defclass colour-picker (component) ())
 (defmethod render ((self colour-picker))
-  (ul ()
+  (h:ul ()
     (dolist (colour '(:red :green :blue))
       (let ((colour colour))
-        (li () (anchor (:callback (lambda () (answer self colour)))
-                 (text (string-downcase colour))))))))
+        (h:li () (h:anchor (:callback (lambda () (answer self colour)))
+                 (h:text (string-downcase colour))))))))
 (defclass boat (component)
   ((colour :initform :white :accessor boat-colour)))
 (defmethod states ((self boat)) (list self))
 (defmethod render ((self boat))
-  (p () "The boat is " (text (string-downcase (boat-colour self))) ". ")
-  (anchor (:callback (lambda ()
+  (h:p () "The boat is " (h:text (string-downcase (boat-colour self))) ". ")
+  (h:anchor (:callback (lambda ()
                        (show self (make-instance 'colour-picker)
                              :on-answer (lambda (colour) (setf (boat-colour self) colour)))))
     "Paint it"))
@@ -857,17 +857,17 @@ of `call`.  Signals `render-phase-error` while rendering.
 ```lisp
 (defclass colour-picker (component) ())
 (defmethod render ((self colour-picker))
-  (ul ()
+  (h:ul ()
     (dolist (colour '(:red :green :blue))
       (let ((colour colour))
-        (li () (anchor (:callback (lambda () (answer self colour)))
-                 (text (string-downcase colour))))))))
+        (h:li () (h:anchor (:callback (lambda () (answer self colour)))
+                 (h:text (string-downcase colour))))))))
 (defclass boat (component)
   ((colour :initform :white :accessor boat-colour)))
 (defmethod states ((self boat)) (list self))
 (defmethod render ((self boat))
-  (p () "The boat is " (text (string-downcase (boat-colour self))) ". ")
-  (anchor (:callback (lambda ()
+  (h:p () "The boat is " (h:text (string-downcase (boat-colour self))) ". ")
+  (h:anchor (:callback (lambda ()
                        (show self (make-instance 'colour-picker)
                              :on-answer (lambda (colour) (setf (boat-colour self) colour)))))
     "Paint it"))
@@ -953,7 +953,7 @@ tags, links, stylesheets and scripts.
   (add-style root "h1 { color: navy }")
   (add-script root "/js/charts.js"))
 (defmethod render ((self tide-page))
-  (h1 () "Tides"))
+  (h:h1 () "Tides"))
 (with-fresh-applications (("/tides" 'tide-page :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/tides")
@@ -986,7 +986,7 @@ Reads the title of a html-root.  The page's title: the application's title, or i
   (add-style root "h1 { color: navy }")
   (add-script root "/js/charts.js"))
 (defmethod render ((self tide-page))
-  (h1 () "Tides"))
+  (h:h1 () "Tides"))
 (with-fresh-applications (("/tides" 'tide-page :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/tides")
@@ -1019,7 +1019,7 @@ Link the stylesheet at URL from the page.
   (add-style root "h1 { color: navy }")
   (add-script root "/js/charts.js"))
 (defmethod render ((self tide-page))
-  (h1 () "Tides"))
+  (h:h1 () "Tides"))
 (with-fresh-applications (("/tides" 'tide-page :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/tides")
@@ -1052,7 +1052,7 @@ Load the script at URL in the page.
   (add-style root "h1 { color: navy }")
   (add-script root "/js/charts.js"))
 (defmethod render ((self tide-page))
-  (h1 () "Tides"))
+  (h:h1 () "Tides"))
 (with-fresh-applications (("/tides" 'tide-page :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/tides")
@@ -1085,7 +1085,7 @@ Add the CSS text CSS to the page head.
   (add-style root "h1 { color: navy }")
   (add-script root "/js/charts.js"))
 (defmethod render ((self tide-page))
-  (h1 () "Tides"))
+  (h:h1 () "Tides"))
 (with-fresh-applications (("/tides" 'tide-page :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/tides")
@@ -1121,7 +1121,7 @@ are written as property=, the rest as name=.  A later call with the same
   (add-style root "h1 { color: navy }")
   (add-script root "/js/charts.js"))
 (defmethod render ((self tide-page))
-  (h1 () "Tides"))
+  (h:h1 () "Tides"))
 (with-fresh-applications (("/tides" 'tide-page :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/tides")
@@ -1156,7 +1156,7 @@ The same `rel` and `href` are added once.  For stylesheets use `add-stylesheet`.
   (add-style root "h1 { color: navy }")
   (add-script root "/js/charts.js"))
 (defmethod render ((self tide-page))
-  (h1 () "Tides"))
+  (h:h1 () "Tides"))
 (with-fresh-applications (("/tides" 'tide-page :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/tides")
@@ -1185,15 +1185,15 @@ Specialise `render-decoration` and call `render-inner` for what it wraps.
   ((caption :initarg :caption :reader frame-caption)))
 (defmethod render-decoration ((self framed) component)
   (declare (ignore component))
-  (section (:class "frame")
-    (h2 () (text (frame-caption self)))
+  (h:section (:class "frame")
+    (h:h2 () (h:text (frame-caption self)))
     (render-inner)))
 (defclass forecast (component) ())
 (defmethod render ((self forecast))
-  (p () "Fair, then rain."))
+  (h:p () "Fair, then rain."))
 (let ((c (make-instance 'forecast)))
   (add-decoration c (make-instance 'framed :caption "Shipping forecast"))
-  (with-canvas-to-string () (render-component c)))
+  (h:with-canvas-to-string () (render-component c)))
 ;; ⇒ "<section class=\"frame\"><h2>Shipping forecast</h2><p>Fair, then rain.</p></section>"
 ```
 
@@ -1209,15 +1209,15 @@ Globals come first, then any delegation, then locals.  Returns `decoration`.
   ((caption :initarg :caption :reader frame-caption)))
 (defmethod render-decoration ((self framed) component)
   (declare (ignore component))
-  (section (:class "frame")
-    (h2 () (text (frame-caption self)))
+  (h:section (:class "frame")
+    (h:h2 () (h:text (frame-caption self)))
     (render-inner)))
 (defclass forecast (component) ())
 (defmethod render ((self forecast))
-  (p () "Fair, then rain."))
+  (h:p () "Fair, then rain."))
 (let ((c (make-instance 'forecast)))
   (add-decoration c (make-instance 'framed :caption "Shipping forecast"))
-  (with-canvas-to-string () (render-component c)))
+  (h:with-canvas-to-string () (render-component c)))
 ;; ⇒ "<section class=\"frame\"><h2>Shipping forecast</h2><p>Fair, then rain.</p></section>"
 ```
 
@@ -1312,10 +1312,10 @@ A heading above the component: its `:message`, in an h3.
 ```lisp
 (defclass tide-table (component) ())
 (defmethod render ((self tide-table))
-  (p () "High water 06:12"))
+  (h:p () "High water 06:12"))
 (let ((c (make-instance 'tide-table)))
   (add-decoration c (make-instance 'message-decoration :message "Dover"))
-  (with-canvas-to-string () (render-component c)))
+  (h:with-canvas-to-string () (render-component c)))
 ;; ⇒ "<h3 class=\"lt-message\">Dover</h3><p>High water 06:12</p>"
 ```
 
@@ -1331,7 +1331,7 @@ answering `:ok`.
 (defclass name-editor (component)
   ((name :initform "" :accessor editor-name)))
 (defmethod render ((self name-editor))
-  (text-input (:id "name" :value (editor-name self)
+  (h:text-input (:id "name" :value (editor-name self)
                :callback (lambda (value) (setf (editor-name self) value)))))
 (defun make-name-editor ()
   (let ((editor (make-instance 'name-editor)))
@@ -1344,8 +1344,8 @@ answering `:ok`.
   ((crew :initform '() :accessor crew)))
 (defmethod states ((self crew-list)) (list self))
 (defmethod render ((self crew-list))
-  (p () "Crew: " (text (format nil "~{~A~^, ~}" (crew self))))
-  (anchor (:callback (lambda ()
+  (h:p () "Crew: " (h:text (format nil "~{~A~^, ~}" (crew self))))
+  (h:anchor (:callback (lambda ()
                        (show self (make-name-editor)
                              :on-answer (lambda (name) (when name (push name (crew self)))))))
     "Add"))
@@ -1371,7 +1371,7 @@ Refuses answers the validator rejects and shows why.
 (defclass name-editor (component)
   ((name :initform "" :accessor editor-name)))
 (defmethod render ((self name-editor))
-  (text-input (:id "name" :value (editor-name self)
+  (h:text-input (:id "name" :value (editor-name self)
                :callback (lambda (value) (setf (editor-name self) value)))))
 (defun make-name-editor ()
   (let ((editor (make-instance 'name-editor)))
@@ -1384,8 +1384,8 @@ Refuses answers the validator rejects and shows why.
   ((crew :initform '() :accessor crew)))
 (defmethod states ((self crew-list)) (list self))
 (defmethod render ((self crew-list))
-  (p () "Crew: " (text (format nil "~{~A~^, ~}" (crew self))))
-  (anchor (:callback (lambda ()
+  (h:p () "Crew: " (h:text (format nil "~{~A~^, ~}" (crew self))))
+  (h:anchor (:callback (lambda ()
                        (show self (make-name-editor)
                              :on-answer (lambda (name) (when name (push name (crew self)))))))
     "Add"))
@@ -1413,7 +1413,7 @@ is shown above `component` until an answer passes.  Returns `component`.
 (defclass name-editor (component)
   ((name :initform "" :accessor editor-name)))
 (defmethod render ((self name-editor))
-  (text-input (:id "name" :value (editor-name self)
+  (h:text-input (:id "name" :value (editor-name self)
                :callback (lambda (value) (setf (editor-name self) value)))))
 (defun make-name-editor ()
   (let ((editor (make-instance 'name-editor)))
@@ -1426,8 +1426,8 @@ is shown above `component` until an answer passes.  Returns `component`.
   ((crew :initform '() :accessor crew)))
 (defmethod states ((self crew-list)) (list self))
 (defmethod render ((self crew-list))
-  (p () "Crew: " (text (format nil "~{~A~^, ~}" (crew self))))
-  (anchor (:callback (lambda ()
+  (h:p () "Crew: " (h:text (format nil "~{~A~^, ~}" (crew self))))
+  (h:anchor (:callback (lambda ()
                        (show self (make-name-editor)
                              :on-answer (lambda (name) (when name (push name (crew self)))))))
     "Add"))
@@ -1454,15 +1454,15 @@ Render whatever the current decoration wraps.
   ((caption :initarg :caption :reader frame-caption)))
 (defmethod render-decoration ((self framed) component)
   (declare (ignore component))
-  (section (:class "frame")
-    (h2 () (text (frame-caption self)))
+  (h:section (:class "frame")
+    (h:h2 () (h:text (frame-caption self)))
     (render-inner)))
 (defclass forecast (component) ())
 (defmethod render ((self forecast))
-  (p () "Fair, then rain."))
+  (h:p () "Fair, then rain."))
 (let ((c (make-instance 'forecast)))
   (add-decoration c (make-instance 'framed :caption "Shipping forecast"))
-  (with-canvas-to-string () (render-component c)))
+  (h:with-canvas-to-string () (render-component c)))
 ;; ⇒ "<section class=\"frame\"><h2>Shipping forecast</h2><p>Fair, then rain.</p></section>"
 ```
 
@@ -1478,15 +1478,15 @@ the rest of the chain.
   ((caption :initarg :caption :reader frame-caption)))
 (defmethod render-decoration ((self framed) component)
   (declare (ignore component))
-  (section (:class "frame")
-    (h2 () (text (frame-caption self)))
+  (h:section (:class "frame")
+    (h:h2 () (h:text (frame-caption self)))
     (render-inner)))
 (defclass forecast (component) ())
 (defmethod render ((self forecast))
-  (p () "Fair, then rain."))
+  (h:p () "Fair, then rain."))
 (let ((c (make-instance 'forecast)))
   (add-decoration c (make-instance 'framed :caption "Shipping forecast"))
-  (with-canvas-to-string () (render-component c)))
+  (h:with-canvas-to-string () (render-component c)))
 ;; ⇒ "<section class=\"frame\"><h2>Shipping forecast</h2><p>Fair, then rain.</p></section>"
 ```
 
@@ -1503,14 +1503,14 @@ ones, the default, sit inside it.  A `delegation`'s kind is `:delegation`.
 (defmethod decoration-kind ((self site-frame)) :global)
 (defmethod render-decoration ((self site-frame) component)
   (declare (ignore component))
-  (header () "Harbour office")
+  (h:header () "Harbour office")
   (render-inner))
 (defclass desk (component) ())
 (defmethod initialize-instance :after ((self desk) &key)
   (add-decoration self (make-instance 'site-frame))
   (add-decoration self (make-instance 'message-decoration :message "Front desk")))
 (defmethod render ((self desk))
-  (anchor (:callback (lambda () (call self (make-instance 'message-dialog :message "Closed for lunch."))))
+  (h:anchor (:callback (lambda () (call self (make-instance 'message-dialog :message "Closed for lunch."))))
     "Ring the bell"))
 (with-fresh-applications (("/desk" 'desk :mode :deployment))
   (let ((b (make-instance 'browser)))
@@ -1533,8 +1533,8 @@ modal dialog, say).
   ((tips :initform 0 :accessor tips)))
 (defmethod states ((self tip-counter)) (list self))
 (defmethod render ((self tip-counter))
-  (aside () (text (format nil "~D tips " (tips self)))
-    (anchor (:callback (lambda () (incf (tips self)))) "Tip")))
+  (h:aside () (h:text (format nil "~D tips " (tips self)))
+    (h:anchor (:callback (lambda () (incf (tips self)))) "Tip")))
 (defclass tip-jar (decoration)
   ((counter :initform (make-instance 'tip-counter) :reader counter)))
 (defmethod decoration-children ((self tip-jar))
@@ -1547,7 +1547,7 @@ modal dialog, say).
 (defmethod initialize-instance :after ((self busker) &key)
   (add-decoration self (make-instance 'tip-jar)))
 (defmethod render ((self busker))
-  (p () "A song."))
+  (h:p () "A song."))
 (with-fresh-applications (("/busker" 'busker :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/busker")
@@ -1573,8 +1573,8 @@ inside an element carrying its `component-id`.
 (defmethod updatable-wrapper ((self shopping-item))
   (values "li" '(:aria-live "polite")))
 (defmethod render ((self shopping-item))
-  (text (item-name self)))
-(let ((html (with-canvas-to-string ()
+  (h:text (item-name self)))
+(let ((html (h:with-canvas-to-string ()
               (render-component (make-instance 'shopping-item :name "Milk")))))
   (cl-ppcre:regex-replace " id=\"[^\"]*\"" html ""))
 ;; ⇒ "<li class=\"lt-updatable\" aria-live=\"polite\">Milk</li>"
@@ -1594,8 +1594,8 @@ request: the dialog covers `*session*`'s root.  Returns `other` at once.
   ((booked :initform nil :accessor booked)))
 (defmethod states ((self moorings)) (list self))
 (defmethod render ((self moorings))
-  (p () "Booked: " (text (if (booked self) "yes" "no")))
-  (anchor (:callback (lambda ()
+  (h:p () "Booked: " (h:text (if (booked self) "yes" "no")))
+  (h:anchor (:callback (lambda ()
                        (show-modal (make-instance 'confirm-dialog :message "Book a mooring?")
                                    :title "Booking"
                                    :on-answer (lambda (yes) (setf (booked self) yes)))))
@@ -1645,8 +1645,8 @@ behind it but cannot be used until the dialog answers.
   ((booked :initform nil :accessor booked)))
 (defmethod states ((self moorings)) (list self))
 (defmethod render ((self moorings))
-  (p () "Booked: " (text (if (booked self) "yes" "no")))
-  (anchor (:callback (lambda ()
+  (h:p () "Booked: " (h:text (if (booked self) "yes" "no")))
+  (h:anchor (:callback (lambda ()
                        (show-modal (make-instance 'confirm-dialog :message "Book a mooring?")
                                    :title "Booking"
                                    :on-answer (lambda (yes) (setf (booked self) yes)))))
@@ -1672,7 +1672,7 @@ AJAX response, or at once on pages with a push stream.  `kind` is `:info`,
 ```lisp
 (defclass logbook (component) ())
 (defmethod render ((self logbook))
-  (anchor (:callback (lambda () (toast "Entry saved." :kind :success))) "Save"))
+  (h:anchor (:callback (lambda () (toast "Entry saved." :kind :success))) "Save"))
 (with-fresh-applications (("/log" 'logbook :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/log")
@@ -1786,8 +1786,8 @@ giving each item's label (default `princ-to-string`).
   ((berth :initform nil :accessor berth)))
 (defmethod states ((self berth-picker)) (list self))
 (defmethod render ((self berth-picker))
-  (p () "Berth: " (text (princ-to-string (berth self))))
-  (anchor (:callback (lambda ()
+  (h:p () "Berth: " (h:text (princ-to-string (berth self))))
+  (h:anchor (:callback (lambda ()
                        (show self (make-instance 'choice-dialog
                                                  :message "Which berth?"
                                                  :items '(1 2 3)
@@ -1818,8 +1818,8 @@ username and password.
   ((user :initform nil :accessor user)))
 (defmethod states ((self crew-room)) (list self))
 (defmethod render ((self crew-room))
-  (p () "Signed in: " (text (or (user self) "nobody")))
-  (anchor (:callback (lambda ()
+  (h:p () "Signed in: " (h:text (or (user self) "nobody")))
+  (h:anchor (:callback (lambda ()
                        (show self (make-instance 'login-dialog :message "Crew only")
                              :on-answer (lambda (credentials)
                                           (when (and credentials (equal (rest credentials) "knots"))
@@ -1956,7 +1956,7 @@ Seaside's WABatchedList.
 (defmethod children ((self fruit-list))
   (list (pages self)))
 (defmethod render ((self fruit-list))
-  (ul () (dolist (fruit (batch (pages self))) (li () (text fruit))))
+  (h:ul () (dolist (fruit (batch (pages self))) (h:li () (h:text fruit))))
   (render-component (pages self)))
 (with-fresh-applications (("/fruit" 'fruit-list :mode :deployment))
   (let ((b (make-instance 'browser)))
@@ -1989,7 +1989,7 @@ The items on `list`'s current page.
 (defmethod children ((self fruit-list))
   (list (pages self)))
 (defmethod render ((self fruit-list))
-  (ul () (dolist (fruit (batch (pages self))) (li () (text fruit))))
+  (h:ul () (dolist (fruit (batch (pages self))) (h:li () (h:text fruit))))
   (render-component (pages self)))
 (with-fresh-applications (("/fruit" 'fruit-list :mode :deployment))
   (let ((b (make-instance 'browser)))
@@ -2092,7 +2092,7 @@ gives its CSS class.  Give `:batch-size` to page it, and `:csv-filename`
                                       (column "" nil :sortable nil
                                                      :render (lambda (row value)
                                                                (declare (ignore value))
-                                                               (anchor (:callback (lambda () (setf (orders self) (remove row (orders self)))))
+                                                               (h:anchor (:callback (lambda () (setf (orders self) (remove row (orders self)))))
                                                                  "cancel")))))))
 (defmethod states ((self order-book))
   (list self))
@@ -2166,7 +2166,7 @@ printed form, `nil` last).  `class` is the CSS class of the column's cells.
                                       (column "" nil :sortable nil
                                                      :render (lambda (row value)
                                                                (declare (ignore value))
-                                                               (anchor (:callback (lambda () (setf (orders self) (remove row (orders self)))))
+                                                               (h:anchor (:callback (lambda () (setf (orders self) (remove row (orders self)))))
                                                                  "cancel")))))))
 (defmethod states ((self order-book))
   (list self))
@@ -2200,7 +2200,7 @@ Reads the rows of a report.  A list, or a thunk returning one on every render.
                                       (column "" nil :sortable nil
                                                      :render (lambda (row value)
                                                                (declare (ignore value))
-                                                               (anchor (:callback (lambda () (setf (orders self) (remove row (orders self)))))
+                                                               (h:anchor (:callback (lambda () (setf (orders self) (remove row (orders self)))))
                                                                  "cancel")))))))
 (defmethod states ((self order-book))
   (list self))
@@ -2306,7 +2306,7 @@ the callback shouldn't change anything else.
 ```lisp
 (defclass export-button (component) ())
 (defmethod render ((self export-button))
-  (anchor (:callback (lambda () (send-download "id,total" :filename "orders.csv" :content-type "text/csv")))
+  (h:anchor (:callback (lambda () (send-download "id,total" :filename "orders.csv" :content-type "text/csv")))
     "Export"))
 (with-fresh-applications (("/export" 'export-button :mode :deployment))
   (let ((b (make-instance 'browser)))
@@ -2344,7 +2344,7 @@ labels translated when shown; `:selected` is the index of the tab shown first
 (defclass note (component)
   ((words :initarg :words :reader words)))
 (defmethod render ((self note))
-  (p () (text (words self))))
+  (h:p () (h:text (words self))))
 (defclass settings (tab-panel) ()
   (:default-initargs
    :tabs (list (cons "Profile" (make-instance 'note :words "Your name and photo."))
@@ -2368,7 +2368,7 @@ Seaside's WASimpleNavigation.
 (defclass chapter (component)
   ((words :initarg :words :reader words)))
 (defmethod render ((self chapter))
-  (p () (text (words self))))
+  (h:p () (h:text (words self))))
 (defclass handbook (navigation) ()
   (:default-initargs
    :tabs (list (cons "Start" (make-instance 'chapter :words "Welcome."))
@@ -2391,7 +2391,7 @@ Reads the tabs of a tab-panel.  Alist of (`label` . `component`).
 (defclass note (component)
   ((words :initarg :words :reader words)))
 (defmethod render ((self note))
-  (p () (text (words self))))
+  (h:p () (h:text (words self))))
 (defclass settings (tab-panel) ()
   (:default-initargs
    :tabs (list (cons "Profile" (make-instance 'note :words "Your name and photo."))
@@ -2477,7 +2477,7 @@ and calls `:on-select`, when given, with it.  Items are compared with `eql`.
   (list (kingdom-tree self)))
 (defmethod render ((self kingdoms))
   (render-component (kingdom-tree self))
-  (when (chosen self) (p () "Chose " (text (string-capitalize (chosen self))))))
+  (when (chosen self) (h:p () "Chose " (h:text (string-capitalize (chosen self))))))
 (with-fresh-applications (("/kingdoms" 'kingdoms :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/kingdoms")
@@ -2526,7 +2526,7 @@ Reads the selected of a tree.  The item whose label was clicked last, or `nil`.
   (list (kingdom-tree self)))
 (defmethod render ((self kingdoms))
   (render-component (kingdom-tree self))
-  (when (chosen self) (p () "Chose " (text (string-capitalize (chosen self))))))
+  (when (chosen self) (h:p () "Chose " (h:text (string-capitalize (chosen self))))))
 (with-fresh-applications (("/kingdoms" 'kingdoms :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/kingdoms")
@@ -2596,11 +2596,11 @@ placeholder.  The field's text is submitted with its form, like any input.
 (defmethod children ((self colour-form))
   (list (colour-field self)))
 (defmethod render ((self colour-form))
-  (form ()
+  (h:form ()
     (render-component (colour-field self))
-    (submit-button (:callback (lambda () (setf (picked self) (autocomplete-value (colour-field self)))))
+    (h:submit-button (:callback (lambda () (setf (picked self) (autocomplete-value (colour-field self)))))
       "Pick"))
-  (when (picked self) (p () "Picked " (text (picked self)))))
+  (when (picked self) (h:p () "Picked " (h:text (picked self)))))
 (with-fresh-applications (("/colours" 'colour-form :mode :deployment))
   (let* ((b (make-instance 'browser))
          (field (progn (visit b "/colours") (element-name b "colour")))
@@ -2634,11 +2634,11 @@ Reads the value of an autocomplete.  The text in the field.
 (defmethod children ((self colour-form))
   (list (colour-field self)))
 (defmethod render ((self colour-form))
-  (form ()
+  (h:form ()
     (render-component (colour-field self))
-    (submit-button (:callback (lambda () (setf (picked self) (autocomplete-value (colour-field self)))))
+    (h:submit-button (:callback (lambda () (setf (picked self) (autocomplete-value (colour-field self)))))
       "Pick"))
-  (when (picked self) (p () "Picked " (text (picked self)))))
+  (when (picked self) (h:p () "Picked " (h:text (picked self)))))
 (with-fresh-applications (("/colours" 'colour-form :mode :deployment))
   (let* ((b (make-instance 'browser))
          (field (progn (visit b "/colours") (element-name b "colour")))
@@ -3080,7 +3080,7 @@ a line break after each.
 (define-description memo
   ((body :type :text)))
 (let ((field (find-field 'memo 'body)))
-  (with-canvas-to-string ()
+  (h:with-canvas-to-string ()
     (render-field-value field (parse-field field (format nil "Buy milk.~%Call Ada.~%~%")))))
 ;; ⇒ "Buy milk.<br>Call Ada.<br>"
 ```
@@ -3439,9 +3439,9 @@ Methods should call `call-next-method` to keep the general checks.
 ```lisp
 (defclass pence-field (integer-field) ())
 (defmethod render-field-input ((field pence-field) id text callback)
-  (text-input (:id id :value text :callback callback :inputmode "numeric" :placeholder "pence")))
+  (h:text-input (:id id :value text :callback callback :inputmode "numeric" :placeholder "pence")))
 (defmethod render-field-value ((field pence-field) value)
-  (when value (text (format nil "£~D.~2,'0D" (floor value 100) (mod value 100)))))
+  (when value (h:text (format nil "£~D.~2,'0D" (floor value 100) (mod value 100)))))
 (defmethod check-field ((field pence-field) value)
   (or (call-next-method)
       (when (and value (not (zerop (mod value 5))))
@@ -3455,7 +3455,7 @@ Methods should call `call-next-method` to keep the general checks.
   ((item :initform (make-instance 'item) :reader item)))
 (defmethod render ((self price-page))
   (render-component (make-viewer (item self)))
-  (anchor (:callback (lambda () (show self (make-editor (item self))))) "Edit"))
+  (h:anchor (:callback (lambda () (show self (make-editor (item self))))) "Edit"))
 (with-fresh-applications (("/price" 'price-page :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/price")
@@ -3479,9 +3479,9 @@ call it.
 ```lisp
 (defclass pence-field (integer-field) ())
 (defmethod render-field-input ((field pence-field) id text callback)
-  (text-input (:id id :value text :callback callback :inputmode "numeric" :placeholder "pence")))
+  (h:text-input (:id id :value text :callback callback :inputmode "numeric" :placeholder "pence")))
 (defmethod render-field-value ((field pence-field) value)
-  (when value (text (format nil "£~D.~2,'0D" (floor value 100) (mod value 100)))))
+  (when value (h:text (format nil "£~D.~2,'0D" (floor value 100) (mod value 100)))))
 (defmethod check-field ((field pence-field) value)
   (or (call-next-method)
       (when (and value (not (zerop (mod value 5))))
@@ -3495,7 +3495,7 @@ call it.
   ((item :initform (make-instance 'item) :reader item)))
 (defmethod render ((self price-page))
   (render-component (make-viewer (item self)))
-  (anchor (:callback (lambda () (show self (make-editor (item self))))) "Edit"))
+  (h:anchor (:callback (lambda () (show self (make-editor (item self))))) "Edit"))
 (with-fresh-applications (("/price" 'price-page :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/price")
@@ -3520,7 +3520,7 @@ Write `value` for reading, in a viewer or report.
 (define-description memo
   ((body :type :text)))
 (let ((field (find-field 'memo 'body)))
-  (with-canvas-to-string ()
+  (h:with-canvas-to-string ()
     (render-field-value field (parse-field field (format nil "Buy milk.~%Call Ada.~%~%")))))
 ;; ⇒ "Buy milk.<br>Call Ada.<br>"
 ```
@@ -3530,9 +3530,9 @@ Write `value` for reading, in a viewer or report.
 ```lisp
 (defclass pence-field (integer-field) ())
 (defmethod render-field-input ((field pence-field) id text callback)
-  (text-input (:id id :value text :callback callback :inputmode "numeric" :placeholder "pence")))
+  (h:text-input (:id id :value text :callback callback :inputmode "numeric" :placeholder "pence")))
 (defmethod render-field-value ((field pence-field) value)
-  (when value (text (format nil "£~D.~2,'0D" (floor value 100) (mod value 100)))))
+  (when value (h:text (format nil "£~D.~2,'0D" (floor value 100) (mod value 100)))))
 (defmethod check-field ((field pence-field) value)
   (or (call-next-method)
       (when (and value (not (zerop (mod value 5))))
@@ -3546,7 +3546,7 @@ Write `value` for reading, in a viewer or report.
   ((item :initform (make-instance 'item) :reader item)))
 (defmethod render ((self price-page))
   (render-component (make-viewer (item self)))
-  (anchor (:callback (lambda () (show self (make-editor (item self))))) "Edit"))
+  (h:anchor (:callback (lambda () (show self (make-editor (item self))))) "Edit"))
 (with-fresh-applications (("/price" 'price-page :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/price")
@@ -3665,8 +3665,8 @@ under its own lock.  Cancel answers `nil`.
 (defclass guest-page (component)
   ((guest :initform (make-instance 'guest :name "Ada" :email "ada@example.org") :reader guest)))
 (defmethod render ((self guest-page))
-  (p () (text (slot-value (guest self) 'name)))
-  (anchor (:callback (lambda () (show self (make-editor (guest self) :title "Edit guest")))) "Edit"))
+  (h:p () (h:text (slot-value (guest self) 'name)))
+  (h:anchor (:callback (lambda () (show self (make-editor (guest self) :title "Edit guest")))) "Edit"))
 (with-fresh-applications (("/guest" 'guest-page :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/guest")
@@ -3694,8 +3694,8 @@ under its own lock.  Cancel answers `nil`.
   ((topic :initform (make-instance 'topic) :reader topic)
    (answer :initform nil :accessor editor-answer)))
 (defmethod render ((self topic-page))
-  (p () (text (prin1-to-string (editor-answer self))))
-  (anchor (:callback (lambda ()
+  (h:p () (h:text (prin1-to-string (editor-answer self))))
+  (h:anchor (:callback (lambda ()
                        (show self (make-editor (topic self) :write nil :save-label "Propose")
                              :on-answer (lambda (values) (setf (editor-answer self) values)))))
     "Change"))
@@ -3753,8 +3753,8 @@ with `make-editor`.
 (defclass guest-page (component)
   ((guest :initform (make-instance 'guest :name "Ada" :email "ada@example.org") :reader guest)))
 (defmethod render ((self guest-page))
-  (p () (text (slot-value (guest self) 'name)))
-  (anchor (:callback (lambda () (show self (make-editor (guest self) :title "Edit guest")))) "Edit"))
+  (h:p () (h:text (slot-value (guest self) 'name)))
+  (h:anchor (:callback (lambda () (show self (make-editor (guest self) :title "Edit guest")))) "Edit"))
 (with-fresh-applications (("/guest" 'guest-page :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/guest")
@@ -3956,8 +3956,8 @@ strings and hash tables by copying them, not sharing them.
   ((counts :initform (make-hash-table :test 'equal) :reader counts)))
 (defmethod states ((self stock)) (list (deep self)))
 (defmethod render ((self stock))
-  (p () "Rope: " (text (princ-to-string (gethash "rope" (counts self) 0))))
-  (anchor (:callback (lambda () (incf (gethash "rope" (counts self) 0)))) "Add rope"))
+  (h:p () "Rope: " (h:text (princ-to-string (gethash "rope" (counts self) 0))))
+  (h:anchor (:callback (lambda () (incf (gethash "rope" (counts self) 0)))) "Add rope"))
 (with-fresh-applications (("/stock" 'stock :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/stock")
@@ -4080,8 +4080,8 @@ page resuming from it.
   ((plan :initform nil :accessor plan)))
 (defmethod states ((self chart-table)) (list self))
 (defmethod render ((self chart-table))
-  (p () "Plan: " (text (format nil "~{~A~^ to ~}" (plan self))))
-  (anchor (:callback (lambda ()
+  (h:p () "Plan: " (h:text (format nil "~{~A~^ to ~}" (plan self))))
+  (h:anchor (:callback (lambda ()
                        (show self (make-instance 'passage-plan)
                              :on-answer (lambda (plan) (setf (plan self) plan)))))
     "Plan a passage"))
@@ -4149,8 +4149,8 @@ question the user must accept before anything is sent.
 (defclass likes (component updatable)
   ((count :initform 0 :accessor like-count)))
 (defmethod render ((self likes))
-  (text (format nil "~D likes " (like-count self)))
-  (button (:on-click (ajax :callback (lambda () (incf (like-count self))) :update self))
+  (h:text (format nil "~D likes " (like-count self)))
+  (h:button (:on-click (ajax :callback (lambda () (incf (like-count self))) :update self))
     "Like"))
 (with-fresh-applications (("/likes" 'likes :mode :deployment))
   (let ((b (make-instance 'browser)))
@@ -4166,7 +4166,7 @@ question the user must accept before anything is sent.
 ```lisp
 (defclass size-probe (component) ())
 (defmethod render ((self size-probe))
-  (button (:on-click (ajax :value "window.innerWidth + 'x' + window.innerHeight"
+  (h:button (:on-click (ajax :value "window.innerWidth + 'x' + window.innerHeight"
                            :callback (lambda (size) (format nil "The server saw ~A." size))
                            :on-complete "document.title = value"
                            :confirm "Send your window size?"))
@@ -4198,9 +4198,9 @@ element's field is still posted, so its own `:callback` runs.
   (setf (slot-value self 'preview) (make-instance 'search-preview :box self)))
 (defmethod children ((self search-box)) (list (preview self)))
 (defmethod render ((self search-preview))
-  (p () (text (format nil "Searching for ~S" (query (box self))))))
+  (h:p () (h:text (format nil "Searching for ~S" (query (box self))))))
 (defmethod render ((self search-box))
-  (text-input (:id "q" :label "Search" :value (query self)
+  (h:text-input (:id "q" :label "Search" :value (query self)
                :callback (lambda (v) (setf (query self) v))
                :on-input (ajax-update (preview self))))
   (render-component (preview self)))
@@ -4226,8 +4226,8 @@ list of components `update`, which must be `updatable`.
 (defclass ticker (component updatable)
   ((ticks :initform 0 :accessor ticks)))
 (defmethod render ((self ticker))
-  (span (:periodical (periodical 5 :callback (lambda () (incf (ticks self))) :update self))
-    (text (format nil "Ticks: ~D" (ticks self)))))
+  (h:span (:periodical (periodical 5 :callback (lambda () (incf (ticks self))) :update self))
+    (h:text (format nil "Ticks: ~D" (ticks self)))))
 (with-fresh-applications (("/ticker" 'ticker :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/ticker")
@@ -4249,7 +4249,7 @@ in place.  Outside an AJAX request it does nothing and returns `nil`.
 ```lisp
 (defclass retitler (component) ())
 (defmethod render ((self retitler))
-  (button (:on-click (ajax :callback (lambda () (execute-script "document.title = 'Saved'"))))
+  (h:button (:on-click (ajax :callback (lambda () (execute-script "document.title = 'Saved'"))))
     "Save"))
 (with-fresh-applications (("/retitle" 'retitler :mode :deployment))
   (let ((b (make-instance 'browser)))
@@ -4273,12 +4273,12 @@ Something components can subscribe to and threads `publish`.
 (defclass headline (component updatable) ())
 (defmethod subscriptions ((self headline)) (list *news*))
 (defmethod render ((self headline))
-  (p () (text *headline*)))
+  (h:p () (h:text *headline*)))
 (defclass front-page (component)
   ((headline :initform (make-instance 'headline) :reader headline)))
 (defmethod children ((self front-page)) (list (headline self)))
 (defmethod render ((self front-page))
-  (h1 () "The Littoral Times")
+  (h:h1 () "The Littoral Times")
   (render-component (headline self)))
 (with-fresh-applications (("/news" 'front-page :mode :deployment))
   (let* ((b (make-instance 'browser))
@@ -4305,12 +4305,12 @@ A new channel, named `name` for printing.
 (defclass headline (component updatable) ())
 (defmethod subscriptions ((self headline)) (list *news*))
 (defmethod render ((self headline))
-  (p () (text *headline*)))
+  (h:p () (h:text *headline*)))
 (defclass front-page (component)
   ((headline :initform (make-instance 'headline) :reader headline)))
 (defmethod children ((self front-page)) (list (headline self)))
 (defmethod render ((self front-page))
-  (h1 () "The Littoral Times")
+  (h:h1 () "The Littoral Times")
   (render-component (headline self)))
 (with-fresh-applications (("/news" 'front-page :mode :deployment))
   (let* ((b (make-instance 'browser))
@@ -4339,12 +4339,12 @@ event stream.  Subscribers must be `updatable`.
 (defclass headline (component updatable) ())
 (defmethod subscriptions ((self headline)) (list *news*))
 (defmethod render ((self headline))
-  (p () (text *headline*)))
+  (h:p () (h:text *headline*)))
 (defclass front-page (component)
   ((headline :initform (make-instance 'headline) :reader headline)))
 (defmethod children ((self front-page)) (list (headline self)))
 (defmethod render ((self front-page))
-  (h1 () "The Littoral Times")
+  (h:h1 () "The Littoral Times")
   (render-component (headline self)))
 (with-fresh-applications (("/news" 'front-page :mode :deployment))
   (let* ((b (make-instance 'browser))
@@ -4374,12 +4374,12 @@ show a subscriber.
 (defclass headline (component updatable) ())
 (defmethod subscriptions ((self headline)) (list *news*))
 (defmethod render ((self headline))
-  (p () (text *headline*)))
+  (h:p () (h:text *headline*)))
 (defclass front-page (component)
   ((headline :initform (make-instance 'headline) :reader headline)))
 (defmethod children ((self front-page)) (list (headline self)))
 (defmethod render ((self front-page))
-  (h1 () "The Littoral Times")
+  (h:h1 () "The Littoral Times")
   (render-component (headline self)))
 (with-fresh-applications (("/news" 'front-page :mode :deployment))
   (let* ((b (make-instance 'browser))
@@ -4408,7 +4408,7 @@ the work).
   ((unread :initform 0 :accessor unread)))
 (defmethod subscriptions ((self inbox)) (list *mail*))
 (defmethod render ((self inbox))
-  (p () (text (format nil "~D unread" (unread self)))))
+  (h:p () (h:text (format nil "~D unread" (unread self)))))
 (defclass mail-page (component)
   ((inbox :initform (make-instance 'inbox) :reader inbox)))
 (defmethod children ((self mail-page)) (list (inbox self)))
@@ -4442,7 +4442,7 @@ End every open stream; browsers reconnect when their page is current.
 (defvar *alerts* (make-channel "alerts"))
 (defclass alert-bar (component updatable) ())
 (defmethod subscriptions ((self alert-bar)) (list *alerts*))
-(defmethod render ((self alert-bar)) (p () "No alerts"))
+(defmethod render ((self alert-bar)) (h:p () "No alerts"))
 (with-fresh-applications (("/alerts" 'alert-bar :mode :deployment))
   (let* ((b (make-instance 'browser))
          (sink (make-instance 'sink))
@@ -4484,7 +4484,7 @@ For other threads that change a session's components.
   ((unread :initform 0 :accessor unread)))
 (defmethod subscriptions ((self inbox)) (list *mail*))
 (defmethod render ((self inbox))
-  (p () (text (format nil "~D unread" (unread self)))))
+  (h:p () (h:text (format nil "~D unread" (unread self)))))
 (defclass mail-page (component)
   ((inbox :initform (make-instance 'inbox) :reader inbox)))
 (defmethod children ((self mail-page)) (list (inbox self)))
@@ -4584,7 +4584,7 @@ stream, as one with `subscriptions` does.
 (defmethod presences ((self doc-editor)) (list *doc*))
 (defmethod presence-activity ((self doc-editor)) "editing")
 (defmethod render ((self doc-editor))
-  (anchor (:callback (lambda () (setf (presence-name) "Ada"))) "I'm Ada"))
+  (h:anchor (:callback (lambda () (setf (presence-name) "Ada"))) "I'm Ada"))
 (defclass doc-page (component)
   ((here :initform (make-instance 'presence-list :presence *doc*) :reader here)))
 (defmethod children ((self doc-page)) (list (here self)))
@@ -4614,7 +4614,7 @@ short text such as "editing" that `presence-list` shows by their name; or
 (defmethod presences ((self doc-editor)) (list *doc*))
 (defmethod presence-activity ((self doc-editor)) "editing")
 (defmethod render ((self doc-editor))
-  (anchor (:callback (lambda () (setf (presence-name) "Ada"))) "I'm Ada"))
+  (h:anchor (:callback (lambda () (setf (presence-name) "Ada"))) "I'm Ada"))
 (defclass doc-page (component)
   ((here :initform (make-instance 'presence-list :presence *doc*) :reader here)))
 (defmethod children ((self doc-page)) (list (here self)))
@@ -4644,7 +4644,7 @@ request of `session`'s), else `nil` for a guest.
 (defmethod presences ((self doc-editor)) (list *doc*))
 (defmethod presence-activity ((self doc-editor)) "editing")
 (defmethod render ((self doc-editor))
-  (anchor (:callback (lambda () (setf (presence-name) "Ada"))) "I'm Ada"))
+  (h:anchor (:callback (lambda () (setf (presence-name) "Ada"))) "I'm Ada"))
 (defclass doc-page (component)
   ((here :initform (make-instance 'presence-list :presence *doc*) :reader here)))
 (defmethod children ((self doc-page)) (list (here self)))
@@ -4675,7 +4675,7 @@ name.
 (defmethod presences ((self doc-editor)) (list *doc*))
 (defmethod presence-activity ((self doc-editor)) "editing")
 (defmethod render ((self doc-editor))
-  (anchor (:callback (lambda () (setf (presence-name) "Ada"))) "I'm Ada"))
+  (h:anchor (:callback (lambda () (setf (presence-name) "Ada"))) "I'm Ada"))
 (defclass doc-page (component)
   ((here :initform (make-instance 'presence-list :presence *doc*) :reader here)))
 (defmethod children ((self doc-page)) (list (here self)))
@@ -4779,8 +4779,8 @@ finishing.  Make one with `make-wizard`.
   ((user :initform nil :accessor user)))
 (defmethod render ((self welcome))
   (if (user self)
-      (p () (text (format nil "Welcome, ~A!" (slot-value (user self) 'name))))
-      (anchor (:callback (lambda ()
+      (h:p () (h:text (format nil "Welcome, ~A!" (slot-value (user self) 'name))))
+      (h:anchor (:callback (lambda ()
                            (show self (make-wizard (make-instance 'signup)
                                                    :title "Sign up"
                                                    :steps '(("Account" name email) ("Team" seats)))
@@ -4830,8 +4830,8 @@ the values as a plist keyed by field name keywords.  Cancel answers `nil`.
   ((user :initform nil :accessor user)))
 (defmethod render ((self welcome))
   (if (user self)
-      (p () (text (format nil "Welcome, ~A!" (slot-value (user self) 'name))))
-      (anchor (:callback (lambda ()
+      (h:p () (h:text (format nil "Welcome, ~A!" (slot-value (user self) 'name))))
+      (h:anchor (:callback (lambda ()
                            (show self (make-wizard (make-instance 'signup)
                                                    :title "Sign up"
                                                    :steps '(("Account" name email) ("Team" seats)))
@@ -4867,8 +4867,8 @@ the values as a plist keyed by field name keywords.  Cancel answers `nil`.
   ((answers :initform nil :accessor answers)))
 (defmethod render ((self survey-page))
   (if (answers self)
-      (p () (text (prin1-to-string (answers self))))
-      (anchor (:callback (lambda ()
+      (h:p () (h:text (prin1-to-string (answers self))))
+      (h:anchor (:callback (lambda ()
                            (let ((wizard (make-wizard (make-instance 'survey :colour "Teal") :write nil)))
                              (setf (wizard-step wizard) 2)
                              (show self wizard :on-answer (lambda (values) (setf (answers self) values))))))
@@ -4900,8 +4900,8 @@ Reads the step of a wizard.  The step shown, counting from 0; the number of step
   ((answers :initform nil :accessor answers)))
 (defmethod render ((self survey-page))
   (if (answers self)
-      (p () (text (prin1-to-string (answers self))))
-      (anchor (:callback (lambda ()
+      (h:p () (h:text (prin1-to-string (answers self))))
+      (h:anchor (:callback (lambda ()
                            (let ((wizard (make-wizard (make-instance 'survey :colour "Teal") :write nil)))
                              (setf (wizard-step wizard) 2)
                              (show self wizard :on-answer (lambda (values) (setf (answers self) values))))))
@@ -4969,7 +4969,7 @@ starts it with those.  The grid shows only the rows that pass.
   (list (grid self)))
 (defmethod render ((self people))
   (render-component (grid self))
-  (when (saved self) (p () "Saved " (text (saved self)))))
+  (when (saved self) (h:p () "Saved " (h:text (saved self)))))
 (with-fresh-applications (("/people" 'people :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/people")
@@ -5020,7 +5020,7 @@ axis.  `width` and `height` are in SVG units; the chart scales to fit.
 *Example:* A bar chart is SVG in a figure, captioned by `title`, with the data as a table for screen readers.  Each bar's title gives its label and value, written by `:format-value`.
 
 ```lisp
-(let ((html (with-canvas-to-string ()
+(let ((html (h:with-canvas-to-string ()
               (bar-chart '(("Mon" . 3) ("Tue" . 7) ("Wed" . 5))
                          :title "Orders"
                          :format-value (lambda (n) (format nil "~D orders" n))))))
@@ -5040,7 +5040,7 @@ gets a legend.
 *Example:* One line per series, each a name and its values; `:x-labels` name the points.  With more than one series the chart has a legend.
 
 ```lisp
-(let ((html (with-canvas-to-string ()
+(let ((html (h:with-canvas-to-string ()
               (line-chart '(("Visits" 10 40 25) ("Sign-ups" 1 4 2))
                           :title "This week" :x-labels '("Mon" "Tue" "Wed")))))
   (list (length (cl-ppcre:all-matches-as-strings "<polyline" html))
@@ -5056,7 +5056,7 @@ Write a small line of `values`, non-negative numbers, as SVG `width` by
 *Example:* A small line with no axes, labelled for screen readers.
 
 ```lisp
-(with-canvas-to-string ()
+(h:with-canvas-to-string ()
   (sparkline '(1 3 2) :label "Errors this hour" :width 40 :height 10))
 ;; ⇒ "<svg class=\"lt-sparkline\" width=\"40\" height=\"10\" viewBox=\"0 0 40 10\" role=\"img\" aria-label=\"Errors this hour\"><polyline points=\"1.0,6.3 20.0,1.0 39.0,3.7\"/></svg>"
 ```
@@ -5074,7 +5074,7 @@ pairs, `date` as (`year` `month` `day`): a list, or a function returning one.  W
 ```lisp
 (let* ((calendar (make-instance 'calendar :year 2026 :month 10
                                           :events '(((2026 10 9) . "Release"))))
-       (html (with-canvas-to-string () (render calendar))))
+       (html (h:with-canvas-to-string () (render calendar))))
   (list (calendar-year calendar) (calendar-month calendar)
         (not (null (search "October 2026" html)))
         (not (null (search "<li>Release</li>" html)))))
@@ -5097,7 +5097,7 @@ pairs, `date` as (`year` `month` `day`): a list, or a function returning one.  W
   (list (planner-calendar self)))
 (defmethod render ((self planner))
   (render-component (planner-calendar self))
-  (when (day self) (p (:id "chosen") (text (format nil "Chose ~{~D-~2,'0D-~2,'0D~}" (day self))))))
+  (when (day self) (h:p (:id "chosen") (h:text (format nil "Chose ~{~D-~2,'0D-~2,'0D~}" (day self))))))
 (with-fresh-applications (("/planner" 'planner :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/planner")
@@ -5117,7 +5117,7 @@ Reads the year of a calendar.  The year of the month shown.
 ```lisp
 (let* ((calendar (make-instance 'calendar :year 2026 :month 10
                                           :events '(((2026 10 9) . "Release"))))
-       (html (with-canvas-to-string () (render calendar))))
+       (html (h:with-canvas-to-string () (render calendar))))
   (list (calendar-year calendar) (calendar-month calendar)
         (not (null (search "October 2026" html)))
         (not (null (search "<li>Release</li>" html)))))
@@ -5133,7 +5133,7 @@ Reads the month of a calendar.  The month shown, 1 to 12.
 ```lisp
 (let* ((calendar (make-instance 'calendar :year 2026 :month 10
                                           :events '(((2026 10 9) . "Release"))))
-       (html (with-canvas-to-string () (render calendar))))
+       (html (h:with-canvas-to-string () (render calendar))))
   (list (calendar-year calendar) (calendar-month calendar)
         (not (null (search "October 2026" html)))
         (not (null (search "<li>Release</li>" html)))))
@@ -5248,7 +5248,7 @@ Text written in Markdown, shown as safe HTML (see
 (define-description announcement
   ((body :type :markdown)))
 (let ((field (find-field 'announcement 'body)))
-  (with-canvas-to-string ()
+  (h:with-canvas-to-string ()
     (render-field-value field (field-value field (make-instance 'announcement)))))
 ;; ⇒ "<div class=\"lt-markdown\"><p>Doors open at <strong>seven</strong>.</p></div>"
 ```
@@ -5269,9 +5269,9 @@ replaces.  It is `updatable`, for AJAX callbacks that call or change a name.
 (defclass letter (component) ())
 (defmethod breadcrumb-label ((self letter)) "Hello, Ada")
 (defmethod render ((self inbox))
-  (anchor (:callback (lambda () (show self (make-instance 'letter)))) "Open"))
+  (h:anchor (:callback (lambda () (show self (make-instance 'letter)))) "Open"))
 (defmethod render ((self letter))
-  (p () "Dear Ada,"))
+  (h:p () "Dear Ada,"))
 (defclass mail-page (component)
   ((inbox :initform (make-instance 'inbox) :reader inbox)
    (trail :reader trail)))
@@ -5302,9 +5302,9 @@ Reads the of of a breadcrumb-trail.  The component whose calls the trail follows
 (defclass letter (component) ())
 (defmethod breadcrumb-label ((self letter)) "Hello, Ada")
 (defmethod render ((self inbox))
-  (anchor (:callback (lambda () (show self (make-instance 'letter)))) "Open"))
+  (h:anchor (:callback (lambda () (show self (make-instance 'letter)))) "Open"))
 (defmethod render ((self letter))
-  (p () "Dear Ada,"))
+  (h:p () "Dear Ada,"))
 (defclass mail-page (component)
   ((inbox :initform (make-instance 'inbox) :reader inbox)
    (trail :reader trail)))
@@ -5337,9 +5337,9 @@ shown.  By default its class name, capitalised, with spaces for hyphens
 (defclass letter (component) ())
 (defmethod breadcrumb-label ((self letter)) "Hello, Ada")
 (defmethod render ((self inbox))
-  (anchor (:callback (lambda () (show self (make-instance 'letter)))) "Open"))
+  (h:anchor (:callback (lambda () (show self (make-instance 'letter)))) "Open"))
 (defmethod render ((self letter))
-  (p () "Dear Ada,"))
+  (h:p () "Dear Ada,"))
 (defclass mail-page (component)
   ((inbox :initform (make-instance 'inbox) :reader inbox)
    (trail :reader trail)))
@@ -5371,7 +5371,7 @@ starts it open.
 
 ```lisp
 (defclass small-print (component) ())
-(defmethod render ((self small-print)) (p () "No refunds after 30 days."))
+(defmethod render ((self small-print)) (h:p () "No refunds after 30 days."))
 (defclass terms (component)
   ((more :initform (make-instance 'disclosure :summary "Small print" :content (make-instance 'small-print))
          :reader more)))
@@ -5398,7 +5398,7 @@ Reads the open of a disclosure.
 
 ```lisp
 (defclass small-print (component) ())
-(defmethod render ((self small-print)) (p () "No refunds after 30 days."))
+(defmethod render ((self small-print)) (h:p () "No refunds after 30 days."))
 (defclass terms (component)
   ((more :initform (make-instance 'disclosure :summary "Small print" :content (make-instance 'small-print))
          :reader more)))
@@ -5429,7 +5429,7 @@ without JavaScript, and remembers what is open.
 
 ```lisp
 (defclass answer-text (component) ((words :initarg :words :reader words)))
-(defmethod render ((self answer-text)) (p () (text (words self))))
+(defmethod render ((self answer-text)) (h:p () (h:text (words self))))
 (defun open-sections (html)
   "The titles of the accordion sections open in HTML."
   (let ((titles '()))
@@ -5464,7 +5464,7 @@ Reads the sections of an accordion.  Alist of (`title` . `component`).
 
 ```lisp
 (defclass answer-text (component) ((words :initarg :words :reader words)))
-(defmethod render ((self answer-text)) (p () (text (words self))))
+(defmethod render ((self answer-text)) (h:p () (h:text (words self))))
 (defun open-sections (html)
   "The titles of the accordion sections open in HTML."
   (let ((titles '()))
@@ -5499,7 +5499,7 @@ Reads the open of an accordion.  The indexes of the sections open now.  Replaced
 
 ```lisp
 (defclass answer-text (component) ((words :initarg :words :reader words)))
-(defmethod render ((self answer-text)) (p () (text (words self))))
+(defmethod render ((self answer-text)) (h:p () (h:text (words self))))
 (defun open-sections (html)
   "The titles of the accordion sections open in HTML."
   (let ((titles '()))
@@ -5771,7 +5771,7 @@ again.
 (defclass slow-total (component)
   ((total :initarg :total :reader total)))
 (defmethod render ((self slow-total))
-  (p () (text (format nil "Total: ~D" (total self)))))
+  (h:p () (h:text (format nil "Total: ~D" (total self)))))
 (defvar *made* 0)
 (defclass ledger (component)
   ((panel :initform (make-instance 'lazy-panel
@@ -5803,7 +5803,7 @@ Reads the loaded of a lazy-panel.
 (defclass slow-total (component)
   ((total :initarg :total :reader total)))
 (defmethod render ((self slow-total))
-  (p () (text (format nil "Total: ~D" (total self)))))
+  (h:p () (h:text (format nil "Total: ~D" (total self)))))
 (defvar *made* 0)
 (defclass ledger (component)
   ((panel :initform (make-instance 'lazy-panel
@@ -5835,7 +5835,7 @@ Reads the content of a lazy-panel.  The component shown, once loaded.
 (defclass slow-total (component)
   ((total :initarg :total :reader total)))
 (defmethod render ((self slow-total))
-  (p () (text (format nil "Total: ~D" (total self)))))
+  (h:p () (h:text (format nil "Total: ~D" (total self)))))
 (defvar *made* 0)
 (defclass ledger (component)
   ((panel :initform (make-instance 'lazy-panel
@@ -6045,7 +6045,7 @@ Ctrl-K alone (one palette a page should have it).
 (defmethod children ((self editor-page)) (list (palette self)))
 (defmethod render ((self editor-page))
   (render-component (palette self))
-  (when (saved self) (p () "Saved.")))
+  (when (saved self) (h:p () "Saved.")))
 (with-fresh-applications (("/edit" 'editor-page :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/edit")
@@ -6087,7 +6087,7 @@ strings, are more words it is found by.
 (defmethod children ((self editor-page)) (list (palette self)))
 (defmethod render ((self editor-page))
   (render-component (palette self))
-  (when (saved self) (p () "Saved.")))
+  (when (saved self) (h:p () "Saved.")))
 (with-fresh-applications (("/edit" 'editor-page :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/edit")
@@ -6344,7 +6344,7 @@ stands for `nil`.
   (list (parse-field field "4")
         (parse-field field "0")
         (handler-case (parse-field field "6") (field-error (e) (princ-to-string e)))
-        (with-canvas-to-string () (render-field-value field 3))))
+        (h:with-canvas-to-string () (render-field-value field 3))))
 ;; ⇒ (4 NIL "Stars must be from 1 to 5." "<span class=\"lt-stars\" role=\"img\" aria-label=\"3 out of 5\">★★★<span class=\"lt-stars-empty\">☆☆</span></span>")
 ```
 
@@ -6366,7 +6366,7 @@ picker alone can't.
   (list (normalize-color "#36C")
         (normalize-color "teal")
         (parse-field field "0E7490")
-        (with-canvas-to-string () (render-field-value field "#0e7490"))))
+        (h:with-canvas-to-string () (render-field-value field "#0e7490"))))
 ;; ⇒ ("#3366cc" NIL "#0e7490" "<span class=\"lt-swatch\" style=\"background: #0e7490\" aria-hidden=\"true\"></span><code>#0e7490</code>")
 ```
 
@@ -6386,7 +6386,7 @@ picker alone can't.
   (list (normalize-color "#36C")
         (normalize-color "teal")
         (parse-field field "0E7490")
-        (with-canvas-to-string () (render-field-value field "#0e7490"))))
+        (h:with-canvas-to-string () (render-field-value field "#0e7490"))))
 ;; ⇒ ("#3366cc" NIL "#0e7490" "<span class=\"lt-swatch\" style=\"background: #0e7490\" aria-hidden=\"true\"></span><code>#0e7490</code>")
 ```
 
@@ -6412,7 +6412,7 @@ one.  As text, the chosen labels are written one to a line.
 (defmethod children ((self meeting-page)) (list (editor self)))
 (defmethod render ((self meeting-page))
   (render-component (editor self))
-  (p () (text (format nil "Meets on ~S" (slot-value (meeting self) 'days)))))
+  (h:p () (h:text (format nil "Meets on ~S" (slot-value (meeting self) 'days)))))
 (with-fresh-applications (("/meeting" 'meeting-page :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/meeting")
@@ -6580,9 +6580,9 @@ there from the start, so its links and fields work as any others.
 *Example:* A button that opens a popover: the browser's own, which opens and closes without a round trip and closes on Escape or a click elsewhere.  littoral.js places it beside its button.
 
 ```lisp
-(with-canvas-to-string ()
+(h:with-canvas-to-string ()
   (with-popover ("Shipping" :id "shipping")
-    (p () "Free over €50.")))
+    (h:p () "Free over €50.")))
 ;; ⇒ "<button type=\"button\" class=\"lt-popover-button\" popovertarget=\"shipping\">Shipping</button><div id=\"shipping\" popover=\"auto\" class=\"lt-popover\"><p>Free over €50.</p></div>"
 ```
 
@@ -6596,9 +6596,9 @@ made focusable), and Escape hides it.  `id` names the tip's element.
 *Example:* A tip shown above what it wraps while that has the pointer or the focus.  littoral.js makes the tip describe the first thing inside that takes the focus, and Escape hides it.
 
 ```lisp
-(with-canvas-to-string ()
+(h:with-canvas-to-string ()
   (with-tooltip ("Saves a copy" :id "tip")
-    (button () "Duplicate")))
+    (h:button () "Duplicate")))
 ;; ⇒ "<span class=\"lt-tooltip\"><button type=\"button\">Duplicate</button><span id=\"tip\" role=\"tooltip\" class=\"lt-tooltip-text\">Saves a copy</span></span>"
 ```
 
@@ -6616,7 +6616,7 @@ it closes.
 
 ```lisp
 (defclass filters (component) ())
-(defmethod render ((self filters)) (p () "Only in stock"))
+(defmethod render ((self filters)) (h:p () "Only in stock"))
 (defclass shop-page (component)
   ((drawer :initform (make-instance 'drawer :label "Filters" :side :right :content (make-instance 'filters))
            :reader drawer)))
@@ -6645,7 +6645,7 @@ Reads the content of a drawer.  The component shown in the drawer.
 
 ```lisp
 (defclass filters (component) ())
-(defmethod render ((self filters)) (p () "Only in stock"))
+(defmethod render ((self filters)) (h:p () "Only in stock"))
 (defclass shop-page (component)
   ((drawer :initform (make-instance 'drawer :label "Filters" :side :right :content (make-instance 'filters))
            :reader drawer)))
@@ -6674,7 +6674,7 @@ Reads the open of a drawer.
 
 ```lisp
 (defclass filters (component) ())
-(defmethod render ((self filters)) (p () "Only in stock"))
+(defmethod render ((self filters)) (h:p () "Only in stock"))
 (defclass shop-page (component)
   ((drawer :initform (make-instance 'drawer :label "Filters" :side :right :content (make-instance 'filters))
            :reader drawer)))
@@ -6703,7 +6703,7 @@ Open `drawer`, or close it, or with `open` true or false, open or close it.
 
 ```lisp
 (defclass filters (component) ())
-(defmethod render ((self filters)) (p () "Only in stock"))
+(defmethod render ((self filters)) (h:p () "Only in stock"))
 (defclass shop-page (component)
   ((drawer :initform (make-instance 'drawer :label "Filters" :side :right :content (make-instance 'filters))
            :reader drawer)))
@@ -6738,7 +6738,7 @@ panes are stacked.
 
 ```lisp
 (defclass words (component) ((text :initarg :text :reader words-text)))
-(defmethod render ((self words)) (p () (text (words-text self))))
+(defmethod render ((self words)) (h:p () (h:text (words-text self))))
 (let ((pane (make-instance 'split-pane :first (make-instance 'words :text "Inbox")
                                        :second (make-instance 'words :text "Message")
                                        :position 30)))
@@ -6757,7 +6757,7 @@ Reads the first of a split-pane.  The component on the left.
 
 ```lisp
 (defclass words (component) ((text :initarg :text :reader words-text)))
-(defmethod render ((self words)) (p () (text (words-text self))))
+(defmethod render ((self words)) (h:p () (h:text (words-text self))))
 (let ((pane (make-instance 'split-pane :first (make-instance 'words :text "Inbox")
                                        :second (make-instance 'words :text "Message")
                                        :position 30)))
@@ -6776,7 +6776,7 @@ Reads the second of a split-pane.  The component on the right.
 
 ```lisp
 (defclass words (component) ((text :initarg :text :reader words-text)))
-(defmethod render ((self words)) (p () (text (words-text self))))
+(defmethod render ((self words)) (h:p () (h:text (words-text self))))
 (let ((pane (make-instance 'split-pane :first (make-instance 'words :text "Inbox")
                                        :second (make-instance 'words :text "Message")
                                        :position 30)))
@@ -6795,7 +6795,7 @@ Reads the position of a split-pane.  The left pane's share of the width, in perc
 
 ```lisp
 (defclass words (component) ((text :initarg :text :reader words-text)))
-(defmethod render ((self words)) (p () (text (words-text self))))
+(defmethod render ((self words)) (h:p () (h:text (words-text self))))
 (let ((pane (make-instance 'split-pane :first (make-instance 'words :text "Inbox")
                                        :second (make-instance 'words :text "Message")
                                        :position 30)))
@@ -6814,7 +6814,7 @@ Give `pane`'s first pane `percent` of the width, kept within its limits.
 
 ```lisp
 (defclass words (component) ((text :initarg :text :reader words-text)))
-(defmethod render ((self words)) (p () (text (words-text self))))
+(defmethod render ((self words)) (h:p () (h:text (words-text self))))
 (let ((pane (make-instance 'split-pane :first (make-instance 'words :text "Inbox")
                                        :second (make-instance 'words :text "Message")
                                        :position 30)))
@@ -6849,7 +6849,7 @@ line says how many are shown.
 (defclass numbers-page (component)
   ((list :reader numbers
          :initform (make-instance 'load-more-list :items '(1 2 3 4 5 6 7) :batch-size 3
-                                                  :render-item (lambda (n) (text (format nil "№ ~D" n)))))))
+                                                  :render-item (lambda (n) (h:text (format nil "№ ~D" n)))))))
 (defmethod children ((self numbers-page)) (list (numbers self)))
 (defmethod render ((self numbers-page)) (render-component (numbers self)))
 (with-fresh-applications (("/numbers" 'numbers-page :mode :deployment))
@@ -6874,7 +6874,7 @@ first new item takes the focus once it is shown.
 (defclass numbers-page (component)
   ((list :reader numbers
          :initform (make-instance 'load-more-list :items '(1 2 3 4 5 6 7) :batch-size 3
-                                                  :render-item (lambda (n) (text (format nil "№ ~D" n)))))))
+                                                  :render-item (lambda (n) (h:text (format nil "№ ~D" n)))))))
 (defmethod children ((self numbers-page)) (list (numbers self)))
 (defmethod render ((self numbers-page)) (render-component (numbers self)))
 (with-fresh-applications (("/numbers" 'numbers-page :mode :deployment))
@@ -6898,7 +6898,7 @@ Show only `list`'s first batch again, as after its items change.
 (defclass numbers-page (component)
   ((list :reader numbers
          :initform (make-instance 'load-more-list :items '(1 2 3 4 5 6 7) :batch-size 3
-                                                  :render-item (lambda (n) (text (format nil "№ ~D" n)))))))
+                                                  :render-item (lambda (n) (h:text (format nil "№ ~D" n)))))))
 (defmethod children ((self numbers-page)) (list (numbers self)))
 (defmethod render ((self numbers-page)) (render-component (numbers self)))
 (with-fresh-applications (("/numbers" 'numbers-page :mode :deployment))
@@ -6922,7 +6922,7 @@ Reads the shown of a load-more-list.  How many items are shown.
 (defclass numbers-page (component)
   ((list :reader numbers
          :initform (make-instance 'load-more-list :items '(1 2 3 4 5 6 7) :batch-size 3
-                                                  :render-item (lambda (n) (text (format nil "№ ~D" n)))))))
+                                                  :render-item (lambda (n) (h:text (format nil "№ ~D" n)))))))
 (defmethod children ((self numbers-page)) (list (numbers self)))
 (defmethod render ((self numbers-page)) (render-component (numbers self)))
 (with-fresh-applications (("/numbers" 'numbers-page :mode :deployment))
@@ -7187,7 +7187,7 @@ diameter in SVG units; the chart scales to fit.
 *Example:* A pie chart of (label . value) pairs, as SVG: each slice titled with its label, value and share, a key, and the data as a table for screen readers.  `:donut t` cuts out the middle and writes the total there.
 
 ```lisp
-(let ((html (with-canvas-to-string ()
+(let ((html (h:with-canvas-to-string ()
               (pie-chart '(("Tea" . 6) ("Coffee" . 3) ("Water" . 1)) :title "Drinks" :donut t))))
   (list (cl-ppcre:all-matches-as-strings "<title>[^<]*</title>" html)
         (cl-ppcre:register-groups-bind (total) ("<text class=\"lt-chart-total\"[^>]*>([^<]*)</text>" html) total)))
@@ -7205,7 +7205,7 @@ writing the values and the axis, and the data as a table.
 *Example:* A bar for each point of the series, each series' value stacked on the one before, with a key; the series are (name . values) as for `line-chart`.
 
 ```lisp
-(let ((html (with-canvas-to-string ()
+(let ((html (h:with-canvas-to-string ()
               (stacked-bar-chart '(("Won" 3 5) ("Lost" 2 1)) :title "Matches" :x-labels '("Spring" "Autumn")))))
   (cl-ppcre:all-matches-as-strings "<title>[^<]*</title>" html))
 ;; ⇒ ("<title>Won, Spring: 3</title>" "<title>Lost, Spring: 2</title>" "<title>Won, Autumn: 5</title>" "<title>Lost, Autumn: 1</title>")
@@ -7222,7 +7222,7 @@ shape.  `format-x` and `format-y` write the coordinates and the axes.
 *Example:* Points, (x . y), for each series (name . points), each series with a colour and a shape of its own, and axes named by `:x-label` and `:y-label`.
 
 ```lisp
-(let ((html (with-canvas-to-string ()
+(let ((html (h:with-canvas-to-string ()
               (scatter-chart '(("Hens" (1 . 250) (2 . 230)) ("Ducks" (1 . 180))) :title "Eggs a year"
                              :x-label "Age" :y-label "Eggs"))))
   (list (cl-ppcre:all-matches-as-strings "<title>[^<]*</title>" html)
@@ -7365,7 +7365,7 @@ page's language.  `class` is added to its classes.
 
 ```lisp
 (let ((time (- (get-universal-time) 120)))
-  (cl-ppcre:regex-replace-all " (datetime|title|data-lt-date)=\"[^\"]*\"" (with-canvas-to-string () (time-ago time)) ""))
+  (cl-ppcre:regex-replace-all " (datetime|title|data-lt-date)=\"[^\"]*\"" (h:with-canvas-to-string () (time-ago time)) ""))
 ;; ⇒ "<time class=\"lt-relative-time\" data-lt-relative data-lt-now=\"just now\">2 minutes ago</time>"
 ```
 
@@ -7964,7 +7964,7 @@ list.
 
 ```lisp
 (defclass hello (component) ())
-(defmethod render ((self hello)) (p () "Hello"))
+(defmethod render ((self hello)) (h:p () "Hello"))
 (serve-metrics :path "/hello-metrics")
 (unwind-protect
      (with-fresh-applications (("/hello" 'hello :mode :deployment))
@@ -7987,7 +7987,7 @@ Every metric, in Prometheus's text exposition format.
 
 ```lisp
 (defclass hello (component) ())
-(defmethod render ((self hello)) (p () "Hello"))
+(defmethod render ((self hello)) (h:p () "Hello"))
 (serve-metrics :path "/hello-metrics")
 (unwind-protect
      (with-fresh-applications (("/hello" 'hello :mode :deployment))
@@ -8014,7 +8014,7 @@ than a stream or socket, in milliseconds (a rational).
 
 ```lisp
 (defclass hello (component) ())
-(defmethod render ((self hello)) (p () "Hello"))
+(defmethod render ((self hello)) (h:p () "Hello"))
 (with-fresh-applications (("/hello" 'hello :mode :deployment))
   (visit (make-instance 'browser) "/hello")
   (let ((summary (metrics-summary)))
@@ -8038,7 +8038,7 @@ string, where session keys ride.  `nil` for `stream` stops logging.  It sets
 
 ```lisp
 (defclass hello (component) ())
-(defmethod render ((self hello)) (p () "Hello"))
+(defmethod render ((self hello)) (h:p () "Hello"))
 (with-fresh-applications (("/hello" 'hello :mode :deployment))
   (let ((*request-log* nil)
         (log (make-string-output-stream)))
@@ -8061,7 +8061,7 @@ A function of a plist describing each request (`:time` `:method` `:path` `:app` 
 
 ```lisp
 (defclass hello (component) ())
-(defmethod render ((self hello)) (anchor (:callback (lambda () nil)) "Again"))
+(defmethod render ((self hello)) (h:anchor (:callback (lambda () nil)) "Again"))
 (with-fresh-applications (("/hello" 'hello :mode :deployment))
   (let* ((seen '())
          (*request-log* (lambda (entry) (push (list (getf entry :kind) (getf entry :status)) seen)))
@@ -8323,7 +8323,7 @@ to `*jobs-channel*`.  Returns `component`.
   ((view :initform (make-instance 'job-view) :reader view)))
 (defmethod children ((self exporter)) (list (view self)))
 (defmethod render ((self exporter))
-  (anchor (:callback (lambda ()
+  (h:anchor (:callback (lambda ()
                        (let ((job (submit-job (lambda ()
                                                 (sb-thread:wait-on-semaphore *go* :timeout 5)
                                                 (job-progress 1/2 "Exporting")
@@ -8387,7 +8387,7 @@ date by server push once `watch-job` has been called on it.
   ((view :initform (make-instance 'job-view) :reader view)))
 (defmethod children ((self exporter)) (list (view self)))
 (defmethod render ((self exporter))
-  (anchor (:callback (lambda ()
+  (h:anchor (:callback (lambda ()
                        (let ((job (submit-job (lambda ()
                                                 (sb-thread:wait-on-semaphore *go* :timeout 5)
                                                 (job-progress 1/2 "Exporting")
@@ -8422,7 +8422,7 @@ Reads the job of a job-view.  The job shown, or `nil` for none.
   ((view :initform (make-instance 'job-view) :reader view)))
 (defmethod children ((self exporter)) (list (view self)))
 (defmethod render ((self exporter))
-  (anchor (:callback (lambda ()
+  (h:anchor (:callback (lambda ()
                        (let ((job (submit-job (lambda ()
                                                 (sb-thread:wait-on-semaphore *go* :timeout 5)
                                                 (job-progress 1/2 "Exporting")
@@ -8498,7 +8498,7 @@ Subscribed to by `job-view` so that its page listens for pushes; never published
   ((view :initform (make-instance 'job-view) :reader view)))
 (defmethod children ((self exporter)) (list (view self)))
 (defmethod render ((self exporter))
-  (anchor (:callback (lambda ()
+  (h:anchor (:callback (lambda ()
                        (let ((job (submit-job (lambda ()
                                                 (sb-thread:wait-on-semaphore *go* :timeout 5)
                                                 (job-progress 1/2 "Exporting")
@@ -8650,7 +8650,7 @@ their components' rendering methods are redefined (see live.lisp).
 
 ```lisp
 (defclass banner (component) ())
-(defmethod render ((self banner)) (p () "Welcome"))
+(defmethod render ((self banner)) (h:p () "Welcome"))
 (with-fresh-applications (("/banner" 'banner :mode :development))
   (let ((b (make-instance 'browser)))
     (list (progn (visit b "/banner") (not (null (search "data-lt-live" (browser-html b)))))
@@ -8673,7 +8673,7 @@ next poll; returns how many pages with event streams were told.
 (defvar *ticks* (make-channel "ticks"))
 (defclass dashboard (component updatable) ())
 (defmethod subscriptions ((self dashboard)) (list *ticks*))
-(defmethod render ((self dashboard)) (p () "Dashboard"))
+(defmethod render ((self dashboard)) (h:p () "Dashboard"))
 (with-fresh-applications (("/dashboard" 'dashboard :mode :development))
   (let* ((b (make-instance 'browser))
          (sink (make-instance 'sink))
@@ -8698,7 +8698,7 @@ Replaces any watcher already running.
 
 ```lisp
 (defclass banner (component) ())
-(defmethod render ((self banner)) (p () "Welcome"))
+(defmethod render ((self banner)) (h:p () "Welcome"))
 (defun reload-asked-p (browser)
   (let ((url (cl-ppcre:register-groups-bind (u) ("data-lt-live=\"([^\"]*)\"" (browser-html browser))
                (unescape u))))
@@ -8709,7 +8709,7 @@ Replaces any watcher already running.
        (let ((b (make-instance 'browser)))
          (visit b "/banner")
          (let ((before (reload-asked-p b)))
-           (eval '(defmethod render ((self banner)) (p () "Welcome aboard")))
+           (eval '(defmethod render ((self banner)) (h:p () "Welcome aboard")))
            (list before (wait-for (lambda () (reload-asked-p b)) 3)))))
   (stop-live-watcher))
 ;; ⇒ (NIL T)
@@ -8723,7 +8723,7 @@ Stop watching for redefined rendering methods.
 
 ```lisp
 (defclass banner (component) ())
-(defmethod render ((self banner)) (p () "Welcome"))
+(defmethod render ((self banner)) (h:p () "Welcome"))
 (defun reload-asked-p (browser)
   (let ((url (cl-ppcre:register-groups-bind (u) ("data-lt-live=\"([^\"]*)\"" (browser-html browser))
                (unescape u))))
@@ -8734,7 +8734,7 @@ Stop watching for redefined rendering methods.
        (let ((b (make-instance 'browser)))
          (visit b "/banner")
          (let ((before (reload-asked-p b)))
-           (eval '(defmethod render ((self banner)) (p () "Welcome aboard")))
+           (eval '(defmethod render ((self banner)) (h:p () "Welcome aboard")))
            (list before (wait-for (lambda () (reload-asked-p b)) 3)))))
   (stop-live-watcher))
 ;; ⇒ (NIL T)
@@ -8752,8 +8752,8 @@ One user's component tree, the pages it has shown, and its lock.
 (defclass tally (component)
   ((count :initform 0 :accessor tally-count)))
 (defmethod render ((self tally))
-  (p () (text (format nil "Count: ~D" (tally-count self))))
-  (anchor (:callback (lambda () (incf (tally-count self)))) "Add one"))
+  (h:p () (h:text (format nil "Count: ~D" (tally-count self))))
+  (h:anchor (:callback (lambda () (incf (tally-count self)))) "Add one"))
 (with-fresh-applications (("/tally" 'tally :mode :deployment))
   (let ((ann (visit (make-instance 'browser) "/tally"))
         (bob (visit (make-instance 'browser) "/tally")))
@@ -8777,7 +8777,7 @@ in its cookie; `rotate-session-key` changes it.
 ```lisp
 (defclass greeting (component) ())
 (defmethod render ((self greeting))
-  (p () "Hello"))
+  (h:p () "Hello"))
 (with-fresh-applications (("/hello" 'greeting :mode :deployment))
   (let* ((*instance-id* "a1")
          (b (visit (make-instance 'browser) "/hello"))
@@ -8797,8 +8797,8 @@ Reads the root of a session.  The session's instance of its application's root c
 (defclass tally (component)
   ((count :initform 0 :accessor tally-count)))
 (defmethod render ((self tally))
-  (p () (text (format nil "Count: ~D" (tally-count self))))
-  (anchor (:callback (lambda () (incf (tally-count self)))) "Add one"))
+  (h:p () (h:text (format nil "Count: ~D" (tally-count self))))
+  (h:anchor (:callback (lambda () (incf (tally-count self)))) "Add one"))
 (with-fresh-applications (("/tally" 'tally :mode :deployment))
   (let ((ann (visit (make-instance 'browser) "/tally"))
         (bob (visit (make-instance 'browser) "/tally")))
@@ -8821,8 +8821,8 @@ Reads the properties of a session.  The `equal` hash table behind `session-prope
 ```lisp
 (defclass visit-counter (component) ())
 (defmethod render ((self visit-counter))
-  (p () (text (format nil "Pages seen: ~D" (or (session-property :pages) 0))))
-  (anchor (:callback (lambda ()
+  (h:p () (h:text (format nil "Pages seen: ~D" (or (session-property :pages) 0))))
+  (h:anchor (:callback (lambda ()
                        (setf (session-property :pages) (1+ (or (session-property :pages) 0)))))
     "Next"))
 (with-fresh-applications (("/visits" 'visit-counter :mode :deployment))
@@ -8847,8 +8847,8 @@ back button does not undo it.
 ```lisp
 (defclass visit-counter (component) ())
 (defmethod render ((self visit-counter))
-  (p () (text (format nil "Pages seen: ~D" (or (session-property :pages) 0))))
-  (anchor (:callback (lambda ()
+  (h:p () (h:text (format nil "Pages seen: ~D" (or (session-property :pages) 0))))
+  (h:anchor (:callback (lambda ()
                        (setf (session-property :pages) (1+ (or (session-property :pages) 0)))))
     "Next"))
 (with-fresh-applications (("/visits" 'visit-counter :mode :deployment))
@@ -8872,8 +8872,8 @@ Forget `session` at once.
 (defclass tally (component)
   ((count :initform 0 :accessor tally-count)))
 (defmethod render ((self tally))
-  (p () (text (format nil "Count: ~D" (tally-count self))))
-  (anchor (:callback (lambda () (incf (tally-count self)))) "Add one"))
+  (h:p () (h:text (format nil "Count: ~D" (tally-count self))))
+  (h:anchor (:callback (lambda () (incf (tally-count self)))) "Add one"))
 (with-fresh-applications (("/tally" 'tally :mode :deployment :expired-notice 'session-expired-notice))
   (let ((b (visit (make-instance 'browser) "/tally")))
     (click b "Add one")
@@ -8894,8 +8894,8 @@ Forget `session` at once.
 (defclass tally (component)
   ((count :initform 0 :accessor tally-count)))
 (defmethod render ((self tally))
-  (p () (text (format nil "Count: ~D" (tally-count self))))
-  (anchor (:callback (lambda () (incf (tally-count self)))) "Add one"))
+  (h:p () (h:text (format nil "Count: ~D" (tally-count self))))
+  (h:anchor (:callback (lambda () (incf (tally-count self)))) "Add one"))
 (with-fresh-applications (("/tally" 'tally :mode :deployment))
   (let ((ann (visit (make-instance 'browser) "/tally"))
         (bob (visit (make-instance 'browser) "/tally")))
@@ -8922,8 +8922,8 @@ kept in a cookie keep their key: another site cannot plant that cookie.
 (defclass sign-in-page (component)
   ((user :initform nil :accessor signed-in-user)))
 (defmethod render ((self sign-in-page))
-  (p () (text (or (signed-in-user self) "Nobody")))
-  (anchor (:callback (lambda ()
+  (h:p () (h:text (or (signed-in-user self) "Nobody")))
+  (h:anchor (:callback (lambda ()
                        (setf (signed-in-user self) "ada")
                        (rotate-session-key)))
     "Sign in"))
@@ -8955,11 +8955,11 @@ characters other than letters, digits and _.~+/=-.  Returns `value`.
 ```lisp
 (defclass biscuit-tin (component) ())
 (defmethod render ((self biscuit-tin))
-  (p () (text (format nil "Flavour: ~A" (or (request-cookie "flavour") "none"))))
-  (p ()
-    (anchor (:callback (lambda () (set-cookie "flavour" "oat" :max-age 3600))) "Bake")
+  (h:p () (h:text (format nil "Flavour: ~A" (or (request-cookie "flavour") "none"))))
+  (h:p ()
+    (h:anchor (:callback (lambda () (set-cookie "flavour" "oat" :max-age 3600))) "Bake")
     " or "
-    (anchor (:callback (lambda () (set-cookie "flavour" "" :max-age 0))) "Eat")))
+    (h:anchor (:callback (lambda () (set-cookie "flavour" "" :max-age 0))) "Eat")))
 (with-fresh-applications (("/tin" 'biscuit-tin :mode :deployment))
   (let ((b (visit (make-instance 'browser) "/tin")))
     (multiple-value-bind (status headers) (raw-request b :get (find-link b "Bake"))
@@ -8979,11 +8979,11 @@ The value of the current request's cookie `name`, or `nil`.
 ```lisp
 (defclass biscuit-tin (component) ())
 (defmethod render ((self biscuit-tin))
-  (p () (text (format nil "Flavour: ~A" (or (request-cookie "flavour") "none"))))
-  (p ()
-    (anchor (:callback (lambda () (set-cookie "flavour" "oat" :max-age 3600))) "Bake")
+  (h:p () (h:text (format nil "Flavour: ~A" (or (request-cookie "flavour") "none"))))
+  (h:p ()
+    (h:anchor (:callback (lambda () (set-cookie "flavour" "oat" :max-age 3600))) "Bake")
     " or "
-    (anchor (:callback (lambda () (set-cookie "flavour" "" :max-age 0))) "Eat")))
+    (h:anchor (:callback (lambda () (set-cookie "flavour" "" :max-age 0))) "Eat")))
 (with-fresh-applications (("/tin" 'biscuit-tin :mode :deployment))
   (let ((b (visit (make-instance 'browser) "/tin")))
     (multiple-value-bind (status headers) (raw-request b :get (find-link b "Bake"))
@@ -9056,7 +9056,7 @@ A root component class served at a path, with its settings and live sessions.
 ```lisp
 (defclass storefront (component) ())
 (defmethod render ((self storefront))
-  (h1 () "Welcome to the shop"))
+  (h:h1 () "Welcome to the shop"))
 (with-fresh-applications ()
   (register-application "shop/" 'storefront :mode :deployment)
   (let ((app (find-application "/shop")))
@@ -9073,7 +9073,7 @@ Reads the path of an application.  Where it is served, such as "/shop": a leadin
 ```lisp
 (defclass storefront (component) ())
 (defmethod render ((self storefront))
-  (h1 () "Welcome to the shop"))
+  (h:h1 () "Welcome to the shop"))
 (with-fresh-applications ()
   (register-application "shop/" 'storefront :mode :deployment)
   (let ((app (find-application "/shop")))
@@ -9090,7 +9090,7 @@ Reads the root-class of an application.  The component class each new session ma
 ```lisp
 (defclass storefront (component) ())
 (defmethod render ((self storefront))
-  (h1 () "Welcome to the shop"))
+  (h:h1 () "Welcome to the shop"))
 (with-fresh-applications ()
   (register-application "shop/" 'storefront :mode :deployment)
   (let ((app (find-application "/shop")))
@@ -9122,7 +9122,7 @@ it with `update-root`.
 ```lisp
 (defclass storefront (component) ())
 (defmethod render ((self storefront))
-  (h1 () "Welcome"))
+  (h:h1 () "Welcome"))
 (with-fresh-applications (("/shop" 'storefront :mode :deployment :title "Fish Shop" :language "fr"
                                    :stylesheets '("/css/shop.css") :scripts '("/js/basket.js")))
   (let* ((b (visit (make-instance 'browser) "/shop"))
@@ -9157,7 +9157,7 @@ Reads the mode of an application.  `:development` adds the toolbar and halos.
 ```lisp
 (defclass greeting (component) ())
 (defmethod render ((self greeting))
-  (p () "Hello"))
+  (h:p () "Hello"))
 (with-fresh-applications (("/dev" 'greeting) ("/live" 'greeting :mode :deployment))
   (list (not (null (find-link (visit (make-instance 'browser) "/dev") "New Session")))
         (body-text (visit (make-instance 'browser) "/live"))))
@@ -9187,7 +9187,7 @@ Reads the session-timeout of an application.  Seconds a session may sit idle.
 ```lisp
 (defclass greeting (component) ())
 (defmethod render ((self greeting))
-  (p () "Hello"))
+  (h:p () "Hello"))
 (with-fresh-applications (("/hello" 'greeting :mode :deployment))
   (let ((app (find-application "/hello")))
     (visit (make-instance 'browser) "/hello")
@@ -9227,8 +9227,8 @@ Reads the max-continuations of an application.  Pages per session the back butto
 (defmethod states ((self tally))
   (list self))
 (defmethod render ((self tally))
-  (p () (text (format nil "Count: ~D" (tally-count self))))
-  (anchor (:callback (lambda () (incf (tally-count self)))) "Add one"))
+  (h:p () (h:text (format nil "Count: ~D" (tally-count self))))
+  (h:anchor (:callback (lambda () (incf (tally-count self)))) "Add one"))
 (with-fresh-applications (("/kept" 'tally :mode :deployment)
                           ("/forgetful" 'tally :mode :deployment :max-continuations 2))
   (flet ((go-back (path)
@@ -9263,7 +9263,7 @@ Reads the cookie-sessions-p of an application.  Track the session in a cookie in
 ```lisp
 (defclass greeting (component) ())
 (defmethod render ((self greeting))
-  (p () "Hello"))
+  (h:p () "Hello"))
 (with-fresh-applications (("/hello" 'greeting :mode :deployment :cookie-sessions t))
   (let* ((b (visit (make-instance 'browser) "/hello"))
          (key (session-key (first (list-sessions (find-application "/hello"))))))
@@ -9283,8 +9283,8 @@ Reads the sessions of an application.  Session key → live `session`.  Guarded 
 (defclass tally (component)
   ((count :initform 0 :accessor tally-count)))
 (defmethod render ((self tally))
-  (p () (text (format nil "Count: ~D" (tally-count self))))
-  (anchor (:callback (lambda () (incf (tally-count self)))) "Add one"))
+  (h:p () (h:text (format nil "Count: ~D" (tally-count self))))
+  (h:anchor (:callback (lambda () (incf (tally-count self)))) "Add one"))
 (with-fresh-applications (("/tally" 'tally :mode :deployment))
   (let ((ann (visit (make-instance 'browser) "/tally"))
         (bob (visit (make-instance 'browser) "/tally")))
@@ -9326,13 +9326,13 @@ string for the error page, or `nil` for the standard one.
 ```lisp
 (defclass fragile (component) ())
 (defmethod render ((self fragile))
-  (anchor (:callback (lambda () (error "The till is stuck."))) "Pay"))
+  (h:anchor (:callback (lambda () (error "The till is stuck."))) "Pay"))
 (defclass apology (component)
   ((problem :initarg :problem :reader apology-problem)))
 (defmethod render ((self apology))
-  (h1 () "Sorry")
-  (p () (text (princ-to-string (apology-problem self))))
-  (anchor (:href "/till") "Start again"))
+  (h:h1 () "Sorry")
+  (h:p () (h:text (princ-to-string (apology-problem self))))
+  (h:anchor (:href "/till") "Start again"))
 (with-fresh-applications (("/till" 'fragile :mode :deployment
                                    :error-handler (lambda (condition)
                                                     (make-instance 'apology :problem condition))))
@@ -9353,8 +9353,8 @@ session expired.  `nil` starts them over silently.
 (defclass tally (component)
   ((count :initform 0 :accessor tally-count)))
 (defmethod render ((self tally))
-  (p () (text (format nil "Count: ~D" (tally-count self))))
-  (anchor (:callback (lambda () (incf (tally-count self)))) "Add one"))
+  (h:p () (h:text (format nil "Count: ~D" (tally-count self))))
+  (h:anchor (:callback (lambda () (incf (tally-count self)))) "Add one"))
 (with-fresh-applications (("/tally" 'tally :mode :deployment :expired-notice 'session-expired-notice))
   (let ((b (visit (make-instance 'browser) "/tally")))
     (click b "Add one")
@@ -9374,7 +9374,7 @@ Reads the stylesheets of an application.  URLs of style sheets every page links,
 ```lisp
 (defclass storefront (component) ())
 (defmethod render ((self storefront))
-  (h1 () "Welcome"))
+  (h:h1 () "Welcome"))
 (with-fresh-applications (("/shop" 'storefront :mode :deployment :title "Fish Shop" :language "fr"
                                    :stylesheets '("/css/shop.css") :scripts '("/js/basket.js")))
   (let* ((b (visit (make-instance 'browser) "/shop"))
@@ -9395,7 +9395,7 @@ Reads the scripts of an application.  URLs of scripts every page loads (deferred
 ```lisp
 (defclass storefront (component) ())
 (defmethod render ((self storefront))
-  (h1 () "Welcome"))
+  (h:h1 () "Welcome"))
 (with-fresh-applications (("/shop" 'storefront :mode :deployment :title "Fish Shop" :language "fr"
                                    :stylesheets '("/css/shop.css") :scripts '("/js/basket.js")))
   (let* ((b (visit (make-instance 'browser) "/shop"))
@@ -9416,7 +9416,7 @@ Reads the credentials of an application.  (`user` . `password`) required by HTTP
 ```lisp
 (defclass vault (component) ())
 (defmethod render ((self vault))
-  (p () "The secret is 42."))
+  (h:p () "The secret is 42."))
 (with-fresh-applications (("/vault" 'vault :mode :deployment :credentials '("ada" . "lovelace")))
   (let ((stranger (make-instance 'browser))
         (ada (make-instance 'browser
@@ -9437,7 +9437,7 @@ Forget the idle sessions of every application.
 ```lisp
 (defclass greeting (component) ())
 (defmethod render ((self greeting))
-  (p () "Hello"))
+  (h:p () "Hello"))
 (with-fresh-applications (("/hello" 'greeting :mode :deployment))
   (let ((app (find-application "/hello")))
     (visit (make-instance 'browser) "/hello")
@@ -9461,7 +9461,7 @@ replacing any reaper already running.  Returns the thread.
 ```lisp
 (defclass greeting (component) ())
 (defmethod render ((self greeting))
-  (p () "Hello"))
+  (h:p () "Hello"))
 (with-fresh-applications (("/hello" 'greeting :mode :deployment))
   (let ((app (find-application "/hello")))
     (visit (make-instance 'browser) "/hello")
@@ -9484,7 +9484,7 @@ Stop the session reaper thread, if it is running.
 ```lisp
 (defclass greeting (component) ())
 (defmethod render ((self greeting))
-  (p () "Hello"))
+  (h:p () "Hello"))
 (with-fresh-applications (("/hello" 'greeting :mode :deployment))
   (let ((app (find-application "/hello")))
     (visit (make-instance 'browser) "/hello")
@@ -9509,8 +9509,8 @@ session expired and answers when its Continue button is pressed.
 (defclass tally (component)
   ((count :initform 0 :accessor tally-count)))
 (defmethod render ((self tally))
-  (p () (text (format nil "Count: ~D" (tally-count self))))
-  (anchor (:callback (lambda () (incf (tally-count self)))) "Add one"))
+  (h:p () (h:text (format nil "Count: ~D" (tally-count self))))
+  (h:anchor (:callback (lambda () (incf (tally-count self)))) "Add one"))
 (with-fresh-applications (("/tally" 'tally :mode :deployment :expired-notice 'session-expired-notice))
   (let ((b (visit (make-instance 'browser) "/tally")))
     (click b "Add one")
@@ -9532,7 +9532,7 @@ that holds it.  `nil` for none.
 ```lisp
 (defclass greeting (component) ())
 (defmethod render ((self greeting))
-  (p () "Hello"))
+  (h:p () "Hello"))
 (with-fresh-applications (("/hello" 'greeting :mode :deployment))
   (let* ((*instance-id* "a1")
          (b (visit (make-instance 'browser) "/hello"))
@@ -9552,7 +9552,7 @@ says otherwise.  Larger requests get 413 before their body is read.
 ```lisp
 (defclass guestbook (component) ())
 (defmethod render ((self guestbook))
-  (p () "Sign here"))
+  (h:p () "Sign here"))
 (with-fresh-applications (("/guestbook" 'guestbook :mode :deployment :max-request-size 1000))
   (let ((b (make-instance 'browser)))
     (list (raw-request b :post "/guestbook" :body (make-string 2000 :initial-element #\x))
@@ -9571,7 +9571,7 @@ How many sessions one client address may start a minute; more get 429.
 ```lisp
 (defclass greeting (component) ())
 (defmethod render ((self greeting))
-  (p () "Hello"))
+  (h:p () "Hello"))
 (with-fresh-applications (("/hello" 'greeting :mode :deployment))
   (let* ((*new-sessions-per-minute* 1)
          (*trust-forwarded-for* t)
@@ -9592,7 +9592,7 @@ behind a proxy that sets that header itself.
 ```lisp
 (defclass greeting (component) ())
 (defmethod render ((self greeting))
-  (p () "Hello"))
+  (h:p () "Hello"))
 (with-fresh-applications (("/hello" 'greeting :mode :deployment))
   (let* ((*new-sessions-per-minute* 1)
          (*trust-forwarded-for* t)
@@ -9615,7 +9615,7 @@ Most event streams open at once; more get 503.
 (defmethod subscriptions ((self headlines))
   (list *headlines*))
 (defmethod render ((self headlines))
-  (p () "No news yet"))
+  (h:p () "No news yet"))
 (with-fresh-applications (("/news" 'headlines :mode :deployment))
   (let* ((b (visit (make-instance 'browser) "/news"))
          (events (cl-ppcre:register-groups-bind (url) ("data-lt-events=\"([^\"]*)\"" (browser-html b))
@@ -9639,7 +9639,7 @@ Most event streams one session may hold open.
 (defmethod subscriptions ((self headlines))
   (list *headlines*))
 (defmethod render ((self headlines))
-  (p () "No news yet"))
+  (h:p () "No news yet"))
 (with-fresh-applications (("/news" 'headlines :mode :deployment))
   (let* ((b (visit (make-instance 'browser) "/news"))
          (events (cl-ppcre:register-groups-bind (url) ("data-lt-events=\"([^\"]*)\"" (browser-html b))
@@ -9674,7 +9674,7 @@ Reads the max-request-size of an application.  Largest request body in bytes, or
 ```lisp
 (defclass guestbook (component) ())
 (defmethod render ((self guestbook))
-  (p () "Sign here"))
+  (h:p () "Sign here"))
 (with-fresh-applications (("/guestbook" 'guestbook :mode :deployment :max-request-size 1000))
   (let ((b (make-instance 'browser)))
     (list (raw-request b :post "/guestbook" :body (make-string 2000 :initial-element #\x))
@@ -9707,7 +9707,7 @@ proxy unless `*trust-forwarded-for*`; others get 403.
 ```lisp
 (defclass console (component) ())
 (defmethod render ((self console))
-  (p () "Console"))
+  (h:p () "Console"))
 (with-fresh-applications (("/console" 'console :mode :deployment :local-only t))
   (list (browser-status (visit (make-instance 'browser) "/console"))
         (browser-status (visit (make-instance 'browser :headers '(("x-forwarded-for" . "203.0.113.7")))
@@ -9725,7 +9725,7 @@ another: their html lang attribute and the language `translate` uses.
 ```lisp
 (defclass storefront (component) ())
 (defmethod render ((self storefront))
-  (h1 () "Welcome"))
+  (h:h1 () "Welcome"))
 (with-fresh-applications (("/shop" 'storefront :mode :deployment :title "Fish Shop" :language "fr"
                                    :stylesheets '("/css/shop.css") :scripts '("/js/basket.js")))
   (let* ((b (visit (make-instance 'browser) "/shop"))
@@ -9752,8 +9752,8 @@ transaction.
 (defvar *action-log* '())
 (defclass price-list (component) ())
 (defmethod render ((self price-list))
-  (p () (text (format nil "Cod: 4 ~A" *shop-currency*)))
-  (anchor (:callback (lambda () (push :bought *action-log*))) "Buy"))
+  (h:p () (h:text (format nil "Cod: 4 ~A" *shop-currency*)))
+  (h:anchor (:callback (lambda () (push :bought *action-log*))) "Buy"))
 (with-fresh-applications (("/prices" 'price-list :mode :deployment
                                      :around-request (lambda (thunk)
                                                        (let ((*shop-currency* "EUR")) (funcall thunk)))
@@ -9782,8 +9782,8 @@ application's database.
 (defvar *action-log* '())
 (defclass price-list (component) ())
 (defmethod render ((self price-list))
-  (p () (text (format nil "Cod: 4 ~A" *shop-currency*)))
-  (anchor (:callback (lambda () (push :bought *action-log*))) "Buy"))
+  (h:p () (h:text (format nil "Cod: 4 ~A" *shop-currency*)))
+  (h:anchor (:callback (lambda () (push :bought *action-log*))) "Buy"))
 (with-fresh-applications (("/prices" 'price-list :mode :deployment
                                      :around-request (lambda (thunk)
                                                        (let ((*shop-currency* "EUR")) (funcall thunk)))
@@ -9842,7 +9842,7 @@ string with {nonce} for the nonce, or `nil` for none.
 ```lisp
 (defclass greeting (component) ())
 (defmethod render ((self greeting))
-  (p () "Hello"))
+  (h:p () "Hello"))
 (with-fresh-applications (("/strict" 'greeting :mode :deployment)
                           ("/own" 'greeting :mode :deployment :content-security-policy "default-src 'self'")
                           ("/none" 'greeting :mode :deployment :content-security-policy nil))
@@ -9939,7 +9939,7 @@ Returns the `application`.
 ```lisp
 (defclass storefront (component) ())
 (defmethod render ((self storefront))
-  (h1 () "Welcome"))
+  (h:h1 () "Welcome"))
 (with-fresh-applications (("/shop" 'storefront :title "Fish Shop" :mode :deployment))
   (visit (make-instance 'browser) "/shop")
   (configure-application "/shop" :title "Fish & Chip Shop")
@@ -9980,7 +9980,7 @@ read with `application-cookie-sessions-p`, `application-local-only-p` and
 ```lisp
 (defclass storefront (component) ())
 (defmethod render ((self storefront))
-  (h1 () "Welcome to the shop"))
+  (h:h1 () "Welcome to the shop"))
 (with-fresh-applications ()
   (register-application "shop/" 'storefront :mode :deployment)
   (let ((app (find-application "/shop")))
@@ -9997,7 +9997,7 @@ Stop serving the application at `path`.
 ```lisp
 (defclass blank-page (component) ())
 (defmethod render ((self blank-page))
-  (p () "Nothing here yet."))
+  (h:p () "Nothing here yet."))
 (with-fresh-applications (("/wiki" 'blank-page) ("/blog" 'blank-page) ("/admin" 'blank-page))
   (unregister-application "/admin")
   (mapcar #'application-path (list-applications)))
@@ -10013,7 +10013,7 @@ The application registered at exactly `path`, or `nil`.
 ```lisp
 (defclass storefront (component) ())
 (defmethod render ((self storefront))
-  (h1 () "Welcome to the shop"))
+  (h:h1 () "Welcome to the shop"))
 (with-fresh-applications ()
   (register-application "shop/" 'storefront :mode :deployment)
   (let ((app (find-application "/shop")))
@@ -10030,7 +10030,7 @@ All registered applications, sorted by path.
 ```lisp
 (defclass blank-page (component) ())
 (defmethod render ((self blank-page))
-  (p () "Nothing here yet."))
+  (h:p () "Nothing here yet."))
 (with-fresh-applications (("/wiki" 'blank-page) ("/blog" 'blank-page) ("/admin" 'blank-page))
   (unregister-application "/admin")
   (mapcar #'application-path (list-applications)))
@@ -10049,8 +10049,8 @@ not set `:script-name` (lack's mount middleware does not).
 (defclass tally (component)
   ((count :initform 0 :accessor tally-count)))
 (defmethod render ((self tally))
-  (p () (text (format nil "Count: ~D" (tally-count self))))
-  (anchor (:callback (lambda () (incf (tally-count self)))) "Add one"))
+  (h:p () (h:text (format nil "Count: ~D" (tally-count self))))
+  (h:anchor (:callback (lambda () (incf (tally-count self)))) "Add one"))
 (with-fresh-applications (("/tally" 'tally :mode :deployment))
   (let* ((site (lack:builder
                 (:mount "/apps" (make-lack-app :prefix "/apps"))
@@ -10072,7 +10072,7 @@ not set `:script-name` (lack's mount middleware does not).
 ```lisp
 (defclass greeting (component) ())
 (defmethod render ((self greeting))
-  (p () "Hello"))
+  (h:p () "Hello"))
 (with-fresh-applications (("/hello" 'greeting :mode :deployment))
   (destructuring-bind (status headers body) (funcall (make-lack-app) (make-env :get "/hello"))
     (declare (ignore body))
@@ -10099,7 +10099,7 @@ Returns the Clack handler.
 ```lisp
 (defclass greeting (component) ())
 (defmethod render ((self greeting))
-  (p () "Hello"))
+  (h:p () "Hello"))
 (register-application "/hello" 'greeting :mode :deployment)
 (unwind-protect
      (progn (start :port 48173)
@@ -10118,7 +10118,7 @@ watching for redefinitions, as `start` began).  Returns `nil`.
 ```lisp
 (defclass greeting (component) ())
 (defmethod render ((self greeting))
-  (p () "Hello"))
+  (h:p () "Hello"))
 (register-application "/hello" 'greeting :mode :deployment)
 (unwind-protect
      (progn (start :port 48173)
@@ -10137,7 +10137,7 @@ rendering an error page.
 ```lisp
 (defclass fragile (component) ())
 (defmethod render ((self fragile))
-  (anchor (:callback (lambda () (error "The till is stuck."))) "Pay"))
+  (h:anchor (:callback (lambda () (error "The till is stuck."))) "Pay"))
 (with-fresh-applications (("/till" 'fragile :mode :deployment))
   (list (browser-status (click (visit (make-instance 'browser) "/till") "Pay"))
         (let ((*debug-errors* t))
@@ -10156,8 +10156,8 @@ rendering an error page.
 (defclass tally (component)
   ((count :initform 0 :accessor tally-count)))
 (defmethod render ((self tally))
-  (p () (text (format nil "Count: ~D" (tally-count self))))
-  (anchor (:callback (lambda () (incf (tally-count self)))) "Add one"))
+  (h:p () (h:text (format nil "Count: ~D" (tally-count self))))
+  (h:anchor (:callback (lambda () (incf (tally-count self)))) "Add one"))
 (with-fresh-applications (("/tally" 'tally :mode :deployment))
   (let* ((site (lack:builder
                 (:mount "/apps" (make-lack-app :prefix "/apps"))
@@ -10185,8 +10185,8 @@ Prepended to every URL littoral writes: the mount prefix given to
 (defclass tally (component)
   ((count :initform 0 :accessor tally-count)))
 (defmethod render ((self tally))
-  (p () (text (format nil "Count: ~D" (tally-count self))))
-  (anchor (:callback (lambda () (incf (tally-count self)))) "Add one"))
+  (h:p () (h:text (format nil "Count: ~D" (tally-count self))))
+  (h:anchor (:callback (lambda () (incf (tally-count self)))) "Add one"))
 (with-fresh-applications (("/tally" 'tally :mode :deployment))
   (let* ((site (lack:builder
                 (:mount "/apps" (make-lack-app :prefix "/apps"))
@@ -10362,8 +10362,8 @@ session's, else the application's.
 ```lisp
 (defclass greeter (component) ())
 (defmethod render ((self greeter))
-  (p () (text (current-language)) ": " (translate "Yes"))
-  (anchor (:callback (lambda () (set-language "es"))) "Español"))
+  (h:p () (h:text (current-language)) ": " (translate "Yes"))
+  (h:anchor (:callback (lambda () (set-language "es"))) "Español"))
 (with-fresh-applications (("/greeter" 'greeter :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/greeter")
@@ -10382,8 +10382,8 @@ From now on, show `session` in the language `code`.
 ```lisp
 (defclass greeter (component) ())
 (defmethod render ((self greeter))
-  (p () (text (current-language)) ": " (translate "Yes"))
-  (anchor (:callback (lambda () (set-language "es"))) "Español"))
+  (h:p () (h:text (current-language)) ": " (translate "Yes"))
+  (h:anchor (:callback (lambda () (set-language "es"))) "Español"))
 (with-fresh-applications (("/greeter" 'greeter :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/greeter")
@@ -10525,7 +10525,7 @@ first of these and `language` that the browser's Accept-Language asks for.
 (defmethod children ((self shop)) (list (chooser self)))
 (defmethod render ((self shop))
   (render-component (chooser self))
-  (p () (translate "Cancel")))
+  (h:p () (translate "Cancel")))
 (with-fresh-applications (("/shop" 'shop :mode :deployment :languages '("fr" "de")))
   (let ((b (make-instance 'browser :headers '(("accept-language" . "de-CH, de;q=0.9")))))
     (visit b "/shop")
@@ -10553,7 +10553,7 @@ lists the codes to offer; by default the application's `language` and
 (defmethod children ((self shop)) (list (chooser self)))
 (defmethod render ((self shop))
   (render-component (chooser self))
-  (p () (translate "Cancel")))
+  (h:p () (translate "Cancel")))
 (with-fresh-applications (("/shop" 'shop :mode :deployment :languages '("fr" "de")))
   (let ((b (make-instance 'browser :headers '(("accept-language" . "de-CH, de;q=0.9")))))
     (visit b "/shop")
@@ -10568,7 +10568,9 @@ lists the codes to offer; by default the application's `language` and
 
 ## Package `littoral.html`
 
-Tags and brushes for writing HTML in RENDER methods.
+Tags and brushes for writing HTML in RENDER methods: every HTML element,
+under its own name.  Give the package a local nickname, as in
+(:local-nicknames (#:h #:littoral.html)), and write (h:p () "Hello").
 
 ### Canvas
 
@@ -10580,9 +10582,9 @@ The stream render methods write HTML to.  Outside rendering (and
 *Example:* Tags write to whatever stream `*canvas*` is bound to.  Outside rendering it discards what it is given.
 
 ```lisp
-(let ((*canvas* (make-string-output-stream)))
-  (p () "Saved.")
-  (get-output-stream-string *canvas*))
+(let ((h:*canvas* (make-string-output-stream)))
+  (h:p () "Saved.")
+  (get-output-stream-string h:*canvas*))
 ;; ⇒ "<p>Saved.</p>"
 ```
 
@@ -10594,12 +10596,12 @@ Write `thing`, printed with `princ` and HTML-escaped.
 
 ```lisp
 (defun price-tag (pence)
-  (span (:class "price")
-    "£" (text (/ pence 100.0))))
-(with-canvas-to-string ()
+  (h:span (:class "price")
+    "£" (h:text (/ pence 100.0))))
+(h:with-canvas-to-string ()
   (price-tag 450)
-  (p () (format nil "~D items" 3))  ; written nowhere: the value is dropped
-  (p () (text "<3 items>")))
+  (h:p () (format nil "~D items" 3))  ; written nowhere: the value is dropped
+  (h:p () (h:text "<3 items>")))
 ;; ⇒ "<span class=\"price\">£4.5</span><p></p><p>&lt;3 items&gt;</p>"
 ```
 
@@ -10610,9 +10612,9 @@ Write `string` verbatim.
 *Example:* `raw` writes a string as it is, for markup you trust, such as HTML your own code made.
 
 ```lisp
-(with-canvas-to-string ()
-  (div (:class "icon")
-    (raw "<svg width=\"8\" height=\"8\"></svg>")))
+(h:with-canvas-to-string ()
+  (h:div (:class "icon")
+    (h:raw "<svg width=\"8\" height=\"8\"></svg>")))
 ;; ⇒ "<div class=\"icon\"><svg width=\"8\" height=\"8\"></svg></div>"
 ```
 
@@ -10623,16 +10625,16 @@ Evaluate `body` with `*canvas*` collecting into a string, which is returned.
 *Example:* The HTML that rendering code writes, as a string.
 
 ```lisp
-(with-canvas-to-string () (p (:class "note") "Fish & chips"))
+(h:with-canvas-to-string () (h:p (:class "note") "Fish & chips"))
 ;; ⇒ "<p class=\"note\">Fish &amp; chips</p>"
 ```
 
 *Example:* Render code writes to the canvas; this macro collects what it writes into a string, which is handy at the `repl` and in tests.
 
 ```lisp
-(with-canvas-to-string ()
-  (h1 () "Menu")
-  (p (:class "note") "Fish & chips"))
+(h:with-canvas-to-string ()
+  (h:h1 () "Menu")
+  (h:p (:class "note") "Fish & chips"))
 ;; ⇒ "<h1>Menu</h1><p class=\"note\">Fish &amp; chips</p>"
 ```
 
@@ -10643,1016 +10645,9 @@ Return the printed representation of `thing` with HTML metacharacters escaped.
 *Example:* The escaping `text` does, as a function.  Anything that isn't a string is printed first.
 
 ```lisp
-(list (html-escape "Tom & \"Jerry\" <tj@example.com>")
-      (html-escape 42))
+(list (h:html-escape "Tom & \"Jerry\" <tj@example.com>")
+      (h:html-escape 42))
 ;; ⇒ ("Tom &amp; &quot;Jerry&quot; &lt;tj@example.com&gt;" "42")
-```
-
-### Plain tags
-
-#### `div` `&rest arguments` — macro
-
-Write an HTML div element.  Arguments are as for `tag`, without the name.
-
-*Example:* The first argument of a tag is a plist of attributes, whose values are evaluated.  A `nil` value leaves the attribute out, T writes it bare (a boolean attribute), and a `:class` list is joined with spaces, its NILs dropped.  Values are escaped.
-
-```lisp
-(let ((selected t) (disabled nil))
-  (with-canvas-to-string ()
-    (div (:id "row-1" :class (list "row" (and selected "selected") nil)
-          :hidden disabled :data-note "say \"hi\"")
-      (span (:title "Ready" :aria-busy t) "Go"))))
-;; ⇒ "<div id=\"row-1\" class=\"row selected\" data-note=\"say &quot;hi&quot;\"><span title=\"Ready\" aria-busy>Go</span></div>"
-```
-
-*Example:* The attribute list may be left out when the tag has none and its body does not start with a keyword list; () works too.
-
-```lisp
-(with-canvas-to-string ()
-  (div
-    (p "No attributes.")
-    (p () "Empty attributes.")
-    (span (text 3))))
-;; ⇒ "<div><p>No attributes.</p><p>Empty attributes.</p><span>3</span></div>"
-```
-
-*Example:* The document-structure tags.
-
-```lisp
-(with-canvas-to-string ()
-  (header () (nav (:aria-label "Site") "Home"))
-  (main ()
-    (section (:id "news")
-      (article () "First post")
-      (aside () "Related")))
-  (footer () (span () "2026")))
-;; ⇒ "<header><nav aria-label=\"Site\">Home</nav></header><main><section id=\"news\"><article>First post</article><aside>Related</aside></section></main><footer><span>2026</span></footer>"
-```
-
-#### `span` `&rest arguments` — macro
-
-Write an HTML span element.  Arguments are as for `tag`, without the name.
-
-*Example:* The first argument of a tag is a plist of attributes, whose values are evaluated.  A `nil` value leaves the attribute out, T writes it bare (a boolean attribute), and a `:class` list is joined with spaces, its NILs dropped.  Values are escaped.
-
-```lisp
-(let ((selected t) (disabled nil))
-  (with-canvas-to-string ()
-    (div (:id "row-1" :class (list "row" (and selected "selected") nil)
-          :hidden disabled :data-note "say \"hi\"")
-      (span (:title "Ready" :aria-busy t) "Go"))))
-;; ⇒ "<div id=\"row-1\" class=\"row selected\" data-note=\"say &quot;hi&quot;\"><span title=\"Ready\" aria-busy>Go</span></div>"
-```
-
-*Example:* The attribute list may be left out when the tag has none and its body does not start with a keyword list; () works too.
-
-```lisp
-(with-canvas-to-string ()
-  (div
-    (p "No attributes.")
-    (p () "Empty attributes.")
-    (span (text 3))))
-;; ⇒ "<div><p>No attributes.</p><p>Empty attributes.</p><span>3</span></div>"
-```
-
-*Example:* The document-structure tags.
-
-```lisp
-(with-canvas-to-string ()
-  (header () (nav (:aria-label "Site") "Home"))
-  (main ()
-    (section (:id "news")
-      (article () "First post")
-      (aside () "Related")))
-  (footer () (span () "2026")))
-;; ⇒ "<header><nav aria-label=\"Site\">Home</nav></header><main><section id=\"news\"><article>First post</article><aside>Related</aside></section></main><footer><span>2026</span></footer>"
-```
-
-#### `p` `&rest arguments` — macro
-
-Write an HTML p element.  Arguments are as for `tag`, without the name.
-
-*Example:* The attribute list may be left out when the tag has none and its body does not start with a keyword list; () works too.
-
-```lisp
-(with-canvas-to-string ()
-  (div
-    (p "No attributes.")
-    (p () "Empty attributes.")
-    (span (text 3))))
-;; ⇒ "<div><p>No attributes.</p><p>Empty attributes.</p><span>3</span></div>"
-```
-
-*Example:* Headings and paragraphs.
-
-```lisp
-(with-canvas-to-string ()
-  (h1 () "Guide")
-  (h2 () "Setup")
-  (h3 () "Linux")
-  (h4 () "Debian")
-  (h5 () "Packages")
-  (h6 () "Notes")
-  (p () "Install SBCL first."))
-;; ⇒ "<h1>Guide</h1><h2>Setup</h2><h3>Linux</h3><h4>Debian</h4><h5>Packages</h5><h6>Notes</h6><p>Install SBCL first.</p>"
-```
-
-#### `h1` `&rest arguments` — macro
-
-Write an HTML h1 element.  Arguments are as for `tag`, without the name.
-
-*Example:* Headings and paragraphs.
-
-```lisp
-(with-canvas-to-string ()
-  (h1 () "Guide")
-  (h2 () "Setup")
-  (h3 () "Linux")
-  (h4 () "Debian")
-  (h5 () "Packages")
-  (h6 () "Notes")
-  (p () "Install SBCL first."))
-;; ⇒ "<h1>Guide</h1><h2>Setup</h2><h3>Linux</h3><h4>Debian</h4><h5>Packages</h5><h6>Notes</h6><p>Install SBCL first.</p>"
-```
-
-#### `h2` `&rest arguments` — macro
-
-Write an HTML h2 element.  Arguments are as for `tag`, without the name.
-
-*Example:* Headings and paragraphs.
-
-```lisp
-(with-canvas-to-string ()
-  (h1 () "Guide")
-  (h2 () "Setup")
-  (h3 () "Linux")
-  (h4 () "Debian")
-  (h5 () "Packages")
-  (h6 () "Notes")
-  (p () "Install SBCL first."))
-;; ⇒ "<h1>Guide</h1><h2>Setup</h2><h3>Linux</h3><h4>Debian</h4><h5>Packages</h5><h6>Notes</h6><p>Install SBCL first.</p>"
-```
-
-#### `h3` `&rest arguments` — macro
-
-Write an HTML h3 element.  Arguments are as for `tag`, without the name.
-
-*Example:* Headings and paragraphs.
-
-```lisp
-(with-canvas-to-string ()
-  (h1 () "Guide")
-  (h2 () "Setup")
-  (h3 () "Linux")
-  (h4 () "Debian")
-  (h5 () "Packages")
-  (h6 () "Notes")
-  (p () "Install SBCL first."))
-;; ⇒ "<h1>Guide</h1><h2>Setup</h2><h3>Linux</h3><h4>Debian</h4><h5>Packages</h5><h6>Notes</h6><p>Install SBCL first.</p>"
-```
-
-#### `h4` `&rest arguments` — macro
-
-Write an HTML h4 element.  Arguments are as for `tag`, without the name.
-
-*Example:* Headings and paragraphs.
-
-```lisp
-(with-canvas-to-string ()
-  (h1 () "Guide")
-  (h2 () "Setup")
-  (h3 () "Linux")
-  (h4 () "Debian")
-  (h5 () "Packages")
-  (h6 () "Notes")
-  (p () "Install SBCL first."))
-;; ⇒ "<h1>Guide</h1><h2>Setup</h2><h3>Linux</h3><h4>Debian</h4><h5>Packages</h5><h6>Notes</h6><p>Install SBCL first.</p>"
-```
-
-#### `h5` `&rest arguments` — macro
-
-Write an HTML h5 element.  Arguments are as for `tag`, without the name.
-
-*Example:* Headings and paragraphs.
-
-```lisp
-(with-canvas-to-string ()
-  (h1 () "Guide")
-  (h2 () "Setup")
-  (h3 () "Linux")
-  (h4 () "Debian")
-  (h5 () "Packages")
-  (h6 () "Notes")
-  (p () "Install SBCL first."))
-;; ⇒ "<h1>Guide</h1><h2>Setup</h2><h3>Linux</h3><h4>Debian</h4><h5>Packages</h5><h6>Notes</h6><p>Install SBCL first.</p>"
-```
-
-#### `h6` `&rest arguments` — macro
-
-Write an HTML h6 element.  Arguments are as for `tag`, without the name.
-
-*Example:* Headings and paragraphs.
-
-```lisp
-(with-canvas-to-string ()
-  (h1 () "Guide")
-  (h2 () "Setup")
-  (h3 () "Linux")
-  (h4 () "Debian")
-  (h5 () "Packages")
-  (h6 () "Notes")
-  (p () "Install SBCL first."))
-;; ⇒ "<h1>Guide</h1><h2>Setup</h2><h3>Linux</h3><h4>Debian</h4><h5>Packages</h5><h6>Notes</h6><p>Install SBCL first.</p>"
-```
-
-#### `ul` `&rest arguments` — macro
-
-Write an HTML ul element.  Arguments are as for `tag`, without the name.
-
-*Example:* Lists.  A body may contain any Lisp code, such as a loop writing one item per element.
-
-```lisp
-(with-canvas-to-string ()
-  (ul (:class "tags")
-    (dolist (tag '("lisp" "web"))
-      (li () (text tag))))
-  (ol () (li () "Clone") (li () "Build"))
-  (dl ()
-    (dt () "SBCL") (dd () "A Common Lisp compiler")))
-;; ⇒ "<ul class=\"tags\"><li>lisp</li><li>web</li></ul><ol><li>Clone</li><li>Build</li></ol><dl><dt>SBCL</dt><dd>A Common Lisp compiler</dd></dl>"
-```
-
-#### `ol` `&rest arguments` — macro
-
-Write an HTML ol element.  Arguments are as for `tag`, without the name.
-
-*Example:* Lists.  A body may contain any Lisp code, such as a loop writing one item per element.
-
-```lisp
-(with-canvas-to-string ()
-  (ul (:class "tags")
-    (dolist (tag '("lisp" "web"))
-      (li () (text tag))))
-  (ol () (li () "Clone") (li () "Build"))
-  (dl ()
-    (dt () "SBCL") (dd () "A Common Lisp compiler")))
-;; ⇒ "<ul class=\"tags\"><li>lisp</li><li>web</li></ul><ol><li>Clone</li><li>Build</li></ol><dl><dt>SBCL</dt><dd>A Common Lisp compiler</dd></dl>"
-```
-
-#### `li` `&rest arguments` — macro
-
-Write an HTML li element.  Arguments are as for `tag`, without the name.
-
-*Example:* Lists.  A body may contain any Lisp code, such as a loop writing one item per element.
-
-```lisp
-(with-canvas-to-string ()
-  (ul (:class "tags")
-    (dolist (tag '("lisp" "web"))
-      (li () (text tag))))
-  (ol () (li () "Clone") (li () "Build"))
-  (dl ()
-    (dt () "SBCL") (dd () "A Common Lisp compiler")))
-;; ⇒ "<ul class=\"tags\"><li>lisp</li><li>web</li></ul><ol><li>Clone</li><li>Build</li></ol><dl><dt>SBCL</dt><dd>A Common Lisp compiler</dd></dl>"
-```
-
-#### `dl` `&rest arguments` — macro
-
-Write an HTML dl element.  Arguments are as for `tag`, without the name.
-
-*Example:* Lists.  A body may contain any Lisp code, such as a loop writing one item per element.
-
-```lisp
-(with-canvas-to-string ()
-  (ul (:class "tags")
-    (dolist (tag '("lisp" "web"))
-      (li () (text tag))))
-  (ol () (li () "Clone") (li () "Build"))
-  (dl ()
-    (dt () "SBCL") (dd () "A Common Lisp compiler")))
-;; ⇒ "<ul class=\"tags\"><li>lisp</li><li>web</li></ul><ol><li>Clone</li><li>Build</li></ol><dl><dt>SBCL</dt><dd>A Common Lisp compiler</dd></dl>"
-```
-
-#### `dt` `&rest arguments` — macro
-
-Write an HTML dt element.  Arguments are as for `tag`, without the name.
-
-*Example:* Lists.  A body may contain any Lisp code, such as a loop writing one item per element.
-
-```lisp
-(with-canvas-to-string ()
-  (ul (:class "tags")
-    (dolist (tag '("lisp" "web"))
-      (li () (text tag))))
-  (ol () (li () "Clone") (li () "Build"))
-  (dl ()
-    (dt () "SBCL") (dd () "A Common Lisp compiler")))
-;; ⇒ "<ul class=\"tags\"><li>lisp</li><li>web</li></ul><ol><li>Clone</li><li>Build</li></ol><dl><dt>SBCL</dt><dd>A Common Lisp compiler</dd></dl>"
-```
-
-#### `dd` `&rest arguments` — macro
-
-Write an HTML dd element.  Arguments are as for `tag`, without the name.
-
-*Example:* Lists.  A body may contain any Lisp code, such as a loop writing one item per element.
-
-```lisp
-(with-canvas-to-string ()
-  (ul (:class "tags")
-    (dolist (tag '("lisp" "web"))
-      (li () (text tag))))
-  (ol () (li () "Clone") (li () "Build"))
-  (dl ()
-    (dt () "SBCL") (dd () "A Common Lisp compiler")))
-;; ⇒ "<ul class=\"tags\"><li>lisp</li><li>web</li></ul><ol><li>Clone</li><li>Build</li></ol><dl><dt>SBCL</dt><dd>A Common Lisp compiler</dd></dl>"
-```
-
-#### `table` — class
-
-How a class's objects are stored.
-
-#### `table` `&rest arguments` — macro
-
-Write an HTML table element.  Arguments are as for `tag`, without the name.
-
-*Example:* Tables.
-
-```lisp
-(let ((rows '(("Apples" 3) ("Pears" 5))))
-  (with-canvas-to-string ()
-    (table (:class "stock")
-      (caption () "Stock")
-      (thead () (tr () (th (:scope "col") "Fruit") (th (:scope "col") "Count")))
-      (tbody ()
-        (loop for (fruit count) in rows
-              do (tr () (td () (text fruit)) (td () (text count)))))
-      (tfoot () (tr () (th () "Total") (td () (text (reduce #'+ rows :key #'second))))))))
-;; ⇒ "<table class=\"stock\"><caption>Stock</caption><thead><tr><th scope=\"col\">Fruit</th><th scope=\"col\">Count</th></tr></thead><tbody><tr><td>Apples</td><td>3</td></tr><tr><td>Pears</td><td>5</td></tr></tbody><tfoot><tr><th>Total</th><td>8</td></tr></tfoot></table>"
-```
-
-#### `thead` `&rest arguments` — macro
-
-Write an HTML thead element.  Arguments are as for `tag`, without the name.
-
-*Example:* Tables.
-
-```lisp
-(let ((rows '(("Apples" 3) ("Pears" 5))))
-  (with-canvas-to-string ()
-    (table (:class "stock")
-      (caption () "Stock")
-      (thead () (tr () (th (:scope "col") "Fruit") (th (:scope "col") "Count")))
-      (tbody ()
-        (loop for (fruit count) in rows
-              do (tr () (td () (text fruit)) (td () (text count)))))
-      (tfoot () (tr () (th () "Total") (td () (text (reduce #'+ rows :key #'second))))))))
-;; ⇒ "<table class=\"stock\"><caption>Stock</caption><thead><tr><th scope=\"col\">Fruit</th><th scope=\"col\">Count</th></tr></thead><tbody><tr><td>Apples</td><td>3</td></tr><tr><td>Pears</td><td>5</td></tr></tbody><tfoot><tr><th>Total</th><td>8</td></tr></tfoot></table>"
-```
-
-#### `tbody` `&rest arguments` — macro
-
-Write an HTML tbody element.  Arguments are as for `tag`, without the name.
-
-*Example:* Tables.
-
-```lisp
-(let ((rows '(("Apples" 3) ("Pears" 5))))
-  (with-canvas-to-string ()
-    (table (:class "stock")
-      (caption () "Stock")
-      (thead () (tr () (th (:scope "col") "Fruit") (th (:scope "col") "Count")))
-      (tbody ()
-        (loop for (fruit count) in rows
-              do (tr () (td () (text fruit)) (td () (text count)))))
-      (tfoot () (tr () (th () "Total") (td () (text (reduce #'+ rows :key #'second))))))))
-;; ⇒ "<table class=\"stock\"><caption>Stock</caption><thead><tr><th scope=\"col\">Fruit</th><th scope=\"col\">Count</th></tr></thead><tbody><tr><td>Apples</td><td>3</td></tr><tr><td>Pears</td><td>5</td></tr></tbody><tfoot><tr><th>Total</th><td>8</td></tr></tfoot></table>"
-```
-
-#### `tfoot` `&rest arguments` — macro
-
-Write an HTML tfoot element.  Arguments are as for `tag`, without the name.
-
-*Example:* Tables.
-
-```lisp
-(let ((rows '(("Apples" 3) ("Pears" 5))))
-  (with-canvas-to-string ()
-    (table (:class "stock")
-      (caption () "Stock")
-      (thead () (tr () (th (:scope "col") "Fruit") (th (:scope "col") "Count")))
-      (tbody ()
-        (loop for (fruit count) in rows
-              do (tr () (td () (text fruit)) (td () (text count)))))
-      (tfoot () (tr () (th () "Total") (td () (text (reduce #'+ rows :key #'second))))))))
-;; ⇒ "<table class=\"stock\"><caption>Stock</caption><thead><tr><th scope=\"col\">Fruit</th><th scope=\"col\">Count</th></tr></thead><tbody><tr><td>Apples</td><td>3</td></tr><tr><td>Pears</td><td>5</td></tr></tbody><tfoot><tr><th>Total</th><td>8</td></tr></tfoot></table>"
-```
-
-#### `tr` `&rest arguments` — macro
-
-Write an HTML tr element.  Arguments are as for `tag`, without the name.
-
-*Example:* Tables.
-
-```lisp
-(let ((rows '(("Apples" 3) ("Pears" 5))))
-  (with-canvas-to-string ()
-    (table (:class "stock")
-      (caption () "Stock")
-      (thead () (tr () (th (:scope "col") "Fruit") (th (:scope "col") "Count")))
-      (tbody ()
-        (loop for (fruit count) in rows
-              do (tr () (td () (text fruit)) (td () (text count)))))
-      (tfoot () (tr () (th () "Total") (td () (text (reduce #'+ rows :key #'second))))))))
-;; ⇒ "<table class=\"stock\"><caption>Stock</caption><thead><tr><th scope=\"col\">Fruit</th><th scope=\"col\">Count</th></tr></thead><tbody><tr><td>Apples</td><td>3</td></tr><tr><td>Pears</td><td>5</td></tr></tbody><tfoot><tr><th>Total</th><td>8</td></tr></tfoot></table>"
-```
-
-#### `td` `&rest arguments` — macro
-
-Write an HTML td element.  Arguments are as for `tag`, without the name.
-
-*Example:* Tables.
-
-```lisp
-(let ((rows '(("Apples" 3) ("Pears" 5))))
-  (with-canvas-to-string ()
-    (table (:class "stock")
-      (caption () "Stock")
-      (thead () (tr () (th (:scope "col") "Fruit") (th (:scope "col") "Count")))
-      (tbody ()
-        (loop for (fruit count) in rows
-              do (tr () (td () (text fruit)) (td () (text count)))))
-      (tfoot () (tr () (th () "Total") (td () (text (reduce #'+ rows :key #'second))))))))
-;; ⇒ "<table class=\"stock\"><caption>Stock</caption><thead><tr><th scope=\"col\">Fruit</th><th scope=\"col\">Count</th></tr></thead><tbody><tr><td>Apples</td><td>3</td></tr><tr><td>Pears</td><td>5</td></tr></tbody><tfoot><tr><th>Total</th><td>8</td></tr></tfoot></table>"
-```
-
-#### `th` `&rest arguments` — macro
-
-Write an HTML th element.  Arguments are as for `tag`, without the name.
-
-*Example:* Tables.
-
-```lisp
-(let ((rows '(("Apples" 3) ("Pears" 5))))
-  (with-canvas-to-string ()
-    (table (:class "stock")
-      (caption () "Stock")
-      (thead () (tr () (th (:scope "col") "Fruit") (th (:scope "col") "Count")))
-      (tbody ()
-        (loop for (fruit count) in rows
-              do (tr () (td () (text fruit)) (td () (text count)))))
-      (tfoot () (tr () (th () "Total") (td () (text (reduce #'+ rows :key #'second))))))))
-;; ⇒ "<table class=\"stock\"><caption>Stock</caption><thead><tr><th scope=\"col\">Fruit</th><th scope=\"col\">Count</th></tr></thead><tbody><tr><td>Apples</td><td>3</td></tr><tr><td>Pears</td><td>5</td></tr></tbody><tfoot><tr><th>Total</th><td>8</td></tr></tfoot></table>"
-```
-
-#### `caption` `&rest arguments` — macro
-
-Write an HTML caption element.  Arguments are as for `tag`, without the name.
-
-*Example:* Tables.
-
-```lisp
-(let ((rows '(("Apples" 3) ("Pears" 5))))
-  (with-canvas-to-string ()
-    (table (:class "stock")
-      (caption () "Stock")
-      (thead () (tr () (th (:scope "col") "Fruit") (th (:scope "col") "Count")))
-      (tbody ()
-        (loop for (fruit count) in rows
-              do (tr () (td () (text fruit)) (td () (text count)))))
-      (tfoot () (tr () (th () "Total") (td () (text (reduce #'+ rows :key #'second))))))))
-;; ⇒ "<table class=\"stock\"><caption>Stock</caption><thead><tr><th scope=\"col\">Fruit</th><th scope=\"col\">Count</th></tr></thead><tbody><tr><td>Apples</td><td>3</td></tr><tr><td>Pears</td><td>5</td></tr></tbody><tfoot><tr><th>Total</th><td>8</td></tr></tfoot></table>"
-```
-
-#### `em` `&rest arguments` — macro
-
-Write an HTML em element.  Arguments are as for `tag`, without the name.
-
-*Example:* Inline text tags for emphasis and position.
-
-```lisp
-(with-canvas-to-string ()
-  (p ()
-    (em () "really") " " (strong () "must") " " (b () "bold") " " (i () "aside") " "
-    (u () "misspelt") " " (small () "fine print") " " (mark () "found") " "
-    "x" (sup () "2") " H" (sub () "2") "O"))
-;; ⇒ "<p><em>really</em> <strong>must</strong> <b>bold</b> <i>aside</i> <u>misspelt</u> <small>fine print</small> <mark>found</mark> x<sup>2</sup> H<sub>2</sub>O</p>"
-```
-
-#### `strong` `&rest arguments` — macro
-
-Write an HTML strong element.  Arguments are as for `tag`, without the name.
-
-*Example:* Inline text tags for emphasis and position.
-
-```lisp
-(with-canvas-to-string ()
-  (p ()
-    (em () "really") " " (strong () "must") " " (b () "bold") " " (i () "aside") " "
-    (u () "misspelt") " " (small () "fine print") " " (mark () "found") " "
-    "x" (sup () "2") " H" (sub () "2") "O"))
-;; ⇒ "<p><em>really</em> <strong>must</strong> <b>bold</b> <i>aside</i> <u>misspelt</u> <small>fine print</small> <mark>found</mark> x<sup>2</sup> H<sub>2</sub>O</p>"
-```
-
-#### `b` `&rest arguments` — macro
-
-Write an HTML b element.  Arguments are as for `tag`, without the name.
-
-*Example:* Inline text tags for emphasis and position.
-
-```lisp
-(with-canvas-to-string ()
-  (p ()
-    (em () "really") " " (strong () "must") " " (b () "bold") " " (i () "aside") " "
-    (u () "misspelt") " " (small () "fine print") " " (mark () "found") " "
-    "x" (sup () "2") " H" (sub () "2") "O"))
-;; ⇒ "<p><em>really</em> <strong>must</strong> <b>bold</b> <i>aside</i> <u>misspelt</u> <small>fine print</small> <mark>found</mark> x<sup>2</sup> H<sub>2</sub>O</p>"
-```
-
-#### `i` `&rest arguments` — macro
-
-Write an HTML i element.  Arguments are as for `tag`, without the name.
-
-*Example:* Inline text tags for emphasis and position.
-
-```lisp
-(with-canvas-to-string ()
-  (p ()
-    (em () "really") " " (strong () "must") " " (b () "bold") " " (i () "aside") " "
-    (u () "misspelt") " " (small () "fine print") " " (mark () "found") " "
-    "x" (sup () "2") " H" (sub () "2") "O"))
-;; ⇒ "<p><em>really</em> <strong>must</strong> <b>bold</b> <i>aside</i> <u>misspelt</u> <small>fine print</small> <mark>found</mark> x<sup>2</sup> H<sub>2</sub>O</p>"
-```
-
-#### `u` `&rest arguments` — macro
-
-Write an HTML u element.  Arguments are as for `tag`, without the name.
-
-*Example:* Inline text tags for emphasis and position.
-
-```lisp
-(with-canvas-to-string ()
-  (p ()
-    (em () "really") " " (strong () "must") " " (b () "bold") " " (i () "aside") " "
-    (u () "misspelt") " " (small () "fine print") " " (mark () "found") " "
-    "x" (sup () "2") " H" (sub () "2") "O"))
-;; ⇒ "<p><em>really</em> <strong>must</strong> <b>bold</b> <i>aside</i> <u>misspelt</u> <small>fine print</small> <mark>found</mark> x<sup>2</sup> H<sub>2</sub>O</p>"
-```
-
-#### `small` `&rest arguments` — macro
-
-Write an HTML small element.  Arguments are as for `tag`, without the name.
-
-*Example:* Inline text tags for emphasis and position.
-
-```lisp
-(with-canvas-to-string ()
-  (p ()
-    (em () "really") " " (strong () "must") " " (b () "bold") " " (i () "aside") " "
-    (u () "misspelt") " " (small () "fine print") " " (mark () "found") " "
-    "x" (sup () "2") " H" (sub () "2") "O"))
-;; ⇒ "<p><em>really</em> <strong>must</strong> <b>bold</b> <i>aside</i> <u>misspelt</u> <small>fine print</small> <mark>found</mark> x<sup>2</sup> H<sub>2</sub>O</p>"
-```
-
-#### `code` `&rest arguments` — macro
-
-Write an HTML code element.  Arguments are as for `tag`, without the name.
-
-*Example:* Tags for code and computer text.  The HTML var element is `var-tag`, as `var` is too useful a name to take from your code.
-
-```lisp
-(with-canvas-to-string ()
-  (p () "Press " (kbd () "Ctrl-C") " to stop " (code () "(main)") "; it prints "
-     (samp () "Bye") ". Let " (var-tag () "n") " be the port.")
-  (pre () "(+ 1 2) ⇒ 3"))
-;; ⇒ "<p>Press <kbd>Ctrl-C</kbd> to stop <code>(main)</code>; it prints <samp>Bye</samp>. Let <var>n</var> be the port.</p><pre>(+ 1 2) ⇒ 3</pre>"
-```
-
-#### `pre` `&rest arguments` — macro
-
-Write an HTML pre element.  Arguments are as for `tag`, without the name.
-
-*Example:* Tags for code and computer text.  The HTML var element is `var-tag`, as `var` is too useful a name to take from your code.
-
-```lisp
-(with-canvas-to-string ()
-  (p () "Press " (kbd () "Ctrl-C") " to stop " (code () "(main)") "; it prints "
-     (samp () "Bye") ". Let " (var-tag () "n") " be the port.")
-  (pre () "(+ 1 2) ⇒ 3"))
-;; ⇒ "<p>Press <kbd>Ctrl-C</kbd> to stop <code>(main)</code>; it prints <samp>Bye</samp>. Let <var>n</var> be the port.</p><pre>(+ 1 2) ⇒ 3</pre>"
-```
-
-#### `blockquote` `&rest arguments` — macro
-
-Write an HTML blockquote element.  Arguments are as for `tag`, without the name.
-
-*Example:* Quotations, citations, abbreviations and definitions.
-
-```lisp
-(with-canvas-to-string ()
-  (blockquote (:cite "https://example.com/talk")
-    (p () "Make it work, then make it fast."))
-  (p () (cite () "The Talk") ": " (dfn () (abbr (:title "Server-sent events") "SSE"))
-     " streams events to a page."))
-;; ⇒ "<blockquote cite=\"https://example.com/talk\"><p>Make it work, then make it fast.</p></blockquote><p><cite>The Talk</cite>: <dfn><abbr title=\"Server-sent events\">SSE</abbr></dfn> streams events to a page.</p>"
-```
-
-#### `sup` `&rest arguments` — macro
-
-Write an HTML sup element.  Arguments are as for `tag`, without the name.
-
-*Example:* Inline text tags for emphasis and position.
-
-```lisp
-(with-canvas-to-string ()
-  (p ()
-    (em () "really") " " (strong () "must") " " (b () "bold") " " (i () "aside") " "
-    (u () "misspelt") " " (small () "fine print") " " (mark () "found") " "
-    "x" (sup () "2") " H" (sub () "2") "O"))
-;; ⇒ "<p><em>really</em> <strong>must</strong> <b>bold</b> <i>aside</i> <u>misspelt</u> <small>fine print</small> <mark>found</mark> x<sup>2</sup> H<sub>2</sub>O</p>"
-```
-
-#### `sub` `&rest arguments` — macro
-
-Write an HTML sub element.  Arguments are as for `tag`, without the name.
-
-*Example:* Inline text tags for emphasis and position.
-
-```lisp
-(with-canvas-to-string ()
-  (p ()
-    (em () "really") " " (strong () "must") " " (b () "bold") " " (i () "aside") " "
-    (u () "misspelt") " " (small () "fine print") " " (mark () "found") " "
-    "x" (sup () "2") " H" (sub () "2") "O"))
-;; ⇒ "<p><em>really</em> <strong>must</strong> <b>bold</b> <i>aside</i> <u>misspelt</u> <small>fine print</small> <mark>found</mark> x<sup>2</sup> H<sub>2</sub>O</p>"
-```
-
-#### `section` `&rest arguments` — macro
-
-Write an HTML section element.  Arguments are as for `tag`, without the name.
-
-*Example:* The document-structure tags.
-
-```lisp
-(with-canvas-to-string ()
-  (header () (nav (:aria-label "Site") "Home"))
-  (main ()
-    (section (:id "news")
-      (article () "First post")
-      (aside () "Related")))
-  (footer () (span () "2026")))
-;; ⇒ "<header><nav aria-label=\"Site\">Home</nav></header><main><section id=\"news\"><article>First post</article><aside>Related</aside></section></main><footer><span>2026</span></footer>"
-```
-
-#### `article` `&rest arguments` — macro
-
-Write an HTML article element.  Arguments are as for `tag`, without the name.
-
-*Example:* The document-structure tags.
-
-```lisp
-(with-canvas-to-string ()
-  (header () (nav (:aria-label "Site") "Home"))
-  (main ()
-    (section (:id "news")
-      (article () "First post")
-      (aside () "Related")))
-  (footer () (span () "2026")))
-;; ⇒ "<header><nav aria-label=\"Site\">Home</nav></header><main><section id=\"news\"><article>First post</article><aside>Related</aside></section></main><footer><span>2026</span></footer>"
-```
-
-#### `aside` `&rest arguments` — macro
-
-Write an HTML aside element.  Arguments are as for `tag`, without the name.
-
-*Example:* The document-structure tags.
-
-```lisp
-(with-canvas-to-string ()
-  (header () (nav (:aria-label "Site") "Home"))
-  (main ()
-    (section (:id "news")
-      (article () "First post")
-      (aside () "Related")))
-  (footer () (span () "2026")))
-;; ⇒ "<header><nav aria-label=\"Site\">Home</nav></header><main><section id=\"news\"><article>First post</article><aside>Related</aside></section></main><footer><span>2026</span></footer>"
-```
-
-#### `nav` `&rest arguments` — macro
-
-Write an HTML nav element.  Arguments are as for `tag`, without the name.
-
-*Example:* The document-structure tags.
-
-```lisp
-(with-canvas-to-string ()
-  (header () (nav (:aria-label "Site") "Home"))
-  (main ()
-    (section (:id "news")
-      (article () "First post")
-      (aside () "Related")))
-  (footer () (span () "2026")))
-;; ⇒ "<header><nav aria-label=\"Site\">Home</nav></header><main><section id=\"news\"><article>First post</article><aside>Related</aside></section></main><footer><span>2026</span></footer>"
-```
-
-#### `header` `&rest arguments` — macro
-
-Write an HTML header element.  Arguments are as for `tag`, without the name.
-
-*Example:* The document-structure tags.
-
-```lisp
-(with-canvas-to-string ()
-  (header () (nav (:aria-label "Site") "Home"))
-  (main ()
-    (section (:id "news")
-      (article () "First post")
-      (aside () "Related")))
-  (footer () (span () "2026")))
-;; ⇒ "<header><nav aria-label=\"Site\">Home</nav></header><main><section id=\"news\"><article>First post</article><aside>Related</aside></section></main><footer><span>2026</span></footer>"
-```
-
-#### `footer` `&rest arguments` — macro
-
-Write an HTML footer element.  Arguments are as for `tag`, without the name.
-
-*Example:* The document-structure tags.
-
-```lisp
-(with-canvas-to-string ()
-  (header () (nav (:aria-label "Site") "Home"))
-  (main ()
-    (section (:id "news")
-      (article () "First post")
-      (aside () "Related")))
-  (footer () (span () "2026")))
-;; ⇒ "<header><nav aria-label=\"Site\">Home</nav></header><main><section id=\"news\"><article>First post</article><aside>Related</aside></section></main><footer><span>2026</span></footer>"
-```
-
-#### `main` `&rest arguments` — macro
-
-Write an HTML main element.  Arguments are as for `tag`, without the name.
-
-*Example:* The document-structure tags.
-
-```lisp
-(with-canvas-to-string ()
-  (header () (nav (:aria-label "Site") "Home"))
-  (main ()
-    (section (:id "news")
-      (article () "First post")
-      (aside () "Related")))
-  (footer () (span () "2026")))
-;; ⇒ "<header><nav aria-label=\"Site\">Home</nav></header><main><section id=\"news\"><article>First post</article><aside>Related</aside></section></main><footer><span>2026</span></footer>"
-```
-
-#### `figure` `&rest arguments` — macro
-
-Write an HTML figure element.  Arguments are as for `tag`, without the name.
-
-*Example:* Figures and images.  `img`, `br` and `hr` are void elements: they take attributes but no body, and have no closing tag.
-
-```lisp
-(with-canvas-to-string ()
-  (figure ()
-    (img (:src "/static/boat.png" :alt "A boat" :width 120))
-    (figcaption () "Low tide" (br) "at noon"))
-  (hr))
-;; ⇒ "<figure><img src=\"/static/boat.png\" alt=\"A boat\" width=\"120\"><figcaption>Low tide<br>at noon</figcaption></figure><hr>"
-```
-
-#### `figcaption` `&rest arguments` — macro
-
-Write an HTML figcaption element.  Arguments are as for `tag`, without the name.
-
-*Example:* Figures and images.  `img`, `br` and `hr` are void elements: they take attributes but no body, and have no closing tag.
-
-```lisp
-(with-canvas-to-string ()
-  (figure ()
-    (img (:src "/static/boat.png" :alt "A boat" :width 120))
-    (figcaption () "Low tide" (br) "at noon"))
-  (hr))
-;; ⇒ "<figure><img src=\"/static/boat.png\" alt=\"A boat\" width=\"120\"><figcaption>Low tide<br>at noon</figcaption></figure><hr>"
-```
-
-#### `fieldset` `&rest arguments` — macro
-
-Write an HTML fieldset element.  Arguments are as for `tag`, without the name.
-
-*Example:* Grouping and labelling form controls.  The controls themselves are brushes, such as `text-input`.
-
-```lisp
-(with-canvas-to-string ()
-  (fieldset ()
-    (legend () "Contact")
-    (label (:for "email") "Email")
-    (text-input (:id "email" :name "email"))))
-;; ⇒ "<fieldset><legend>Contact</legend><label for=\"email\">Email</label><input type=\"text\" name=\"email\" id=\"email\"></fieldset>"
-```
-
-#### `legend` `&rest arguments` — macro
-
-Write an HTML legend element.  Arguments are as for `tag`, without the name.
-
-*Example:* Grouping and labelling form controls.  The controls themselves are brushes, such as `text-input`.
-
-```lisp
-(with-canvas-to-string ()
-  (fieldset ()
-    (legend () "Contact")
-    (label (:for "email") "Email")
-    (text-input (:id "email" :name "email"))))
-;; ⇒ "<fieldset><legend>Contact</legend><label for=\"email\">Email</label><input type=\"text\" name=\"email\" id=\"email\"></fieldset>"
-```
-
-#### `label` `&rest arguments` — macro
-
-Write an HTML label element.  Arguments are as for `tag`, without the name.
-
-*Example:* Grouping and labelling form controls.  The controls themselves are brushes, such as `text-input`.
-
-```lisp
-(with-canvas-to-string ()
-  (fieldset ()
-    (legend () "Contact")
-    (label (:for "email") "Email")
-    (text-input (:id "email" :name "email"))))
-;; ⇒ "<fieldset><legend>Contact</legend><label for=\"email\">Email</label><input type=\"text\" name=\"email\" id=\"email\"></fieldset>"
-```
-
-#### `abbr` `&rest arguments` — macro
-
-Write an HTML abbr element.  Arguments are as for `tag`, without the name.
-
-*Example:* Quotations, citations, abbreviations and definitions.
-
-```lisp
-(with-canvas-to-string ()
-  (blockquote (:cite "https://example.com/talk")
-    (p () "Make it work, then make it fast."))
-  (p () (cite () "The Talk") ": " (dfn () (abbr (:title "Server-sent events") "SSE"))
-     " streams events to a page."))
-;; ⇒ "<blockquote cite=\"https://example.com/talk\"><p>Make it work, then make it fast.</p></blockquote><p><cite>The Talk</cite>: <dfn><abbr title=\"Server-sent events\">SSE</abbr></dfn> streams events to a page.</p>"
-```
-
-#### `cite` `&rest arguments` — macro
-
-Write an HTML cite element.  Arguments are as for `tag`, without the name.
-
-*Example:* Quotations, citations, abbreviations and definitions.
-
-```lisp
-(with-canvas-to-string ()
-  (blockquote (:cite "https://example.com/talk")
-    (p () "Make it work, then make it fast."))
-  (p () (cite () "The Talk") ": " (dfn () (abbr (:title "Server-sent events") "SSE"))
-     " streams events to a page."))
-;; ⇒ "<blockquote cite=\"https://example.com/talk\"><p>Make it work, then make it fast.</p></blockquote><p><cite>The Talk</cite>: <dfn><abbr title=\"Server-sent events\">SSE</abbr></dfn> streams events to a page.</p>"
-```
-
-#### `mark` `&rest arguments` — macro
-
-Write an HTML mark element.  Arguments are as for `tag`, without the name.
-
-*Example:* Inline text tags for emphasis and position.
-
-```lisp
-(with-canvas-to-string ()
-  (p ()
-    (em () "really") " " (strong () "must") " " (b () "bold") " " (i () "aside") " "
-    (u () "misspelt") " " (small () "fine print") " " (mark () "found") " "
-    "x" (sup () "2") " H" (sub () "2") "O"))
-;; ⇒ "<p><em>really</em> <strong>must</strong> <b>bold</b> <i>aside</i> <u>misspelt</u> <small>fine print</small> <mark>found</mark> x<sup>2</sup> H<sub>2</sub>O</p>"
-```
-
-#### `dfn` `&rest arguments` — macro
-
-Write an HTML dfn element.  Arguments are as for `tag`, without the name.
-
-*Example:* Quotations, citations, abbreviations and definitions.
-
-```lisp
-(with-canvas-to-string ()
-  (blockquote (:cite "https://example.com/talk")
-    (p () "Make it work, then make it fast."))
-  (p () (cite () "The Talk") ": " (dfn () (abbr (:title "Server-sent events") "SSE"))
-     " streams events to a page."))
-;; ⇒ "<blockquote cite=\"https://example.com/talk\"><p>Make it work, then make it fast.</p></blockquote><p><cite>The Talk</cite>: <dfn><abbr title=\"Server-sent events\">SSE</abbr></dfn> streams events to a page.</p>"
-```
-
-#### `kbd` `&rest arguments` — macro
-
-Write an HTML kbd element.  Arguments are as for `tag`, without the name.
-
-*Example:* Tags for code and computer text.  The HTML var element is `var-tag`, as `var` is too useful a name to take from your code.
-
-```lisp
-(with-canvas-to-string ()
-  (p () "Press " (kbd () "Ctrl-C") " to stop " (code () "(main)") "; it prints "
-     (samp () "Bye") ". Let " (var-tag () "n") " be the port.")
-  (pre () "(+ 1 2) ⇒ 3"))
-;; ⇒ "<p>Press <kbd>Ctrl-C</kbd> to stop <code>(main)</code>; it prints <samp>Bye</samp>. Let <var>n</var> be the port.</p><pre>(+ 1 2) ⇒ 3</pre>"
-```
-
-#### `samp` `&rest arguments` — macro
-
-Write an HTML samp element.  Arguments are as for `tag`, without the name.
-
-*Example:* Tags for code and computer text.  The HTML var element is `var-tag`, as `var` is too useful a name to take from your code.
-
-```lisp
-(with-canvas-to-string ()
-  (p () "Press " (kbd () "Ctrl-C") " to stop " (code () "(main)") "; it prints "
-     (samp () "Bye") ". Let " (var-tag () "n") " be the port.")
-  (pre () "(+ 1 2) ⇒ 3"))
-;; ⇒ "<p>Press <kbd>Ctrl-C</kbd> to stop <code>(main)</code>; it prints <samp>Bye</samp>. Let <var>n</var> be the port.</p><pre>(+ 1 2) ⇒ 3</pre>"
-```
-
-#### `var-tag` `&rest arguments` — macro
-
-Write an HTML var element.  Arguments are as for `tag`, without the name.
-
-*Example:* Tags for code and computer text.  The HTML var element is `var-tag`, as `var` is too useful a name to take from your code.
-
-```lisp
-(with-canvas-to-string ()
-  (p () "Press " (kbd () "Ctrl-C") " to stop " (code () "(main)") "; it prints "
-     (samp () "Bye") ". Let " (var-tag () "n") " be the port.")
-  (pre () "(+ 1 2) ⇒ 3"))
-;; ⇒ "<p>Press <kbd>Ctrl-C</kbd> to stop <code>(main)</code>; it prints <samp>Bye</samp>. Let <var>n</var> be the port.</p><pre>(+ 1 2) ⇒ 3</pre>"
-```
-
-#### `details` `&rest arguments` — macro
-
-Write an HTML details element.  Arguments are as for `tag`, without the name.
-
-*Example:* A disclosure box the browser opens and closes by itself; `:open` T starts it open.
-
-```lisp
-(with-canvas-to-string ()
-  (details (:open t)
-    (summary () "More")
-    (p () "Hidden until opened.")))
-;; ⇒ "<details open><summary>More</summary><p>Hidden until opened.</p></details>"
-```
-
-#### `summary` `&rest arguments` — macro
-
-Write an HTML summary element.  Arguments are as for `tag`, without the name.
-
-*Example:* A disclosure box the browser opens and closes by itself; `:open` T starts it open.
-
-```lisp
-(with-canvas-to-string ()
-  (details (:open t)
-    (summary () "More")
-    (p () "Hidden until opened.")))
-;; ⇒ "<details open><summary>More</summary><p>Hidden until opened.</p></details>"
-```
-
-#### `img` `&rest arguments` — macro
-
-Write an HTML img element.  Arguments are as for `tag`, without the name.
-
-*Example:* Figures and images.  `img`, `br` and `hr` are void elements: they take attributes but no body, and have no closing tag.
-
-```lisp
-(with-canvas-to-string ()
-  (figure ()
-    (img (:src "/static/boat.png" :alt "A boat" :width 120))
-    (figcaption () "Low tide" (br) "at noon"))
-  (hr))
-;; ⇒ "<figure><img src=\"/static/boat.png\" alt=\"A boat\" width=\"120\"><figcaption>Low tide<br>at noon</figcaption></figure><hr>"
-```
-
-#### `br` `&rest arguments` — macro
-
-Write an HTML br element.  Arguments are as for `tag`, without the name.
-
-*Example:* Figures and images.  `img`, `br` and `hr` are void elements: they take attributes but no body, and have no closing tag.
-
-```lisp
-(with-canvas-to-string ()
-  (figure ()
-    (img (:src "/static/boat.png" :alt "A boat" :width 120))
-    (figcaption () "Low tide" (br) "at noon"))
-  (hr))
-;; ⇒ "<figure><img src=\"/static/boat.png\" alt=\"A boat\" width=\"120\"><figcaption>Low tide<br>at noon</figcaption></figure><hr>"
-```
-
-#### `hr` `&rest arguments` — macro
-
-Write an HTML hr element.  Arguments are as for `tag`, without the name.
-
-*Example:* Figures and images.  `img`, `br` and `hr` are void elements: they take attributes but no body, and have no closing tag.
-
-```lisp
-(with-canvas-to-string ()
-  (figure ()
-    (img (:src "/static/boat.png" :alt "A boat" :width 120))
-    (figcaption () "Low tide" (br) "at noon"))
-  (hr))
-;; ⇒ "<figure><img src=\"/static/boat.png\" alt=\"A boat\" width=\"120\"><figcaption>Low tide<br>at noon</figcaption></figure><hr>"
 ```
 
 #### `tag` `name &rest arguments` — macro
@@ -11670,10 +10665,10 @@ value is written with `text`.
 
 ```lisp
 (let ((selected t) (disabled nil))
-  (with-canvas-to-string ()
-    (div (:id "row-1" :class (list "row" (and selected "selected") nil)
+  (h:with-canvas-to-string ()
+    (h:div (:id "row-1" :class (list "row" (and selected "selected") nil)
           :hidden disabled :data-note "say \"hi\"")
-      (span (:title "Ready" :aria-busy t) "Go"))))
+      (h:span (:title "Ready" :aria-busy t) "Go"))))
 ;; ⇒ "<div id=\"row-1\" class=\"row selected\" data-note=\"say &quot;hi&quot;\"><span title=\"Ready\" aria-busy>Go</span></div>"
 ```
 
@@ -11681,10 +10676,1879 @@ value is written with `text`.
 
 ```lisp
 (defun stamp (element when label)
-  (tag element (:datetime when) (text label)))
-(with-canvas-to-string ()
+  (h:tag element (:datetime when) (h:text label)))
+(h:with-canvas-to-string ()
   (stamp "time" "2026-10-15" "today"))
 ;; ⇒ "<time datetime=\"2026-10-15\">today</time>"
+```
+
+### The document
+
+#### `html` `&rest arguments` — macro
+
+Write an HTML html element.  Arguments are as for `tag`, without the name.
+
+*Example:* A whole document, for an endpoint or a mail rather than a component (an application's page head is `html-root`'s).  `style` and `script` bodies are written as they are, so give them text with `h:raw`.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:raw "<!doctype html>")
+  (h:html (:lang "en")
+    (h:head ()
+      (h:meta (:charset "utf-8"))
+      (h:title () "Receipt")
+      (h:base (:href "https://shop.example/"))
+      (h:link (:rel "stylesheet" :href "receipt.css"))
+      (h:style () (h:raw "p { margin: 0 }")))
+    (h:body ()
+      (h:p () "Thank you.")
+      (h:script (:src "receipt.js")))))
+;; ⇒ "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Receipt</title><base href=\"https://shop.example/\"><link rel=\"stylesheet\" href=\"receipt.css\"><style>p { margin: 0 }</style></head><body><p>Thank you.</p><script src=\"receipt.js\"></script></body></html>"
+```
+
+#### `head` `&rest arguments` — macro
+
+Write an HTML head element.  Arguments are as for `tag`, without the name.
+
+*Example:* A whole document, for an endpoint or a mail rather than a component (an application's page head is `html-root`'s).  `style` and `script` bodies are written as they are, so give them text with `h:raw`.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:raw "<!doctype html>")
+  (h:html (:lang "en")
+    (h:head ()
+      (h:meta (:charset "utf-8"))
+      (h:title () "Receipt")
+      (h:base (:href "https://shop.example/"))
+      (h:link (:rel "stylesheet" :href "receipt.css"))
+      (h:style () (h:raw "p { margin: 0 }")))
+    (h:body ()
+      (h:p () "Thank you.")
+      (h:script (:src "receipt.js")))))
+;; ⇒ "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Receipt</title><base href=\"https://shop.example/\"><link rel=\"stylesheet\" href=\"receipt.css\"><style>p { margin: 0 }</style></head><body><p>Thank you.</p><script src=\"receipt.js\"></script></body></html>"
+```
+
+#### `title` `&rest arguments` — macro
+
+Write an HTML title element.  Arguments are as for `tag`, without the name.
+
+*Example:* A whole document, for an endpoint or a mail rather than a component (an application's page head is `html-root`'s).  `style` and `script` bodies are written as they are, so give them text with `h:raw`.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:raw "<!doctype html>")
+  (h:html (:lang "en")
+    (h:head ()
+      (h:meta (:charset "utf-8"))
+      (h:title () "Receipt")
+      (h:base (:href "https://shop.example/"))
+      (h:link (:rel "stylesheet" :href "receipt.css"))
+      (h:style () (h:raw "p { margin: 0 }")))
+    (h:body ()
+      (h:p () "Thank you.")
+      (h:script (:src "receipt.js")))))
+;; ⇒ "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Receipt</title><base href=\"https://shop.example/\"><link rel=\"stylesheet\" href=\"receipt.css\"><style>p { margin: 0 }</style></head><body><p>Thank you.</p><script src=\"receipt.js\"></script></body></html>"
+```
+
+#### `base` `&rest arguments` — macro
+
+Write an HTML base element.  Arguments are as for `tag`, without the name.
+
+*Example:* A whole document, for an endpoint or a mail rather than a component (an application's page head is `html-root`'s).  `style` and `script` bodies are written as they are, so give them text with `h:raw`.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:raw "<!doctype html>")
+  (h:html (:lang "en")
+    (h:head ()
+      (h:meta (:charset "utf-8"))
+      (h:title () "Receipt")
+      (h:base (:href "https://shop.example/"))
+      (h:link (:rel "stylesheet" :href "receipt.css"))
+      (h:style () (h:raw "p { margin: 0 }")))
+    (h:body ()
+      (h:p () "Thank you.")
+      (h:script (:src "receipt.js")))))
+;; ⇒ "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Receipt</title><base href=\"https://shop.example/\"><link rel=\"stylesheet\" href=\"receipt.css\"><style>p { margin: 0 }</style></head><body><p>Thank you.</p><script src=\"receipt.js\"></script></body></html>"
+```
+
+#### `link` `&rest arguments` — macro
+
+Write an HTML link element.  Arguments are as for `tag`, without the name.
+
+*Example:* A whole document, for an endpoint or a mail rather than a component (an application's page head is `html-root`'s).  `style` and `script` bodies are written as they are, so give them text with `h:raw`.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:raw "<!doctype html>")
+  (h:html (:lang "en")
+    (h:head ()
+      (h:meta (:charset "utf-8"))
+      (h:title () "Receipt")
+      (h:base (:href "https://shop.example/"))
+      (h:link (:rel "stylesheet" :href "receipt.css"))
+      (h:style () (h:raw "p { margin: 0 }")))
+    (h:body ()
+      (h:p () "Thank you.")
+      (h:script (:src "receipt.js")))))
+;; ⇒ "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Receipt</title><base href=\"https://shop.example/\"><link rel=\"stylesheet\" href=\"receipt.css\"><style>p { margin: 0 }</style></head><body><p>Thank you.</p><script src=\"receipt.js\"></script></body></html>"
+```
+
+#### `meta` `&rest arguments` — macro
+
+Write an HTML meta element.  Arguments are as for `tag`, without the name.
+
+*Example:* A whole document, for an endpoint or a mail rather than a component (an application's page head is `html-root`'s).  `style` and `script` bodies are written as they are, so give them text with `h:raw`.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:raw "<!doctype html>")
+  (h:html (:lang "en")
+    (h:head ()
+      (h:meta (:charset "utf-8"))
+      (h:title () "Receipt")
+      (h:base (:href "https://shop.example/"))
+      (h:link (:rel "stylesheet" :href "receipt.css"))
+      (h:style () (h:raw "p { margin: 0 }")))
+    (h:body ()
+      (h:p () "Thank you.")
+      (h:script (:src "receipt.js")))))
+;; ⇒ "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Receipt</title><base href=\"https://shop.example/\"><link rel=\"stylesheet\" href=\"receipt.css\"><style>p { margin: 0 }</style></head><body><p>Thank you.</p><script src=\"receipt.js\"></script></body></html>"
+```
+
+#### `style` `&rest arguments` — macro
+
+Write an HTML style element.  Arguments are as for `tag`, without the name.
+
+*Example:* A whole document, for an endpoint or a mail rather than a component (an application's page head is `html-root`'s).  `style` and `script` bodies are written as they are, so give them text with `h:raw`.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:raw "<!doctype html>")
+  (h:html (:lang "en")
+    (h:head ()
+      (h:meta (:charset "utf-8"))
+      (h:title () "Receipt")
+      (h:base (:href "https://shop.example/"))
+      (h:link (:rel "stylesheet" :href "receipt.css"))
+      (h:style () (h:raw "p { margin: 0 }")))
+    (h:body ()
+      (h:p () "Thank you.")
+      (h:script (:src "receipt.js")))))
+;; ⇒ "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Receipt</title><base href=\"https://shop.example/\"><link rel=\"stylesheet\" href=\"receipt.css\"><style>p { margin: 0 }</style></head><body><p>Thank you.</p><script src=\"receipt.js\"></script></body></html>"
+```
+
+#### `script` `&rest arguments` — macro
+
+Write an HTML script element.  Arguments are as for `tag`, without the name.
+
+*Example:* A whole document, for an endpoint or a mail rather than a component (an application's page head is `html-root`'s).  `style` and `script` bodies are written as they are, so give them text with `h:raw`.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:raw "<!doctype html>")
+  (h:html (:lang "en")
+    (h:head ()
+      (h:meta (:charset "utf-8"))
+      (h:title () "Receipt")
+      (h:base (:href "https://shop.example/"))
+      (h:link (:rel "stylesheet" :href "receipt.css"))
+      (h:style () (h:raw "p { margin: 0 }")))
+    (h:body ()
+      (h:p () "Thank you.")
+      (h:script (:src "receipt.js")))))
+;; ⇒ "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Receipt</title><base href=\"https://shop.example/\"><link rel=\"stylesheet\" href=\"receipt.css\"><style>p { margin: 0 }</style></head><body><p>Thank you.</p><script src=\"receipt.js\"></script></body></html>"
+```
+
+#### `noscript` `&rest arguments` — macro
+
+Write an HTML noscript element.  Arguments are as for `tag`, without the name.
+
+*Example:* `noscript` is shown only without JavaScript; `template` holds markup for scripts to copy, with SLOTs for a web component's content.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:noscript () (h:p () "Turn on JavaScript to see the map."))
+  (h:template (:id "card")
+    (h:div (:class "card") (h:slot (:name "title") "Untitled"))))
+;; ⇒ "<noscript><p>Turn on JavaScript to see the map.</p></noscript><template id=\"card\"><div class=\"card\"><slot name=\"title\">Untitled</slot></div></template>"
+```
+
+#### `template` `&rest arguments` — macro
+
+Write an HTML template element.  Arguments are as for `tag`, without the name.
+
+*Example:* `noscript` is shown only without JavaScript; `template` holds markup for scripts to copy, with SLOTs for a web component's content.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:noscript () (h:p () "Turn on JavaScript to see the map."))
+  (h:template (:id "card")
+    (h:div (:class "card") (h:slot (:name "title") "Untitled"))))
+;; ⇒ "<noscript><p>Turn on JavaScript to see the map.</p></noscript><template id=\"card\"><div class=\"card\"><slot name=\"title\">Untitled</slot></div></template>"
+```
+
+#### `slot` `&rest arguments` — macro
+
+Write an HTML slot element.  Arguments are as for `tag`, without the name.
+
+*Example:* `noscript` is shown only without JavaScript; `template` holds markup for scripts to copy, with SLOTs for a web component's content.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:noscript () (h:p () "Turn on JavaScript to see the map."))
+  (h:template (:id "card")
+    (h:div (:class "card") (h:slot (:name "title") "Untitled"))))
+;; ⇒ "<noscript><p>Turn on JavaScript to see the map.</p></noscript><template id=\"card\"><div class=\"card\"><slot name=\"title\">Untitled</slot></div></template>"
+```
+
+#### `body` `&rest arguments` — macro
+
+Write an HTML body element.  Arguments are as for `tag`, without the name.
+
+*Example:* A whole document, for an endpoint or a mail rather than a component (an application's page head is `html-root`'s).  `style` and `script` bodies are written as they are, so give them text with `h:raw`.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:raw "<!doctype html>")
+  (h:html (:lang "en")
+    (h:head ()
+      (h:meta (:charset "utf-8"))
+      (h:title () "Receipt")
+      (h:base (:href "https://shop.example/"))
+      (h:link (:rel "stylesheet" :href "receipt.css"))
+      (h:style () (h:raw "p { margin: 0 }")))
+    (h:body ()
+      (h:p () "Thank you.")
+      (h:script (:src "receipt.js")))))
+;; ⇒ "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Receipt</title><base href=\"https://shop.example/\"><link rel=\"stylesheet\" href=\"receipt.css\"><style>p { margin: 0 }</style></head><body><p>Thank you.</p><script src=\"receipt.js\"></script></body></html>"
+```
+
+### Sections
+
+#### `article` `&rest arguments` — macro
+
+Write an HTML article element.  Arguments are as for `tag`, without the name.
+
+*Example:* The document-structure tags.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:header () (h:nav (:aria-label "Site") "Home"))
+  (h:main ()
+    (h:section (:id "news")
+      (h:article () "First post")
+      (h:aside () "Related")))
+  (h:footer () (h:span () "2026")))
+;; ⇒ "<header><nav aria-label=\"Site\">Home</nav></header><main><section id=\"news\"><article>First post</article><aside>Related</aside></section></main><footer><span>2026</span></footer>"
+```
+
+#### `section` `&rest arguments` — macro
+
+Write an HTML section element.  Arguments are as for `tag`, without the name.
+
+*Example:* The document-structure tags.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:header () (h:nav (:aria-label "Site") "Home"))
+  (h:main ()
+    (h:section (:id "news")
+      (h:article () "First post")
+      (h:aside () "Related")))
+  (h:footer () (h:span () "2026")))
+;; ⇒ "<header><nav aria-label=\"Site\">Home</nav></header><main><section id=\"news\"><article>First post</article><aside>Related</aside></section></main><footer><span>2026</span></footer>"
+```
+
+#### `nav` `&rest arguments` — macro
+
+Write an HTML nav element.  Arguments are as for `tag`, without the name.
+
+*Example:* The document-structure tags.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:header () (h:nav (:aria-label "Site") "Home"))
+  (h:main ()
+    (h:section (:id "news")
+      (h:article () "First post")
+      (h:aside () "Related")))
+  (h:footer () (h:span () "2026")))
+;; ⇒ "<header><nav aria-label=\"Site\">Home</nav></header><main><section id=\"news\"><article>First post</article><aside>Related</aside></section></main><footer><span>2026</span></footer>"
+```
+
+#### `aside` `&rest arguments` — macro
+
+Write an HTML aside element.  Arguments are as for `tag`, without the name.
+
+*Example:* The document-structure tags.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:header () (h:nav (:aria-label "Site") "Home"))
+  (h:main ()
+    (h:section (:id "news")
+      (h:article () "First post")
+      (h:aside () "Related")))
+  (h:footer () (h:span () "2026")))
+;; ⇒ "<header><nav aria-label=\"Site\">Home</nav></header><main><section id=\"news\"><article>First post</article><aside>Related</aside></section></main><footer><span>2026</span></footer>"
+```
+
+#### `h1` `&rest arguments` — macro
+
+Write an HTML h1 element.  Arguments are as for `tag`, without the name.
+
+*Example:* Headings and paragraphs.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:h1 () "Guide")
+  (h:h2 () "Setup")
+  (h:h3 () "Linux")
+  (h:h4 () "Debian")
+  (h:h5 () "Packages")
+  (h:h6 () "Notes")
+  (h:p () "Install SBCL first."))
+;; ⇒ "<h1>Guide</h1><h2>Setup</h2><h3>Linux</h3><h4>Debian</h4><h5>Packages</h5><h6>Notes</h6><p>Install SBCL first.</p>"
+```
+
+#### `h2` `&rest arguments` — macro
+
+Write an HTML h2 element.  Arguments are as for `tag`, without the name.
+
+*Example:* Headings and paragraphs.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:h1 () "Guide")
+  (h:h2 () "Setup")
+  (h:h3 () "Linux")
+  (h:h4 () "Debian")
+  (h:h5 () "Packages")
+  (h:h6 () "Notes")
+  (h:p () "Install SBCL first."))
+;; ⇒ "<h1>Guide</h1><h2>Setup</h2><h3>Linux</h3><h4>Debian</h4><h5>Packages</h5><h6>Notes</h6><p>Install SBCL first.</p>"
+```
+
+#### `h3` `&rest arguments` — macro
+
+Write an HTML h3 element.  Arguments are as for `tag`, without the name.
+
+*Example:* Headings and paragraphs.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:h1 () "Guide")
+  (h:h2 () "Setup")
+  (h:h3 () "Linux")
+  (h:h4 () "Debian")
+  (h:h5 () "Packages")
+  (h:h6 () "Notes")
+  (h:p () "Install SBCL first."))
+;; ⇒ "<h1>Guide</h1><h2>Setup</h2><h3>Linux</h3><h4>Debian</h4><h5>Packages</h5><h6>Notes</h6><p>Install SBCL first.</p>"
+```
+
+#### `h4` `&rest arguments` — macro
+
+Write an HTML h4 element.  Arguments are as for `tag`, without the name.
+
+*Example:* Headings and paragraphs.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:h1 () "Guide")
+  (h:h2 () "Setup")
+  (h:h3 () "Linux")
+  (h:h4 () "Debian")
+  (h:h5 () "Packages")
+  (h:h6 () "Notes")
+  (h:p () "Install SBCL first."))
+;; ⇒ "<h1>Guide</h1><h2>Setup</h2><h3>Linux</h3><h4>Debian</h4><h5>Packages</h5><h6>Notes</h6><p>Install SBCL first.</p>"
+```
+
+#### `h5` `&rest arguments` — macro
+
+Write an HTML h5 element.  Arguments are as for `tag`, without the name.
+
+*Example:* Headings and paragraphs.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:h1 () "Guide")
+  (h:h2 () "Setup")
+  (h:h3 () "Linux")
+  (h:h4 () "Debian")
+  (h:h5 () "Packages")
+  (h:h6 () "Notes")
+  (h:p () "Install SBCL first."))
+;; ⇒ "<h1>Guide</h1><h2>Setup</h2><h3>Linux</h3><h4>Debian</h4><h5>Packages</h5><h6>Notes</h6><p>Install SBCL first.</p>"
+```
+
+#### `h6` `&rest arguments` — macro
+
+Write an HTML h6 element.  Arguments are as for `tag`, without the name.
+
+*Example:* Headings and paragraphs.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:h1 () "Guide")
+  (h:h2 () "Setup")
+  (h:h3 () "Linux")
+  (h:h4 () "Debian")
+  (h:h5 () "Packages")
+  (h:h6 () "Notes")
+  (h:p () "Install SBCL first."))
+;; ⇒ "<h1>Guide</h1><h2>Setup</h2><h3>Linux</h3><h4>Debian</h4><h5>Packages</h5><h6>Notes</h6><p>Install SBCL first.</p>"
+```
+
+#### `hgroup` `&rest arguments` — macro
+
+Write an HTML hgroup element.  Arguments are as for `tag`, without the name.
+
+*Example:* A heading with its subtitle, contact details, and a menu: a list of commands.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:hgroup () (h:h1 () "Littoral") (h:p () "Web applications in Lisp"))
+  (h:address () "Write to " (h:a (:href "mailto:ada@example.com") "Ada"))
+  (h:menu () (h:li () (h:button () "Copy")) (h:li () (h:button () "Paste"))))
+;; ⇒ "<hgroup><h1>Littoral</h1><p>Web applications in Lisp</p></hgroup><address>Write to <a href=\"mailto:ada@example.com\">Ada</a></address><menu><li><button type=\"button\">Copy</button></li><li><button type=\"button\">Paste</button></li></menu>"
+```
+
+#### `header` `&rest arguments` — macro
+
+Write an HTML header element.  Arguments are as for `tag`, without the name.
+
+*Example:* The document-structure tags.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:header () (h:nav (:aria-label "Site") "Home"))
+  (h:main ()
+    (h:section (:id "news")
+      (h:article () "First post")
+      (h:aside () "Related")))
+  (h:footer () (h:span () "2026")))
+;; ⇒ "<header><nav aria-label=\"Site\">Home</nav></header><main><section id=\"news\"><article>First post</article><aside>Related</aside></section></main><footer><span>2026</span></footer>"
+```
+
+#### `footer` `&rest arguments` — macro
+
+Write an HTML footer element.  Arguments are as for `tag`, without the name.
+
+*Example:* The document-structure tags.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:header () (h:nav (:aria-label "Site") "Home"))
+  (h:main ()
+    (h:section (:id "news")
+      (h:article () "First post")
+      (h:aside () "Related")))
+  (h:footer () (h:span () "2026")))
+;; ⇒ "<header><nav aria-label=\"Site\">Home</nav></header><main><section id=\"news\"><article>First post</article><aside>Related</aside></section></main><footer><span>2026</span></footer>"
+```
+
+#### `address` `&rest arguments` — macro
+
+Write an HTML address element.  Arguments are as for `tag`, without the name.
+
+*Example:* A heading with its subtitle, contact details, and a menu: a list of commands.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:hgroup () (h:h1 () "Littoral") (h:p () "Web applications in Lisp"))
+  (h:address () "Write to " (h:a (:href "mailto:ada@example.com") "Ada"))
+  (h:menu () (h:li () (h:button () "Copy")) (h:li () (h:button () "Paste"))))
+;; ⇒ "<hgroup><h1>Littoral</h1><p>Web applications in Lisp</p></hgroup><address>Write to <a href=\"mailto:ada@example.com\">Ada</a></address><menu><li><button type=\"button\">Copy</button></li><li><button type=\"button\">Paste</button></li></menu>"
+```
+
+#### `main` `&rest arguments` — macro
+
+Write an HTML main element.  Arguments are as for `tag`, without the name.
+
+*Example:* The document-structure tags.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:header () (h:nav (:aria-label "Site") "Home"))
+  (h:main ()
+    (h:section (:id "news")
+      (h:article () "First post")
+      (h:aside () "Related")))
+  (h:footer () (h:span () "2026")))
+;; ⇒ "<header><nav aria-label=\"Site\">Home</nav></header><main><section id=\"news\"><article>First post</article><aside>Related</aside></section></main><footer><span>2026</span></footer>"
+```
+
+#### `search` `&rest arguments` — macro
+
+Write an HTML search element.  Arguments are as for `tag`, without the name.
+
+*Example:* Every element has a tag under its own name, those named like `cl`'s `time`, `search` and `map` too: written with the package's nickname, `h:time` is the tag and `time` is still `cl`'s.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:search ()
+    (h:p () "Updated " (h:time (:datetime "2026-10-20") "today") ", "
+         (h:data (:value 42) "forty-two") " results."))
+  (h:map (:name "plan")
+    (h:area (:shape "rect" :coords "0,0,10,10" :href "/kitchen" :alt "Kitchen"))))
+;; ⇒ "<search><p>Updated <time datetime=\"2026-10-20\">today</time>, <data value=\"42\">forty-two</data> results.</p></search><map name=\"plan\"><area shape=\"rect\" coords=\"0,0,10,10\" href=\"/kitchen\" alt=\"Kitchen\"></map>"
+```
+
+### Grouping content
+
+#### `p` `&rest arguments` — macro
+
+Write an HTML p element.  Arguments are as for `tag`, without the name.
+
+*Example:* The attribute list may be left out when the tag has none and its body does not start with a keyword list; () works too.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:div
+    (h:p "No attributes.")
+    (h:p () "Empty attributes.")
+    (h:span (h:text 3))))
+;; ⇒ "<div><p>No attributes.</p><p>Empty attributes.</p><span>3</span></div>"
+```
+
+*Example:* Headings and paragraphs.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:h1 () "Guide")
+  (h:h2 () "Setup")
+  (h:h3 () "Linux")
+  (h:h4 () "Debian")
+  (h:h5 () "Packages")
+  (h:h6 () "Notes")
+  (h:p () "Install SBCL first."))
+;; ⇒ "<h1>Guide</h1><h2>Setup</h2><h3>Linux</h3><h4>Debian</h4><h5>Packages</h5><h6>Notes</h6><p>Install SBCL first.</p>"
+```
+
+#### `hr` `&rest arguments` — macro
+
+Write an HTML hr element.  Arguments are as for `tag`, without the name.
+
+*Example:* Figures and images.  `img`, `br` and `hr` are void elements: they take attributes but no body, and have no closing tag.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:figure ()
+    (h:img (:src "/static/boat.png" :alt "A boat" :width 120))
+    (h:figcaption () "Low tide" (h:br) "at noon"))
+  (h:hr))
+;; ⇒ "<figure><img src=\"/static/boat.png\" alt=\"A boat\" width=\"120\"><figcaption>Low tide<br>at noon</figcaption></figure><hr>"
+```
+
+#### `pre` `&rest arguments` — macro
+
+Write an HTML pre element.  Arguments are as for `tag`, without the name.
+
+*Example:* Tags for code and computer text.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:p () "Press " (h:kbd () "Ctrl-C") " to stop " (h:code () "(main)") "; it prints "
+     (h:samp () "Bye") ". Let " (h:var () "n") " be the port.")
+  (h:pre () "(+ 1 2) ⇒ 3"))
+;; ⇒ "<p>Press <kbd>Ctrl-C</kbd> to stop <code>(main)</code>; it prints <samp>Bye</samp>. Let <var>n</var> be the port.</p><pre>(+ 1 2) ⇒ 3</pre>"
+```
+
+#### `blockquote` `&rest arguments` — macro
+
+Write an HTML blockquote element.  Arguments are as for `tag`, without the name.
+
+*Example:* Quotations, citations, abbreviations and definitions.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:blockquote (:cite "https://example.com/talk")
+    (h:p () "Make it work, then make it fast."))
+  (h:p () (h:cite () "The Talk") ": " (h:dfn () (h:abbr (:title "Server-sent events") "SSE"))
+     " streams events to a page."))
+;; ⇒ "<blockquote cite=\"https://example.com/talk\"><p>Make it work, then make it fast.</p></blockquote><p><cite>The Talk</cite>: <dfn><abbr title=\"Server-sent events\">SSE</abbr></dfn> streams events to a page.</p>"
+```
+
+#### `ol` `&rest arguments` — macro
+
+Write an HTML ol element.  Arguments are as for `tag`, without the name.
+
+*Example:* Lists.  A body may contain any Lisp code, such as a loop writing one item per element.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:ul (:class "tags")
+    (dolist (tag '("lisp" "web"))
+      (h:li () (h:text tag))))
+  (h:ol () (h:li () "Clone") (h:li () "Build"))
+  (h:dl ()
+    (h:dt () "SBCL") (h:dd () "A Common Lisp compiler")))
+;; ⇒ "<ul class=\"tags\"><li>lisp</li><li>web</li></ul><ol><li>Clone</li><li>Build</li></ol><dl><dt>SBCL</dt><dd>A Common Lisp compiler</dd></dl>"
+```
+
+#### `ul` `&rest arguments` — macro
+
+Write an HTML ul element.  Arguments are as for `tag`, without the name.
+
+*Example:* Lists.  A body may contain any Lisp code, such as a loop writing one item per element.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:ul (:class "tags")
+    (dolist (tag '("lisp" "web"))
+      (h:li () (h:text tag))))
+  (h:ol () (h:li () "Clone") (h:li () "Build"))
+  (h:dl ()
+    (h:dt () "SBCL") (h:dd () "A Common Lisp compiler")))
+;; ⇒ "<ul class=\"tags\"><li>lisp</li><li>web</li></ul><ol><li>Clone</li><li>Build</li></ol><dl><dt>SBCL</dt><dd>A Common Lisp compiler</dd></dl>"
+```
+
+#### `menu` `&rest arguments` — macro
+
+Write an HTML menu element.  Arguments are as for `tag`, without the name.
+
+*Example:* A heading with its subtitle, contact details, and a menu: a list of commands.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:hgroup () (h:h1 () "Littoral") (h:p () "Web applications in Lisp"))
+  (h:address () "Write to " (h:a (:href "mailto:ada@example.com") "Ada"))
+  (h:menu () (h:li () (h:button () "Copy")) (h:li () (h:button () "Paste"))))
+;; ⇒ "<hgroup><h1>Littoral</h1><p>Web applications in Lisp</p></hgroup><address>Write to <a href=\"mailto:ada@example.com\">Ada</a></address><menu><li><button type=\"button\">Copy</button></li><li><button type=\"button\">Paste</button></li></menu>"
+```
+
+#### `li` `&rest arguments` — macro
+
+Write an HTML li element.  Arguments are as for `tag`, without the name.
+
+*Example:* Lists.  A body may contain any Lisp code, such as a loop writing one item per element.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:ul (:class "tags")
+    (dolist (tag '("lisp" "web"))
+      (h:li () (h:text tag))))
+  (h:ol () (h:li () "Clone") (h:li () "Build"))
+  (h:dl ()
+    (h:dt () "SBCL") (h:dd () "A Common Lisp compiler")))
+;; ⇒ "<ul class=\"tags\"><li>lisp</li><li>web</li></ul><ol><li>Clone</li><li>Build</li></ol><dl><dt>SBCL</dt><dd>A Common Lisp compiler</dd></dl>"
+```
+
+#### `dl` `&rest arguments` — macro
+
+Write an HTML dl element.  Arguments are as for `tag`, without the name.
+
+*Example:* Lists.  A body may contain any Lisp code, such as a loop writing one item per element.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:ul (:class "tags")
+    (dolist (tag '("lisp" "web"))
+      (h:li () (h:text tag))))
+  (h:ol () (h:li () "Clone") (h:li () "Build"))
+  (h:dl ()
+    (h:dt () "SBCL") (h:dd () "A Common Lisp compiler")))
+;; ⇒ "<ul class=\"tags\"><li>lisp</li><li>web</li></ul><ol><li>Clone</li><li>Build</li></ol><dl><dt>SBCL</dt><dd>A Common Lisp compiler</dd></dl>"
+```
+
+#### `dt` `&rest arguments` — macro
+
+Write an HTML dt element.  Arguments are as for `tag`, without the name.
+
+*Example:* Lists.  A body may contain any Lisp code, such as a loop writing one item per element.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:ul (:class "tags")
+    (dolist (tag '("lisp" "web"))
+      (h:li () (h:text tag))))
+  (h:ol () (h:li () "Clone") (h:li () "Build"))
+  (h:dl ()
+    (h:dt () "SBCL") (h:dd () "A Common Lisp compiler")))
+;; ⇒ "<ul class=\"tags\"><li>lisp</li><li>web</li></ul><ol><li>Clone</li><li>Build</li></ol><dl><dt>SBCL</dt><dd>A Common Lisp compiler</dd></dl>"
+```
+
+#### `dd` `&rest arguments` — macro
+
+Write an HTML dd element.  Arguments are as for `tag`, without the name.
+
+*Example:* Lists.  A body may contain any Lisp code, such as a loop writing one item per element.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:ul (:class "tags")
+    (dolist (tag '("lisp" "web"))
+      (h:li () (h:text tag))))
+  (h:ol () (h:li () "Clone") (h:li () "Build"))
+  (h:dl ()
+    (h:dt () "SBCL") (h:dd () "A Common Lisp compiler")))
+;; ⇒ "<ul class=\"tags\"><li>lisp</li><li>web</li></ul><ol><li>Clone</li><li>Build</li></ol><dl><dt>SBCL</dt><dd>A Common Lisp compiler</dd></dl>"
+```
+
+#### `figure` `&rest arguments` — macro
+
+Write an HTML figure element.  Arguments are as for `tag`, without the name.
+
+*Example:* Figures and images.  `img`, `br` and `hr` are void elements: they take attributes but no body, and have no closing tag.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:figure ()
+    (h:img (:src "/static/boat.png" :alt "A boat" :width 120))
+    (h:figcaption () "Low tide" (h:br) "at noon"))
+  (h:hr))
+;; ⇒ "<figure><img src=\"/static/boat.png\" alt=\"A boat\" width=\"120\"><figcaption>Low tide<br>at noon</figcaption></figure><hr>"
+```
+
+#### `figcaption` `&rest arguments` — macro
+
+Write an HTML figcaption element.  Arguments are as for `tag`, without the name.
+
+*Example:* Figures and images.  `img`, `br` and `hr` are void elements: they take attributes but no body, and have no closing tag.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:figure ()
+    (h:img (:src "/static/boat.png" :alt "A boat" :width 120))
+    (h:figcaption () "Low tide" (h:br) "at noon"))
+  (h:hr))
+;; ⇒ "<figure><img src=\"/static/boat.png\" alt=\"A boat\" width=\"120\"><figcaption>Low tide<br>at noon</figcaption></figure><hr>"
+```
+
+#### `div` `&rest arguments` — macro
+
+Write an HTML div element.  Arguments are as for `tag`, without the name.
+
+*Example:* The first argument of a tag is a plist of attributes, whose values are evaluated.  A `nil` value leaves the attribute out, T writes it bare (a boolean attribute), and a `:class` list is joined with spaces, its NILs dropped.  Values are escaped.
+
+```lisp
+(let ((selected t) (disabled nil))
+  (h:with-canvas-to-string ()
+    (h:div (:id "row-1" :class (list "row" (and selected "selected") nil)
+          :hidden disabled :data-note "say \"hi\"")
+      (h:span (:title "Ready" :aria-busy t) "Go"))))
+;; ⇒ "<div id=\"row-1\" class=\"row selected\" data-note=\"say &quot;hi&quot;\"><span title=\"Ready\" aria-busy>Go</span></div>"
+```
+
+*Example:* The attribute list may be left out when the tag has none and its body does not start with a keyword list; () works too.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:div
+    (h:p "No attributes.")
+    (h:p () "Empty attributes.")
+    (h:span (h:text 3))))
+;; ⇒ "<div><p>No attributes.</p><p>Empty attributes.</p><span>3</span></div>"
+```
+
+*Example:* The document-structure tags.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:header () (h:nav (:aria-label "Site") "Home"))
+  (h:main ()
+    (h:section (:id "news")
+      (h:article () "First post")
+      (h:aside () "Related")))
+  (h:footer () (h:span () "2026")))
+;; ⇒ "<header><nav aria-label=\"Site\">Home</nav></header><main><section id=\"news\"><article>First post</article><aside>Related</aside></section></main><footer><span>2026</span></footer>"
+```
+
+### Text
+
+#### `a` `&rest arguments` — macro
+
+Write an HTML a element.  Arguments are as for `tag`, without the name.
+
+*Example:* H:A is a plain link, with no callback (`h:anchor` has those).  S is no longer accurate, Q quotes inline, and `ins` and `del` mark what an edit added and took away.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:p () (h:a (:href "/sale") "Sale") ": " (h:s () "£30") " £20, "
+     (h:q () "while stocks last") ". Ends " (h:del () "Friday") (h:ins () "Sunday") "."))
+;; ⇒ "<p><a href=\"/sale\">Sale</a>: <s>£30</s> £20, <q>while stocks last</q>. Ends <del>Friday</del><ins>Sunday</ins>.</p>"
+```
+
+#### `em` `&rest arguments` — macro
+
+Write an HTML em element.  Arguments are as for `tag`, without the name.
+
+*Example:* Inline text tags for emphasis and position.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:p ()
+    (h:em () "really") " " (h:strong () "must") " " (h:b () "bold") " " (h:i () "aside") " "
+    (h:u () "misspelt") " " (h:small () "fine print") " " (h:mark () "found") " "
+    "x" (h:sup () "2") " H" (h:sub () "2") "O"))
+;; ⇒ "<p><em>really</em> <strong>must</strong> <b>bold</b> <i>aside</i> <u>misspelt</u> <small>fine print</small> <mark>found</mark> x<sup>2</sup> H<sub>2</sub>O</p>"
+```
+
+#### `strong` `&rest arguments` — macro
+
+Write an HTML strong element.  Arguments are as for `tag`, without the name.
+
+*Example:* Inline text tags for emphasis and position.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:p ()
+    (h:em () "really") " " (h:strong () "must") " " (h:b () "bold") " " (h:i () "aside") " "
+    (h:u () "misspelt") " " (h:small () "fine print") " " (h:mark () "found") " "
+    "x" (h:sup () "2") " H" (h:sub () "2") "O"))
+;; ⇒ "<p><em>really</em> <strong>must</strong> <b>bold</b> <i>aside</i> <u>misspelt</u> <small>fine print</small> <mark>found</mark> x<sup>2</sup> H<sub>2</sub>O</p>"
+```
+
+#### `small` `&rest arguments` — macro
+
+Write an HTML small element.  Arguments are as for `tag`, without the name.
+
+*Example:* Inline text tags for emphasis and position.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:p ()
+    (h:em () "really") " " (h:strong () "must") " " (h:b () "bold") " " (h:i () "aside") " "
+    (h:u () "misspelt") " " (h:small () "fine print") " " (h:mark () "found") " "
+    "x" (h:sup () "2") " H" (h:sub () "2") "O"))
+;; ⇒ "<p><em>really</em> <strong>must</strong> <b>bold</b> <i>aside</i> <u>misspelt</u> <small>fine print</small> <mark>found</mark> x<sup>2</sup> H<sub>2</sub>O</p>"
+```
+
+#### `s` `&rest arguments` — macro
+
+Write an HTML s element.  Arguments are as for `tag`, without the name.
+
+*Example:* H:A is a plain link, with no callback (`h:anchor` has those).  S is no longer accurate, Q quotes inline, and `ins` and `del` mark what an edit added and took away.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:p () (h:a (:href "/sale") "Sale") ": " (h:s () "£30") " £20, "
+     (h:q () "while stocks last") ". Ends " (h:del () "Friday") (h:ins () "Sunday") "."))
+;; ⇒ "<p><a href=\"/sale\">Sale</a>: <s>£30</s> £20, <q>while stocks last</q>. Ends <del>Friday</del><ins>Sunday</ins>.</p>"
+```
+
+#### `cite` `&rest arguments` — macro
+
+Write an HTML cite element.  Arguments are as for `tag`, without the name.
+
+*Example:* Quotations, citations, abbreviations and definitions.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:blockquote (:cite "https://example.com/talk")
+    (h:p () "Make it work, then make it fast."))
+  (h:p () (h:cite () "The Talk") ": " (h:dfn () (h:abbr (:title "Server-sent events") "SSE"))
+     " streams events to a page."))
+;; ⇒ "<blockquote cite=\"https://example.com/talk\"><p>Make it work, then make it fast.</p></blockquote><p><cite>The Talk</cite>: <dfn><abbr title=\"Server-sent events\">SSE</abbr></dfn> streams events to a page.</p>"
+```
+
+#### `q` `&rest arguments` — macro
+
+Write an HTML q element.  Arguments are as for `tag`, without the name.
+
+*Example:* H:A is a plain link, with no callback (`h:anchor` has those).  S is no longer accurate, Q quotes inline, and `ins` and `del` mark what an edit added and took away.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:p () (h:a (:href "/sale") "Sale") ": " (h:s () "£30") " £20, "
+     (h:q () "while stocks last") ". Ends " (h:del () "Friday") (h:ins () "Sunday") "."))
+;; ⇒ "<p><a href=\"/sale\">Sale</a>: <s>£30</s> £20, <q>while stocks last</q>. Ends <del>Friday</del><ins>Sunday</ins>.</p>"
+```
+
+#### `dfn` `&rest arguments` — macro
+
+Write an HTML dfn element.  Arguments are as for `tag`, without the name.
+
+*Example:* Quotations, citations, abbreviations and definitions.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:blockquote (:cite "https://example.com/talk")
+    (h:p () "Make it work, then make it fast."))
+  (h:p () (h:cite () "The Talk") ": " (h:dfn () (h:abbr (:title "Server-sent events") "SSE"))
+     " streams events to a page."))
+;; ⇒ "<blockquote cite=\"https://example.com/talk\"><p>Make it work, then make it fast.</p></blockquote><p><cite>The Talk</cite>: <dfn><abbr title=\"Server-sent events\">SSE</abbr></dfn> streams events to a page.</p>"
+```
+
+#### `abbr` `&rest arguments` — macro
+
+Write an HTML abbr element.  Arguments are as for `tag`, without the name.
+
+*Example:* Quotations, citations, abbreviations and definitions.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:blockquote (:cite "https://example.com/talk")
+    (h:p () "Make it work, then make it fast."))
+  (h:p () (h:cite () "The Talk") ": " (h:dfn () (h:abbr (:title "Server-sent events") "SSE"))
+     " streams events to a page."))
+;; ⇒ "<blockquote cite=\"https://example.com/talk\"><p>Make it work, then make it fast.</p></blockquote><p><cite>The Talk</cite>: <dfn><abbr title=\"Server-sent events\">SSE</abbr></dfn> streams events to a page.</p>"
+```
+
+#### `ruby` `&rest arguments` — macro
+
+Write an HTML ruby element.  Arguments are as for `tag`, without the name.
+
+*Example:* Ruby annotations (with `rp`'s parentheses for browsers without them), and isolating or overriding the direction of text.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:p () (h:ruby () "漢" (h:rp () "(") (h:rt () "kan") (h:rp () ")")))
+  (h:p () "Winner: " (h:bdi () "إيان") ", " (h:bdo (:dir "rtl") "backwards")))
+;; ⇒ "<p><ruby>漢<rp>(</rp><rt>kan</rt><rp>)</rp></ruby></p><p>Winner: <bdi>إيان</bdi>, <bdo dir=\"rtl\">backwards</bdo></p>"
+```
+
+#### `rt` `&rest arguments` — macro
+
+Write an HTML rt element.  Arguments are as for `tag`, without the name.
+
+*Example:* Ruby annotations (with `rp`'s parentheses for browsers without them), and isolating or overriding the direction of text.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:p () (h:ruby () "漢" (h:rp () "(") (h:rt () "kan") (h:rp () ")")))
+  (h:p () "Winner: " (h:bdi () "إيان") ", " (h:bdo (:dir "rtl") "backwards")))
+;; ⇒ "<p><ruby>漢<rp>(</rp><rt>kan</rt><rp>)</rp></ruby></p><p>Winner: <bdi>إيان</bdi>, <bdo dir=\"rtl\">backwards</bdo></p>"
+```
+
+#### `rp` `&rest arguments` — macro
+
+Write an HTML rp element.  Arguments are as for `tag`, without the name.
+
+*Example:* Ruby annotations (with `rp`'s parentheses for browsers without them), and isolating or overriding the direction of text.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:p () (h:ruby () "漢" (h:rp () "(") (h:rt () "kan") (h:rp () ")")))
+  (h:p () "Winner: " (h:bdi () "إيان") ", " (h:bdo (:dir "rtl") "backwards")))
+;; ⇒ "<p><ruby>漢<rp>(</rp><rt>kan</rt><rp>)</rp></ruby></p><p>Winner: <bdi>إيان</bdi>, <bdo dir=\"rtl\">backwards</bdo></p>"
+```
+
+#### `data` `&rest arguments` — macro
+
+Write an HTML data element.  Arguments are as for `tag`, without the name.
+
+*Example:* Every element has a tag under its own name, those named like `cl`'s `time`, `search` and `map` too: written with the package's nickname, `h:time` is the tag and `time` is still `cl`'s.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:search ()
+    (h:p () "Updated " (h:time (:datetime "2026-10-20") "today") ", "
+         (h:data (:value 42) "forty-two") " results."))
+  (h:map (:name "plan")
+    (h:area (:shape "rect" :coords "0,0,10,10" :href "/kitchen" :alt "Kitchen"))))
+;; ⇒ "<search><p>Updated <time datetime=\"2026-10-20\">today</time>, <data value=\"42\">forty-two</data> results.</p></search><map name=\"plan\"><area shape=\"rect\" coords=\"0,0,10,10\" href=\"/kitchen\" alt=\"Kitchen\"></map>"
+```
+
+#### `time` `&rest arguments` — macro
+
+Write an HTML time element.  Arguments are as for `tag`, without the name.
+
+*Example:* Every element has a tag under its own name, those named like `cl`'s `time`, `search` and `map` too: written with the package's nickname, `h:time` is the tag and `time` is still `cl`'s.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:search ()
+    (h:p () "Updated " (h:time (:datetime "2026-10-20") "today") ", "
+         (h:data (:value 42) "forty-two") " results."))
+  (h:map (:name "plan")
+    (h:area (:shape "rect" :coords "0,0,10,10" :href "/kitchen" :alt "Kitchen"))))
+;; ⇒ "<search><p>Updated <time datetime=\"2026-10-20\">today</time>, <data value=\"42\">forty-two</data> results.</p></search><map name=\"plan\"><area shape=\"rect\" coords=\"0,0,10,10\" href=\"/kitchen\" alt=\"Kitchen\"></map>"
+```
+
+#### `code` `&rest arguments` — macro
+
+Write an HTML code element.  Arguments are as for `tag`, without the name.
+
+*Example:* Tags for code and computer text.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:p () "Press " (h:kbd () "Ctrl-C") " to stop " (h:code () "(main)") "; it prints "
+     (h:samp () "Bye") ". Let " (h:var () "n") " be the port.")
+  (h:pre () "(+ 1 2) ⇒ 3"))
+;; ⇒ "<p>Press <kbd>Ctrl-C</kbd> to stop <code>(main)</code>; it prints <samp>Bye</samp>. Let <var>n</var> be the port.</p><pre>(+ 1 2) ⇒ 3</pre>"
+```
+
+#### `var` `&rest arguments` — macro
+
+Write an HTML var element.  Arguments are as for `tag`, without the name.
+
+*Example:* Tags for code and computer text.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:p () "Press " (h:kbd () "Ctrl-C") " to stop " (h:code () "(main)") "; it prints "
+     (h:samp () "Bye") ". Let " (h:var () "n") " be the port.")
+  (h:pre () "(+ 1 2) ⇒ 3"))
+;; ⇒ "<p>Press <kbd>Ctrl-C</kbd> to stop <code>(main)</code>; it prints <samp>Bye</samp>. Let <var>n</var> be the port.</p><pre>(+ 1 2) ⇒ 3</pre>"
+```
+
+#### `samp` `&rest arguments` — macro
+
+Write an HTML samp element.  Arguments are as for `tag`, without the name.
+
+*Example:* Tags for code and computer text.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:p () "Press " (h:kbd () "Ctrl-C") " to stop " (h:code () "(main)") "; it prints "
+     (h:samp () "Bye") ". Let " (h:var () "n") " be the port.")
+  (h:pre () "(+ 1 2) ⇒ 3"))
+;; ⇒ "<p>Press <kbd>Ctrl-C</kbd> to stop <code>(main)</code>; it prints <samp>Bye</samp>. Let <var>n</var> be the port.</p><pre>(+ 1 2) ⇒ 3</pre>"
+```
+
+#### `kbd` `&rest arguments` — macro
+
+Write an HTML kbd element.  Arguments are as for `tag`, without the name.
+
+*Example:* Tags for code and computer text.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:p () "Press " (h:kbd () "Ctrl-C") " to stop " (h:code () "(main)") "; it prints "
+     (h:samp () "Bye") ". Let " (h:var () "n") " be the port.")
+  (h:pre () "(+ 1 2) ⇒ 3"))
+;; ⇒ "<p>Press <kbd>Ctrl-C</kbd> to stop <code>(main)</code>; it prints <samp>Bye</samp>. Let <var>n</var> be the port.</p><pre>(+ 1 2) ⇒ 3</pre>"
+```
+
+#### `sub` `&rest arguments` — macro
+
+Write an HTML sub element.  Arguments are as for `tag`, without the name.
+
+*Example:* Inline text tags for emphasis and position.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:p ()
+    (h:em () "really") " " (h:strong () "must") " " (h:b () "bold") " " (h:i () "aside") " "
+    (h:u () "misspelt") " " (h:small () "fine print") " " (h:mark () "found") " "
+    "x" (h:sup () "2") " H" (h:sub () "2") "O"))
+;; ⇒ "<p><em>really</em> <strong>must</strong> <b>bold</b> <i>aside</i> <u>misspelt</u> <small>fine print</small> <mark>found</mark> x<sup>2</sup> H<sub>2</sub>O</p>"
+```
+
+#### `sup` `&rest arguments` — macro
+
+Write an HTML sup element.  Arguments are as for `tag`, without the name.
+
+*Example:* Inline text tags for emphasis and position.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:p ()
+    (h:em () "really") " " (h:strong () "must") " " (h:b () "bold") " " (h:i () "aside") " "
+    (h:u () "misspelt") " " (h:small () "fine print") " " (h:mark () "found") " "
+    "x" (h:sup () "2") " H" (h:sub () "2") "O"))
+;; ⇒ "<p><em>really</em> <strong>must</strong> <b>bold</b> <i>aside</i> <u>misspelt</u> <small>fine print</small> <mark>found</mark> x<sup>2</sup> H<sub>2</sub>O</p>"
+```
+
+#### `i` `&rest arguments` — macro
+
+Write an HTML i element.  Arguments are as for `tag`, without the name.
+
+*Example:* Inline text tags for emphasis and position.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:p ()
+    (h:em () "really") " " (h:strong () "must") " " (h:b () "bold") " " (h:i () "aside") " "
+    (h:u () "misspelt") " " (h:small () "fine print") " " (h:mark () "found") " "
+    "x" (h:sup () "2") " H" (h:sub () "2") "O"))
+;; ⇒ "<p><em>really</em> <strong>must</strong> <b>bold</b> <i>aside</i> <u>misspelt</u> <small>fine print</small> <mark>found</mark> x<sup>2</sup> H<sub>2</sub>O</p>"
+```
+
+#### `b` `&rest arguments` — macro
+
+Write an HTML b element.  Arguments are as for `tag`, without the name.
+
+*Example:* Inline text tags for emphasis and position.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:p ()
+    (h:em () "really") " " (h:strong () "must") " " (h:b () "bold") " " (h:i () "aside") " "
+    (h:u () "misspelt") " " (h:small () "fine print") " " (h:mark () "found") " "
+    "x" (h:sup () "2") " H" (h:sub () "2") "O"))
+;; ⇒ "<p><em>really</em> <strong>must</strong> <b>bold</b> <i>aside</i> <u>misspelt</u> <small>fine print</small> <mark>found</mark> x<sup>2</sup> H<sub>2</sub>O</p>"
+```
+
+#### `u` `&rest arguments` — macro
+
+Write an HTML u element.  Arguments are as for `tag`, without the name.
+
+*Example:* Inline text tags for emphasis and position.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:p ()
+    (h:em () "really") " " (h:strong () "must") " " (h:b () "bold") " " (h:i () "aside") " "
+    (h:u () "misspelt") " " (h:small () "fine print") " " (h:mark () "found") " "
+    "x" (h:sup () "2") " H" (h:sub () "2") "O"))
+;; ⇒ "<p><em>really</em> <strong>must</strong> <b>bold</b> <i>aside</i> <u>misspelt</u> <small>fine print</small> <mark>found</mark> x<sup>2</sup> H<sub>2</sub>O</p>"
+```
+
+#### `mark` `&rest arguments` — macro
+
+Write an HTML mark element.  Arguments are as for `tag`, without the name.
+
+*Example:* Inline text tags for emphasis and position.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:p ()
+    (h:em () "really") " " (h:strong () "must") " " (h:b () "bold") " " (h:i () "aside") " "
+    (h:u () "misspelt") " " (h:small () "fine print") " " (h:mark () "found") " "
+    "x" (h:sup () "2") " H" (h:sub () "2") "O"))
+;; ⇒ "<p><em>really</em> <strong>must</strong> <b>bold</b> <i>aside</i> <u>misspelt</u> <small>fine print</small> <mark>found</mark> x<sup>2</sup> H<sub>2</sub>O</p>"
+```
+
+#### `bdi` `&rest arguments` — macro
+
+Write an HTML bdi element.  Arguments are as for `tag`, without the name.
+
+*Example:* Ruby annotations (with `rp`'s parentheses for browsers without them), and isolating or overriding the direction of text.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:p () (h:ruby () "漢" (h:rp () "(") (h:rt () "kan") (h:rp () ")")))
+  (h:p () "Winner: " (h:bdi () "إيان") ", " (h:bdo (:dir "rtl") "backwards")))
+;; ⇒ "<p><ruby>漢<rp>(</rp><rt>kan</rt><rp>)</rp></ruby></p><p>Winner: <bdi>إيان</bdi>, <bdo dir=\"rtl\">backwards</bdo></p>"
+```
+
+#### `bdo` `&rest arguments` — macro
+
+Write an HTML bdo element.  Arguments are as for `tag`, without the name.
+
+*Example:* Ruby annotations (with `rp`'s parentheses for browsers without them), and isolating or overriding the direction of text.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:p () (h:ruby () "漢" (h:rp () "(") (h:rt () "kan") (h:rp () ")")))
+  (h:p () "Winner: " (h:bdi () "إيان") ", " (h:bdo (:dir "rtl") "backwards")))
+;; ⇒ "<p><ruby>漢<rp>(</rp><rt>kan</rt><rp>)</rp></ruby></p><p>Winner: <bdi>إيان</bdi>, <bdo dir=\"rtl\">backwards</bdo></p>"
+```
+
+#### `span` `&rest arguments` — macro
+
+Write an HTML span element.  Arguments are as for `tag`, without the name.
+
+*Example:* The first argument of a tag is a plist of attributes, whose values are evaluated.  A `nil` value leaves the attribute out, T writes it bare (a boolean attribute), and a `:class` list is joined with spaces, its NILs dropped.  Values are escaped.
+
+```lisp
+(let ((selected t) (disabled nil))
+  (h:with-canvas-to-string ()
+    (h:div (:id "row-1" :class (list "row" (and selected "selected") nil)
+          :hidden disabled :data-note "say \"hi\"")
+      (h:span (:title "Ready" :aria-busy t) "Go"))))
+;; ⇒ "<div id=\"row-1\" class=\"row selected\" data-note=\"say &quot;hi&quot;\"><span title=\"Ready\" aria-busy>Go</span></div>"
+```
+
+*Example:* The attribute list may be left out when the tag has none and its body does not start with a keyword list; () works too.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:div
+    (h:p "No attributes.")
+    (h:p () "Empty attributes.")
+    (h:span (h:text 3))))
+;; ⇒ "<div><p>No attributes.</p><p>Empty attributes.</p><span>3</span></div>"
+```
+
+*Example:* The document-structure tags.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:header () (h:nav (:aria-label "Site") "Home"))
+  (h:main ()
+    (h:section (:id "news")
+      (h:article () "First post")
+      (h:aside () "Related")))
+  (h:footer () (h:span () "2026")))
+;; ⇒ "<header><nav aria-label=\"Site\">Home</nav></header><main><section id=\"news\"><article>First post</article><aside>Related</aside></section></main><footer><span>2026</span></footer>"
+```
+
+#### `br` `&rest arguments` — macro
+
+Write an HTML br element.  Arguments are as for `tag`, without the name.
+
+*Example:* Figures and images.  `img`, `br` and `hr` are void elements: they take attributes but no body, and have no closing tag.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:figure ()
+    (h:img (:src "/static/boat.png" :alt "A boat" :width 120))
+    (h:figcaption () "Low tide" (h:br) "at noon"))
+  (h:hr))
+;; ⇒ "<figure><img src=\"/static/boat.png\" alt=\"A boat\" width=\"120\"><figcaption>Low tide<br>at noon</figcaption></figure><hr>"
+```
+
+#### `wbr` `&rest arguments` — macro
+
+Write an HTML wbr element.  Arguments are as for `tag`, without the name.
+
+*Example:* Void elements, such as source, track and wbr, get no closing tag.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:picture ()
+    (h:source (:srcset "/cat.avif" :type "image/avif"))
+    (h:img (:src "/cat.jpg" :alt "A cat")))
+  (h:video (:src "/talk.mp4" :controls t)
+    (h:track (:kind "captions" :src "/talk.vtt" :srclang "en")))
+  (h:p () "super" (h:wbr) "califragilistic"))
+;; ⇒ "<picture><source srcset=\"/cat.avif\" type=\"image/avif\"><img src=\"/cat.jpg\" alt=\"A cat\"></picture><video src=\"/talk.mp4\" controls><track kind=\"captions\" src=\"/talk.vtt\" srclang=\"en\"></video><p>super<wbr>califragilistic</p>"
+```
+
+#### `ins` `&rest arguments` — macro
+
+Write an HTML ins element.  Arguments are as for `tag`, without the name.
+
+*Example:* H:A is a plain link, with no callback (`h:anchor` has those).  S is no longer accurate, Q quotes inline, and `ins` and `del` mark what an edit added and took away.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:p () (h:a (:href "/sale") "Sale") ": " (h:s () "£30") " £20, "
+     (h:q () "while stocks last") ". Ends " (h:del () "Friday") (h:ins () "Sunday") "."))
+;; ⇒ "<p><a href=\"/sale\">Sale</a>: <s>£30</s> £20, <q>while stocks last</q>. Ends <del>Friday</del><ins>Sunday</ins>.</p>"
+```
+
+#### `del` `&rest arguments` — macro
+
+Write an HTML del element.  Arguments are as for `tag`, without the name.
+
+*Example:* H:A is a plain link, with no callback (`h:anchor` has those).  S is no longer accurate, Q quotes inline, and `ins` and `del` mark what an edit added and took away.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:p () (h:a (:href "/sale") "Sale") ": " (h:s () "£30") " £20, "
+     (h:q () "while stocks last") ". Ends " (h:del () "Friday") (h:ins () "Sunday") "."))
+;; ⇒ "<p><a href=\"/sale\">Sale</a>: <s>£30</s> £20, <q>while stocks last</q>. Ends <del>Friday</del><ins>Sunday</ins>.</p>"
+```
+
+### Embedded content
+
+#### `picture` `&rest arguments` — macro
+
+Write an HTML picture element.  Arguments are as for `tag`, without the name.
+
+*Example:* Void elements, such as source, track and wbr, get no closing tag.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:picture ()
+    (h:source (:srcset "/cat.avif" :type "image/avif"))
+    (h:img (:src "/cat.jpg" :alt "A cat")))
+  (h:video (:src "/talk.mp4" :controls t)
+    (h:track (:kind "captions" :src "/talk.vtt" :srclang "en")))
+  (h:p () "super" (h:wbr) "califragilistic"))
+;; ⇒ "<picture><source srcset=\"/cat.avif\" type=\"image/avif\"><img src=\"/cat.jpg\" alt=\"A cat\"></picture><video src=\"/talk.mp4\" controls><track kind=\"captions\" src=\"/talk.vtt\" srclang=\"en\"></video><p>super<wbr>califragilistic</p>"
+```
+
+#### `source` `&rest arguments` — macro
+
+Write an HTML source element.  Arguments are as for `tag`, without the name.
+
+*Example:* Void elements, such as source, track and wbr, get no closing tag.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:picture ()
+    (h:source (:srcset "/cat.avif" :type "image/avif"))
+    (h:img (:src "/cat.jpg" :alt "A cat")))
+  (h:video (:src "/talk.mp4" :controls t)
+    (h:track (:kind "captions" :src "/talk.vtt" :srclang "en")))
+  (h:p () "super" (h:wbr) "califragilistic"))
+;; ⇒ "<picture><source srcset=\"/cat.avif\" type=\"image/avif\"><img src=\"/cat.jpg\" alt=\"A cat\"></picture><video src=\"/talk.mp4\" controls><track kind=\"captions\" src=\"/talk.vtt\" srclang=\"en\"></video><p>super<wbr>califragilistic</p>"
+```
+
+#### `img` `&rest arguments` — macro
+
+Write an HTML img element.  Arguments are as for `tag`, without the name.
+
+*Example:* Figures and images.  `img`, `br` and `hr` are void elements: they take attributes but no body, and have no closing tag.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:figure ()
+    (h:img (:src "/static/boat.png" :alt "A boat" :width 120))
+    (h:figcaption () "Low tide" (h:br) "at noon"))
+  (h:hr))
+;; ⇒ "<figure><img src=\"/static/boat.png\" alt=\"A boat\" width=\"120\"><figcaption>Low tide<br>at noon</figcaption></figure><hr>"
+```
+
+#### `iframe` `&rest arguments` — macro
+
+Write an HTML iframe element.  Arguments are as for `tag`, without the name.
+
+*Example:* Embedded content.  `embed` is void; the others' bodies are the fallback.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:iframe (:src "/preview" :title "Preview" :sandbox ""))
+  (h:embed (:src "/chart.svg" :type "image/svg+xml"))
+  (h:object (:data "/report.pdf" :type "application/pdf") (h:a (:href "/report.pdf") "The report"))
+  (h:audio (:src "/bell.ogg" :controls t) "No audio here.")
+  (h:canvas (:width 200 :height 100) "A chart of sales."))
+;; ⇒ "<iframe src=\"/preview\" title=\"Preview\" sandbox=\"\"></iframe><embed src=\"/chart.svg\" type=\"image/svg+xml\"><object data=\"/report.pdf\" type=\"application/pdf\"><a href=\"/report.pdf\">The report</a></object><audio src=\"/bell.ogg\" controls>No audio here.</audio><canvas width=\"200\" height=\"100\">A chart of sales.</canvas>"
+```
+
+#### `embed` `&rest arguments` — macro
+
+Write an HTML embed element.  Arguments are as for `tag`, without the name.
+
+*Example:* Embedded content.  `embed` is void; the others' bodies are the fallback.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:iframe (:src "/preview" :title "Preview" :sandbox ""))
+  (h:embed (:src "/chart.svg" :type "image/svg+xml"))
+  (h:object (:data "/report.pdf" :type "application/pdf") (h:a (:href "/report.pdf") "The report"))
+  (h:audio (:src "/bell.ogg" :controls t) "No audio here.")
+  (h:canvas (:width 200 :height 100) "A chart of sales."))
+;; ⇒ "<iframe src=\"/preview\" title=\"Preview\" sandbox=\"\"></iframe><embed src=\"/chart.svg\" type=\"image/svg+xml\"><object data=\"/report.pdf\" type=\"application/pdf\"><a href=\"/report.pdf\">The report</a></object><audio src=\"/bell.ogg\" controls>No audio here.</audio><canvas width=\"200\" height=\"100\">A chart of sales.</canvas>"
+```
+
+#### `object` `&rest arguments` — macro
+
+Write an HTML object element.  Arguments are as for `tag`, without the name.
+
+*Example:* Embedded content.  `embed` is void; the others' bodies are the fallback.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:iframe (:src "/preview" :title "Preview" :sandbox ""))
+  (h:embed (:src "/chart.svg" :type "image/svg+xml"))
+  (h:object (:data "/report.pdf" :type "application/pdf") (h:a (:href "/report.pdf") "The report"))
+  (h:audio (:src "/bell.ogg" :controls t) "No audio here.")
+  (h:canvas (:width 200 :height 100) "A chart of sales."))
+;; ⇒ "<iframe src=\"/preview\" title=\"Preview\" sandbox=\"\"></iframe><embed src=\"/chart.svg\" type=\"image/svg+xml\"><object data=\"/report.pdf\" type=\"application/pdf\"><a href=\"/report.pdf\">The report</a></object><audio src=\"/bell.ogg\" controls>No audio here.</audio><canvas width=\"200\" height=\"100\">A chart of sales.</canvas>"
+```
+
+#### `video` `&rest arguments` — macro
+
+Write an HTML video element.  Arguments are as for `tag`, without the name.
+
+*Example:* Void elements, such as source, track and wbr, get no closing tag.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:picture ()
+    (h:source (:srcset "/cat.avif" :type "image/avif"))
+    (h:img (:src "/cat.jpg" :alt "A cat")))
+  (h:video (:src "/talk.mp4" :controls t)
+    (h:track (:kind "captions" :src "/talk.vtt" :srclang "en")))
+  (h:p () "super" (h:wbr) "califragilistic"))
+;; ⇒ "<picture><source srcset=\"/cat.avif\" type=\"image/avif\"><img src=\"/cat.jpg\" alt=\"A cat\"></picture><video src=\"/talk.mp4\" controls><track kind=\"captions\" src=\"/talk.vtt\" srclang=\"en\"></video><p>super<wbr>califragilistic</p>"
+```
+
+#### `audio` `&rest arguments` — macro
+
+Write an HTML audio element.  Arguments are as for `tag`, without the name.
+
+*Example:* Embedded content.  `embed` is void; the others' bodies are the fallback.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:iframe (:src "/preview" :title "Preview" :sandbox ""))
+  (h:embed (:src "/chart.svg" :type "image/svg+xml"))
+  (h:object (:data "/report.pdf" :type "application/pdf") (h:a (:href "/report.pdf") "The report"))
+  (h:audio (:src "/bell.ogg" :controls t) "No audio here.")
+  (h:canvas (:width 200 :height 100) "A chart of sales."))
+;; ⇒ "<iframe src=\"/preview\" title=\"Preview\" sandbox=\"\"></iframe><embed src=\"/chart.svg\" type=\"image/svg+xml\"><object data=\"/report.pdf\" type=\"application/pdf\"><a href=\"/report.pdf\">The report</a></object><audio src=\"/bell.ogg\" controls>No audio here.</audio><canvas width=\"200\" height=\"100\">A chart of sales.</canvas>"
+```
+
+#### `track` `&rest arguments` — macro
+
+Write an HTML track element.  Arguments are as for `tag`, without the name.
+
+*Example:* Void elements, such as source, track and wbr, get no closing tag.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:picture ()
+    (h:source (:srcset "/cat.avif" :type "image/avif"))
+    (h:img (:src "/cat.jpg" :alt "A cat")))
+  (h:video (:src "/talk.mp4" :controls t)
+    (h:track (:kind "captions" :src "/talk.vtt" :srclang "en")))
+  (h:p () "super" (h:wbr) "califragilistic"))
+;; ⇒ "<picture><source srcset=\"/cat.avif\" type=\"image/avif\"><img src=\"/cat.jpg\" alt=\"A cat\"></picture><video src=\"/talk.mp4\" controls><track kind=\"captions\" src=\"/talk.vtt\" srclang=\"en\"></video><p>super<wbr>califragilistic</p>"
+```
+
+#### `map` `&rest arguments` — macro
+
+Write an HTML map element.  Arguments are as for `tag`, without the name.
+
+*Example:* Every element has a tag under its own name, those named like `cl`'s `time`, `search` and `map` too: written with the package's nickname, `h:time` is the tag and `time` is still `cl`'s.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:search ()
+    (h:p () "Updated " (h:time (:datetime "2026-10-20") "today") ", "
+         (h:data (:value 42) "forty-two") " results."))
+  (h:map (:name "plan")
+    (h:area (:shape "rect" :coords "0,0,10,10" :href "/kitchen" :alt "Kitchen"))))
+;; ⇒ "<search><p>Updated <time datetime=\"2026-10-20\">today</time>, <data value=\"42\">forty-two</data> results.</p></search><map name=\"plan\"><area shape=\"rect\" coords=\"0,0,10,10\" href=\"/kitchen\" alt=\"Kitchen\"></map>"
+```
+
+#### `area` `&rest arguments` — macro
+
+Write an HTML area element.  Arguments are as for `tag`, without the name.
+
+*Example:* Every element has a tag under its own name, those named like `cl`'s `time`, `search` and `map` too: written with the package's nickname, `h:time` is the tag and `time` is still `cl`'s.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:search ()
+    (h:p () "Updated " (h:time (:datetime "2026-10-20") "today") ", "
+         (h:data (:value 42) "forty-two") " results."))
+  (h:map (:name "plan")
+    (h:area (:shape "rect" :coords "0,0,10,10" :href "/kitchen" :alt "Kitchen"))))
+;; ⇒ "<search><p>Updated <time datetime=\"2026-10-20\">today</time>, <data value=\"42\">forty-two</data> results.</p></search><map name=\"plan\"><area shape=\"rect\" coords=\"0,0,10,10\" href=\"/kitchen\" alt=\"Kitchen\"></map>"
+```
+
+#### `canvas` `&rest arguments` — macro
+
+Write an HTML canvas element.  Arguments are as for `tag`, without the name.
+
+*Example:* Embedded content.  `embed` is void; the others' bodies are the fallback.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:iframe (:src "/preview" :title "Preview" :sandbox ""))
+  (h:embed (:src "/chart.svg" :type "image/svg+xml"))
+  (h:object (:data "/report.pdf" :type "application/pdf") (h:a (:href "/report.pdf") "The report"))
+  (h:audio (:src "/bell.ogg" :controls t) "No audio here.")
+  (h:canvas (:width 200 :height 100) "A chart of sales."))
+;; ⇒ "<iframe src=\"/preview\" title=\"Preview\" sandbox=\"\"></iframe><embed src=\"/chart.svg\" type=\"image/svg+xml\"><object data=\"/report.pdf\" type=\"application/pdf\"><a href=\"/report.pdf\">The report</a></object><audio src=\"/bell.ogg\" controls>No audio here.</audio><canvas width=\"200\" height=\"100\">A chart of sales.</canvas>"
+```
+
+### Tables
+
+#### `table` `&rest arguments` — macro
+
+Write an HTML table element.  Arguments are as for `tag`, without the name.
+
+*Example:* Tables.
+
+```lisp
+(let ((rows '(("Apples" 3) ("Pears" 5))))
+  (h:with-canvas-to-string ()
+    (h:table (:class "stock")
+      (h:caption () "Stock")
+      (h:thead () (h:tr () (h:th (:scope "col") "Fruit") (h:th (:scope "col") "Count")))
+      (h:tbody ()
+        (loop for (fruit count) in rows
+              do (h:tr () (h:td () (h:text fruit)) (h:td () (h:text count)))))
+      (h:tfoot () (h:tr () (h:th () "Total") (h:td () (h:text (reduce #'+ rows :key #'second))))))))
+;; ⇒ "<table class=\"stock\"><caption>Stock</caption><thead><tr><th scope=\"col\">Fruit</th><th scope=\"col\">Count</th></tr></thead><tbody><tr><td>Apples</td><td>3</td></tr><tr><td>Pears</td><td>5</td></tr></tbody><tfoot><tr><th>Total</th><td>8</td></tr></tfoot></table>"
+```
+
+#### `caption` `&rest arguments` — macro
+
+Write an HTML caption element.  Arguments are as for `tag`, without the name.
+
+*Example:* Tables.
+
+```lisp
+(let ((rows '(("Apples" 3) ("Pears" 5))))
+  (h:with-canvas-to-string ()
+    (h:table (:class "stock")
+      (h:caption () "Stock")
+      (h:thead () (h:tr () (h:th (:scope "col") "Fruit") (h:th (:scope "col") "Count")))
+      (h:tbody ()
+        (loop for (fruit count) in rows
+              do (h:tr () (h:td () (h:text fruit)) (h:td () (h:text count)))))
+      (h:tfoot () (h:tr () (h:th () "Total") (h:td () (h:text (reduce #'+ rows :key #'second))))))))
+;; ⇒ "<table class=\"stock\"><caption>Stock</caption><thead><tr><th scope=\"col\">Fruit</th><th scope=\"col\">Count</th></tr></thead><tbody><tr><td>Apples</td><td>3</td></tr><tr><td>Pears</td><td>5</td></tr></tbody><tfoot><tr><th>Total</th><td>8</td></tr></tfoot></table>"
+```
+
+#### `colgroup` `&rest arguments` — macro
+
+Write an HTML colgroup element.  Arguments are as for `tag`, without the name.
+
+*Example:* Columns styled as a whole.  `col` is void.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:table ()
+    (h:colgroup () (h:col (:class "name")) (h:col (:span 2 :class "number")))
+    (h:tr () (h:td () "Figs") (h:td () "3") (h:td () "£1.20"))))
+;; ⇒ "<table><colgroup><col class=\"name\"><col span=\"2\" class=\"number\"></colgroup><tr><td>Figs</td><td>3</td><td>£1.20</td></tr></table>"
+```
+
+#### `col` `&rest arguments` — macro
+
+Write an HTML col element.  Arguments are as for `tag`, without the name.
+
+*Example:* Columns styled as a whole.  `col` is void.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:table ()
+    (h:colgroup () (h:col (:class "name")) (h:col (:span 2 :class "number")))
+    (h:tr () (h:td () "Figs") (h:td () "3") (h:td () "£1.20"))))
+;; ⇒ "<table><colgroup><col class=\"name\"><col span=\"2\" class=\"number\"></colgroup><tr><td>Figs</td><td>3</td><td>£1.20</td></tr></table>"
+```
+
+#### `tbody` `&rest arguments` — macro
+
+Write an HTML tbody element.  Arguments are as for `tag`, without the name.
+
+*Example:* Tables.
+
+```lisp
+(let ((rows '(("Apples" 3) ("Pears" 5))))
+  (h:with-canvas-to-string ()
+    (h:table (:class "stock")
+      (h:caption () "Stock")
+      (h:thead () (h:tr () (h:th (:scope "col") "Fruit") (h:th (:scope "col") "Count")))
+      (h:tbody ()
+        (loop for (fruit count) in rows
+              do (h:tr () (h:td () (h:text fruit)) (h:td () (h:text count)))))
+      (h:tfoot () (h:tr () (h:th () "Total") (h:td () (h:text (reduce #'+ rows :key #'second))))))))
+;; ⇒ "<table class=\"stock\"><caption>Stock</caption><thead><tr><th scope=\"col\">Fruit</th><th scope=\"col\">Count</th></tr></thead><tbody><tr><td>Apples</td><td>3</td></tr><tr><td>Pears</td><td>5</td></tr></tbody><tfoot><tr><th>Total</th><td>8</td></tr></tfoot></table>"
+```
+
+#### `thead` `&rest arguments` — macro
+
+Write an HTML thead element.  Arguments are as for `tag`, without the name.
+
+*Example:* Tables.
+
+```lisp
+(let ((rows '(("Apples" 3) ("Pears" 5))))
+  (h:with-canvas-to-string ()
+    (h:table (:class "stock")
+      (h:caption () "Stock")
+      (h:thead () (h:tr () (h:th (:scope "col") "Fruit") (h:th (:scope "col") "Count")))
+      (h:tbody ()
+        (loop for (fruit count) in rows
+              do (h:tr () (h:td () (h:text fruit)) (h:td () (h:text count)))))
+      (h:tfoot () (h:tr () (h:th () "Total") (h:td () (h:text (reduce #'+ rows :key #'second))))))))
+;; ⇒ "<table class=\"stock\"><caption>Stock</caption><thead><tr><th scope=\"col\">Fruit</th><th scope=\"col\">Count</th></tr></thead><tbody><tr><td>Apples</td><td>3</td></tr><tr><td>Pears</td><td>5</td></tr></tbody><tfoot><tr><th>Total</th><td>8</td></tr></tfoot></table>"
+```
+
+#### `tfoot` `&rest arguments` — macro
+
+Write an HTML tfoot element.  Arguments are as for `tag`, without the name.
+
+*Example:* Tables.
+
+```lisp
+(let ((rows '(("Apples" 3) ("Pears" 5))))
+  (h:with-canvas-to-string ()
+    (h:table (:class "stock")
+      (h:caption () "Stock")
+      (h:thead () (h:tr () (h:th (:scope "col") "Fruit") (h:th (:scope "col") "Count")))
+      (h:tbody ()
+        (loop for (fruit count) in rows
+              do (h:tr () (h:td () (h:text fruit)) (h:td () (h:text count)))))
+      (h:tfoot () (h:tr () (h:th () "Total") (h:td () (h:text (reduce #'+ rows :key #'second))))))))
+;; ⇒ "<table class=\"stock\"><caption>Stock</caption><thead><tr><th scope=\"col\">Fruit</th><th scope=\"col\">Count</th></tr></thead><tbody><tr><td>Apples</td><td>3</td></tr><tr><td>Pears</td><td>5</td></tr></tbody><tfoot><tr><th>Total</th><td>8</td></tr></tfoot></table>"
+```
+
+#### `tr` `&rest arguments` — macro
+
+Write an HTML tr element.  Arguments are as for `tag`, without the name.
+
+*Example:* Tables.
+
+```lisp
+(let ((rows '(("Apples" 3) ("Pears" 5))))
+  (h:with-canvas-to-string ()
+    (h:table (:class "stock")
+      (h:caption () "Stock")
+      (h:thead () (h:tr () (h:th (:scope "col") "Fruit") (h:th (:scope "col") "Count")))
+      (h:tbody ()
+        (loop for (fruit count) in rows
+              do (h:tr () (h:td () (h:text fruit)) (h:td () (h:text count)))))
+      (h:tfoot () (h:tr () (h:th () "Total") (h:td () (h:text (reduce #'+ rows :key #'second))))))))
+;; ⇒ "<table class=\"stock\"><caption>Stock</caption><thead><tr><th scope=\"col\">Fruit</th><th scope=\"col\">Count</th></tr></thead><tbody><tr><td>Apples</td><td>3</td></tr><tr><td>Pears</td><td>5</td></tr></tbody><tfoot><tr><th>Total</th><td>8</td></tr></tfoot></table>"
+```
+
+#### `td` `&rest arguments` — macro
+
+Write an HTML td element.  Arguments are as for `tag`, without the name.
+
+*Example:* Tables.
+
+```lisp
+(let ((rows '(("Apples" 3) ("Pears" 5))))
+  (h:with-canvas-to-string ()
+    (h:table (:class "stock")
+      (h:caption () "Stock")
+      (h:thead () (h:tr () (h:th (:scope "col") "Fruit") (h:th (:scope "col") "Count")))
+      (h:tbody ()
+        (loop for (fruit count) in rows
+              do (h:tr () (h:td () (h:text fruit)) (h:td () (h:text count)))))
+      (h:tfoot () (h:tr () (h:th () "Total") (h:td () (h:text (reduce #'+ rows :key #'second))))))))
+;; ⇒ "<table class=\"stock\"><caption>Stock</caption><thead><tr><th scope=\"col\">Fruit</th><th scope=\"col\">Count</th></tr></thead><tbody><tr><td>Apples</td><td>3</td></tr><tr><td>Pears</td><td>5</td></tr></tbody><tfoot><tr><th>Total</th><td>8</td></tr></tfoot></table>"
+```
+
+#### `th` `&rest arguments` — macro
+
+Write an HTML th element.  Arguments are as for `tag`, without the name.
+
+*Example:* Tables.
+
+```lisp
+(let ((rows '(("Apples" 3) ("Pears" 5))))
+  (h:with-canvas-to-string ()
+    (h:table (:class "stock")
+      (h:caption () "Stock")
+      (h:thead () (h:tr () (h:th (:scope "col") "Fruit") (h:th (:scope "col") "Count")))
+      (h:tbody ()
+        (loop for (fruit count) in rows
+              do (h:tr () (h:td () (h:text fruit)) (h:td () (h:text count)))))
+      (h:tfoot () (h:tr () (h:th () "Total") (h:td () (h:text (reduce #'+ rows :key #'second))))))))
+;; ⇒ "<table class=\"stock\"><caption>Stock</caption><thead><tr><th scope=\"col\">Fruit</th><th scope=\"col\">Count</th></tr></thead><tbody><tr><td>Apples</td><td>3</td></tr><tr><td>Pears</td><td>5</td></tr></tbody><tfoot><tr><th>Total</th><td>8</td></tr></tfoot></table>"
+```
+
+### Forms, written plainly
+
+#### `fieldset` `&rest arguments` — macro
+
+Write an HTML fieldset element.  Arguments are as for `tag`, without the name.
+
+*Example:* Grouping and labelling form controls.  The controls themselves are brushes, such as `text-input`.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:fieldset ()
+    (h:legend () "Contact")
+    (h:label (:for "email") "Email")
+    (h:text-input (:id "email" :name "email"))))
+;; ⇒ "<fieldset><legend>Contact</legend><label for=\"email\">Email</label><input type=\"text\" name=\"email\" id=\"email\"></fieldset>"
+```
+
+#### `legend` `&rest arguments` — macro
+
+Write an HTML legend element.  Arguments are as for `tag`, without the name.
+
+*Example:* Grouping and labelling form controls.  The controls themselves are brushes, such as `text-input`.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:fieldset ()
+    (h:legend () "Contact")
+    (h:label (:for "email") "Email")
+    (h:text-input (:id "email" :name "email"))))
+;; ⇒ "<fieldset><legend>Contact</legend><label for=\"email\">Email</label><input type=\"text\" name=\"email\" id=\"email\"></fieldset>"
+```
+
+#### `label` `&rest arguments` — macro
+
+Write an HTML label element.  Arguments are as for `tag`, without the name.
+
+*Example:* Grouping and labelling form controls.  The controls themselves are brushes, such as `text-input`.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:fieldset ()
+    (h:legend () "Contact")
+    (h:label (:for "email") "Email")
+    (h:text-input (:id "email" :name "email"))))
+;; ⇒ "<fieldset><legend>Contact</legend><label for=\"email\">Email</label><input type=\"text\" name=\"email\" id=\"email\"></fieldset>"
+```
+
+#### `input` `&rest arguments` — macro
+
+Write an HTML input element.  Arguments are as for `tag`, without the name.
+
+*Example:* Form controls written plainly, with no callback, for a form that posts somewhere else.  The brushes (`h:text-input`, `h:select-list`, …) are the ones whose values come back to Lisp.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:input (:name "q" :list "places" :placeholder "Town"))
+  (h:datalist (:id "places") (h:option (:value "Leeds")) (h:option (:value "York")))
+  (h:select (:name "fruit")
+    (h:optgroup (:label "Stone fruit") (h:option (:value "plum" :selected t) "Plum")))
+  (h:textarea (:name "note" :rows 2) "Hello"))
+;; ⇒ "<input name=\"q\" list=\"places\" placeholder=\"Town\"><datalist id=\"places\"><option value=\"Leeds\"></option><option value=\"York\"></option></datalist><select name=\"fruit\"><optgroup label=\"Stone fruit\"><option value=\"plum\" selected>Plum</option></optgroup></select><textarea name=\"note\" rows=\"2\">Hello</textarea>"
+```
+
+#### `select` `&rest arguments` — macro
+
+Write an HTML select element.  Arguments are as for `tag`, without the name.
+
+*Example:* Form controls written plainly, with no callback, for a form that posts somewhere else.  The brushes (`h:text-input`, `h:select-list`, …) are the ones whose values come back to Lisp.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:input (:name "q" :list "places" :placeholder "Town"))
+  (h:datalist (:id "places") (h:option (:value "Leeds")) (h:option (:value "York")))
+  (h:select (:name "fruit")
+    (h:optgroup (:label "Stone fruit") (h:option (:value "plum" :selected t) "Plum")))
+  (h:textarea (:name "note" :rows 2) "Hello"))
+;; ⇒ "<input name=\"q\" list=\"places\" placeholder=\"Town\"><datalist id=\"places\"><option value=\"Leeds\"></option><option value=\"York\"></option></datalist><select name=\"fruit\"><optgroup label=\"Stone fruit\"><option value=\"plum\" selected>Plum</option></optgroup></select><textarea name=\"note\" rows=\"2\">Hello</textarea>"
+```
+
+#### `datalist` `&rest arguments` — macro
+
+Write an HTML datalist element.  Arguments are as for `tag`, without the name.
+
+*Example:* Form controls written plainly, with no callback, for a form that posts somewhere else.  The brushes (`h:text-input`, `h:select-list`, …) are the ones whose values come back to Lisp.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:input (:name "q" :list "places" :placeholder "Town"))
+  (h:datalist (:id "places") (h:option (:value "Leeds")) (h:option (:value "York")))
+  (h:select (:name "fruit")
+    (h:optgroup (:label "Stone fruit") (h:option (:value "plum" :selected t) "Plum")))
+  (h:textarea (:name "note" :rows 2) "Hello"))
+;; ⇒ "<input name=\"q\" list=\"places\" placeholder=\"Town\"><datalist id=\"places\"><option value=\"Leeds\"></option><option value=\"York\"></option></datalist><select name=\"fruit\"><optgroup label=\"Stone fruit\"><option value=\"plum\" selected>Plum</option></optgroup></select><textarea name=\"note\" rows=\"2\">Hello</textarea>"
+```
+
+#### `optgroup` `&rest arguments` — macro
+
+Write an HTML optgroup element.  Arguments are as for `tag`, without the name.
+
+*Example:* Form controls written plainly, with no callback, for a form that posts somewhere else.  The brushes (`h:text-input`, `h:select-list`, …) are the ones whose values come back to Lisp.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:input (:name "q" :list "places" :placeholder "Town"))
+  (h:datalist (:id "places") (h:option (:value "Leeds")) (h:option (:value "York")))
+  (h:select (:name "fruit")
+    (h:optgroup (:label "Stone fruit") (h:option (:value "plum" :selected t) "Plum")))
+  (h:textarea (:name "note" :rows 2) "Hello"))
+;; ⇒ "<input name=\"q\" list=\"places\" placeholder=\"Town\"><datalist id=\"places\"><option value=\"Leeds\"></option><option value=\"York\"></option></datalist><select name=\"fruit\"><optgroup label=\"Stone fruit\"><option value=\"plum\" selected>Plum</option></optgroup></select><textarea name=\"note\" rows=\"2\">Hello</textarea>"
+```
+
+#### `option` `&rest arguments` — macro
+
+Write an HTML option element.  Arguments are as for `tag`, without the name.
+
+*Example:* Form controls written plainly, with no callback, for a form that posts somewhere else.  The brushes (`h:text-input`, `h:select-list`, …) are the ones whose values come back to Lisp.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:input (:name "q" :list "places" :placeholder "Town"))
+  (h:datalist (:id "places") (h:option (:value "Leeds")) (h:option (:value "York")))
+  (h:select (:name "fruit")
+    (h:optgroup (:label "Stone fruit") (h:option (:value "plum" :selected t) "Plum")))
+  (h:textarea (:name "note" :rows 2) "Hello"))
+;; ⇒ "<input name=\"q\" list=\"places\" placeholder=\"Town\"><datalist id=\"places\"><option value=\"Leeds\"></option><option value=\"York\"></option></datalist><select name=\"fruit\"><optgroup label=\"Stone fruit\"><option value=\"plum\" selected>Plum</option></optgroup></select><textarea name=\"note\" rows=\"2\">Hello</textarea>"
+```
+
+#### `selectedcontent` `&rest arguments` — macro
+
+Write an HTML selectedcontent element.  Arguments are as for `tag`, without the name.
+
+*Example:* In a customizable select, `selectedcontent` shows a copy of the chosen option inside the button.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:select (:name "pet")
+    (h:button () (h:selectedcontent))
+    (h:option (:value "cat") "🐈 Cat")
+    (h:option (:value "dog") "🐕 Dog")))
+;; ⇒ "<select name=\"pet\"><button type=\"button\"><selectedcontent></selectedcontent></button><option value=\"cat\">🐈 Cat</option><option value=\"dog\">🐕 Dog</option></select>"
+```
+
+#### `textarea` `&rest arguments` — macro
+
+Write an HTML textarea element.  Arguments are as for `tag`, without the name.
+
+*Example:* Form controls written plainly, with no callback, for a form that posts somewhere else.  The brushes (`h:text-input`, `h:select-list`, …) are the ones whose values come back to Lisp.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:input (:name "q" :list "places" :placeholder "Town"))
+  (h:datalist (:id "places") (h:option (:value "Leeds")) (h:option (:value "York")))
+  (h:select (:name "fruit")
+    (h:optgroup (:label "Stone fruit") (h:option (:value "plum" :selected t) "Plum")))
+  (h:textarea (:name "note" :rows 2) "Hello"))
+;; ⇒ "<input name=\"q\" list=\"places\" placeholder=\"Town\"><datalist id=\"places\"><option value=\"Leeds\"></option><option value=\"York\"></option></datalist><select name=\"fruit\"><optgroup label=\"Stone fruit\"><option value=\"plum\" selected>Plum</option></optgroup></select><textarea name=\"note\" rows=\"2\">Hello</textarea>"
+```
+
+#### `output` `&rest arguments` — macro
+
+Write an HTML output element.  Arguments are as for `tag`, without the name.
+
+*Example:* A calculation's result, progress towards finishing, and a measurement within a range.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:p () "Total: " (h:output (:for "price quantity") "£6"))
+  (h:progress (:value 3 :max 10) "3 of 10")
+  (h:meter (:value 0.7 :low 0.2 :high 0.8) "70%"))
+;; ⇒ "<p>Total: <output for=\"price quantity\">£6</output></p><progress value=\"3\" max=\"10\">3 of 10</progress><meter value=\"0.7\" low=\"0.2\" high=\"0.8\">70%</meter>"
+```
+
+#### `progress` `&rest arguments` — macro
+
+Write an HTML progress element.  Arguments are as for `tag`, without the name.
+
+*Example:* A calculation's result, progress towards finishing, and a measurement within a range.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:p () "Total: " (h:output (:for "price quantity") "£6"))
+  (h:progress (:value 3 :max 10) "3 of 10")
+  (h:meter (:value 0.7 :low 0.2 :high 0.8) "70%"))
+;; ⇒ "<p>Total: <output for=\"price quantity\">£6</output></p><progress value=\"3\" max=\"10\">3 of 10</progress><meter value=\"0.7\" low=\"0.2\" high=\"0.8\">70%</meter>"
+```
+
+#### `meter` `&rest arguments` — macro
+
+Write an HTML meter element.  Arguments are as for `tag`, without the name.
+
+*Example:* A calculation's result, progress towards finishing, and a measurement within a range.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:p () "Total: " (h:output (:for "price quantity") "£6"))
+  (h:progress (:value 3 :max 10) "3 of 10")
+  (h:meter (:value 0.7 :low 0.2 :high 0.8) "70%"))
+;; ⇒ "<p>Total: <output for=\"price quantity\">£6</output></p><progress value=\"3\" max=\"10\">3 of 10</progress><meter value=\"0.7\" low=\"0.2\" high=\"0.8\">70%</meter>"
+```
+
+### Interactive
+
+#### `details` `&rest arguments` — macro
+
+Write an HTML details element.  Arguments are as for `tag`, without the name.
+
+*Example:* A disclosure box the browser opens and closes by itself; `:open` T starts it open.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:details (:open t)
+    (h:summary () "More")
+    (h:p () "Hidden until opened.")))
+;; ⇒ "<details open><summary>More</summary><p>Hidden until opened.</p></details>"
+```
+
+#### `summary` `&rest arguments` — macro
+
+Write an HTML summary element.  Arguments are as for `tag`, without the name.
+
+*Example:* A disclosure box the browser opens and closes by itself; `:open` T starts it open.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:details (:open t)
+    (h:summary () "More")
+    (h:p () "Hidden until opened.")))
+;; ⇒ "<details open><summary>More</summary><p>Hidden until opened.</p></details>"
+```
+
+#### `dialog` `&rest arguments` — macro
+
+Write an HTML dialog element.  Arguments are as for `tag`, without the name.
+
+*Example:* A dialog box; `:open` shows it.  `call-modal` and `show-modal` draw Littoral's own.
+
+```lisp
+(h:with-canvas-to-string ()
+  (h:dialog (:open t :aria-labelledby "saved")
+    (h:h2 (:id "saved") "Saved")
+    (h:p () "Your changes are saved.")))
+;; ⇒ "<dialog open aria-labelledby=\"saved\"><h2 id=\"saved\">Saved</h2><p>Your changes are saved.</p></dialog>"
 ```
 
 ### Brushes with callbacks
@@ -11701,8 +12565,8 @@ aria-label; other attributes are written as given.
 (defclass counter (component)
   ((count :initform 0 :accessor count-of)))
 (defmethod render ((self counter))
-  (p () (text (count-of self)))
-  (anchor (:callback (lambda () (incf (count-of self)))) "Add one"))
+  (h:p () (h:text (count-of self)))
+  (h:anchor (:callback (lambda () (incf (count-of self)))) "Add one"))
 (with-fresh-applications (("/counter" 'counter :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/counter")
@@ -11715,8 +12579,8 @@ aria-label; other attributes are written as given.
 *Example:* Without a callback, `:href` makes a plain link, and other attributes are written as given.  `:label` becomes aria-label.
 
 ```lisp
-(with-canvas-to-string ()
-  (anchor (:href "https://sbcl.org/" :rel "external" :label "SBCL's site") "SBCL"))
+(h:with-canvas-to-string ()
+  (h:anchor (:href "https://sbcl.org/" :rel "external" :label "SBCL's site") "SBCL"))
 ;; ⇒ "<a href=\"https://sbcl.org/\" rel=\"external\" aria-label=\"SBCL&#39;s site\">SBCL</a>"
 ```
 
@@ -11733,14 +12597,14 @@ when the form is submitted without a button; `:multipart` T allows `file-input`.
   ((name :initform "" :accessor name-of)
    (greeting :initform nil :accessor greeting-of)))
 (defmethod render ((self greeter))
-  (form ()
-    (label (:for "name") "Name")
-    (text-input (:id "name" :value (name-of self)
+  (h:form ()
+    (h:label (:for "name") "Name")
+    (h:text-input (:id "name" :value (name-of self)
                  :callback (lambda (value) (setf (name-of self) value))))
-    (submit-button (:callback (lambda () (setf (greeting-of self) (format nil "Hello, ~A!" (name-of self)))))
+    (h:submit-button (:callback (lambda () (setf (greeting-of self) (format nil "Hello, ~A!" (name-of self)))))
       "Greet"))
   (when (greeting-of self)
-    (p () (text (greeting-of self)))))
+    (h:p () (h:text (greeting-of self)))))
 (with-fresh-applications (("/greet" 'greeter :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/greet")
@@ -11757,10 +12621,10 @@ when the form is submitted without a button; `:multipart` T allows `file-input`.
   ((query :initform "" :accessor query-of)
    (results :initform nil :accessor results-of)))
 (defmethod render ((self search-box))
-  (form (:role "search" :default-action (lambda () (setf (results-of self) (format nil "Results for ~A" (query-of self)))))
-    (text-input (:id "q" :callback (lambda (value) (setf (query-of self) value))))
-    (submit-button (:callback (lambda () (setf (results-of self) "Feeling lucky"))) "Lucky"))
-  (p () (text (results-of self))))
+  (h:form (:role "search" :default-action (lambda () (setf (results-of self) (format nil "Results for ~A" (query-of self)))))
+    (h:text-input (:id "q" :callback (lambda (value) (setf (query-of self) value))))
+    (h:submit-button (:callback (lambda () (setf (results-of self) "Feeling lucky"))) "Lucky"))
+  (h:p () (h:text (results-of self))))
 (with-fresh-applications (("/search" 'search-box :mode :deployment))
   (let ((b (visit (make-instance 'browser) "/search")))
     (fill-in b "q" "lisp")
@@ -11781,14 +12645,14 @@ without one, the field is named `:name`.
   ((name :initform "" :accessor name-of)
    (greeting :initform nil :accessor greeting-of)))
 (defmethod render ((self greeter))
-  (form ()
-    (label (:for "name") "Name")
-    (text-input (:id "name" :value (name-of self)
+  (h:form ()
+    (h:label (:for "name") "Name")
+    (h:text-input (:id "name" :value (name-of self)
                  :callback (lambda (value) (setf (name-of self) value))))
-    (submit-button (:callback (lambda () (setf (greeting-of self) (format nil "Hello, ~A!" (name-of self)))))
+    (h:submit-button (:callback (lambda () (setf (greeting-of self) (format nil "Hello, ~A!" (name-of self)))))
       "Greet"))
   (when (greeting-of self)
-    (p () (text (greeting-of self)))))
+    (h:p () (h:text (greeting-of self)))))
 (with-fresh-applications (("/greet" 'greeter :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/greet")
@@ -11810,14 +12674,14 @@ submitted string.
   ((password :initform nil :accessor password-of)
    (outcome :initform "" :accessor outcome-of)))
 (defmethod render ((self sign-in))
-  (form ()
-    (password-input (:id "password" :autocomplete "current-password"
+  (h:form ()
+    (h:password-input (:id "password" :autocomplete "current-password"
                      :callback (lambda (value) (setf (password-of self) value))))
-    (submit-button (:callback (lambda () (setf (outcome-of self) (format nil "Got ~D characters." (length (password-of self))))))
+    (h:submit-button (:callback (lambda () (setf (outcome-of self) (format nil "Got ~D characters." (length (password-of self))))))
       "Sign in")
-    (cancel-button (:callback (lambda () (setf (outcome-of self) (format nil "Cancelled; password ~S." (password-of self)))))
+    (h:cancel-button (:callback (lambda () (setf (outcome-of self) (format nil "Cancelled; password ~S." (password-of self)))))
       "Cancel"))
-  (p () (text (outcome-of self))))
+  (h:p () (h:text (outcome-of self))))
 (with-fresh-applications (("/sign-in" 'sign-in :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/sign-in")
@@ -11841,11 +12705,11 @@ submission does not parse.
 (defclass quantity (component)
   ((amount :initform 1 :accessor amount-of)))
 (defmethod render ((self quantity))
-  (form ()
-    (number-input (:id "amount" :min 1 :value (or (amount-of self) "")
+  (h:form ()
+    (h:number-input (:id "amount" :min 1 :value (or (amount-of self) "")
                    :callback (lambda (n) (setf (amount-of self) n))))
-    (submit-button () "Update"))
-  (p () (text (if (amount-of self) (format nil "~D in the basket" (amount-of self)) "Not a number"))))
+    (h:submit-button () "Update"))
+  (h:p () (h:text (if (amount-of self) (format nil "~D in the basket" (amount-of self)) "Not a number"))))
 (with-fresh-applications (("/quantity" 'quantity :mode :deployment))
   (let ((b (make-instance 'browser)) (seen '()))
     (visit b "/quantity")
@@ -11868,11 +12732,11 @@ A hidden field.  `:callback` receives its `:value` when the form is submitted.
   ((version :initform 7 :accessor version-of)
    (submitted :initform nil :accessor submitted-of)))
 (defmethod render ((self versioned-note))
-  (form ()
-    (hidden-input (:value (version-of self)
+  (h:form ()
+    (h:hidden-input (:value (version-of self)
                    :callback (lambda (value) (setf (submitted-of self) value))))
-    (submit-button () "Save"))
-  (p () "Submitted version: " (text (submitted-of self))))
+    (h:submit-button () "Save"))
+  (h:p () "Submitted version: " (h:text (submitted-of self))))
 (with-fresh-applications (("/note" 'versioned-note :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/note")
@@ -11891,11 +12755,11 @@ A multi-line text field showing `:value`.  `:callback` receives the submitted st
 (defclass notes (component)
   ((body :initform "Bring <cake>" :accessor body-of)))
 (defmethod render ((self notes))
-  (form ()
-    (text-area (:id "body" :rows 4 :value (body-of self)
+  (h:form ()
+    (h:text-area (:id "body" :rows 4 :value (body-of self)
                 :callback (lambda (value) (setf (body-of self) value))))
-    (submit-button () "Save"))
-  (p () (text (length (body-of self))) " characters"))
+    (h:submit-button () "Save"))
+  (h:p () (h:text (length (body-of self))) " characters"))
 (with-fresh-applications (("/notes" 'notes :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/notes")
@@ -11917,13 +12781,13 @@ A checkbox.  `:value` is its state; `:callback` receives T or `nil`.
   ((newsletter :initform nil :accessor newsletter-p)
    (digest :initform t :accessor digest-p)))
 (defmethod render ((self preferences))
-  (form ()
-    (label () (checkbox (:value (newsletter-p self) :callback (lambda (on) (setf (newsletter-p self) on))))
+  (h:form ()
+    (h:label () (h:checkbox (:value (newsletter-p self) :callback (lambda (on) (setf (newsletter-p self) on))))
       "Newsletter")
-    (label () (checkbox (:value (digest-p self) :callback (lambda (on) (setf (digest-p self) on))))
+    (h:label () (h:checkbox (:value (digest-p self) :callback (lambda (on) (setf (digest-p self) on))))
       "Weekly digest")
-    (submit-button () "Save"))
-  (p () (text (list (newsletter-p self) (digest-p self)))))
+    (h:submit-button () "Save"))
+  (h:p () (h:text (list (newsletter-p self) (digest-p self)))))
 (with-fresh-applications (("/prefs" 'preferences :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/prefs")
@@ -11946,13 +12810,13 @@ A drop-down of `:items` shown through `:labels` (a function, default `princ`).
 (defclass shipping (component)
   ((carrier :initform :post :accessor carrier-of)))
 (defmethod render ((self shipping))
-  (form ()
-    (select-list (:id "method" :items '(:post :courier :collect)
+  (h:form ()
+    (h:select-list (:id "method" :items '(:post :courier :collect)
                   :labels (lambda (item) (string-capitalize item))
                   :selected (carrier-of self)
                   :callback (lambda (item) (setf (carrier-of self) item))))
-    (submit-button () "Choose"))
-  (p () "Shipping by " (text (string-downcase (carrier-of self)))))
+    (h:submit-button () "Choose"))
+  (h:p () "Shipping by " (h:text (string-downcase (carrier-of self)))))
 (with-fresh-applications (("/ship" 'shipping :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/ship")
@@ -11969,8 +12833,8 @@ Radio buttons, one per item of `:items`; otherwise like `select-list`.
 *Example:* One radio button per item, inside a span of class lt-radio-group; it takes the same keywords as `select-list`.  Outside a request, as here, callback names are numbered from 1.
 
 ```lisp
-(with-canvas-to-string ()
-  (radio-group (:items '(1 2 3) :selected 2 :labels (lambda (n) (format nil "~D star~:P" n))
+(h:with-canvas-to-string ()
+  (h:radio-group (:items '(1 2 3) :selected 2 :labels (lambda (n) (format nil "~D star~:P" n))
                 :callback (lambda (n) (print n)))))
 ;; ⇒ "<span class=\"lt-radio-group\"><label><input type=\"radio\" name=\"1\" value=\"0\">1 star</label><label><input type=\"radio\" name=\"1\" value=\"1\" checked>2 stars</label><label><input type=\"radio\" name=\"1\" value=\"2\">3 stars</label></span>"
 ```
@@ -11981,12 +12845,12 @@ Radio buttons, one per item of `:items`; otherwise like `select-list`.
 (defclass size-picker (component)
   ((size :initform :small :accessor size-of)))
 (defmethod render ((self size-picker))
-  (form ()
-    (radio-group (:id "size" :items '(:small :medium :large) :selected (size-of self)
+  (h:form ()
+    (h:radio-group (:id "size" :items '(:small :medium :large) :selected (size-of self)
                   :labels #'string-downcase
                   :callback (lambda (size) (setf (size-of self) size))))
-    (submit-button () "Pick"))
-  (p () "Size: " (text (size-of self))))
+    (h:submit-button () "Pick"))
+  (h:p () "Size: " (h:text (size-of self))))
 (with-fresh-applications (("/size" 'size-picker :mode :deployment))
   (let ((b (visit (make-instance 'browser) "/size")))
     (choose-radio b "large")
@@ -12006,14 +12870,14 @@ A button submitting its form, then running the thunk `:callback`.
   ((name :initform "" :accessor name-of)
    (greeting :initform nil :accessor greeting-of)))
 (defmethod render ((self greeter))
-  (form ()
-    (label (:for "name") "Name")
-    (text-input (:id "name" :value (name-of self)
+  (h:form ()
+    (h:label (:for "name") "Name")
+    (h:text-input (:id "name" :value (name-of self)
                  :callback (lambda (value) (setf (name-of self) value))))
-    (submit-button (:callback (lambda () (setf (greeting-of self) (format nil "Hello, ~A!" (name-of self)))))
+    (h:submit-button (:callback (lambda () (setf (greeting-of self) (format nil "Hello, ~A!" (name-of self)))))
       "Greet"))
   (when (greeting-of self)
-    (p () (text (greeting-of self)))))
+    (h:p () (h:text (greeting-of self)))))
 (with-fresh-applications (("/greet" 'greeter :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/greet")
@@ -12035,14 +12899,14 @@ fields are not applied.
   ((password :initform nil :accessor password-of)
    (outcome :initform "" :accessor outcome-of)))
 (defmethod render ((self sign-in))
-  (form ()
-    (password-input (:id "password" :autocomplete "current-password"
+  (h:form ()
+    (h:password-input (:id "password" :autocomplete "current-password"
                      :callback (lambda (value) (setf (password-of self) value))))
-    (submit-button (:callback (lambda () (setf (outcome-of self) (format nil "Got ~D characters." (length (password-of self))))))
+    (h:submit-button (:callback (lambda () (setf (outcome-of self) (format nil "Got ~D characters." (length (password-of self))))))
       "Sign in")
-    (cancel-button (:callback (lambda () (setf (outcome-of self) (format nil "Cancelled; password ~S." (password-of self)))))
+    (h:cancel-button (:callback (lambda () (setf (outcome-of self) (format nil "Cancelled; password ~S." (password-of self)))))
       "Cancel"))
-  (p () (text (outcome-of self))))
+  (h:p () (h:text (outcome-of self))))
 (with-fresh-applications (("/sign-in" 'sign-in :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/sign-in")
@@ -12065,8 +12929,8 @@ A button that submits nothing; give it an AJAX `:on-click`.
 (defclass likes (updatable component)
   ((count :initform 0 :accessor count-of)))
 (defmethod render ((self likes))
-  (span () (text (count-of self)) " likes")
-  (button (:class "like" :on-click (ajax :callback (lambda () (incf (count-of self))) :update self))
+  (h:span () (h:text (count-of self)) " likes")
+  (h:button (:class "like" :on-click (ajax :callback (lambda () (incf (count-of self))) :update self))
     "Like"))
 (with-fresh-applications (("/likes" 'likes :mode :deployment))
   (let* ((b (visit (make-instance 'browser) "/likes"))
@@ -12089,16 +12953,16 @@ when no file was chosen.  The enclosing `form` needs `:multipart` T.
 (defclass uploader (component)
   ((report :initform "Nothing yet" :accessor report-of)))
 (defmethod render ((self uploader))
-  (form (:multipart t)
-    (file-input (:id "file" :accept "text/*"
+  (h:form (:multipart t)
+    (h:file-input (:id "file" :accept "text/*"
                  :callback (lambda (file)
                              (setf (report-of self)
                                    (format nil "~A (~A): ~D bytes, starting ~S"
-                                           (file-name file) (file-content-type file)
-                                           (length (file-contents file))
-                                           (code-char (aref (file-contents file) 0)))))))
-    (submit-button () "Upload"))
-  (p () (text (report-of self))))
+                                           (h:file-name file) (h:file-content-type file)
+                                           (length (h:file-contents file))
+                                           (code-char (aref (h:file-contents file) 0)))))))
+    (h:submit-button () "Upload"))
+  (h:p () (h:text (report-of self))))
 (with-fresh-applications (("/upload" 'uploader :mode :deployment))
   (let ((b (visit (make-instance 'browser) "/upload")))
     (attach-file b "file" "notes.txt" "text/plain" "Hello, world")
@@ -12117,16 +12981,16 @@ A file submitted through `file-input`.
 (defclass uploader (component)
   ((report :initform "Nothing yet" :accessor report-of)))
 (defmethod render ((self uploader))
-  (form (:multipart t)
-    (file-input (:id "file" :accept "text/*"
+  (h:form (:multipart t)
+    (h:file-input (:id "file" :accept "text/*"
                  :callback (lambda (file)
                              (setf (report-of self)
                                    (format nil "~A (~A): ~D bytes, starting ~S"
-                                           (file-name file) (file-content-type file)
-                                           (length (file-contents file))
-                                           (code-char (aref (file-contents file) 0)))))))
-    (submit-button () "Upload"))
-  (p () (text (report-of self))))
+                                           (h:file-name file) (h:file-content-type file)
+                                           (length (h:file-contents file))
+                                           (code-char (aref (h:file-contents file) 0)))))))
+    (h:submit-button () "Upload"))
+  (h:p () (h:text (report-of self))))
 (with-fresh-applications (("/upload" 'uploader :mode :deployment))
   (let ((b (visit (make-instance 'browser) "/upload")))
     (attach-file b "file" "notes.txt" "text/plain" "Hello, world")
@@ -12145,16 +13009,16 @@ Reads the filename of an uploaded-file.  The name the browser gave, without dire
 (defclass uploader (component)
   ((report :initform "Nothing yet" :accessor report-of)))
 (defmethod render ((self uploader))
-  (form (:multipart t)
-    (file-input (:id "file" :accept "text/*"
+  (h:form (:multipart t)
+    (h:file-input (:id "file" :accept "text/*"
                  :callback (lambda (file)
                              (setf (report-of self)
                                    (format nil "~A (~A): ~D bytes, starting ~S"
-                                           (file-name file) (file-content-type file)
-                                           (length (file-contents file))
-                                           (code-char (aref (file-contents file) 0)))))))
-    (submit-button () "Upload"))
-  (p () (text (report-of self))))
+                                           (h:file-name file) (h:file-content-type file)
+                                           (length (h:file-contents file))
+                                           (code-char (aref (h:file-contents file) 0)))))))
+    (h:submit-button () "Upload"))
+  (h:p () (h:text (report-of self))))
 (with-fresh-applications (("/upload" 'uploader :mode :deployment))
   (let ((b (visit (make-instance 'browser) "/upload")))
     (attach-file b "file" "notes.txt" "text/plain" "Hello, world")
@@ -12173,16 +13037,16 @@ Reads the content-type of an uploaded-file.  The MIME type the browser gave.
 (defclass uploader (component)
   ((report :initform "Nothing yet" :accessor report-of)))
 (defmethod render ((self uploader))
-  (form (:multipart t)
-    (file-input (:id "file" :accept "text/*"
+  (h:form (:multipart t)
+    (h:file-input (:id "file" :accept "text/*"
                  :callback (lambda (file)
                              (setf (report-of self)
                                    (format nil "~A (~A): ~D bytes, starting ~S"
-                                           (file-name file) (file-content-type file)
-                                           (length (file-contents file))
-                                           (code-char (aref (file-contents file) 0)))))))
-    (submit-button () "Upload"))
-  (p () (text (report-of self))))
+                                           (h:file-name file) (h:file-content-type file)
+                                           (length (h:file-contents file))
+                                           (code-char (aref (h:file-contents file) 0)))))))
+    (h:submit-button () "Upload"))
+  (h:p () (h:text (report-of self))))
 (with-fresh-applications (("/upload" 'uploader :mode :deployment))
   (let ((b (visit (make-instance 'browser) "/upload")))
     (attach-file b "file" "notes.txt" "text/plain" "Hello, world")
@@ -12201,16 +13065,16 @@ Reads the contents of an uploaded-file.  The file's bytes, an (`unsigned-byte` 8
 (defclass uploader (component)
   ((report :initform "Nothing yet" :accessor report-of)))
 (defmethod render ((self uploader))
-  (form (:multipart t)
-    (file-input (:id "file" :accept "text/*"
+  (h:form (:multipart t)
+    (h:file-input (:id "file" :accept "text/*"
                  :callback (lambda (file)
                              (setf (report-of self)
                                    (format nil "~A (~A): ~D bytes, starting ~S"
-                                           (file-name file) (file-content-type file)
-                                           (length (file-contents file))
-                                           (code-char (aref (file-contents file) 0)))))))
-    (submit-button () "Upload"))
-  (p () (text (report-of self))))
+                                           (h:file-name file) (h:file-content-type file)
+                                           (length (h:file-contents file))
+                                           (code-char (aref (h:file-contents file) 0)))))))
+    (h:submit-button () "Upload"))
+  (h:p () (h:text (report-of self))))
 (with-fresh-applications (("/upload" 'uploader :mode :deployment))
   (let ((b (visit (make-instance 'browser) "/upload")))
     (attach-file b "file" "notes.txt" "text/plain" "Hello, world")
@@ -12236,7 +13100,7 @@ every request.
 ```lisp
 (defclass hello (component) ())
 (defmethod render ((self hello))
-  (h1 () "Hello"))
+  (h:h1 () "Hello"))
 (with-fresh-applications (("/hello" 'hello :mode :deployment))
   (let ((b (visit (make-instance 'browser) "/hello")))
     (list (browser-status b)
@@ -12271,7 +13135,7 @@ Reads the url of a browser.  The current page's URL, after redirects, or `nil` b
 ```lisp
 (defclass hello (component) ())
 (defmethod render ((self hello))
-  (h1 () "Hello"))
+  (h:h1 () "Hello"))
 (with-fresh-applications (("/hello" 'hello :mode :deployment))
   (let ((b (visit (make-instance 'browser) "/hello")))
     (list (browser-status b)
@@ -12289,7 +13153,7 @@ Reads the status of a browser.  The current page's HTTP status, or `nil` before 
 ```lisp
 (defclass hello (component) ())
 (defmethod render ((self hello))
-  (h1 () "Hello"))
+  (h:h1 () "Hello"))
 (with-fresh-applications (("/hello" 'hello :mode :deployment))
   (let ((b (visit (make-instance 'browser) "/hello")))
     (list (browser-status b)
@@ -12307,7 +13171,7 @@ Reads the html of a browser.  The current page's body, as served.
 ```lisp
 (defclass hello (component) ())
 (defmethod render ((self hello))
-  (h1 () "Hello & welcome"))
+  (h:h1 () "Hello & welcome"))
 (with-fresh-applications (("/hello" 'hello :mode :deployment :title "Greeter"))
   (let ((b (visit (make-instance 'browser) "/hello")))
     (list (not (null (search "<h1>Hello &amp; welcome</h1>" (browser-html b))))
@@ -12326,8 +13190,8 @@ Reads the cookies of a browser.  Alist of cookie name → value, sent with every
 ```lisp
 (defclass theme-picker (component) ())
 (defmethod render ((self theme-picker))
-  (anchor (:callback (lambda () (set-cookie "theme" "dark" :max-age 3600))) "Dark")
-  (anchor (:callback (lambda () (set-cookie "theme" "" :max-age 0))) "Default"))
+  (h:anchor (:callback (lambda () (set-cookie "theme" "dark" :max-age 3600))) "Dark")
+  (h:anchor (:callback (lambda () (set-cookie "theme" "" :max-age 0))) "Default"))
 (with-fresh-applications (("/theme" 'theme-picker :mode :deployment))
   (let ((b (visit (make-instance 'browser) "/theme")))
     (click b "Dark")
@@ -12347,7 +13211,7 @@ such as ("accept-language" . "fr").
 ```lisp
 (defclass trash (component) ())
 (defmethod render ((self trash))
-  (submit-button () (translate "Remove")))
+  (h:submit-button () (translate "Remove")))
 (with-fresh-applications (("/trash" 'trash :mode :deployment :languages '("fr")))
   (let ((b (make-instance 'browser :headers '(("accept-language" . "fr-CA,fr;q=0.9")))))
     (visit b "/trash")
@@ -12366,9 +13230,9 @@ page's fields as served, changed by `fill-in`, `set-checkbox` and `select-option
 (defclass profile (component)
   ((city :initform "Lyon" :accessor city-of)))
 (defmethod render ((self profile))
-  (form ()
-    (text-input (:id "city" :value (city-of self) :callback (lambda (v) (setf (city-of self) v))))
-    (submit-button () "Save")))
+  (h:form ()
+    (h:text-input (:id "city" :value (city-of self) :callback (lambda (v) (setf (city-of self) v))))
+    (h:submit-button () "Save")))
 (with-fresh-applications (("/profile" 'profile :mode :deployment))
   (let* ((b (visit (make-instance 'browser) "/profile"))
          (name (element-name b "city")))
@@ -12388,9 +13252,9 @@ Reads the files of a browser.  Alist of field name → (`filename` `content-type
 ```lisp
 (defclass avatar (component) ())
 (defmethod render ((self avatar))
-  (form (:multipart t)
-    (file-input (:id "picture" :callback (lambda (file) (declare (ignore file)))))
-    (submit-button () "Upload")))
+  (h:form (:multipart t)
+    (h:file-input (:id "picture" :callback (lambda (file) (declare (ignore file)))))
+    (h:submit-button () "Upload")))
 (with-fresh-applications (("/avatar" 'avatar :mode :deployment))
   (let ((b (visit (make-instance 'browser) "/avatar")))
     (attach-file b "picture" "me.png" "image/png" #(137 80 78 71))
@@ -12413,7 +13277,7 @@ an error after ten redirects.
 ```lisp
 (defclass hello (component) ())
 (defmethod render ((self hello))
-  (h1 () "Hello"))
+  (h:h1 () "Hello"))
 (with-fresh-applications (("/hello" 'hello :mode :deployment))
   (let ((b (visit (make-instance 'browser) "/hello")))
     (list (browser-status b)
@@ -12434,8 +13298,8 @@ Return to an earlier page, as the back button (with no cache) would.
 (defmethod states ((self counter))
   (list self))
 (defmethod render ((self counter))
-  (p () (text (count-of self)))
-  (anchor (:callback (lambda () (incf (count-of self)))) "Add one"))
+  (h:p () (h:text (count-of self)))
+  (h:anchor (:callback (lambda () (incf (count-of self)))) "Add one"))
 (with-fresh-applications (("/counter" 'counter :mode :deployment))
   (let ((b (visit (make-instance 'browser) "/counter")))
     (click b "Add one")
@@ -12459,7 +13323,7 @@ and the body as a string.
 ```lisp
 (defclass hello (component) ())
 (defmethod render ((self hello))
-  (p () "Hi"))
+  (h:p () "Hi"))
 (with-fresh-applications (("/hello" 'hello :mode :deployment))
   (let ((b (make-instance 'browser)))
     (multiple-value-bind (status headers body) (raw-request b :get "/hello")
@@ -12495,7 +13359,7 @@ The header `name` from a Lack response's `headers` plist.
 ```lisp
 (defclass hello (component) ())
 (defmethod render ((self hello))
-  (p () "Hi"))
+  (h:p () "Hi"))
 (with-fresh-applications (("/hello" 'hello :mode :deployment))
   (let ((b (make-instance 'browser)))
     (multiple-value-bind (status headers body) (raw-request b :get "/hello")
@@ -12517,7 +13381,7 @@ The current page's text without markup.
 ```lisp
 (defclass hello (component) ())
 (defmethod render ((self hello))
-  (h1 () "Hello & welcome"))
+  (h:h1 () "Hello & welcome"))
 (with-fresh-applications (("/hello" 'hello :mode :deployment :title "Greeter"))
   (let ((b (visit (make-instance 'browser) "/hello")))
     (list (not (null (search "<h1>Hello &amp; welcome</h1>" (browser-html b))))
@@ -12538,11 +13402,11 @@ run of whitespace made one space.
 ```lisp
 (defclass planets (component) ())
 (defmethod render ((self planets))
-  (h1 () "Planets")
-  (p () "The " (strong () "inner") " ones:")
-  (ul () (li () "Mercury") (li () "Venus"))
-  (table () (tr () (th () "Largest") (td () "Jupiter")))
-  (anchor (:href "/more") "More…"))
+  (h:h1 () "Planets")
+  (h:p () "The " (h:strong () "inner") " ones:")
+  (h:ul () (h:li () "Mercury") (h:li () "Venus"))
+  (h:table () (h:tr () (h:th () "Largest") (h:td () "Jupiter")))
+  (h:anchor (:href "/more") "More…"))
 (with-fresh-applications (("/planets" 'planets :mode :deployment :title "Space"))
   (body-text (visit (make-instance 'browser) "/planets")))
 ;; ⇒ "Planets The inner ones: Mercury Venus Largest Jupiter More…"
@@ -12557,7 +13421,7 @@ True when the current page's text contains `text`.
 ```lisp
 (defclass hello (component) ())
 (defmethod render ((self hello))
-  (h1 () "Hello & welcome"))
+  (h:h1 () "Hello & welcome"))
 (with-fresh-applications (("/hello" 'hello :mode :deployment :title "Greeter"))
   (let ((b (visit (make-instance 'browser) "/hello")))
     (list (not (null (search "<h1>Hello &amp; welcome</h1>" (browser-html b))))
@@ -12577,12 +13441,12 @@ The href of the first link whose text contains `text`.
 (defclass shopping-list (component)
   ((items :initform (list "Bread" "Milk" "Eggs") :accessor items-of)))
 (defmethod render ((self shopping-list))
-  (ul ()
+  (h:ul ()
     (dolist (item (items-of self))
-      (li () (text item) " "
-        (anchor (:callback (lambda () (setf (items-of self) (remove item (items-of self) :test #'string=))))
+      (h:li () (h:text item) " "
+        (h:anchor (:callback (lambda () (setf (items-of self) (remove item (items-of self) :test #'string=))))
           "Remove"))))
-  (anchor (:href "/help") "Help with lists"))
+  (h:anchor (:href "/help") "Help with lists"))
 (with-fresh-applications (("/list" 'shopping-list :mode :deployment))
   (let ((b (visit (make-instance 'browser) "/list")))
     (let ((help (find-link b "Help"))
@@ -12602,12 +13466,12 @@ The hrefs of every link whose text is exactly `text`, in page order.
 (defclass shopping-list (component)
   ((items :initform (list "Bread" "Milk" "Eggs") :accessor items-of)))
 (defmethod render ((self shopping-list))
-  (ul ()
+  (h:ul ()
     (dolist (item (items-of self))
-      (li () (text item) " "
-        (anchor (:callback (lambda () (setf (items-of self) (remove item (items-of self) :test #'string=))))
+      (h:li () (h:text item) " "
+        (h:anchor (:callback (lambda () (setf (items-of self) (remove item (items-of self) :test #'string=))))
           "Remove"))))
-  (anchor (:href "/help") "Help with lists"))
+  (h:anchor (:href "/help") "Help with lists"))
 (with-fresh-applications (("/list" 'shopping-list :mode :deployment))
   (let ((b (visit (make-instance 'browser) "/list")))
     (let ((help (find-link b "Help"))
@@ -12628,9 +13492,9 @@ aria-label is `id` (a brush's `:label`); an error when there is none.
 (defclass profile (component)
   ((city :initform "Lyon" :accessor city-of)))
 (defmethod render ((self profile))
-  (form ()
-    (text-input (:id "city" :value (city-of self) :callback (lambda (v) (setf (city-of self) v))))
-    (submit-button () "Save")))
+  (h:form ()
+    (h:text-input (:id "city" :value (city-of self) :callback (lambda (v) (setf (city-of self) v))))
+    (h:submit-button () "Save")))
 (with-fresh-applications (("/profile" 'profile :mode :deployment))
   (let* ((b (visit (make-instance 'browser) "/profile"))
          (name (element-name b "city")))
@@ -12652,10 +13516,10 @@ The action URL of the first form on the page.
   ((query :initform "" :accessor query-of)
    (results :initform nil :accessor results-of)))
 (defmethod render ((self search-box))
-  (form (:role "search" :default-action (lambda () (setf (results-of self) (format nil "Results for ~A" (query-of self)))))
-    (text-input (:id "q" :callback (lambda (value) (setf (query-of self) value))))
-    (submit-button (:callback (lambda () (setf (results-of self) "Feeling lucky"))) "Lucky"))
-  (p () (text (results-of self))))
+  (h:form (:role "search" :default-action (lambda () (setf (results-of self) (format nil "Results for ~A" (query-of self)))))
+    (h:text-input (:id "q" :callback (lambda (value) (setf (query-of self) value))))
+    (h:submit-button (:callback (lambda () (setf (results-of self) "Feeling lucky"))) "Lucky"))
+  (h:p () (h:text (results-of self))))
 (with-fresh-applications (("/search" 'search-box :mode :deployment))
   (let ((b (visit (make-instance 'browser) "/search")))
     (fill-in b "q" "lisp")
@@ -12726,8 +13590,8 @@ Follow the first link whose text contains `text`; an error when there is none.
 (defclass counter (component)
   ((count :initform 0 :accessor count-of)))
 (defmethod render ((self counter))
-  (p () (text (count-of self)))
-  (anchor (:callback (lambda () (incf (count-of self)))) "Add one"))
+  (h:p () (h:text (count-of self)))
+  (h:anchor (:callback (lambda () (incf (count-of self)))) "Add one"))
 (with-fresh-applications (("/counter" 'counter :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/counter")
@@ -12747,12 +13611,12 @@ Follow the Nth (from 0) link whose text is exactly `text`.
 (defclass shopping-list (component)
   ((items :initform (list "Bread" "Milk" "Eggs") :accessor items-of)))
 (defmethod render ((self shopping-list))
-  (ul ()
+  (h:ul ()
     (dolist (item (items-of self))
-      (li () (text item) " "
-        (anchor (:callback (lambda () (setf (items-of self) (remove item (items-of self) :test #'string=))))
+      (h:li () (h:text item) " "
+        (h:anchor (:callback (lambda () (setf (items-of self) (remove item (items-of self) :test #'string=))))
           "Remove"))))
-  (anchor (:href "/help") "Help with lists"))
+  (h:anchor (:href "/help") "Help with lists"))
 (with-fresh-applications (("/list" 'shopping-list :mode :deployment))
   (let ((b (visit (make-instance 'browser) "/list")))
     (let ((help (find-link b "Help"))
@@ -12775,14 +13639,14 @@ Returns `browser`.
   ((name :initform "" :accessor name-of)
    (greeting :initform nil :accessor greeting-of)))
 (defmethod render ((self greeter))
-  (form ()
-    (label (:for "name") "Name")
-    (text-input (:id "name" :value (name-of self)
+  (h:form ()
+    (h:label (:for "name") "Name")
+    (h:text-input (:id "name" :value (name-of self)
                  :callback (lambda (value) (setf (name-of self) value))))
-    (submit-button (:callback (lambda () (setf (greeting-of self) (format nil "Hello, ~A!" (name-of self)))))
+    (h:submit-button (:callback (lambda () (setf (greeting-of self) (format nil "Hello, ~A!" (name-of self)))))
       "Greet"))
   (when (greeting-of self)
-    (p () (text (greeting-of self)))))
+    (h:p () (h:text (greeting-of self)))))
 (with-fresh-applications (("/greet" 'greeter :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/greet")
@@ -12804,13 +13668,13 @@ counting from 0.
   ((newsletter :initform nil :accessor newsletter-p)
    (digest :initform t :accessor digest-p)))
 (defmethod render ((self preferences))
-  (form ()
-    (label () (checkbox (:value (newsletter-p self) :callback (lambda (on) (setf (newsletter-p self) on))))
+  (h:form ()
+    (h:label () (h:checkbox (:value (newsletter-p self) :callback (lambda (on) (setf (newsletter-p self) on))))
       "Newsletter")
-    (label () (checkbox (:value (digest-p self) :callback (lambda (on) (setf (digest-p self) on))))
+    (h:label () (h:checkbox (:value (digest-p self) :callback (lambda (on) (setf (digest-p self) on))))
       "Weekly digest")
-    (submit-button () "Save"))
-  (p () (text (list (newsletter-p self) (digest-p self)))))
+    (h:submit-button () "Save"))
+  (h:p () (h:text (list (newsletter-p self) (digest-p self)))))
 (with-fresh-applications (("/prefs" 'preferences :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/prefs")
@@ -12833,13 +13697,13 @@ Returns `browser`.
 (defclass shipping (component)
   ((carrier :initform :post :accessor carrier-of)))
 (defmethod render ((self shipping))
-  (form ()
-    (select-list (:id "method" :items '(:post :courier :collect)
+  (h:form ()
+    (h:select-list (:id "method" :items '(:post :courier :collect)
                   :labels (lambda (item) (string-capitalize item))
                   :selected (carrier-of self)
                   :callback (lambda (item) (setf (carrier-of self) item))))
-    (submit-button () "Choose"))
-  (p () "Shipping by " (text (string-downcase (carrier-of self)))))
+    (h:submit-button () "Choose"))
+  (h:p () "Shipping by " (h:text (string-downcase (carrier-of self)))))
 (with-fresh-applications (("/ship" 'shipping :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/ship")
@@ -12871,7 +13735,7 @@ as Ctrl-clicking them would; an error when one is missing.  Returns
 (defmethod children ((self meeting-page)) (list (editor self)))
 (defmethod render ((self meeting-page))
   (render-component (editor self))
-  (p () (text (format nil "Meets on ~S" (slot-value (meeting self) 'days)))))
+  (h:p () (h:text (format nil "Meets on ~S" (slot-value (meeting self) 'days)))))
 (with-fresh-applications (("/meeting" 'meeting-page :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/meeting")
@@ -12893,12 +13757,12 @@ Choose the radio button labelled exactly `label` (the text of its
 (defclass size-picker (component)
   ((size :initform :small :accessor size-of)))
 (defmethod render ((self size-picker))
-  (form ()
-    (radio-group (:id "size" :items '(:small :medium :large) :selected (size-of self)
+  (h:form ()
+    (h:radio-group (:id "size" :items '(:small :medium :large) :selected (size-of self)
                   :labels #'string-downcase
                   :callback (lambda (size) (setf (size-of self) size))))
-    (submit-button () "Pick"))
-  (p () "Size: " (text (size-of self))))
+    (h:submit-button () "Pick"))
+  (h:p () "Size: " (h:text (size-of self))))
 (with-fresh-applications (("/size" 'size-picker :mode :deployment))
   (let ((b (visit (make-instance 'browser) "/size")))
     (choose-radio b "large")
@@ -12918,16 +13782,16 @@ or a vector of octets.
 (defclass uploader (component)
   ((report :initform "Nothing yet" :accessor report-of)))
 (defmethod render ((self uploader))
-  (form (:multipart t)
-    (file-input (:id "file" :accept "text/*"
+  (h:form (:multipart t)
+    (h:file-input (:id "file" :accept "text/*"
                  :callback (lambda (file)
                              (setf (report-of self)
                                    (format nil "~A (~A): ~D bytes, starting ~S"
-                                           (file-name file) (file-content-type file)
-                                           (length (file-contents file))
-                                           (code-char (aref (file-contents file) 0)))))))
-    (submit-button () "Upload"))
-  (p () (text (report-of self))))
+                                           (h:file-name file) (h:file-content-type file)
+                                           (length (h:file-contents file))
+                                           (code-char (aref (h:file-contents file) 0)))))))
+    (h:submit-button () "Upload"))
+  (h:p () (h:text (report-of self))))
 (with-fresh-applications (("/upload" 'uploader :mode :deployment))
   (let ((b (visit (make-instance 'browser) "/upload")))
     (attach-file b "file" "notes.txt" "text/plain" "Hello, world")
@@ -12949,14 +13813,14 @@ when there is no such button.
   ((name :initform "" :accessor name-of)
    (greeting :initform nil :accessor greeting-of)))
 (defmethod render ((self greeter))
-  (form ()
-    (label (:for "name") "Name")
-    (text-input (:id "name" :value (name-of self)
+  (h:form ()
+    (h:label (:for "name") "Name")
+    (h:text-input (:id "name" :value (name-of self)
                  :callback (lambda (value) (setf (name-of self) value))))
-    (submit-button (:callback (lambda () (setf (greeting-of self) (format nil "Hello, ~A!" (name-of self)))))
+    (h:submit-button (:callback (lambda () (setf (greeting-of self) (format nil "Hello, ~A!" (name-of self)))))
       "Greet"))
   (when (greeting-of self)
-    (p () (text (greeting-of self)))))
+    (h:p () (h:text (greeting-of self)))))
 (with-fresh-applications (("/greet" 'greeter :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/greet")
@@ -12977,10 +13841,10 @@ when there is no such button.
   ((query :initform "" :accessor query-of)
    (results :initform nil :accessor results-of)))
 (defmethod render ((self search-box))
-  (form (:role "search" :default-action (lambda () (setf (results-of self) (format nil "Results for ~A" (query-of self)))))
-    (text-input (:id "q" :callback (lambda (value) (setf (query-of self) value))))
-    (submit-button (:callback (lambda () (setf (results-of self) "Feeling lucky"))) "Lucky"))
-  (p () (text (results-of self))))
+  (h:form (:role "search" :default-action (lambda () (setf (results-of self) (format nil "Results for ~A" (query-of self)))))
+    (h:text-input (:id "q" :callback (lambda (value) (setf (query-of self) value))))
+    (h:submit-button (:callback (lambda () (setf (results-of self) "Feeling lucky"))) "Lucky"))
+  (h:p () (h:text (results-of self))))
 (with-fresh-applications (("/search" 'search-box :mode :deployment))
   (let ((b (visit (make-instance 'browser) "/search")))
     (fill-in b "q" "lisp")
@@ -13004,8 +13868,8 @@ Returns the JSON text and the status.
 (defclass likes (updatable component)
   ((count :initform 0 :accessor count-of)))
 (defmethod render ((self likes))
-  (span () (text (count-of self)) " likes")
-  (button (:class "like" :on-click (ajax :callback (lambda () (incf (count-of self))) :update self))
+  (h:span () (h:text (count-of self)) " likes")
+  (h:button (:class "like" :on-click (ajax :callback (lambda () (incf (count-of self))) :update self))
     "Like"))
 (with-fresh-applications (("/likes" 'likes :mode :deployment))
   (let* ((b (visit (make-instance 'browser) "/likes"))
@@ -13028,8 +13892,8 @@ order, for `ajax-request`.  `attribute` is the event, such as "on-click".
 (defclass likes (updatable component)
   ((count :initform 0 :accessor count-of)))
 (defmethod render ((self likes))
-  (span () (text (count-of self)) " likes")
-  (button (:class "like" :on-click (ajax :callback (lambda () (incf (count-of self))) :update self))
+  (h:span () (h:text (count-of self)) " likes")
+  (h:button (:class "like" :on-click (ajax :callback (lambda () (incf (count-of self))) :update self))
     "Like"))
 (with-fresh-applications (("/likes" 'likes :mode :deployment))
   (let* ((b (visit (make-instance 'browser) "/likes"))
@@ -13054,7 +13918,7 @@ Collects what an event stream writes.
 (defmethod subscriptions ((self scoreboard))
   (list *scores*))
 (defmethod render ((self scoreboard))
-  (p () "Score: " (text *score*)))
+  (h:p () "Score: " (h:text *score*)))
 (with-fresh-applications (("/score" 'scoreboard :mode :deployment))
   (let* ((b (visit (make-instance 'browser) "/score"))
          (sink (make-instance 'sink))
@@ -13083,7 +13947,7 @@ Everything written to `sink` so far.
 (defmethod subscriptions ((self scoreboard))
   (list *scores*))
 (defmethod render ((self scoreboard))
-  (p () "Score: " (text *score*)))
+  (h:p () "Score: " (h:text *score*)))
 (with-fresh-applications (("/score" 'scoreboard :mode :deployment))
   (let* ((b (visit (make-instance 'browser) "/score"))
          (sink (make-instance 'sink))
@@ -13116,7 +13980,7 @@ has no stream.
 (defmethod subscriptions ((self scoreboard))
   (list *scores*))
 (defmethod render ((self scoreboard))
-  (p () "Score: " (text *score*)))
+  (h:p () "Score: " (h:text *score*)))
 (with-fresh-applications (("/score" 'scoreboard :mode :deployment))
   (let* ((b (visit (make-instance 'browser) "/score"))
          (sink (make-instance 'sink))
@@ -13145,7 +14009,7 @@ Poll `predicate` for up to `seconds`; true when it came true.
 (defmethod subscriptions ((self scoreboard))
   (list *scores*))
 (defmethod render ((self scoreboard))
-  (p () "Score: " (text *score*)))
+  (h:p () "Score: " (h:text *score*)))
 (with-fresh-applications (("/score" 'scoreboard :mode :deployment))
   (let* ((b (visit (make-instance 'browser) "/score"))
          (sink (make-instance 'sink))
@@ -13173,7 +14037,7 @@ registration a list of `register-application`'s arguments.
 ```lisp
 (defclass hello (component) ())
 (defmethod render ((self hello))
-  (p () "Hi"))
+  (h:p () "Hi"))
 (list (with-fresh-applications (("/one" 'hello :mode :deployment)
                                 ("/two" 'hello :mode :deployment))
         (mapcar #'application-path (list-applications)))
@@ -14101,8 +14965,8 @@ with Littoral's HTML tags (as in `render`), inside `*mail-layout*`.  Without
 (littoral.mail:define-mail welcome-mail (name address)
   :to (format nil "~A <~A>" name address)
   :subject (format nil "Welcome, ~A" name)
-  :html ((p () "Hello " (strong () (text name)) ",")
-         (p () (anchor (:href "https://example.org/start") "Get started"))))
+  :html ((h:p () "Hello " (h:strong () (h:text name)) ",")
+         (h:p () (h:anchor (:href "https://example.org/start") "Get started"))))
 (let ((mail (welcome-mail "Ada" "ada@example.org")))
   (list (littoral.mail:mail-to mail)
         (littoral.mail:mail-subject mail)
@@ -14121,14 +14985,14 @@ A function of (`subject` `body-thunk`) that writes the HTML around a template's 
 (littoral.mail:define-mail shipped-mail (address)
   :to address
   :subject "Your order has shipped"
-  :html ((p () "It should arrive on Friday.")))
+  :html ((h:p () "It should arrive on Friday.")))
 (let ((littoral.mail:*mail-layout*
         (lambda (subject body)
           (littoral.mail:default-mail-layout
            subject
            (lambda ()
              (funcall body)
-             (p (:class "footer") "Bookshop, 1 High Street"))))))
+             (h:p (:class "footer") "Bookshop, 1 High Street"))))))
   (let ((mail (shipped-mail "ada@example.org")))
     (list (uiop:split-string (littoral.mail:mail-text mail) :separator '(#\Newline))
           (not (null (search "<title>Your order has shipped</title>" (littoral.mail:mail-html mail)))))))
@@ -14146,14 +15010,14 @@ readable page that mail programs show well.
 (littoral.mail:define-mail shipped-mail (address)
   :to address
   :subject "Your order has shipped"
-  :html ((p () "It should arrive on Friday.")))
+  :html ((h:p () "It should arrive on Friday.")))
 (let ((littoral.mail:*mail-layout*
         (lambda (subject body)
           (littoral.mail:default-mail-layout
            subject
            (lambda ()
              (funcall body)
-             (p (:class "footer") "Bookshop, 1 High Street"))))))
+             (h:p (:class "footer") "Bookshop, 1 High Street"))))))
   (let ((mail (shipped-mail "ada@example.org")))
     (list (uiop:split-string (littoral.mail:mail-text mail) :separator '(#\Newline))
           (not (null (search "<title>Your order has shipped</title>" (littoral.mail:mail-html mail)))))))
@@ -17185,7 +18049,7 @@ elsewhere.
 (defmethod render ((self inbox-page))
   (render-component (bell self))
   (unless (littoral.auth:current-user)
-    (anchor (:callback (lambda () (show self (make-instance 'littoral.auth:sign-in)))) "Sign in")))
+    (h:anchor (:callback (lambda () (show self (make-instance 'littoral.auth:sign-in)))) "Sign in")))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
       (littoral.auth:*pbkdf2-iterations* 1000))
   (littoral.auth:create-auth-tables)
@@ -17496,7 +18360,7 @@ An `:around-request` function binding `*user-store*` to `store`, then calling
 ```lisp
 (defclass who-is-ada (component) ())
 (defmethod render ((self who-is-ada))
-  (p () (text (littoral.auth:user-email (littoral.auth:find-user "ada")))))
+  (h:p () (h:text (littoral.auth:user-email (littoral.auth:find-user "ada")))))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
   (littoral.db:db-execute "CREATE TABLE members (id INTEGER PRIMARY KEY, name TEXT, email TEXT, password_hash TEXT)")
   (littoral.db:db-execute "INSERT INTO members (name, email) VALUES ('ada', 'ada@members.example')")
@@ -18152,13 +19016,13 @@ The user signed in to this session, or `nil`; `nil` outside a request.
 ```lisp
 (defclass members-news (littoral.auth:restricted component) ())
 (defmethod render ((self members-news))
-  (p () "Members' news"))
+  (h:p () "Members' news"))
 (defclass club (littoral.auth:auth-root component)
   ((news :initform (make-instance 'members-news) :reader club-news)))
 (defmethod children ((self club)) (list (club-news self)))
 (defmethod render ((self club))
   (let ((user (littoral.auth:current-user)))
-    (p () (text (if user (format nil "Hello, ~A." (littoral.auth:user-name user)) "Hello, stranger."))))
+    (h:p () (h:text (if user (format nil "Hello, ~A." (littoral.auth:user-name user)) "Hello, stranger."))))
   (render-component (club-news self)))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
       (littoral.auth:*pbkdf2-iterations* 1000))
@@ -18190,9 +19054,9 @@ who they are, goes in the audit log.
 (defclass demo-door (littoral.auth:auth-root component) ())
 (defmethod render ((self demo-door))
   (if (littoral.auth:signed-in-p)
-      (progn (p () (text (format nil "Signed in as ~A." (littoral.auth:user-name (littoral.auth:current-user)))))
-             (anchor (:callback (lambda () (littoral.auth:log-out))) "Leave"))
-      (anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "demo")))) "Try the demo")))
+      (progn (h:p () (h:text (format nil "Signed in as ~A." (littoral.auth:user-name (littoral.auth:current-user)))))
+             (h:anchor (:callback (lambda () (littoral.auth:log-out))) "Leave"))
+      (h:anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "demo")))) "Try the demo")))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
       (littoral.auth:*pbkdf2-iterations* 1000))
   (littoral.auth:create-auth-tables)
@@ -18217,9 +19081,9 @@ Sign the session's user out, end its sign-in, and give the session a new key.
 (defclass demo-door (littoral.auth:auth-root component) ())
 (defmethod render ((self demo-door))
   (if (littoral.auth:signed-in-p)
-      (progn (p () (text (format nil "Signed in as ~A." (littoral.auth:user-name (littoral.auth:current-user)))))
-             (anchor (:callback (lambda () (littoral.auth:log-out))) "Leave"))
-      (anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "demo")))) "Try the demo")))
+      (progn (h:p () (h:text (format nil "Signed in as ~A." (littoral.auth:user-name (littoral.auth:current-user)))))
+             (h:anchor (:callback (lambda () (littoral.auth:log-out))) "Leave"))
+      (h:anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "demo")))) "Try the demo")))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
       (littoral.auth:*pbkdf2-iterations* 1000))
   (littoral.auth:create-auth-tables)
@@ -18244,9 +19108,9 @@ True when someone is signed in to this session.
 (defclass demo-door (littoral.auth:auth-root component) ())
 (defmethod render ((self demo-door))
   (if (littoral.auth:signed-in-p)
-      (progn (p () (text (format nil "Signed in as ~A." (littoral.auth:user-name (littoral.auth:current-user)))))
-             (anchor (:callback (lambda () (littoral.auth:log-out))) "Leave"))
-      (anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "demo")))) "Try the demo")))
+      (progn (h:p () (h:text (format nil "Signed in as ~A." (littoral.auth:user-name (littoral.auth:current-user)))))
+             (h:anchor (:callback (lambda () (littoral.auth:log-out))) "Leave"))
+      (h:anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "demo")))) "Try the demo")))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
       (littoral.auth:*pbkdf2-iterations* 1000))
   (littoral.auth:create-auth-tables)
@@ -18271,9 +19135,9 @@ True when `user` has `role` (a keyword); with `role` `nil`, when there is a user
 (defclass report-page (littoral.auth:auth-root component) ())
 (defmethod render ((self report-page))
   (when (littoral.auth:has-role-p :admin)
-    (p () "Admin tools"))
-  (anchor (:callback (lambda () (littoral.auth:require-role :admin))) "Delete everything")
-  (anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "bob")))) "Be bob"))
+    (h:p () "Admin tools"))
+  (h:anchor (:callback (lambda () (littoral.auth:require-role :admin))) "Delete everything")
+  (h:anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "bob")))) "Be bob"))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
       (littoral.auth:*pbkdf2-iterations* 1000))
   (littoral.auth:create-auth-tables)
@@ -18299,9 +19163,9 @@ Refuse the request (403) unless the current user has `role`; with `role`
 (defclass report-page (littoral.auth:auth-root component) ())
 (defmethod render ((self report-page))
   (when (littoral.auth:has-role-p :admin)
-    (p () "Admin tools"))
-  (anchor (:callback (lambda () (littoral.auth:require-role :admin))) "Delete everything")
-  (anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "bob")))) "Be bob"))
+    (h:p () "Admin tools"))
+  (h:anchor (:callback (lambda () (littoral.auth:require-role :admin))) "Delete everything")
+  (h:anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "bob")))) "Be bob"))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
       (littoral.auth:*pbkdf2-iterations* 1000))
   (littoral.auth:create-auth-tables)
@@ -18325,7 +19189,7 @@ How long "Keep me signed in" lasts, renewed by use.
 ```lisp
 (defclass remembering (littoral.auth:auth-root component) ())
 (defmethod render ((self remembering))
-  (anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "ada") :remember t))) "Remember me"))
+  (h:anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "ada") :remember t))) "Remember me"))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
       (littoral.auth:*pbkdf2-iterations* 1000)
       (littoral.auth:*remember-days* 7))
@@ -18352,7 +19216,7 @@ How long an unremembered sign-in lasts unused.
 ```lisp
 (defclass remembering (littoral.auth:auth-root component) ())
 (defmethod render ((self remembering))
-  (anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "ada") :remember t))) "Remember me"))
+  (h:anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "ada") :remember t))) "Remember me"))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
       (littoral.auth:*pbkdf2-iterations* 1000)
       (littoral.auth:*remember-days* 7))
@@ -18382,13 +19246,13 @@ How often a signed-in session checks that its sign-in still stands.
   (let ((user (littoral.auth:current-user)))
     (if user
         (let ((sessions (littoral.auth:user-sessions user)))
-          (p () (text (format nil "~A has ~D sign-in~:P." (littoral.auth:user-name user) (length sessions))))
-          (anchor (:callback (lambda ()
+          (h:p () (h:text (format nil "~A has ~D sign-in~:P." (littoral.auth:user-name user) (length sessions))))
+          (h:anchor (:callback (lambda ()
                                (dolist (session sessions)
                                  (unless (getf session :current)
                                    (littoral.auth:revoke-session (getf session :id))))))
             "End the others"))
-        (anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "ada")))) "Sign in"))))
+        (h:anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "ada")))) "Sign in"))))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
       (littoral.auth:*pbkdf2-iterations* 1000)
       (littoral.auth:*auth-session-check-seconds* 0))
@@ -18438,13 +19302,13 @@ Whether the sign-in form offers "Keep me signed in".
   (let ((user (littoral.auth:current-user)))
     (if user
         (let ((sessions (littoral.auth:user-sessions user)))
-          (p () (text (format nil "~A has ~D sign-in~:P." (littoral.auth:user-name user) (length sessions))))
-          (anchor (:callback (lambda ()
+          (h:p () (h:text (format nil "~A has ~D sign-in~:P." (littoral.auth:user-name user) (length sessions))))
+          (h:anchor (:callback (lambda ()
                                (dolist (session sessions)
                                  (unless (getf session :current)
                                    (littoral.auth:revoke-session (getf session :id))))))
             "End the others"))
-        (anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "ada")))) "Sign in"))))
+        (h:anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "ada")))) "Sign in"))))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
       (littoral.auth:*pbkdf2-iterations* 1000)
       (littoral.auth:*auth-session-check-seconds* 0))
@@ -18474,13 +19338,13 @@ End `user`'s sign-in `id` wherever it is; that browser is signed out within
   (let ((user (littoral.auth:current-user)))
     (if user
         (let ((sessions (littoral.auth:user-sessions user)))
-          (p () (text (format nil "~A has ~D sign-in~:P." (littoral.auth:user-name user) (length sessions))))
-          (anchor (:callback (lambda ()
+          (h:p () (h:text (format nil "~A has ~D sign-in~:P." (littoral.auth:user-name user) (length sessions))))
+          (h:anchor (:callback (lambda ()
                                (dolist (session sessions)
                                  (unless (getf session :current)
                                    (littoral.auth:revoke-session (getf session :id))))))
             "End the others"))
-        (anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "ada")))) "Sign in"))))
+        (h:anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "ada")))) "Sign in"))))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
       (littoral.auth:*pbkdf2-iterations* 1000)
       (littoral.auth:*auth-session-check-seconds* 0))
@@ -18507,8 +19371,8 @@ End all of `user`'s sign-ins, this one too.
 (defclass lost-phone (littoral.auth:auth-root component) ())
 (defmethod render ((self lost-phone))
   (if (littoral.auth:signed-in-p)
-      (anchor (:callback (lambda () (littoral.auth:log-out-everywhere))) "Sign out everywhere")
-      (anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "ada")))) "Sign in")))
+      (h:anchor (:callback (lambda () (littoral.auth:log-out-everywhere))) "Sign out everywhere")
+      (h:anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "ada")))) "Sign in")))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
       (littoral.auth:*pbkdf2-iterations* 1000))
   (littoral.auth:create-auth-tables)
@@ -18631,8 +19495,8 @@ from a forged one would send its token to someone else's site.
 (defmethod render ((self reading-room))
   (let ((user (littoral.auth:current-user)))
     (if user
-        (p () (text (format nil "Hello, ~A." (littoral.auth:user-name user))))
-        (anchor (:callback (lambda () (show self (make-instance 'littoral.auth:sign-in)))) "Sign in"))))
+        (h:p () (h:text (format nil "Hello, ~A." (littoral.auth:user-name user))))
+        (h:anchor (:callback (lambda () (show self (make-instance 'littoral.auth:sign-in)))) "Sign in"))))
 (let* ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
        (littoral.auth:*pbkdf2-iterations* 1000)
        (littoral.auth:*public-url* "https://library.example")
@@ -18668,7 +19532,7 @@ How long a password reset link works.
 ```lisp
 (defclass short-links (littoral.auth:auth-root component) ())
 (defmethod render ((self short-links))
-  (anchor (:callback (lambda () (show self (make-instance 'littoral.auth:password-reset-request)))) "Reset"))
+  (h:anchor (:callback (lambda () (show self (make-instance 'littoral.auth:password-reset-request)))) "Reset"))
 (let* ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
        (littoral.auth:*pbkdf2-iterations* 1000)
        (littoral.auth:*public-url* "https://short.example")
@@ -18700,8 +19564,8 @@ plug in your mailer.
 (defmethod render ((self reading-room))
   (let ((user (littoral.auth:current-user)))
     (if user
-        (p () (text (format nil "Hello, ~A." (littoral.auth:user-name user))))
-        (anchor (:callback (lambda () (show self (make-instance 'littoral.auth:sign-in)))) "Sign in"))))
+        (h:p () (h:text (format nil "Hello, ~A." (littoral.auth:user-name user))))
+        (h:anchor (:callback (lambda () (show self (make-instance 'littoral.auth:sign-in)))) "Sign in"))))
 (let* ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
        (littoral.auth:*pbkdf2-iterations* 1000)
        (littoral.auth:*public-url* "https://library.example")
@@ -18876,7 +19740,7 @@ passkeys and recovery codes.
 (defmethod children ((self account)) (list (account-security self)))
 (defmethod render ((self account))
   (let ((user (littoral.auth:current-user)))
-    (p () (text (if user (format nil "Hello, ~A." (littoral.auth:user-name user)) "Hello, stranger."))))
+    (h:p () (h:text (if user (format nil "Hello, ~A." (littoral.auth:user-name user)) "Hello, stranger."))))
   (render-component (account-security self)))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
       (littoral.auth:*pbkdf2-iterations* 1000))
@@ -18918,7 +19782,7 @@ True when signing in as `user` with a password needs a second step.
 (defmethod children ((self account)) (list (account-security self)))
 (defmethod render ((self account))
   (let ((user (littoral.auth:current-user)))
-    (p () (text (if user (format nil "Hello, ~A." (littoral.auth:user-name user)) "Hello, stranger."))))
+    (h:p () (h:text (if user (format nil "Hello, ~A." (littoral.auth:user-name user)) "Hello, stranger."))))
   (render-component (account-security self)))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
       (littoral.auth:*pbkdf2-iterations* 1000))
@@ -18960,7 +19824,7 @@ True when signing in as `user` with a password needs a second step.
 (defmethod children ((self account)) (list (account-security self)))
 (defmethod render ((self account))
   (let ((user (littoral.auth:current-user)))
-    (p () (text (if user (format nil "Hello, ~A." (littoral.auth:user-name user)) "Hello, stranger."))))
+    (h:p () (h:text (if user (format nil "Hello, ~A." (littoral.auth:user-name user)) "Hello, stranger."))))
   (render-component (account-security self)))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
       (littoral.auth:*pbkdf2-iterations* 1000))
@@ -19443,17 +20307,17 @@ Refuse the request (403) unless the current user may do `permission`.
 (defclass post-page (littoral.auth:auth-root component)
   ((deleted :initform nil :accessor post-deleted)))
 (defmethod render ((self post-page))
-  (p () (text (if (post-deleted self) "Deleted." "A post.")))
-  (p ()
-    (anchor (:callback (lambda ()
+  (h:p () (h:text (if (post-deleted self) "Deleted." "A post.")))
+  (h:p ()
+    (h:anchor (:callback (lambda ()
                          (littoral.auth:require-permission :delete-posts)
                          (setf (post-deleted self) t)))
       "Delete")
     " "
     (dolist (name '("ada" "bob"))
       (let ((name name))
-        (anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user name))))
-          (text (format nil "Be ~A " name)))))))
+        (h:anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user name))))
+          (h:text (format nil "Be ~A " name)))))))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
       (littoral.auth:*pbkdf2-iterations* 1000))
   (littoral.auth:create-auth-tables)
@@ -19485,13 +20349,13 @@ Mixin for components only some users may see.  Specialise
 ```lisp
 (defclass members-news (littoral.auth:restricted component) ())
 (defmethod render ((self members-news))
-  (p () "Members' news"))
+  (h:p () "Members' news"))
 (defclass club (littoral.auth:auth-root component)
   ((news :initform (make-instance 'members-news) :reader club-news)))
 (defmethod children ((self club)) (list (club-news self)))
 (defmethod render ((self club))
   (let ((user (littoral.auth:current-user)))
-    (p () (text (if user (format nil "Hello, ~A." (littoral.auth:user-name user)) "Hello, stranger."))))
+    (h:p () (h:text (if user (format nil "Hello, ~A." (littoral.auth:user-name user)) "Hello, stranger."))))
   (render-component (club-news self)))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
       (littoral.auth:*pbkdf2-iterations* 1000))
@@ -19518,17 +20382,17 @@ The role needed to see `component`, or `nil` for any signed-in user.
 ```lisp
 (defclass staff-room (littoral.auth:restricted component) ())
 (defmethod littoral.auth:required-role ((self staff-room)) :staff)
-(defmethod render ((self staff-room)) (p () "Staff only"))
+(defmethod render ((self staff-room)) (h:p () "Staff only"))
 (defclass editors-desk (littoral.auth:restricted component) ())
 (defmethod littoral.auth:required-permission ((self editors-desk)) :edit-posts)
-(defmethod render ((self editors-desk)) (p () "The editor's desk"))
+(defmethod render ((self editors-desk)) (h:p () "The editor's desk"))
 (defclass office (littoral.auth:auth-root component)
   ((rooms :initform (list (make-instance 'staff-room) (make-instance 'editors-desk)) :reader office-rooms)))
 (defmethod children ((self office)) (office-rooms self))
 (defmethod render ((self office))
-  (p () (text (format nil "~D of 2 rooms open." (count-if #'littoral.auth:permitted-p (office-rooms self)))))
+  (h:p () (h:text (format nil "~D of 2 rooms open." (count-if #'littoral.auth:permitted-p (office-rooms self)))))
   (mapc #'render-component (office-rooms self))
-  (anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "eve")))) "Be eve"))
+  (h:anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "eve")))) "Be eve"))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
       (littoral.auth:*pbkdf2-iterations* 1000))
   (littoral.auth:create-auth-tables)
@@ -19551,17 +20415,17 @@ The permission needed to see `component`, or `nil` for none beyond its role.
 ```lisp
 (defclass staff-room (littoral.auth:restricted component) ())
 (defmethod littoral.auth:required-role ((self staff-room)) :staff)
-(defmethod render ((self staff-room)) (p () "Staff only"))
+(defmethod render ((self staff-room)) (h:p () "Staff only"))
 (defclass editors-desk (littoral.auth:restricted component) ())
 (defmethod littoral.auth:required-permission ((self editors-desk)) :edit-posts)
-(defmethod render ((self editors-desk)) (p () "The editor's desk"))
+(defmethod render ((self editors-desk)) (h:p () "The editor's desk"))
 (defclass office (littoral.auth:auth-root component)
   ((rooms :initform (list (make-instance 'staff-room) (make-instance 'editors-desk)) :reader office-rooms)))
 (defmethod children ((self office)) (office-rooms self))
 (defmethod render ((self office))
-  (p () (text (format nil "~D of 2 rooms open." (count-if #'littoral.auth:permitted-p (office-rooms self)))))
+  (h:p () (h:text (format nil "~D of 2 rooms open." (count-if #'littoral.auth:permitted-p (office-rooms self)))))
   (mapc #'render-component (office-rooms self))
-  (anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "eve")))) "Be eve"))
+  (h:anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "eve")))) "Be eve"))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
       (littoral.auth:*pbkdf2-iterations* 1000))
   (littoral.auth:create-auth-tables)
@@ -19584,17 +20448,17 @@ True when the current user may see `component`: has its role, and its permission
 ```lisp
 (defclass staff-room (littoral.auth:restricted component) ())
 (defmethod littoral.auth:required-role ((self staff-room)) :staff)
-(defmethod render ((self staff-room)) (p () "Staff only"))
+(defmethod render ((self staff-room)) (h:p () "Staff only"))
 (defclass editors-desk (littoral.auth:restricted component) ())
 (defmethod littoral.auth:required-permission ((self editors-desk)) :edit-posts)
-(defmethod render ((self editors-desk)) (p () "The editor's desk"))
+(defmethod render ((self editors-desk)) (h:p () "The editor's desk"))
 (defclass office (littoral.auth:auth-root component)
   ((rooms :initform (list (make-instance 'staff-room) (make-instance 'editors-desk)) :reader office-rooms)))
 (defmethod children ((self office)) (office-rooms self))
 (defmethod render ((self office))
-  (p () (text (format nil "~D of 2 rooms open." (count-if #'littoral.auth:permitted-p (office-rooms self)))))
+  (h:p () (h:text (format nil "~D of 2 rooms open." (count-if #'littoral.auth:permitted-p (office-rooms self)))))
   (mapc #'render-component (office-rooms self))
-  (anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "eve")))) "Be eve"))
+  (h:anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "eve")))) "Be eve"))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
       (littoral.auth:*pbkdf2-iterations* 1000))
   (littoral.auth:create-auth-tables)
@@ -19619,13 +20483,13 @@ Asks for a name and password; signs the user in and answers them.
 ```lisp
 (defclass members-news (littoral.auth:restricted component) ())
 (defmethod render ((self members-news))
-  (p () "Members' news"))
+  (h:p () "Members' news"))
 (defclass club (littoral.auth:auth-root component)
   ((news :initform (make-instance 'members-news) :reader club-news)))
 (defmethod children ((self club)) (list (club-news self)))
 (defmethod render ((self club))
   (let ((user (littoral.auth:current-user)))
-    (p () (text (if user (format nil "Hello, ~A." (littoral.auth:user-name user)) "Hello, stranger."))))
+    (h:p () (h:text (if user (format nil "Hello, ~A." (littoral.auth:user-name user)) "Hello, stranger."))))
   (render-component (club-news self)))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
       (littoral.auth:*pbkdf2-iterations* 1000))
@@ -19649,8 +20513,8 @@ Asks for a name and password; signs the user in and answers them.
 (defclass front-door (component)
   ((greeting :initform "Welcome." :accessor greeting)))
 (defmethod render ((self front-door))
-  (p () (text (greeting self)))
-  (anchor (:callback (lambda ()
+  (h:p () (h:text (greeting self)))
+  (h:anchor (:callback (lambda ()
                        (show self (make-instance 'littoral.auth:sign-in)
                              :on-answer (lambda (user)
                                           (when user
@@ -19702,10 +20566,10 @@ Write a link that signs the user out, then calls `then`, a thunk.
 (defclass farewell (littoral.auth:auth-root component)
   ((message :initform nil :accessor farewell-message)))
 (defmethod render ((self farewell))
-  (when (farewell-message self) (p () (text (farewell-message self))))
+  (when (farewell-message self) (h:p () (h:text (farewell-message self))))
   (if (littoral.auth:signed-in-p)
       (littoral.auth:sign-out-link :then (lambda () (setf (farewell-message self) "Goodbye.")))
-      (anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "ada")))) "Come in")))
+      (h:anchor (:callback (lambda () (littoral.auth:log-in (littoral.auth:find-user "ada")))) "Come in")))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
       (littoral.auth:*pbkdf2-iterations* 1000))
   (littoral.auth:create-auth-tables)
@@ -19730,8 +20594,8 @@ Asks for an email address and sends a reset link to it.
 (defmethod render ((self reading-room))
   (let ((user (littoral.auth:current-user)))
     (if user
-        (p () (text (format nil "Hello, ~A." (littoral.auth:user-name user))))
-        (anchor (:callback (lambda () (show self (make-instance 'littoral.auth:sign-in)))) "Sign in"))))
+        (h:p () (h:text (format nil "Hello, ~A." (littoral.auth:user-name user))))
+        (h:anchor (:callback (lambda () (show self (make-instance 'littoral.auth:sign-in)))) "Sign in"))))
 (let* ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
        (littoral.auth:*pbkdf2-iterations* 1000)
        (littoral.auth:*public-url* "https://library.example")
@@ -19790,8 +20654,8 @@ Lets the holder of a reset link choose a new password; answers the user.
 (defmethod render ((self reading-room))
   (let ((user (littoral.auth:current-user)))
     (if user
-        (p () (text (format nil "Hello, ~A." (littoral.auth:user-name user))))
-        (anchor (:callback (lambda () (show self (make-instance 'littoral.auth:sign-in)))) "Sign in"))))
+        (h:p () (h:text (format nil "Hello, ~A." (littoral.auth:user-name user))))
+        (h:anchor (:callback (lambda () (show self (make-instance 'littoral.auth:sign-in)))) "Sign in"))))
 (let* ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
        (littoral.auth:*pbkdf2-iterations* 1000)
        (littoral.auth:*public-url* "https://library.example")
@@ -19828,13 +20692,13 @@ password reset links and, with littoral/oauth, sign-in callbacks.
 ```lisp
 (defclass members-news (littoral.auth:restricted component) ())
 (defmethod render ((self members-news))
-  (p () "Members' news"))
+  (h:p () "Members' news"))
 (defclass club (littoral.auth:auth-root component)
   ((news :initform (make-instance 'members-news) :reader club-news)))
 (defmethod children ((self club)) (list (club-news self)))
 (defmethod render ((self club))
   (let ((user (littoral.auth:current-user)))
-    (p () (text (if user (format nil "Hello, ~A." (littoral.auth:user-name user)) "Hello, stranger."))))
+    (h:p () (h:text (if user (format nil "Hello, ~A." (littoral.auth:user-name user)) "Hello, stranger."))))
   (render-component (club-news self)))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
       (littoral.auth:*pbkdf2-iterations* 1000))
@@ -19865,7 +20729,7 @@ replaces it.
 (littoral.auth:define-auth-path "welcome" (root rest request)
   (show root (make-instance 'message-dialog :message (format nil "Welcome, ~A!" (first rest)))))
 (defclass guest-house (littoral.auth:auth-root component) ())
-(defmethod render ((self guest-house)) (p () "The front page"))
+(defmethod render ((self guest-house)) (h:p () "The front page"))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
   (littoral.auth:create-auth-tables)
   (with-fresh-applications (("/house" 'guest-house :mode :deployment))
@@ -19904,7 +20768,7 @@ buttons, from littoral/oauth).
       (littoral.auth:*sign-in-extras*
         (cons (lambda (sign-in)
                 (declare (ignore sign-in))
-                (p () "No account? Ask at the front desk."))
+                (h:p () "No account? Ask at the front desk."))
               littoral.auth:*sign-in-extras*)))
   (with-fresh-applications (("/desk" 'desk-sign-in :mode :deployment))
     (let ((b (make-instance 'browser)))
@@ -19926,7 +20790,7 @@ the sign-in form.
 ```lisp
 (defclass back-office (littoral.auth:signed-in-root component) ())
 (defmethod render ((self back-office))
-  (p () (text (format nil "The back office, for ~(~A~) users." (littoral.auth:application-role)))))
+  (h:p () (h:text (format nil "The back office, for ~(~A~) users." (littoral.auth:application-role)))))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
       (littoral.auth:*pbkdf2-iterations* 1000))
   (littoral.auth:create-auth-tables)
@@ -19957,7 +20821,7 @@ forget the restriction.
 ```lisp
 (defclass back-office (littoral.auth:signed-in-root component) ())
 (defmethod render ((self back-office))
-  (p () (text (format nil "The back office, for ~(~A~) users." (littoral.auth:application-role)))))
+  (h:p () (h:text (format nil "The back office, for ~(~A~) users." (littoral.auth:application-role)))))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
       (littoral.auth:*pbkdf2-iterations* 1000))
   (littoral.auth:create-auth-tables)
@@ -19987,7 +20851,7 @@ whether `restrict-application` restricted it.
 ```lisp
 (defclass back-office (littoral.auth:signed-in-root component) ())
 (defmethod render ((self back-office))
-  (p () (text (format nil "The back office, for ~(~A~) users." (littoral.auth:application-role)))))
+  (h:p () (h:text (format nil "The back office, for ~(~A~) users." (littoral.auth:application-role)))))
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
       (littoral.auth:*pbkdf2-iterations* 1000))
   (littoral.auth:create-auth-tables)
@@ -20020,8 +20884,8 @@ revoked, keeps its links.
 (defclass ledger (littoral.auth:signed-in-root component)
   ((entries :initform 0 :accessor ledger-entries)))
 (defmethod render ((self ledger))
-  (p () (text (format nil "~D entr~:@P" (ledger-entries self))))
-  (anchor (:callback (lambda ()
+  (h:p () (h:text (format nil "~D entr~:@P" (ledger-entries self))))
+  (h:anchor (:callback (lambda ()
                        (littoral.auth:check-application-role)
                        (incf (ledger-entries self))))
     "Add an entry"))
@@ -20913,8 +21777,8 @@ transaction, for `register-application`.
 (littoral.db:define-table vote)
 (defclass ballot (component) ())
 (defmethod render ((self ballot))
-  (p () (text (format nil "~D vote~:P" (littoral.db:db-count 'vote))))
-  (anchor (:callback (lambda ()
+  (h:p () (h:text (format nil "~D vote~:P" (littoral.db:db-count 'vote))))
+  (h:anchor (:callback (lambda ()
                        (littoral.db:db-save (make-instance 'vote :choice "yes"))
                        (error "Counting failed.")))
     "Vote"))
@@ -20968,7 +21832,7 @@ whatever else the process connects to: `driver` and `parameters` as for
 (littoral.db:define-table memo)
 (defclass memo-count (component) ())
 (defmethod render ((self memo-count))
-  (p () (text (format nil "~D memo~:P" (littoral.db:db-count 'memo)))))
+  (h:p () (h:text (format nil "~D memo~:P" (littoral.db:db-count 'memo)))))
 (let ((spec '(:sqlite3 :database-name ":memory:")))
   (let ((littoral.db:*database* spec))
     (littoral.db:create-table 'memo)
@@ -21524,8 +22388,8 @@ Where description file fields keep their files, unless a field names its own.
   ((saved :initform nil :accessor saved)))
 (defmethod render ((self application-form))
   (if (saved self)
-      (p () (text (format nil "Saved: ~A" (littoral.storage:stored-file-name (slot-value (saved self) 'letter)))))
-      (anchor (:callback (lambda ()
+      (h:p () (h:text (format nil "Saved: ~A" (littoral.storage:stored-file-name (slot-value (saved self) 'letter)))))
+      (h:anchor (:callback (lambda ()
                            (show self (make-editor (make-instance 'applicant))
                                  :on-answer (lambda (applicant) (setf (saved self) applicant)))))
         "Apply")))
@@ -21798,14 +22662,14 @@ uploaded with; the `stored-file`.  `storage` and `thumbnail` are as for
 (defclass inbox (component)
   ((received :initform '() :accessor received)))
 (defmethod render ((self inbox))
-  (form (:multipart t)
-    (file-input (:id "document"
+  (h:form (:multipart t)
+    (h:file-input (:id "document"
                  :callback (lambda (upload)
                              (push (littoral.storage:store-upload upload) (received self)))))
-    (submit-button () "Send"))
-  (ul ()
+    (h:submit-button () "Send"))
+  (h:ul ()
     (dolist (file (received self))
-      (li () (text (format nil "~A, ~D bytes" (littoral.storage:stored-file-name file)
+      (h:li () (h:text (format nil "~A, ~D bytes" (littoral.storage:stored-file-name file)
                            (littoral.storage:stored-file-size file)))))))
 (let* ((directory (merge-pathnames "littoral-example-inbox/" (uiop:temporary-directory)))
        (littoral.storage:*storage* (littoral.storage:make-disk-storage directory :prefix "/inbox-files/")))
@@ -22162,8 +23026,8 @@ description's `:type` `:file`, with the options `:storage` and `:max-size`.
   ((saved :initform nil :accessor saved)))
 (defmethod render ((self application-form))
   (if (saved self)
-      (p () (text (format nil "Saved: ~A" (littoral.storage:stored-file-name (slot-value (saved self) 'letter)))))
-      (anchor (:callback (lambda ()
+      (h:p () (h:text (format nil "Saved: ~A" (littoral.storage:stored-file-name (slot-value (saved self) 'letter)))))
+      (h:anchor (:callback (lambda ()
                            (show self (make-editor (make-instance 'applicant))
                                  :on-answer (lambda (applicant) (setf (saved self) applicant)))))
         "Apply")))
@@ -22214,8 +23078,8 @@ description's `:type` `:image`, with the options of `file-field`.
   ((saved :initform nil :accessor saved)))
 (defmethod render ((self application-form))
   (if (saved self)
-      (p () (text (format nil "Saved: ~A" (littoral.storage:stored-file-name (slot-value (saved self) 'letter)))))
-      (anchor (:callback (lambda ()
+      (h:p () (h:text (format nil "Saved: ~A" (littoral.storage:stored-file-name (slot-value (saved self) 'letter)))))
+      (h:anchor (:callback (lambda ()
                            (show self (make-editor (make-instance 'applicant))
                                  :on-answer (lambda (applicant) (setf (saved self) applicant)))))
         "Apply")))
@@ -22366,8 +23230,8 @@ replaces it.  Returns `name`.
 (defmethod render ((self oauth-club))
   (let ((user (littoral.auth:current-user)))
     (if user
-        (p () (text (format nil "Hello, ~A." (littoral.auth:user-name user))))
-        (anchor (:callback (lambda () (show self (make-instance 'littoral.auth:sign-in)))) "Sign in"))))
+        (h:p () (h:text (format nil "Hello, ~A." (littoral.auth:user-name user))))
+        (h:anchor (:callback (lambda () (show self (make-instance 'littoral.auth:sign-in)))) "Sign in"))))
 (littoral.oauth:define-oauth-provider :fakeid
   :label "FakeID"
   :authorize-url "https://id.example/authorize"
@@ -22470,8 +23334,8 @@ A function of (URL `parameters`) posting a form and returning the body.
 (defmethod render ((self oauth-club))
   (let ((user (littoral.auth:current-user)))
     (if user
-        (p () (text (format nil "Hello, ~A." (littoral.auth:user-name user))))
-        (anchor (:callback (lambda () (show self (make-instance 'littoral.auth:sign-in)))) "Sign in"))))
+        (h:p () (h:text (format nil "Hello, ~A." (littoral.auth:user-name user))))
+        (h:anchor (:callback (lambda () (show self (make-instance 'littoral.auth:sign-in)))) "Sign in"))))
 (littoral.oauth:define-oauth-provider :fakeid
   :label "FakeID"
   :authorize-url "https://id.example/authorize"
@@ -22516,8 +23380,8 @@ A function of (URL `access-token`) returning the body.
 (defmethod render ((self oauth-club))
   (let ((user (littoral.auth:current-user)))
     (if user
-        (p () (text (format nil "Hello, ~A." (littoral.auth:user-name user))))
-        (anchor (:callback (lambda () (show self (make-instance 'littoral.auth:sign-in)))) "Sign in"))))
+        (h:p () (h:text (format nil "Hello, ~A." (littoral.auth:user-name user))))
+        (h:anchor (:callback (lambda () (show self (make-instance 'littoral.auth:sign-in)))) "Sign in"))))
 (littoral.oauth:define-oauth-provider :fakeid
   :label "FakeID"
   :authorize-url "https://id.example/authorize"
@@ -22576,9 +23440,8 @@ another name.  A socket from any other origin is refused with 403.
 
 Load with `(asdf:load-system :littoral/parenscript)`.  Writes Littoral
 components' browser behaviour in Parenscript.  A package using both this and
-parenscript must shadow one CALL and one LABEL, as the parenscript demo does
-with (:shadowing-import-from #:littoral #:call) and
-(:shadowing-import-from #:littoral.html #:label).
+parenscript must shadow one CALL, as the parenscript demo does with
+(:shadowing-import-from #:littoral #:call).
 
 ### General
 
@@ -22595,7 +23458,7 @@ only names it, so use it while rendering.
 ```lisp
 (defclass light-switch (component) ())
 (defmethod render ((self light-switch))
-  (button (:on-click (littoral.parenscript:in-browser
+  (h:button (:on-click (littoral.parenscript:in-browser
                       (parenscript:ps (parenscript:chain this class-list (toggle "on")))))
     "Light"))
 (with-fresh-applications (("/switch" 'light-switch :mode :deployment))
@@ -22620,7 +23483,7 @@ value of littoral.call's promise.
 (defclass shouter (component) ())
 (defmethod render ((self shouter))
   (let ((spec (littoral.parenscript:client-callback #'string-upcase)))
-    (button (:on-click (littoral.parenscript:in-browser
+    (h:button (:on-click (littoral.parenscript:in-browser
                         (parenscript:ps
                           (parenscript:chain littoral (call (parenscript:lisp spec) "hello")
                                              (then (lambda (answer) (alert answer)))))))
@@ -22643,8 +23506,8 @@ value of littoral.call's promise.
   (let ((spec (littoral.parenscript:client-callback
                (lambda (value) (declare (ignore value)) (incf (tally-count self)))
                :update self)))
-    (span () (text (format nil "~D so far" (tally-count self))))
-    (button (:on-click (littoral.parenscript:in-browser
+    (h:span () (h:text (format nil "~D so far" (tally-count self))))
+    (h:button (:on-click (littoral.parenscript:in-browser
                         (parenscript:ps (parenscript:chain littoral (call (parenscript:lisp spec))))))
       "Count")))
 (with-fresh-applications (("/tally" 'tally :mode :deployment))

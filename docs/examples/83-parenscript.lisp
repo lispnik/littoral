@@ -4,7 +4,7 @@
 ;;; A handler that runs only in the browser, with no request: THIS is the element.  The attribute names code that the page's own script defines, so no code rides in attributes.  (Parenscript's names are written in full here; an application's package would use parenscript.)
 (defclass light-switch (component) ())
 (defmethod render ((self light-switch))
-  (button (:on-click (littoral.parenscript:in-browser
+  (h:button (:on-click (littoral.parenscript:in-browser
                       (parenscript:ps (parenscript:chain this class-list (toggle "on")))))
     "Light"))
 (with-fresh-applications (("/switch" 'light-switch :mode :deployment))
@@ -19,7 +19,7 @@
 (defclass shouter (component) ())
 (defmethod render ((self shouter))
   (let ((spec (littoral.parenscript:client-callback #'string-upcase)))
-    (button (:on-click (littoral.parenscript:in-browser
+    (h:button (:on-click (littoral.parenscript:in-browser
                         (parenscript:ps
                           (parenscript:chain littoral (call (parenscript:lisp spec) "hello")
                                              (then (lambda (answer) (alert answer)))))))
@@ -49,8 +49,8 @@
   (let ((spec (littoral.parenscript:client-callback
                (lambda (value) (declare (ignore value)) (incf (tally-count self)))
                :update self)))
-    (span () (text (format nil "~D so far" (tally-count self))))
-    (button (:on-click (littoral.parenscript:in-browser
+    (h:span () (h:text (format nil "~D so far" (tally-count self))))
+    (h:button (:on-click (littoral.parenscript:in-browser
                         (parenscript:ps (parenscript:chain littoral (call (parenscript:lisp spec))))))
       "Count")))
 (with-fresh-applications (("/tally" 'tally :mode :deployment))

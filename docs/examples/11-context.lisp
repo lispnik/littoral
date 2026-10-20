@@ -10,7 +10,7 @@
                           (request-parameter-p "loud" request)
                           (request-parameter "missing" request))))
 (defmethod render ((self welcome))
-  (p () (text (prin1-to-string (seen self)))))
+  (h:p () (h:text (prin1-to-string (seen self)))))
 (with-fresh-applications (("/welcome" 'welcome :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/welcome/back?name=Ada&loud")
@@ -26,7 +26,7 @@
   (setf (language self)
         (gethash "accept-language" (lack/request:request-headers *request*))))
 (defmethod render ((self greeter))
-  (p () "Your browser prefers " (text (language self)) "."))
+  (h:p () "Your browser prefers " (h:text (language self)) "."))
 (with-fresh-applications (("/greeter" 'greeter :mode :deployment))
   (let ((b (make-instance 'browser :headers '(("accept-language" . "fr")))))
     (visit b "/greeter")
@@ -37,9 +37,9 @@
 ;;; While a request is handled, *session* is its session and *application* its application.  session-property keeps a value in *session* by default.
 (defclass visits (component) ())
 (defmethod render ((self visits))
-  (p () (text (application-title *application*)) ": "
-    (text (princ-to-string (or (session-property :clicks) 0))) " clicks")
-  (anchor (:callback (lambda ()
+  (h:p () (h:text (application-title *application*)) ": "
+    (h:text (princ-to-string (or (session-property :clicks) 0))) " clicks")
+  (h:anchor (:callback (lambda ()
                        (setf (session-property :clicks *session*)
                              (1+ (or (session-property :clicks *session*) 0)))))
     "Click"))
@@ -55,7 +55,7 @@
 ;;; A callback can send the browser elsewhere instead of to the next page.
 (defclass exit-page (component) ())
 (defmethod render ((self exit-page))
-  (anchor (:callback (lambda () (redirect-to "https://example.com/bye"))) "Leave"))
+  (h:anchor (:callback (lambda () (redirect-to "https://example.com/bye"))) "Leave"))
 (with-fresh-applications (("/exit" 'exit-page :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/exit")
@@ -67,7 +67,7 @@
 ;;; Signal forbidden from a callback (or while rendering) to refuse: the user gets a 403 page with the message.
 (defclass vault (component) ())
 (defmethod render ((self vault))
-  (anchor (:callback (lambda () (error 'forbidden :message "Only the harbour master may open the vault.")))
+  (h:anchor (:callback (lambda () (error 'forbidden :message "Only the harbour master may open the vault.")))
     "Open"))
 (with-fresh-applications (("/vault" 'vault :mode :deployment))
   (let ((b (make-instance 'browser)))

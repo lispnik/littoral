@@ -29,7 +29,7 @@
 
 (defmethod render ((self login-demo))
   (if (user self)
-      (p () "Welcome, " (strong () (text (user self))) ". "
-        (anchor (:callback (lambda () (log-out self))) "Log out"))
-      (p () "Nobody is logged in. "
-        (anchor (:callback (lambda () (log-in self))) "Log in"))))
+      (h:p () "Welcome, " (h:strong () (h:text (user self))) ". "
+        (h:anchor (:callback (lambda () (log-out self))) "Log out"))
+      (h:p () "Nobody is logged in. "
+        (h:anchor (:callback (lambda () (log-in self))) "Log in"))))

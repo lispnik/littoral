@@ -1,7 +1,7 @@
 ;;;; widgets-layout.lisp — popovers, tooltips, drawers and split panes
 ;;;;
-;;;;   (with-popover ("Details") (p () "More about it."))
-;;;;   (with-tooltip ("Copies the link") (button () "Copy"))
+;;;;   (with-popover ("Details") (h:p () "More about it."))
+;;;;   (with-tooltip ("Copies the link") (h:button () "Copy"))
 ;;;;   (make-instance 'drawer :label "Filters" :content filters :side :right)
 ;;;;   (make-instance 'split-pane :first list :second detail :position 35)
 
@@ -17,7 +17,7 @@
   "Write WITH-POPOVER's button and popover, BODY a thunk."
   (let ((id (or id (fresh-element-id "lt-popover"))))
     (emit-tag "button" (list :type "button" :class "lt-popover-button" :popovertarget id)
-              (lambda () (text (translate-label label))))
+              (lambda () (h:text (translate-label label))))
     (emit-tag "div" (list :id id :popover "auto" :class (list "lt-popover" class)) body)))
 
 (defmacro with-popover ((label &key id class) &body body)
@@ -38,7 +38,7 @@ there from the start, so its links and fields work as any others."
               (lambda ()
                 (funcall body)
                 (emit-tag "span" (list :id id :role "tooltip" :class "lt-tooltip-text")
-                          (lambda () (text (translate-label tip))))))))
+                          (lambda () (h:text (translate-label tip))))))))
 
 (defmacro with-tooltip ((tip &key id) &body body)
   "Write BODY, written as a tag's body is, with TIP (translated) shown above
@@ -81,17 +81,17 @@ it closes."))
         (open (drawer-open-p self))
         (title (translate-label (or (drawer-title self) (drawer-label self)))))
     (flet ((toggle () (toggle-drawer self)))
-      (anchor (:class "lt-drawer-toggle" :aria-expanded (if open "true" "false")
+      (h:anchor (:class "lt-drawer-toggle" :aria-expanded (if open "true" "false")
                :aria-controls (when open panel-id)
                :callback #'toggle :on-click (ajax :callback #'toggle :update self))
-        (text (translate-label (drawer-label self))))
+        (h:text (translate-label (drawer-label self))))
       (when open
-        (div (:class "lt-drawer-backdrop"))
-        (div (:id panel-id :role "dialog" :aria-label title
+        (h:div (:class "lt-drawer-backdrop"))
+        (h:div (:id panel-id :role "dialog" :aria-label title
               :class (list "lt-drawer" (format nil "lt-drawer-~(~A~)" (drawer-side self))))
-          (div (:class "lt-drawer-head")
-            (h2 () (text title))
-            (anchor (:class "lt-drawer-close" :label (translate "Close") :autofocus t
+          (h:div (:class "lt-drawer-head")
+            (h:h2 () (h:text title))
+            (h:anchor (:class "lt-drawer-close" :label (translate "Close") :autofocus t
                      :callback #'toggle :on-click (ajax :callback #'toggle :update self))
               "×"))
           (render-component (drawer-content self)))))))
@@ -125,10 +125,10 @@ panes are stacked."))
 (defmethod render ((self split-pane))
   (let ((first-id (format nil "~A-first" (component-id self)))
         (position (split-position self)))
-    (div (:class "lt-split" :style (format nil "--lt-split: ~D%" position))
-      (div (:id first-id :class "lt-split-pane")
+    (h:div (:class "lt-split" :style (format nil "--lt-split: ~D%" position))
+      (h:div (:id first-id :class "lt-split-pane")
         (render-component (split-first self)))
-      (div (:class "lt-split-divider" :role "separator" :tabindex "0" :aria-orientation "vertical"
+      (h:div (:class "lt-split-divider" :role "separator" :tabindex "0" :aria-orientation "vertical"
             :aria-controls first-id :aria-label (translate-label (split-label self))
             :aria-valuenow position :aria-valuetext (format nil "~D%" position)
             :aria-valuemin (split-min self) :aria-valuemax (split-max self)
@@ -136,5 +136,5 @@ panes are stacked."))
                                      (let ((n (ignore-errors (parse-integer value))))
                                        (when n (set-split-position self n))))
                          :value "this.getAttribute('aria-valuenow')")))
-      (div (:class "lt-split-pane")
+      (h:div (:class "lt-split-pane")
         (render-component (split-second self))))))

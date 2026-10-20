@@ -110,7 +110,7 @@
 (defmethod subscriptions ((self presence-toggle)) (list *toggle-channel*))
 (defmethod children ((self presence-toggle)) (when (toggle-shown self) (list (toggle-list self))))
 (defmethod render ((self presence-toggle))
-  (button (:on-click (ajax :callback (lambda () (setf (toggle-shown self) (not (toggle-shown self)))) :update self))
+  (h:button (:on-click (ajax :callback (lambda () (setf (toggle-shown self) (not (toggle-shown self)))) :update self))
     "Toggle")
   (when (toggle-shown self) (render-component (toggle-list self))))
 

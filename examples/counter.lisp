@@ -12,11 +12,11 @@
   (list self))
 
 (defmethod render ((self counter))
-  (div (:class "counter")
-    (h1 () (text (count-of self)))
-    (anchor (:callback (lambda () (incf (count-of self)))) "++")
+  (h:div (:class "counter")
+    (h:h1 () (h:text (count-of self)))
+    (h:anchor (:callback (lambda () (incf (count-of self)))) "++")
     " "
-    (anchor (:callback (lambda () (decf (count-of self)))) "--")))
+    (h:anchor (:callback (lambda () (decf (count-of self)))) "--")))
 
 (defmethod style ((self counter))
   ".counter h1 { font-size: 3rem; margin: .2rem 0; }")

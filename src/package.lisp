@@ -1,31 +1,57 @@
 ;;;; package.lisp
 
-;;; The HTML vocabulary lives in a package of its own: names like MAIN,
-;;; HEADER, LABEL and TABLE are too common to force on every package that
-;;; uses LITTORAL; use LITTORAL.HTML alongside it when that suits.
+;;; The HTML vocabulary lives in a package of its own, with every element
+;;; under its own name: MAP, TIME and SEARCH shadow CL's, and names like
+;;; MAIN, LABEL and DATA are too common to force on anyone.  Give it a
+;;; local nickname rather than using it:
+;;;
+;;;   (defpackage #:my-app
+;;;     (:use #:cl #:littoral)
+;;;     (:local-nicknames (#:h #:littoral.html)))
+;;;
+;;; and write (h:div (:class "x") (h:p () "Hello")).
 (defpackage #:littoral.html
   (:use #:cl)
+  (:shadow #:map #:search #:time)
   (:export
    ;; Canvas
    #:*canvas* #:text #:raw #:with-canvas-to-string
-   #:html-escape
-   ;; Plain tags
-   #:div #:span #:p #:h1 #:h2 #:h3 #:h4 #:h5 #:h6 #:ul #:ol #:li #:dl #:dt #:dd
-   #:table #:thead #:tbody #:tfoot #:tr #:td #:th #:caption
-   #:em #:strong #:b #:i #:u #:small #:code #:pre #:blockquote #:sup #:sub
-   #:section #:article #:aside #:nav #:header #:footer #:main #:figure #:figcaption
-   #:fieldset #:legend #:label #:abbr #:cite #:mark #:dfn #:kbd #:samp #:var-tag #:details #:summary
-   #:img #:br #:hr #:tag
+   #:html-escape #:tag
+   ;; The document
+   #:html #:head #:title #:base #:link #:meta #:style #:script #:noscript #:template #:slot #:body
+   ;; Sections
+   #:article #:section #:nav #:aside #:h1 #:h2 #:h3 #:h4 #:h5 #:h6 #:hgroup
+   #:header #:footer #:address #:main #:search
+   ;; Grouping content
+   #:p #:hr #:pre #:blockquote #:ol #:ul #:menu #:li #:dl #:dt #:dd
+   #:figure #:figcaption #:div
+   ;; Text
+   #:a #:em #:strong #:small #:s #:cite #:q #:dfn #:abbr #:ruby #:rt #:rp #:data #:time
+   #:code #:var #:samp #:kbd #:sub #:sup #:i #:b #:u #:mark #:bdi #:bdo #:span #:br #:wbr
+   #:ins #:del
+   ;; Embedded content
+   #:picture #:source #:img #:iframe #:embed #:object #:video #:audio #:track #:map #:area
+   #:canvas
+   ;; Tables
+   #:table #:caption #:colgroup #:col #:tbody #:thead #:tfoot #:tr #:td #:th
+   ;; Forms, written plainly
+   #:fieldset #:legend #:label #:input #:select #:datalist #:optgroup #:option #:selectedcontent
+   #:textarea #:output #:progress #:meter
+   ;; Interactive
+   #:details #:summary #:dialog
    ;; Brushes with callbacks
    #:anchor #:form #:text-input #:password-input #:number-input #:hidden-input
    #:text-area #:checkbox #:select-list #:radio-group #:submit-button #:cancel-button #:button
    #:file-input #:uploaded-file #:file-name #:file-content-type #:file-contents)
-  (:documentation "Tags and brushes for writing HTML in RENDER methods."))
+  (:documentation "Tags and brushes for writing HTML in RENDER methods: every HTML element,
+under its own name.  Give the package a local nickname, as in
+(:local-nicknames (#:h #:littoral.html)), and write (h:p () \"Hello\")."))
 
 ;;; The class JOB (a background job) is not exported: the name is too
 ;;; common.  Its readers (JOB-ID, JOB-STATUS, …) are.
 (defpackage #:littoral
-  (:use #:cl #:littoral.html)
+  (:use #:cl)
+  (:local-nicknames (#:h #:littoral.html))
   (:import-from #:cl-cont #:defun/cc #:let/cc #:with-call/cc)
   (:export
    ;; Context

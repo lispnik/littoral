@@ -120,9 +120,9 @@
 
 (defmethod render ((self polyglot))
   (render-component (polyglot-chooser self))
-  (p (:class "count") (translate-plural 3 "~D item" "~D items"))
-  (p (:class "today") (text (localized-date 2026 10 7)))
-  (anchor (:callback (lambda () (show self (make-instance 'confirm-dialog :message "Sure?")))) "Ask"))
+  (h:p (:class "count") (translate-plural 3 "~D item" "~D items"))
+  (h:p (:class "today") (h:text (localized-date 2026 10 7)))
+  (h:anchor (:callback (lambda () (show self (make-instance 'confirm-dialog :message "Sure?")))) "Ask"))
 
 (test sessions-take-the-browsers-language
   (with-fresh-applications (("/poly" 'polyglot :mode :deployment :languages '("fr" "de")))

@@ -50,8 +50,8 @@
   (:documentation "Calls a TWO-STEP task and shows its answer."))
 
 (defmethod render ((self task-host))
-  (p () "Host: " (text (prin1-to-string (result self))))
-  (anchor (:callback (lambda ()
+  (h:p () "Host: " (h:text (prin1-to-string (result self))))
+  (h:anchor (:callback (lambda ()
                        (show self (make-instance 'two-step)
                              :on-answer (lambda (v) (setf (result self) v)))))
     "start"))

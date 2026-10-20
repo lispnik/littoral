@@ -20,24 +20,24 @@
           (demo-samples self) (subseq (cons sample (demo-samples self)) 0 (min 30 (1+ (length (demo-samples self))))))))
 
 (defmethod render ((self monitoring-demo))
-  (h1 () "Monitoring")
-  (p () "This server counts and times every request (" (code () "metrics-summary") "), serves "
-    (anchor (:href (url-for "/healthz")) (code () "/healthz")) " for load balancers and "
-    (anchor (:href (url-for "/metrics")) (code () "/metrics")) " for Prometheus. "
+  (h:h1 () "Monitoring")
+  (h:p () "This server counts and times every request (" (h:code () "metrics-summary") "), serves "
+    (h:anchor (:href (url-for "/healthz")) (h:code () "/healthz")) " for load balancers and "
+    (h:anchor (:href (url-for "/metrics")) (h:code () "/metrics")) " for Prometheus. "
     "This page samples the numbers every two seconds; click around other examples in another tab to move them.")
-  (span (:periodical (periodical 2 :callback (lambda () (take-sample self)) :update self)))
+  (h:span (:periodical (periodical 2 :callback (lambda () (take-sample self)) :update self)))
   (let* ((samples (reverse (demo-samples self)))
          (latest (or (first (demo-samples self)) (list :requests 0 :mean-ms 0 :heap-mb 0 :sessions 0 :streams 0 :threads 0))))
-    (dl (:class "monitoring-figures")
+    (h:dl (:class "monitoring-figures")
       (loop for (label key unit) in '(("Requests (last 2 s)" :requests "") ("Mean response" :mean-ms " ms")
                                       ("Heap" :heap-mb " MB") ("Sessions" :sessions "") ("Push streams" :streams "")
                                       ("Threads" :threads ""))
-            do (div ()
-                 (dt () (text label))
-                 (dd () (text (format nil "~:[~D~;~,1F~]~A" (eq key :mean-ms) (getf latest key) unit))
+            do (h:div ()
+                 (h:dt () (h:text label))
+                 (h:dd () (h:text (format nil "~:[~D~;~,1F~]~A" (eq key :mean-ms) (getf latest key) unit))
                    (sparkline (mapcar (lambda (s) (getf s key)) samples) :label (format nil "~A, recent" label))))))
     (if (< (length samples) 2)
-        (p (:class "lt-help") "Collecting samples…")
+        (h:p (:class "lt-help") "Collecting samples…")
         (progn
           (line-chart (list (cons "Requests per 2 s" (mapcar (lambda (s) (getf s :requests)) samples)))
                       :title "Requests" :x-labels (loop for i downfrom (* 2 (1- (length samples))) to 0 by 2 collect (format nil "-~Ds" i)))

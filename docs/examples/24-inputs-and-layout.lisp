@@ -34,7 +34,7 @@
   (list (parse-field field "4")
         (parse-field field "0")
         (handler-case (parse-field field "6") (field-error (e) (princ-to-string e)))
-        (with-canvas-to-string () (render-field-value field 3))))
+        (h:with-canvas-to-string () (render-field-value field 3))))
 ;; ⇒ (4 NIL "Stars must be from 1 to 5." "<span class=\"lt-stars\" role=\"img\" aria-label=\"3 out of 5\">★★★<span class=\"lt-stars-empty\">☆☆</span></span>")
 
 ;;;; Example: littoral:color-field littoral:normalize-color
@@ -47,7 +47,7 @@
   (list (normalize-color "#36C")
         (normalize-color "teal")
         (parse-field field "0E7490")
-        (with-canvas-to-string () (render-field-value field "#0e7490"))))
+        (h:with-canvas-to-string () (render-field-value field "#0e7490"))))
 ;; ⇒ ("#3366cc" NIL "#0e7490" "<span class=\"lt-swatch\" style=\"background: #0e7490\" aria-hidden=\"true\"></span><code>#0e7490</code>")
 
 ;;;; Example: littoral:multiple-choice-field littoral.test:select-options
@@ -64,7 +64,7 @@
 (defmethod children ((self meeting-page)) (list (editor self)))
 (defmethod render ((self meeting-page))
   (render-component (editor self))
-  (p () (text (format nil "Meets on ~S" (slot-value (meeting self) 'days)))))
+  (h:p () (h:text (format nil "Meets on ~S" (slot-value (meeting self) 'days)))))
 (with-fresh-applications (("/meeting" 'meeting-page :mode :deployment))
   (let ((b (make-instance 'browser)))
     (visit b "/meeting")
@@ -123,22 +123,22 @@
 
 ;;;; Example: littoral:with-popover
 ;;; A button that opens a popover: the browser's own, which opens and closes without a round trip and closes on Escape or a click elsewhere.  littoral.js places it beside its button.
-(with-canvas-to-string ()
+(h:with-canvas-to-string ()
   (with-popover ("Shipping" :id "shipping")
-    (p () "Free over €50.")))
+    (h:p () "Free over €50.")))
 ;; ⇒ "<button type=\"button\" class=\"lt-popover-button\" popovertarget=\"shipping\">Shipping</button><div id=\"shipping\" popover=\"auto\" class=\"lt-popover\"><p>Free over €50.</p></div>"
 
 ;;;; Example: littoral:with-tooltip
 ;;; A tip shown above what it wraps while that has the pointer or the focus.  littoral.js makes the tip describe the first thing inside that takes the focus, and Escape hides it.
-(with-canvas-to-string ()
+(h:with-canvas-to-string ()
   (with-tooltip ("Saves a copy" :id "tip")
-    (button () "Duplicate")))
+    (h:button () "Duplicate")))
 ;; ⇒ "<span class=\"lt-tooltip\"><button type=\"button\">Duplicate</button><span id=\"tip\" role=\"tooltip\" class=\"lt-tooltip-text\">Saves a copy</span></span>"
 
 ;;;; Example: littoral:drawer littoral:drawer-content littoral:drawer-open-p littoral:toggle-drawer
 ;;; A panel that slides in from the side over the page.  Its button opens it and its × closes it, over AJAX or as plain links; whether it's open is kept on the server.  `toggle-drawer` opens or closes it from code.
 (defclass filters (component) ())
-(defmethod render ((self filters)) (p () "Only in stock"))
+(defmethod render ((self filters)) (h:p () "Only in stock"))
 (defclass shop-page (component)
   ((drawer :initform (make-instance 'drawer :label "Filters" :side :right :content (make-instance 'filters))
            :reader drawer)))
@@ -161,7 +161,7 @@
 ;;;; Example: littoral:split-pane littoral:split-first littoral:split-second littoral:split-position littoral:set-split-position
 ;;; Two components side by side with a divider that can be dragged, or moved with the arrow keys, to share the width; `:position` is the first's share in percent, kept between `:min` (15) and `:max` (85).  littoral.js posts each new share, which is kept on the server.
 (defclass words (component) ((text :initarg :text :reader words-text)))
-(defmethod render ((self words)) (p () (text (words-text self))))
+(defmethod render ((self words)) (h:p () (h:text (words-text self))))
 (let ((pane (make-instance 'split-pane :first (make-instance 'words :text "Inbox")
                                        :second (make-instance 'words :text "Message")
                                        :position 30)))

@@ -30,25 +30,25 @@
                        (setf (item-title item) title)))))
 
 (defmethod render ((self todo-list))
-  (h1 () "To do")
-  (form ()
-    (ul (:class "todo")
+  (h:h1 () "To do")
+  (h:form ()
+    (h:ul (:class "todo")
       (dolist (item (items self))
         (let ((item item))
-          (li ()
-            (checkbox (:value (item-done-p item) :label (format nil "~A done" (item-title item))
+          (h:li ()
+            (h:checkbox (:value (item-done-p item) :label (format nil "~A done" (item-title item))
                        :callback (lambda (v) (setf (item-done-p item) v))))
             " "
-            (span (:class (when (item-done-p item) "done")) (text (item-title item)))
+            (h:span (:class (when (item-done-p item) "done")) (h:text (item-title item)))
             " "
-            (anchor (:callback (lambda () (edit-item self item))) "edit")
+            (h:anchor (:callback (lambda () (edit-item self item))) "edit")
             " "
-            (anchor (:callback (lambda () (setf (items self) (remove item (items self)))))
+            (h:anchor (:callback (lambda () (setf (items self) (remove item (items self)))))
               "remove")))))
-    (text-input (:id "new-title" :value (new-title self) :placeholder "Something to do"
+    (h:text-input (:id "new-title" :value (new-title self) :placeholder "Something to do"
                  :callback (lambda (v) (setf (new-title self) v))))
-    (submit-button (:callback (lambda () (add-item self))) "Add")
-    (submit-button () "Save")))
+    (h:submit-button (:callback (lambda () (add-item self))) "Add")
+    (h:submit-button () "Save")))
 
 (defmethod style ((self todo-list))
   ".todo { list-style: none; padding: 0; } .todo .done { text-decoration: line-through; color: gray; }")

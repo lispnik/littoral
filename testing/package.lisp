@@ -1,7 +1,8 @@
 ;;;; package.lisp
 
 (defpackage #:littoral.test
-  (:use #:cl #:littoral #:littoral.html)
+  (:use #:cl #:littoral)
+  (:local-nicknames (#:h #:littoral.html))
   (:documentation "Test Littoral applications in-process with a fake browser.")
   (:export
    ;; A browser and its state

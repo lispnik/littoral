@@ -78,12 +78,12 @@ diameter in SVG units; the chart scales to fit."
                             (format out "<path class=\"lt-chart-slice ~A\" d=\"~A\"~:[~; fill-rule=\"evenodd\"~]><title>~A: ~A (~A)</title></path>"
                                     (series-class n) (slice-path r r (1- r) inner angle to)
                                     (and donut (= value total))
-                                    (html-escape (princ-to-string label)) (html-escape (funcall format-value value))
+                                    (h:html-escape (princ-to-string label)) (h:html-escape (funcall format-value value))
                                     (percent-text value total))
                             (setf angle to)))))
          (when donut
            (format out "<text class=\"lt-chart-total\" x=\"~A\" y=\"~A\" text-anchor=\"middle\" dominant-baseline=\"middle\">~A</text>"
-                   (svg-number r) (svg-number r) (html-escape (funcall format-value total))))
+                   (svg-number r) (svg-number r) (h:html-escape (funcall format-value total))))
          (format out "</svg>")))
      (lambda () (chart-key (mapcar #'car data))))))
 
@@ -116,7 +116,7 @@ writing the values and the axis, and the data as a table."
                for y = (+ above (* plot-h (- 1 (/ tick top))))
                do (format out "<line class=\"lt-chart-grid\" x1=\"~A\" x2=\"~A\" y1=\"~A\" y2=\"~A\"/><text class=\"lt-chart-axis\" x=\"~A\" y=\"~A\" text-anchor=\"end\">~A</text>"
                           left (- width right) (svg-number y) (svg-number y) (- left 6) (svg-number (+ y 4))
-                          (html-escape (funcall format-value tick))))
+                          (h:html-escape (funcall format-value tick))))
          (loop for i below count
                for label in bar-labels
                for x = (+ left (* i slot) (* slot 0.15))
@@ -128,11 +128,11 @@ writing the values and the axis, and the data as a table."
                                  (format out "<rect class=\"lt-chart-segment ~A\" x=\"~A\" y=\"~A\" width=\"~A\" height=\"~A\"><title>~A, ~A: ~A</title></rect>"
                                          (series-class n) (svg-number x) (svg-number (- (+ above plot-h) y0 h))
                                          (svg-number (* slot 0.7)) (svg-number h)
-                                         (html-escape (princ-to-string name)) (html-escape label)
-                                         (html-escape (funcall format-value value)))
+                                         (h:html-escape (princ-to-string name)) (h:html-escape label)
+                                         (h:html-escape (funcall format-value value)))
                                  (incf base value))))
                   (format out "<text class=\"lt-chart-axis\" x=\"~A\" y=\"~A\" text-anchor=\"middle\">~A</text>"
-                          (svg-number (+ x (* slot 0.35))) (- height 8) (html-escape label)))
+                          (svg-number (+ x (* slot 0.35))) (- height 8) (h:html-escape label)))
          (format out "</svg>")))
      (lambda () (chart-key (mapcar #'first series))))))
 
@@ -182,20 +182,20 @@ shape.  FORMAT-X and FORMAT-Y write the coordinates and the axes."
                      for yy = (y tick)
                      do (format out "<line class=\"lt-chart-grid\" x1=\"~A\" x2=\"~A\" y1=\"~A\" y2=\"~A\"/><text class=\"lt-chart-axis\" x=\"~A\" y=\"~A\" text-anchor=\"end\">~A</text>"
                                 left (- width right) (svg-number yy) (svg-number yy) (- left 6) (svg-number (+ yy 4))
-                                (html-escape (funcall format-y tick))))
+                                (h:html-escape (funcall format-y tick))))
                (loop for tick from x0 to x1 by x-step
                      for xx = (x tick)
                      do (format out "<line class=\"lt-chart-grid\" x1=\"~A\" x2=\"~A\" y1=\"~A\" y2=\"~A\"/><text class=\"lt-chart-axis\" x=\"~A\" y=\"~A\" text-anchor=\"middle\">~A</text>"
                                 (svg-number xx) (svg-number xx) above (+ above plot-h) (svg-number xx) (+ above plot-h 14)
-                                (html-escape (funcall format-x tick))))
+                                (h:html-escape (funcall format-x tick))))
                (format out "<text class=\"lt-chart-axis lt-chart-axis-title\" x=\"~A\" y=\"~A\" text-anchor=\"middle\">~A</text>"
-                       (svg-number (+ left (/ plot-w 2))) (- height 4) (html-escape (princ-to-string x-label)))
+                       (svg-number (+ left (/ plot-w 2))) (- height 4) (h:html-escape (princ-to-string x-label)))
                (format out "<text class=\"lt-chart-axis lt-chart-axis-title\" text-anchor=\"middle\" transform=\"translate(12 ~A) rotate(-90)\">~A</text>"
-                       (svg-number (+ above (/ plot-h 2))) (html-escape (princ-to-string y-label)))
+                       (svg-number (+ above (/ plot-h 2))) (h:html-escape (princ-to-string y-label)))
                (loop for (name . points) in series for n from 0
                      do (loop for (px . py) in points
                               do (scatter-mark out n (x px) (y py)
-                                               (html-escape (format nil "~A: ~A, ~A" name (funcall format-x px) (funcall format-y py))))))
+                                               (h:html-escape (format nil "~A: ~A, ~A" name (funcall format-x px) (funcall format-y py))))))
                (format out "</svg>")))
            (when (> (length series) 1)
              (lambda () (chart-key (mapcar #'first series))))))))))

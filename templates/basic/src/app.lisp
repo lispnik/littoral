@@ -13,21 +13,21 @@
   (list self))
 
 (defmethod render ((self front-page))
-  (h1 () "{{title}}")
-  (p () "Count: " (strong (:id "count") (text (clicks self))))
-  (p ()
-    (anchor (:callback (lambda () (incf (clicks self)))) "Add one")
+  (h:h1 () "{{title}}")
+  (h:p () "Count: " (h:strong (:id "count") (h:text (clicks self))))
+  (h:p ()
+    (h:anchor (:callback (lambda () (incf (clicks self)))) "Add one")
     " · "
-    (anchor (:callback (lambda () (decf (clicks self)))) "Take one away")
+    (h:anchor (:callback (lambda () (decf (clicks self)))) "Take one away")
     " · "
-    (anchor (:callback (lambda () (reset-clicks self))) "Reset"))
-  (form ()
-    (label (:for "visitor") "Your name ")
-    (text-input (:id "visitor" :value (or (visitor self) "")
+    (h:anchor (:callback (lambda () (reset-clicks self))) "Reset"))
+  (h:form ()
+    (h:label (:for "visitor") "Your name ")
+    (h:text-input (:id "visitor" :value (or (visitor self) "")
                  :callback (lambda (value) (setf (visitor self) (string-trim " " value)))))
-    (submit-button () "Greet"))
+    (h:submit-button () "Greet"))
   (when (and (visitor self) (plusp (length (visitor self))))
-    (p (:class "greeting") (text (format nil "Hello, ~A!" (visitor self))))))
+    (h:p (:class "greeting") (h:text (format nil "Hello, ~A!" (visitor self))))))
 
 (defun reset-clicks (self)
   "Ask before setting the count back to zero.  SHOW puts the dialog in

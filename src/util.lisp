@@ -2,7 +2,7 @@
 
 (in-package #:littoral)
 
-(defun html-escape (thing)
+(defun h:html-escape (thing)
   "Return the printed representation of THING with HTML metacharacters escaped."
   (let ((string (if (stringp thing) thing (princ-to-string thing))))
     (if (not (find-if (lambda (c) (find c "<>&\"'")) string))

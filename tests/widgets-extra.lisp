@@ -35,7 +35,7 @@ Some *em*, **strong** and `<b>code</b>`.
     (is (search "<pre><code>(defun f () &#39;&lt;x&gt;)" html))))
 
 (test charts-are-accessible-svg
-  (let ((html (with-canvas-to-string ()
+  (let ((html (h:with-canvas-to-string ()
                 (bar-chart '(("Mon" . 3) ("Tue" . 7)) :title "Orders")
                 (line-chart '(("Visits" 1 4 2)) :title "Visits" :x-labels '("a" "b" "c"))
                 (sparkline '(1 3 2) :label "Trend"))))
@@ -49,7 +49,7 @@ Some *em*, **strong** and `<b>code</b>`.
 (test the-calendar
   (let ((calendar (make-instance 'calendar :year 2026 :month 10
                                            :events '(((2026 10 9) . "Release")))))
-    (let ((html (with-canvas-to-string () (render calendar))))
+    (let ((html (h:with-canvas-to-string () (render calendar))))
       (is (search "October 2026" html))
       (is (search "Release" html))
       ;; October 2026 begins on a Thursday: three blank days first.

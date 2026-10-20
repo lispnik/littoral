@@ -24,8 +24,9 @@
 
 (in-package #:littoral-doc-examples)
 
-(defparameter *example-packages* '("COMMON-LISP" "LITTORAL" "LITTORAL.HTML" "LITTORAL.TEST")
-  "The packages an example's package uses, as the reference's set-up does.")
+(defparameter *example-packages* '("COMMON-LISP" "LITTORAL" "LITTORAL.TEST")
+  "The packages an example's package uses, as the reference's set-up does.
+LITTORAL.HTML is there too, as H.")
 
 (defclass example ()
   ((symbols :initarg :symbols :reader example-symbols
@@ -176,7 +177,9 @@ otherwise be the test suite's."
 (defun run-example-here (example)
   "Run EXAMPLE in a package of its own, in this thread."
   (let* ((name (format nil "LITTORAL-EXAMPLE-~D" (random (expt 10 9))))
-         (package (make-package name :use *example-packages*))
+         (package (let ((package (make-package name :use *example-packages*)))
+                    (sb-ext:add-package-local-nickname '#:h '#:littoral.html package)
+                    package))
          (problems '()))
     (unwind-protect
          (handler-case

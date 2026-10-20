@@ -31,19 +31,19 @@
 (defmethod states ((self wizard-demo)) (list self))
 
 (defmethod render ((self wizard-demo))
-  (h1 () "Wizard")
-  (p () (code () "make-wizard") " shows a description's fields a few at a time: Next checks each step, "
+  (h:h1 () "Wizard")
+  (h:p () (h:code () "make-wizard") " shows a description's fields a few at a time: Next checks each step, "
     "Back keeps what was typed, and a review comes before Finish, which runs the description's own check. "
-    "It answers like any dialog, so a flow can " (code () "call") " it.")
+    "It answers like any dialog, so a flow can " (h:code () "call") " it.")
   (let ((done (demo-done self)))
     (when done
-      (div (:class "lt-dialog" :role "status")
-        (h2 () "Welcome, " (text (slot-value done 'name)) "!")
+      (h:div (:class "lt-dialog" :role "status")
+        (h:h2 () "Welcome, " (h:text (slot-value done 'name)) "!")
         (render-component (make-viewer done)))))
-  (p () (anchor (:callback (lambda ()
+  (h:p () (h:anchor (:callback (lambda ()
                              (show self (make-wizard (make-instance 'subscriber) :title "Sign up"
                                                      :steps '(("Account" name email)
                                                               ("Plan" plan seats start)
                                                               ("About you" newsletter about)))
                                    :on-answer (lambda (subscriber) (when subscriber (setf (demo-done self) subscriber))))))
-          (text (if (demo-done self) "Sign up someone else" "Sign up")))))
+          (h:text (if (demo-done self) "Sign up someone else" "Sign up")))))

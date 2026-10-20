@@ -16,7 +16,8 @@
 ;;;; and signed in.  The application's root must be an AUTH-ROOT.
 
 (defpackage #:littoral.oauth
-  (:use #:cl #:littoral #:littoral.html #:littoral.db #:littoral.auth)
+  (:use #:cl #:littoral #:littoral.db #:littoral.auth)
+  (:local-nicknames (#:h #:littoral.html))
   (:documentation "Sign in with OAuth 2 / OpenID Connect providers.  Load it with
 `(asdf:load-system :littoral/oauth)`.")
   (:export #:define-oauth-provider #:find-oauth-provider #:oauth-providers
@@ -189,10 +190,10 @@ has not expired; it can be used once."
 (push (lambda (sign-in)
         (declare (ignore sign-in))
         (when *providers*
-          (div (:class "lt-oauth")
+          (h:div (:class "lt-oauth")
             (dolist (provider *providers*)
               (let ((provider provider))
-                (form ()
-                  (submit-button (:callback (lambda () (start-sign-in provider)))
-                    (text (translate "Sign in with ~A" (provider-label provider))))))))))
+                (h:form ()
+                  (h:submit-button (:callback (lambda () (start-sign-in provider)))
+                    (h:text (translate "Sign in with ~A" (provider-label provider))))))))))
       *sign-in-extras*)

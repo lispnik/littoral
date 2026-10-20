@@ -12,18 +12,18 @@
 (defmethod states ((self modal-host)) (list self))
 
 (defmethod render ((self modal-host))
-  (p () "Behind the dialog. Answer: " (text (prin1-to-string (host-answer self))))
-  (anchor (:callback (lambda ()
+  (h:p () "Behind the dialog. Answer: " (h:text (prin1-to-string (host-answer self))))
+  (h:anchor (:callback (lambda ()
                        (show-modal (make-instance 'confirm-dialog :message "Really?")
                                    :title "Confirm"
                                    :on-answer (lambda (yes) (setf (host-answer self) yes)))))
     "ask")
-  (anchor (:callback (lambda ()
+  (h:anchor (:callback (lambda ()
                        (show-modal (make-instance 'message-dialog :message "You must read this.")
                                    :closable nil)))
     "insist")
-  (anchor (:callback (lambda () (toast "Saved." :kind :success))) "save")
-  (button (:id "ajax-toast" :on-click (ajax :callback (lambda () (toast "Saved by AJAX.")) :update self)) "ajax"))
+  (h:anchor (:callback (lambda () (toast "Saved." :kind :success))) "save")
+  (h:button (:id "ajax-toast" :on-click (ajax :callback (lambda () (toast "Saved by AJAX.")) :update self)) "ajax"))
 
 (test modal-over-the-page
   (with-fresh-applications (("/m" 'modal-host :mode :deployment))
@@ -98,7 +98,7 @@
 
 (defmethod subscriptions ((self toast-push-page)) (list *toast-channel*))
 
-(defmethod render ((self toast-push-page)) (p () "Listening."))
+(defmethod render ((self toast-push-page)) (h:p () "Listening."))
 
 (test toasts-by-push
   (with-fresh-applications (("/t" 'toast-push-page :mode :deployment))

@@ -45,17 +45,17 @@
 (defmethod render ((self message-list))
   (let ((messages (room-messages))
         (me (chat-nick (list-chat self))))
-    (div (:class "chat-messages")
+    (h:div (:class "chat-messages")
       (if (null messages)
-          (p (:class "empty") "No messages yet. Say hello!")
+          (h:p (:class "empty") "No messages yet. Say hello!")
           (dolist (m messages)
-            (div (:class (list "chat-message" (when (equal (chat-message-nick m) me) "mine")))
-              (span (:class "chat-time")
-                (text (multiple-value-bind (s mi h) (decode-universal-time (chat-message-time m))
+            (h:div (:class (list "chat-message" (when (equal (chat-message-nick m) me) "mine")))
+              (h:span (:class "chat-time")
+                (h:text (multiple-value-bind (s mi h) (decode-universal-time (chat-message-time m))
                         (declare (ignore s))
                         (format nil "~2,'0D:~2,'0D" h mi))))
-              (strong (:class "chat-nick") (text (chat-message-nick m)))
-              (span (:class "chat-text") (text (chat-message-text m)))))))))
+              (h:strong (:class "chat-nick") (h:text (chat-message-nick m)))
+              (h:span (:class "chat-text") (h:text (chat-message-text m)))))))))
 
 (defclass composer (component updatable)
   ((chat :initarg :chat :reader composer-chat)
@@ -71,14 +71,14 @@
 
 (defmethod render ((self composer))
   (let ((chat (composer-chat self)))
-    (form (:class "chat-composer"
+    (h:form (:class "chat-composer"
            :on-submit (ajax :callback (lambda () (send-draft self))
                             :update (list self (chat-messages chat))))
-      (text-input (:id "draft" :value (composer-draft self) :autofocus t :autocomplete "off"
+      (h:text-input (:id "draft" :value (composer-draft self) :autofocus t :autocomplete "off"
                    :label "Message"
                    :placeholder (format nil "Message as ~A" (chat-nick chat))
                    :callback (lambda (v) (setf (composer-draft self) v))))
-      (submit-button () "Send"))))
+      (h:submit-button () "Send"))))
 
 (defvar *room-presence* (find-presence "chat room")
   "Everyone with the room open.")
@@ -112,16 +112,16 @@
                            (presence-name) (chat-nick chat)))))
 
 (defmethod render ((self chat))
-  (h1 () "Chat")
+  (h:h1 () "Chat")
   (cond ((null (chat-nick self))
-         (p () "Open this page in two browsers to talk to yourself. "
-           (anchor (:callback (lambda () (ask-nick self))) "Join the room")))
+         (h:p () "Open this page in two browsers to talk to yourself. "
+           (h:anchor (:callback (lambda () (ask-nick self))) "Join the room")))
         (t
          (render-component (chat-here self))
          (render-component (chat-messages self))
          (render-component (chat-composer self))
-         (p (:class "chat-who") "You are " (strong () (text (chat-nick self))) ". "
-           (anchor (:callback (lambda () (ask-nick self))) "Change nickname")))))
+         (h:p (:class "chat-who") "You are " (h:strong () (h:text (chat-nick self))) ". "
+           (h:anchor (:callback (lambda () (ask-nick self))) "Change nickname")))))
 
 (defmethod style ((self chat))
   ".chat-messages { height: 22rem; overflow-y: auto; border: 1px solid var(--lt-border);

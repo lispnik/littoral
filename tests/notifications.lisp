@@ -99,7 +99,7 @@
 (defmethod children ((self bell-app)) (list (app-members self) (app-bell self)))
 
 (defmethod render ((self bell-app))
-  (p () "Bell page")
+  (h:p () "Bell page")
   (render-component (app-bell self))
   (render-component (app-members self)))
 

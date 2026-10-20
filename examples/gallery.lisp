@@ -8,7 +8,8 @@
 ;;;; /examples/gallery-files/, the records in SQLite.
 
 (defpackage #:littoral-gallery
-  (:use #:cl #:littoral #:littoral.html)
+  (:use #:cl #:littoral)
+  (:local-nicknames (#:h #:littoral.html))
   (:documentation "A photo gallery: uploads, thumbnails and downloads.")
   (:export #:register #:gallery))
 
@@ -50,22 +51,22 @@
                        (toast "Removed.")))))
 
 (defmethod render ((self gallery))
-  (h1 () "Gallery")
-  (p () "Upload a photo: it's kept on disk, with a thumbnail made from it. "
+  (h:h1 () "Gallery")
+  (h:p () "Upload a photo: it's kept on disk, with a thumbnail made from it. "
     "The file's type comes from its bytes, so only real images are shown in the page.")
-  (p () (anchor (:callback (lambda () (add-photo self))) "Add a photo"))
+  (h:p () (h:anchor (:callback (lambda () (add-photo self))) "Add a photo"))
   (let ((photos (littoral.db:db-select 'photo :order-by "id DESC")))
     (if (null photos)
-        (p (:class "empty") "No photos yet.")
-        (ul (:class "gallery")
+        (h:p (:class "empty") "No photos yet.")
+        (h:ul (:class "gallery")
           (dolist (photo photos)
             (let ((photo photo))
-              (li ()
+              (h:li ()
                 (littoral::render-field-value (field 'picture) (photo-picture photo))
-                (p (:class "caption") (text (photo-caption photo)))
+                (h:p (:class "caption") (h:text (photo-caption photo)))
                 (when (photo-attachment photo)
-                  (p () (littoral::render-field-value (field 'attachment) (photo-attachment photo))))
-                (p () (anchor (:callback (lambda () (remove-photo self photo))) "Remove")))))))))
+                  (h:p () (littoral::render-field-value (field 'attachment) (photo-attachment photo))))
+                (h:p () (h:anchor (:callback (lambda () (remove-photo self photo))) "Remove")))))))))
 
 (defmethod style ((self gallery))
   ".gallery { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; }

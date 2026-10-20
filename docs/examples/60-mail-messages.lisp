@@ -87,8 +87,8 @@
 (littoral.mail:define-mail welcome-mail (name address)
   :to (format nil "~A <~A>" name address)
   :subject (format nil "Welcome, ~A" name)
-  :html ((p () "Hello " (strong () (text name)) ",")
-         (p () (anchor (:href "https://example.org/start") "Get started"))))
+  :html ((h:p () "Hello " (h:strong () (h:text name)) ",")
+         (h:p () (h:anchor (:href "https://example.org/start") "Get started"))))
 (let ((mail (welcome-mail "Ada" "ada@example.org")))
   (list (littoral.mail:mail-to mail)
         (littoral.mail:mail-subject mail)
@@ -101,14 +101,14 @@
 (littoral.mail:define-mail shipped-mail (address)
   :to address
   :subject "Your order has shipped"
-  :html ((p () "It should arrive on Friday.")))
+  :html ((h:p () "It should arrive on Friday.")))
 (let ((littoral.mail:*mail-layout*
         (lambda (subject body)
           (littoral.mail:default-mail-layout
            subject
            (lambda ()
              (funcall body)
-             (p (:class "footer") "Bookshop, 1 High Street"))))))
+             (h:p (:class "footer") "Bookshop, 1 High Street"))))))
   (let ((mail (shipped-mail "ada@example.org")))
     (list (uiop:split-string (littoral.mail:mail-text mail) :separator '(#\Newline))
           (not (null (search "<title>Your order has shipped</title>" (littoral.mail:mail-html mail)))))))

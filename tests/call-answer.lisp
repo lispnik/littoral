@@ -12,8 +12,8 @@
 (defmethod states ((self parent)) (list self))
 
 (defmethod render ((self parent))
-  (p () "Parent. Result: " (text (prin1-to-string (result self))))
-  (anchor (:callback (lambda ()
+  (h:p () "Parent. Result: " (h:text (prin1-to-string (result self))))
+  (h:anchor (:callback (lambda ()
                        (show self (make-instance 'input-dialog :message "Name?")
                              :on-answer (lambda (v) (setf (result self) v)))))
     "ask"))
@@ -88,7 +88,7 @@
     (show (make-instance 'component) c :on-answer (lambda (v) (setf answered v)))
     (let* ((littoral:*render-context* (make-instance 'littoral::render-context
                                                      :callbacks registry :action-url "/"))
-           (out (with-canvas-to-string () (render-component c))))
+           (out (h:with-canvas-to-string () (render-component c))))
       (is (search "<form" out))
       (is (search ">Save</button>" out)))
     (littoral::process-callbacks '(("1" . "1")) registry)

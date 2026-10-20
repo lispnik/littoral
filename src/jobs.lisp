@@ -235,12 +235,12 @@ date by server push once WATCH-JOB has been called on it."))
 (defmethod render ((self job-view))
   (let ((job (job-view-job self)))
     (when job
-      (div (:class (list "lt-job" (format nil "lt-job-~(~A~)" (job-status job))))
-        (div (:class "lt-job-track" :role "progressbar" :aria-valuemin "0" :aria-valuemax "100"
+      (h:div (:class (list "lt-job" (format nil "lt-job-~(~A~)" (job-status job))))
+        (h:div (:class "lt-job-track" :role "progressbar" :aria-valuemin "0" :aria-valuemax "100"
               :aria-valuenow (princ-to-string (round (* 100 (job-progress-fraction job))))
               :aria-label (job-name job))
-          (div (:class "lt-job-fill" :style (format nil "width: ~D%" (round (* 100 (job-progress-fraction job)))))))
-        (p (:class "lt-job-status") (text (job-status-text job)))
+          (h:div (:class "lt-job-fill" :style (format nil "width: ~D%" (round (* 100 (job-progress-fraction job)))))))
+        (h:p (:class "lt-job-status") (h:text (job-status-text job)))
         (unless (finished-p job)
-          (button (:on-click (ajax :callback (lambda () (cancel-job job)) :update self))
+          (h:button (:on-click (ajax :callback (lambda () (cancel-job job)) :update self))
             (translate "Cancel")))))))

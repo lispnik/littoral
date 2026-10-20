@@ -5,7 +5,7 @@
 (defclass numbers-page (component)
   ((list :reader numbers
          :initform (make-instance 'load-more-list :items '(1 2 3 4 5 6 7) :batch-size 3
-                                                  :render-item (lambda (n) (text (format nil "№ ~D" n)))))))
+                                                  :render-item (lambda (n) (h:text (format nil "№ ~D" n)))))))
 (defmethod children ((self numbers-page)) (list (numbers self)))
 (defmethod render ((self numbers-page)) (render-component (numbers self)))
 (with-fresh-applications (("/numbers" 'numbers-page :mode :deployment))
@@ -93,7 +93,7 @@
 
 ;;;; Example: littoral:pie-chart
 ;;; A pie chart of (label . value) pairs, as SVG: each slice titled with its label, value and share, a key, and the data as a table for screen readers.  `:donut t` cuts out the middle and writes the total there.
-(let ((html (with-canvas-to-string ()
+(let ((html (h:with-canvas-to-string ()
               (pie-chart '(("Tea" . 6) ("Coffee" . 3) ("Water" . 1)) :title "Drinks" :donut t))))
   (list (cl-ppcre:all-matches-as-strings "<title>[^<]*</title>" html)
         (cl-ppcre:register-groups-bind (total) ("<text class=\"lt-chart-total\"[^>]*>([^<]*)</text>" html) total)))
@@ -101,14 +101,14 @@
 
 ;;;; Example: littoral:stacked-bar-chart
 ;;; A bar for each point of the series, each series' value stacked on the one before, with a key; the series are (name . values) as for `line-chart`.
-(let ((html (with-canvas-to-string ()
+(let ((html (h:with-canvas-to-string ()
               (stacked-bar-chart '(("Won" 3 5) ("Lost" 2 1)) :title "Matches" :x-labels '("Spring" "Autumn")))))
   (cl-ppcre:all-matches-as-strings "<title>[^<]*</title>" html))
 ;; ⇒ ("<title>Won, Spring: 3</title>" "<title>Lost, Spring: 2</title>" "<title>Won, Autumn: 5</title>" "<title>Lost, Autumn: 1</title>")
 
 ;;;; Example: littoral:scatter-chart
 ;;; Points, (x . y), for each series (name . points), each series with a colour and a shape of its own, and axes named by `:x-label` and `:y-label`.
-(let ((html (with-canvas-to-string ()
+(let ((html (h:with-canvas-to-string ()
               (scatter-chart '(("Hens" (1 . 250) (2 . 230)) ("Ducks" (1 . 180))) :title "Eggs a year"
                              :x-label "Age" :y-label "Eggs"))))
   (list (cl-ppcre:all-matches-as-strings "<title>[^<]*</title>" html)

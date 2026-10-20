@@ -139,7 +139,7 @@ behind it but cannot be used until the dialog answers."))
                            :data-lt-modal (if (modal-closable-p decoration) "closable" "fixed"))
             (lambda ()
               (when (modal-closable-p decoration)
-                (anchor (:class "lt-modal-close" :aria-label (translate "Close")
+                (h:anchor (:class "lt-modal-close" :aria-label (translate "Close")
                          :callback (lambda () (answer (modal-dialog decoration) nil)))
                   "×"))
               (render-component (modal-dialog decoration)))))
@@ -190,7 +190,7 @@ AJAX response, or at once on pages with a push stream.  KIND is :INFO,
             (lambda ()
               (dolist (toast toasts)
                 (emit-tag "div" (list :class (list "lt-toast" (format nil "lt-toast-~(~A~)" (car toast))))
-                          (lambda () (text (cdr toast))))))))
+                          (lambda () (h:text (cdr toast))))))))
 
 (defun toasts-json (toasts)
   (format nil "[~{~A~^,~}]"
@@ -207,7 +207,7 @@ AJAX response, or at once on pages with a push stream.  KIND is :INFO,
 
 (defmethod render-decoration ((decoration message-decoration) component)
   (declare (ignore component))
-  (h3 (:class "lt-message") (text (decoration-message decoration)))
+  (h:h3 (:class "lt-message") (h:text (decoration-message decoration)))
   (render-inner))
 
 (defclass form-decoration (decoration)
@@ -219,16 +219,16 @@ way Seaside's WAFormDecoration does.  The default is one OK button
 answering :OK."))
 
 (defmethod render-decoration ((decoration form-decoration) component)
-  (form (:class "lt-form-decoration")
+  (h:form (:class "lt-form-decoration")
     (render-inner)
-    (div (:class "lt-buttons")
+    (h:div (:class "lt-buttons")
       (loop for (label . action) in (decoration-buttons decoration)
             do (let ((action action))
-                 (submit-button (:callback (lambda ()
+                 (h:submit-button (:callback (lambda ()
                                              (if (functionp action)
                                                  (funcall action component)
                                                  (answer component action))))
-                   (text label)))))))
+                   (h:text label)))))))
 
 (defclass validation-decoration (decoration)
   ((validator :initarg :validator :reader validator)
@@ -242,7 +242,7 @@ answering :OK."))
   (declare (ignore component))
   (let ((message (validation-error-message decoration)))
     (when message
-      (div (:class "lt-validation-error") (text message))))
+      (h:div (:class "lt-validation-error") (h:text message))))
   (render-inner))
 
 (defun validate-with (component validator)

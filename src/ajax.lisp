@@ -6,7 +6,7 @@
 ;;;; rendered again and swapped into the page.  Those components must be
 ;;;; UPDATABLE so the page has an element with their id.
 ;;;;
-;;;;   (button (:on-click (ajax :callback (lambda () (incf (count-of self)))
+;;;;   (h:button (:on-click (ajax :callback (lambda () (incf (count-of self)))
 ;;;;                            :update self))
 ;;;;     "++")
 ;;;;
@@ -114,14 +114,14 @@ code of its own past the content security policy."
             key
             (and (ajax-spec-every value) (round (* 1000 (ajax-spec-every value))))
             id
-            (html-escape targets))
+            (h:html-escape targets))
     (loop for (suffix option) in `(("value" ,(and (ajax-spec-value value)
                                                    (client-code (format nil "return (~A);" (ajax-spec-value value)))))
                                    ("confirm" ,(ajax-spec-confirm value))
                                    ("complete" ,(and (ajax-spec-on-complete value)
                                                      (client-code (ajax-spec-on-complete value) '("value")))))
           when option
-            do (format stream " data-lt-~(~A~)-~A=\"~A\"" key suffix (html-escape option)))))
+            do (format stream " data-lt-~(~A~)-~A=\"~A\"" key suffix (h:html-escape option)))))
 
 (defun json-value (value)
   "VALUE as JSON: strings, numbers, T/NIL as true/null, :FALSE, hash tables
@@ -177,7 +177,7 @@ SCRIPTS to run."
     (dolist (id ids)
       (let ((component (find-visible id root)))
         (if component
-            (push (cons id (with-canvas-to-string () (render-component component))) found)
+            (push (cons id (h:with-canvas-to-string () (render-component component))) found)
             (push id missing))))
     (with-output-to-string (out)
       (format out "{\"fragments\":{~{~A~^,~}},\"missing\":[~{~A~^,~}],\"value\":~A,\"scripts\":[~{~A~^,~}]~@[,\"redirect\":~A~]~@[,\"toasts\":~A~]~@[,\"code\":~A~]}"

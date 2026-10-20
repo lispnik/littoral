@@ -4,7 +4,7 @@
 ;;; An application serves a root component class at a path.  The path is normalised to one leading slash and no trailing one, and FIND-APPLICATION takes either spelling.
 (defclass storefront (component) ())
 (defmethod render ((self storefront))
-  (h1 () "Welcome to the shop"))
+  (h:h1 () "Welcome to the shop"))
 (with-fresh-applications ()
   (register-application "shop/" 'storefront :mode :deployment)
   (let ((app (find-application "/shop")))
@@ -15,7 +15,7 @@
 ;;; LIST-APPLICATIONS returns them sorted by path; UNREGISTER-APPLICATION stops serving one.
 (defclass blank-page (component) ())
 (defmethod render ((self blank-page))
-  (p () "Nothing here yet."))
+  (h:p () "Nothing here yet."))
 (with-fresh-applications (("/wiki" 'blank-page) ("/blog" 'blank-page) ("/admin" 'blank-page))
   (unregister-application "/admin")
   (mapcar #'application-path (list-applications)))
@@ -37,7 +37,7 @@
 ;;; The title, language, style sheets and scripts go into every page's head.
 (defclass storefront (component) ())
 (defmethod render ((self storefront))
-  (h1 () "Welcome"))
+  (h:h1 () "Welcome"))
 (with-fresh-applications (("/shop" 'storefront :mode :deployment :title "Fish Shop" :language "fr"
                                    :stylesheets '("/css/shop.css") :scripts '("/js/basket.js")))
   (let* ((b (visit (make-instance 'browser) "/shop"))
@@ -52,7 +52,7 @@
 ;;; In :DEVELOPMENT mode, the default, every page ends with the development toolbar (New Session, Halos, …); :DEPLOYMENT leaves it out.
 (defclass greeting (component) ())
 (defmethod render ((self greeting))
-  (p () "Hello"))
+  (h:p () "Hello"))
 (with-fresh-applications (("/dev" 'greeting) ("/live" 'greeting :mode :deployment))
   (list (not (null (find-link (visit (make-instance 'browser) "/dev") "New Session")))
         (body-text (visit (make-instance 'browser) "/live"))))
@@ -62,7 +62,7 @@
 ;;; With :CREDENTIALS, a (USER . PASSWORD) pair, the application asks for HTTP basic authentication.
 (defclass vault (component) ())
 (defmethod render ((self vault))
-  (p () "The secret is 42."))
+  (h:p () "The secret is 42."))
 (with-fresh-applications (("/vault" 'vault :mode :deployment :credentials '("ada" . "lovelace")))
   (let ((stranger (make-instance 'browser))
         (ada (make-instance 'browser
@@ -77,7 +77,7 @@
 ;;; A :LOCAL-ONLY application answers only requests from this machine.  A request that came through a proxy (it has an X-Forwarded-For header) is not one, unless *TRUST-FORWARDED-FOR* says to believe the header.
 (defclass console (component) ())
 (defmethod render ((self console))
-  (p () "Console"))
+  (h:p () "Console"))
 (with-fresh-applications (("/console" 'console :mode :deployment :local-only t))
   (list (browser-status (visit (make-instance 'browser) "/console"))
         (browser-status (visit (make-instance 'browser :headers '(("x-forwarded-for" . "203.0.113.7")))
@@ -88,13 +88,13 @@
 ;;; An error in a request shows an error page.  :ERROR-HANDLER, a function of the condition, makes the page: it returns a component (rendered on its own, so use plain links) or a string of HTML.
 (defclass fragile (component) ())
 (defmethod render ((self fragile))
-  (anchor (:callback (lambda () (error "The till is stuck."))) "Pay"))
+  (h:anchor (:callback (lambda () (error "The till is stuck."))) "Pay"))
 (defclass apology (component)
   ((problem :initarg :problem :reader apology-problem)))
 (defmethod render ((self apology))
-  (h1 () "Sorry")
-  (p () (text (princ-to-string (apology-problem self))))
-  (anchor (:href "/till") "Start again"))
+  (h:h1 () "Sorry")
+  (h:p () (h:text (princ-to-string (apology-problem self))))
+  (h:anchor (:href "/till") "Start again"))
 (with-fresh-applications (("/till" 'fragile :mode :deployment
                                    :error-handler (lambda (condition)
                                                     (make-instance 'apology :problem condition))))
@@ -110,8 +110,8 @@
 (defmethod states ((self tally))
   (list self))
 (defmethod render ((self tally))
-  (p () (text (format nil "Count: ~D" (tally-count self))))
-  (anchor (:callback (lambda () (incf (tally-count self)))) "Add one"))
+  (h:p () (h:text (format nil "Count: ~D" (tally-count self))))
+  (h:anchor (:callback (lambda () (incf (tally-count self)))) "Add one"))
 (with-fresh-applications (("/kept" 'tally :mode :deployment)
                           ("/forgetful" 'tally :mode :deployment :max-continuations 2))
   (flet ((go-back (path)
@@ -128,8 +128,8 @@
 (defvar *action-log* '())
 (defclass price-list (component) ())
 (defmethod render ((self price-list))
-  (p () (text (format nil "Cod: 4 ~A" *shop-currency*)))
-  (anchor (:callback (lambda () (push :bought *action-log*))) "Buy"))
+  (h:p () (h:text (format nil "Cod: 4 ~A" *shop-currency*)))
+  (h:anchor (:callback (lambda () (push :bought *action-log*))) "Buy"))
 (with-fresh-applications (("/prices" 'price-list :mode :deployment
                                      :around-request (lambda (thunk)
                                                        (let ((*shop-currency* "EUR")) (funcall thunk)))
@@ -148,7 +148,7 @@
 ;;; Pages get a strict Content-Security-Policy header by default.  A string replaces it ({nonce} stands for the nonce the page gives its scripts); NIL sends none.
 (defclass greeting (component) ())
 (defmethod render ((self greeting))
-  (p () "Hello"))
+  (h:p () "Hello"))
 (with-fresh-applications (("/strict" 'greeting :mode :deployment)
                           ("/own" 'greeting :mode :deployment :content-security-policy "default-src 'self'")
                           ("/none" 'greeting :mode :deployment :content-security-policy nil))
@@ -164,7 +164,7 @@
 ;;; A request whose body is larger than the application's :MAX-REQUEST-SIZE (or, when that is NIL, *MAX-REQUEST-SIZE*) gets 413 before its body is read.
 (defclass guestbook (component) ())
 (defmethod render ((self guestbook))
-  (p () "Sign here"))
+  (h:p () "Sign here"))
 (with-fresh-applications (("/guestbook" 'guestbook :mode :deployment :max-request-size 1000))
   (let ((b (make-instance 'browser)))
     (list (raw-request b :post "/guestbook" :body (make-string 2000 :initial-element #\x))

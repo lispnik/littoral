@@ -4,6 +4,7 @@
 ;;; MAIN, TABLE and the other tags): define functions under other names, or
 ;;; shadow the symbol here first.
 (defpackage #:{{name}}
-  (:use #:cl #:littoral #:littoral.html)
+  (:use #:cl #:littoral)
+  (:local-nicknames (#:h #:littoral.html))
   (:export #:front-page #:register-app #:serve #:toplevel)
   (:documentation "{{title}}, a Littoral application."))

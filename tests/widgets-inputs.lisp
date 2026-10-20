@@ -44,7 +44,7 @@
 (test a-slider-left-blank-starts-in-the-middle
   (let ((field (littoral::make-field 'level :type :range :min 10 :max 20 :step 2)))
     (is (search "value=\"14\""
-                (with-canvas-to-string () (render-field-input field "level" "" (lambda (v) v)))))
+                (h:with-canvas-to-string () (render-field-input field "level" "" (lambda (v) v)))))
     (is (equal "Level must go in steps of 2." (check-field field 13)))
     (is (null (check-field field 12)))
     (is (equal "Level must be at most 20." (check-field field 22)))))
@@ -72,7 +72,7 @@
     (is (null (parse-field field "0")))
     (signals field-error (parse-field field "4"))
     (is (equal "Stars is required." (check-field field nil)))
-    (is (not (search "No rating" (with-canvas-to-string () (render-field-input field "s" "" (lambda (v) v)))))
+    (is (not (search "No rating" (h:with-canvas-to-string () (render-field-input field "s" "" (lambda (v) v)))))
         "A required rating has no blank choice")))
 
 ;;; Colours
@@ -121,7 +121,7 @@
     (is (null (parse-field field "")))
     (signals field-error (parse-field field "Thu"))
     (is (equal "Days can have at most 2." (check-field field '(:mon :tue :wed))))
-    (is (equal "Mon, Tue" (with-canvas-to-string () (render-field-value field '(:mon :tue)))))))
+    (is (equal "Mon, Tue" (h:with-canvas-to-string () (render-field-value field '(:mon :tue)))))))
 
 (test multiple-choice-lists
   (with-party (b)
@@ -234,12 +234,12 @@
   (:documentation "A form with a field posting several values."))
 
 (defmethod render ((self several-values-page))
-  (form ()
+  (h:form ()
     (littoral::emit-tag "select" (list :id "several" :multiple t :name (littoral::register :values (lambda (v) (setf (got self) v))))
               (lambda ()
-                (dolist (v '("a" "b" "c")) (littoral::emit-tag "option" (list :value v) (lambda () (text v))))))
-    (submit-button () "Go"))
-  (p () (text (format nil "Got ~S" (got self)))))
+                (dolist (v '("a" "b" "c")) (littoral::emit-tag "option" (list :value v) (lambda () (h:text v))))))
+    (h:submit-button () "Go"))
+  (h:p () (h:text (format nil "Got ~S" (got self)))))
 
 (test values-callbacks-get-every-value
   (with-fresh-applications (("/several" 'several-values-page :mode :deployment))
