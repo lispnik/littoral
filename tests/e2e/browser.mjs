@@ -381,6 +381,7 @@ try {
   await sleep(500);
   await send("Page.reload"); await waitLoad();
   check("and comes back where it was left", await waitFor(`document.querySelector(".lt-grid-virtual").scrollTop > 0`) && await rowInView(603));
+  await evaluate("window.__data = 1");
   const rowCount = `document.querySelector(".lt-grid .lt-batch").firstChild.textContent`;
   const before = await evaluate(rowCount);
   await evaluate(`(() => { const s = document.querySelector(".lt-filter select[id$='-0-value']"); s.focus();
