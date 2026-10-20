@@ -182,16 +182,30 @@
                  (visit b "/feed")
                  (is (search "data-lt-events" (browser-html b)) "The feed opens an event stream")
                  (let ((thread (open-stream b sink)))
-                   ;; Rolled back: never heard of.
-                   (ignore-errors
-                    (littoral.db:with-transaction ()
-                      (littoral.audit:audit "invoice.voided" :actor-id "1" :actor-name "Ada")
-                      (error "No.")))
-                   (sb-thread:join-thread
-                    (sb-thread:make-thread
-                     (lambda () (littoral.audit:audit "invoice.paid" :subject-label "Invoice 7" :actor-id "1" :actor-name "Ada"))))
-                   (is (wait-for (lambda () (search "Invoice 7" (sink-text sink)))))
-                   (is (not (search "invoice.voided" (sink-text sink))))
+                   (flet ((record-elsewhere (label)
+                            ;; From another thread, as a job runner would.
+                            (sb-thread:join-thread
+                             (sb-thread:make-thread
+                              (lambda ()
+                                (handler-case
+                                    (progn (littoral.audit:audit "invoice.paid" :subject-label label
+                                                                                :actor-id "1" :actor-name "Ada")
+                                           nil)
+                                  (error (e) (princ-to-string e))))))))
+                     (let ((problem (record-elsewhere "Invoice 7")))
+                       (is (null problem) problem))
+                     (is (wait-for (lambda () (search "Invoice 7" (sink-text sink))))
+                         "Not heard: ~A ~S" (sink-text sink)
+                         (mapcar #'littoral.audit:audit-event-subject-label (littoral.audit:audit-events :limit 3)))
+                     ;; Rolled back: never heard of.
+                     (ignore-errors
+                      (littoral.db:with-transaction ()
+                        (littoral.audit:audit "invoice.voided" :actor-id "1" :actor-name "Ada")
+                        (error "No.")))
+                     (let ((problem (record-elsewhere "Invoice 8")))
+                       (is (null problem) problem))
+                     (is (wait-for (lambda () (search "Invoice 8" (sink-text sink)))))
+                     (is (not (search "invoice.voided" (sink-text sink)))))
                    (close-event-streams)
                    (is (wait-for (lambda () (not (sb-thread:thread-alive-p thread))))))))))
       (littoral.audit:drop-audit-tables)

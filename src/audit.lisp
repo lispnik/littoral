@@ -107,12 +107,14 @@ event is written only where AUDIT-ENABLED-P, and passed to *AUDIT-HOOK*."
                        :details details
                        :address (and littoral:*request* (ignore-errors (littoral::client-address))))))
       (when (audit-enabled-p)
-        (littoral.db:after-commit (lambda () (publish *audit-channel*)))
         (littoral.db:db-execute "INSERT INTO audit_log (at, actor_id, actor_name, action, subject, subject_label, details, address)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
                                 (getf event :time) (getf event :actor-id) (getf event :actor-name) action
                                 (getf event :subject) (getf event :subject-label) (details-json details)
-                                (getf event :address)))
+                                (getf event :address))
+        ;; Once the row is there for others to read: after the insert, and
+        ;; after its transaction commits.
+        (littoral.db:after-commit (lambda () (publish *audit-channel*))))
       (when *audit-hook*
         (ignore-errors (funcall *audit-hook* event)))
       action)))
