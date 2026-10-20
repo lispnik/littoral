@@ -428,7 +428,7 @@ ins .lt-diff-word { background: #a9e2b9; }
 .lt-schedule-move .lt-buttons { display: flex; flex-wrap: wrap; gap: .4rem; }
 .lt-schedule-move .lt-buttons a { padding: .2rem .6rem; border: 1px solid var(--lt-border); border-radius: 6px;
                                   background: var(--lt-bg); text-decoration: none; }
-.lt-schedule-scroll { overflow-x: auto; margin-top: .5rem; }
+.lt-schedule-scroll { overflow-x: auto; margin-top: .5rem; position: relative; }  /* contains the hidden day labels */
 .lt-schedule-grid { display: grid; grid-template-columns: 3.2rem repeat(var(--lt-days), minmax(5.5rem, 1fr)); }
 .lt-schedule-day-head { height: 2.2rem; margin: 0; font-size: .85rem; font-weight: 600; display: flex; align-items: center;
                         justify-content: center; border-bottom: 1px solid var(--lt-border); }
