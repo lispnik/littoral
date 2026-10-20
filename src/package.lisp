@@ -102,6 +102,12 @@
    #:with-popover #:with-tooltip
    #:drawer #:drawer-content #:drawer-open-p #:toggle-drawer
    #:split-pane #:split-first #:split-second #:split-position #:set-split-position
+   ;; Loading more, filter builders, more charts, a week calendar
+   #:load-more-list #:load-more #:reset-load-more #:load-more-shown
+   #:filter-builder #:filter-conditions #:filter-match #:filter-matches-p #:filter-operators
+   #:add-filter-condition #:remove-filter-condition #:clear-filter-conditions #:data-grid-filter
+   #:pie-chart #:stacked-bar-chart #:scatter-chart
+   #:event-calendar #:event-calendar-view #:event-calendar-date
    ;; JSON endpoints
    #:define-endpoint #:register-endpoint #:endpoint-error #:endpoint-body #:*endpoint-authenticator*
    ;; Health, metrics, request logs

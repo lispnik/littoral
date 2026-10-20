@@ -4935,6 +4935,15 @@ reported rather than overwritten, and saving again replaces it; so is an
 adds a Download CSV link (see `data-grid-csv`).  Filtering, sorting and
 paging go over AJAX.
 
+`:virtual`, a number of rows, shows that many at once in a box that scrolls
+through all of them instead of paging, writing only the rows near those on
+screen and fetching others as it scrolls, so a table of thousands of rows
+stays quick.  Rows are then one line high.  Without JavaScript it pages.
+
+`:conditions` T adds a `filter-builder` above the table, for conditions such as
+"Birthday is before 1950-01-01"; a list of (`field-name` `operator` `text`)
+starts it with those.  The grid shows only the rows that pass.
+
 *Example:* A data grid shows a description's objects in a table and edits a row in place, with the description's own inputs and checks.  `:on-save` is called with the object once an edit is written to it.
 
 ```lisp
@@ -6814,6 +6823,532 @@ Give `pane`'s first pane `percent` of the width, kept within its limits.
         (set-split-position pane 95)
         (set-split-position pane 3)))
 ;; ⇒ ("Inbox" "Message" 30 85 15)
+```
+
+### Loading more, filter builders, more charts, a week calendar
+
+#### `load-more-list` — class
+
+A long list shown a batch at a time, with a Load more
+button after it; with `:automatic` true the next batch also comes as the
+end of the list scrolls into view (infinite scrolling), and the button
+stays for keyboards and for pages without JavaScript.  `:items` is a list, or
+a function returning one, called on every render; or `:fetch`, a function of
+a start and a count, returns just the items wanted, for a database to page
+through (it is asked for one more than it shows, to tell whether there are
+more).  `:batch-size` is 20 by default.  `:render-item`, a function of an item,
+writes each one inside its li (as text by default).  How many are shown is
+kept on the server, so the page comes back as it was left.  After the
+button loads a batch, the focus moves to the first new item, and a status
+line says how many are shown.
+
+*Example:* A `load-more-list` shows `:batch-size` items, then a Load more button for the next batch; with `:automatic t` the next batch also comes as the end of the list scrolls into view.  `:render-item` writes each item, and a status line says how many are shown.  `load-more` shows another batch, as the button does, and `reset-load-more` goes back to the first, as when the items change.
+
+```lisp
+(defclass numbers-page (component)
+  ((list :reader numbers
+         :initform (make-instance 'load-more-list :items '(1 2 3 4 5 6 7) :batch-size 3
+                                                  :render-item (lambda (n) (text (format nil "№ ~D" n)))))))
+(defmethod children ((self numbers-page)) (list (numbers self)))
+(defmethod render ((self numbers-page)) (render-component (numbers self)))
+(with-fresh-applications (("/numbers" 'numbers-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/numbers")
+    (let ((before (body-text b))
+          (list (numbers (session-root (first (list-sessions (find-application "/numbers")))))))
+      (click b "Load more")
+      (list before (body-text b) (load-more-shown list)
+            (progn (reset-load-more list) (load-more-shown list))))))
+;; ⇒ ("№ 1 № 2 № 3 Load more Showing 3 of 7." "№ 1 № 2 № 3 № 4 № 5 № 6 Load more Showing 6 of 7." 6 3)
+```
+
+#### `load-more` `list &key (focus t)` — function
+
+Show `list`'s next batch too.  With `focus` true, as for the button, the
+first new item takes the focus once it is shown.
+
+*Example:* A `load-more-list` shows `:batch-size` items, then a Load more button for the next batch; with `:automatic t` the next batch also comes as the end of the list scrolls into view.  `:render-item` writes each item, and a status line says how many are shown.  `load-more` shows another batch, as the button does, and `reset-load-more` goes back to the first, as when the items change.
+
+```lisp
+(defclass numbers-page (component)
+  ((list :reader numbers
+         :initform (make-instance 'load-more-list :items '(1 2 3 4 5 6 7) :batch-size 3
+                                                  :render-item (lambda (n) (text (format nil "№ ~D" n)))))))
+(defmethod children ((self numbers-page)) (list (numbers self)))
+(defmethod render ((self numbers-page)) (render-component (numbers self)))
+(with-fresh-applications (("/numbers" 'numbers-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/numbers")
+    (let ((before (body-text b))
+          (list (numbers (session-root (first (list-sessions (find-application "/numbers")))))))
+      (click b "Load more")
+      (list before (body-text b) (load-more-shown list)
+            (progn (reset-load-more list) (load-more-shown list))))))
+;; ⇒ ("№ 1 № 2 № 3 Load more Showing 3 of 7." "№ 1 № 2 № 3 № 4 № 5 № 6 Load more Showing 6 of 7." 6 3)
+```
+
+#### `reset-load-more` `list` — function
+
+Show only `list`'s first batch again, as after its items change.
+
+*Example:* A `load-more-list` shows `:batch-size` items, then a Load more button for the next batch; with `:automatic t` the next batch also comes as the end of the list scrolls into view.  `:render-item` writes each item, and a status line says how many are shown.  `load-more` shows another batch, as the button does, and `reset-load-more` goes back to the first, as when the items change.
+
+```lisp
+(defclass numbers-page (component)
+  ((list :reader numbers
+         :initform (make-instance 'load-more-list :items '(1 2 3 4 5 6 7) :batch-size 3
+                                                  :render-item (lambda (n) (text (format nil "№ ~D" n)))))))
+(defmethod children ((self numbers-page)) (list (numbers self)))
+(defmethod render ((self numbers-page)) (render-component (numbers self)))
+(with-fresh-applications (("/numbers" 'numbers-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/numbers")
+    (let ((before (body-text b))
+          (list (numbers (session-root (first (list-sessions (find-application "/numbers")))))))
+      (click b "Load more")
+      (list before (body-text b) (load-more-shown list)
+            (progn (reset-load-more list) (load-more-shown list))))))
+;; ⇒ ("№ 1 № 2 № 3 Load more Showing 3 of 7." "№ 1 № 2 № 3 № 4 № 5 № 6 Load more Showing 6 of 7." 6 3)
+```
+
+#### `load-more-shown` `object` — generic function
+
+Reads the shown of a load-more-list.  How many items are shown.
+
+*Example:* A `load-more-list` shows `:batch-size` items, then a Load more button for the next batch; with `:automatic t` the next batch also comes as the end of the list scrolls into view.  `:render-item` writes each item, and a status line says how many are shown.  `load-more` shows another batch, as the button does, and `reset-load-more` goes back to the first, as when the items change.
+
+```lisp
+(defclass numbers-page (component)
+  ((list :reader numbers
+         :initform (make-instance 'load-more-list :items '(1 2 3 4 5 6 7) :batch-size 3
+                                                  :render-item (lambda (n) (text (format nil "№ ~D" n)))))))
+(defmethod children ((self numbers-page)) (list (numbers self)))
+(defmethod render ((self numbers-page)) (render-component (numbers self)))
+(with-fresh-applications (("/numbers" 'numbers-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/numbers")
+    (let ((before (body-text b))
+          (list (numbers (session-root (first (list-sessions (find-application "/numbers")))))))
+      (click b "Load more")
+      (list before (body-text b) (load-more-shown list)
+            (progn (reset-load-more list) (load-more-shown list))))))
+;; ⇒ ("№ 1 № 2 № 3 Load more Showing 3 of 7." "№ 1 № 2 № 3 № 4 № 5 № 6 Load more Showing 6 of 7." 6 3)
+```
+
+#### `filter-builder` — class
+
+Conditions on a description's fields, such as "Status is
+Open" and "Due is before 2026-11-01", that must all hold (or, with
+`:match` `:any`, any one).  Each condition is a field, a comparison suited to
+its kind (text, number, date, time, choice, several choices, yes or no)
+and a value, entered with an input of the field's kind.  `filter-matches-p`
+says whether an object passes; a condition not yet complete, or whose
+value doesn't parse, is left out (and says why).
+
+`:description` names the description and `:fields` the fields offered (by
+default those in reports, without passwords).  `:conditions` starts it with
+some, as (`field-name` `operator` `text`) lists, `text` as it would be typed (a
+choice by its position).  `:update` is the component, or list of them, that
+shows what's filtered, re-rendered after each change: include the builder
+unless it is inside one of them, as it is in a `data-grid`'s `:conditions`.
+`:on-change` is called after each change.  Changes go over AJAX; without
+JavaScript an Apply button submits them.
+
+*Example:* A `filter-builder` holds conditions on a description's fields, each a field name, a comparison and the value as it would be typed (a choice by its position).  `filter-matches-p` says whether an object passes them all, or with `filter-match` `:any`, any one.  A condition without a value, or with one that doesn't parse, is left out.
+
+```lisp
+(defclass bug ()
+  ((title :initarg :title)
+   (votes :initarg :votes)
+   (severity :initarg :severity)))
+(define-description bug
+  ((title)
+   (votes :type :integer)
+   (severity :type :choice :choices '(:low :high))))
+(let ((bugs (list (make-instance 'bug :title "Crash on save" :votes 12 :severity :high)
+                  (make-instance 'bug :title "Typo on the about page" :votes 1 :severity :low)
+                  (make-instance 'bug :title "Slow search" :votes 7 :severity :low)))
+      (builder (make-instance 'filter-builder :description 'bug
+                                              :conditions '((votes :>= "5") (severity :is "1")))))
+  (flet ((passing () (loop for bug in bugs when (filter-matches-p builder bug) collect (slot-value bug 'title))))
+    (list (passing)
+          (progn (setf (filter-match builder) :any) (passing))
+          (filter-conditions builder))))
+;; ⇒ (("Crash on save") ("Crash on save" "Slow search") ((VOTES :>= "5") (SEVERITY :IS "1")))
+```
+
+#### `filter-conditions` `object` — generic function
+
+Reads the conditions of a filter-builder.  (`field-name` `operator` `text`) lists, replaced, never changed.
+
+*Example:* A `filter-builder` holds conditions on a description's fields, each a field name, a comparison and the value as it would be typed (a choice by its position).  `filter-matches-p` says whether an object passes them all, or with `filter-match` `:any`, any one.  A condition without a value, or with one that doesn't parse, is left out.
+
+```lisp
+(defclass bug ()
+  ((title :initarg :title)
+   (votes :initarg :votes)
+   (severity :initarg :severity)))
+(define-description bug
+  ((title)
+   (votes :type :integer)
+   (severity :type :choice :choices '(:low :high))))
+(let ((bugs (list (make-instance 'bug :title "Crash on save" :votes 12 :severity :high)
+                  (make-instance 'bug :title "Typo on the about page" :votes 1 :severity :low)
+                  (make-instance 'bug :title "Slow search" :votes 7 :severity :low)))
+      (builder (make-instance 'filter-builder :description 'bug
+                                              :conditions '((votes :>= "5") (severity :is "1")))))
+  (flet ((passing () (loop for bug in bugs when (filter-matches-p builder bug) collect (slot-value bug 'title))))
+    (list (passing)
+          (progn (setf (filter-match builder) :any) (passing))
+          (filter-conditions builder))))
+;; ⇒ (("Crash on save") ("Crash on save" "Slow search") ((VOTES :>= "5") (SEVERITY :IS "1")))
+```
+
+#### `filter-match` `object` — generic function
+
+Reads the match of a filter-builder.  `:all` when every condition must hold, `:any` when one is enough.
+
+*Example:* A `filter-builder` holds conditions on a description's fields, each a field name, a comparison and the value as it would be typed (a choice by its position).  `filter-matches-p` says whether an object passes them all, or with `filter-match` `:any`, any one.  A condition without a value, or with one that doesn't parse, is left out.
+
+```lisp
+(defclass bug ()
+  ((title :initarg :title)
+   (votes :initarg :votes)
+   (severity :initarg :severity)))
+(define-description bug
+  ((title)
+   (votes :type :integer)
+   (severity :type :choice :choices '(:low :high))))
+(let ((bugs (list (make-instance 'bug :title "Crash on save" :votes 12 :severity :high)
+                  (make-instance 'bug :title "Typo on the about page" :votes 1 :severity :low)
+                  (make-instance 'bug :title "Slow search" :votes 7 :severity :low)))
+      (builder (make-instance 'filter-builder :description 'bug
+                                              :conditions '((votes :>= "5") (severity :is "1")))))
+  (flet ((passing () (loop for bug in bugs when (filter-matches-p builder bug) collect (slot-value bug 'title))))
+    (list (passing)
+          (progn (setf (filter-match builder) :any) (passing))
+          (filter-conditions builder))))
+;; ⇒ (("Crash on save") ("Crash on save" "Slow search") ((VOTES :>= "5") (SEVERITY :IS "1")))
+```
+
+#### `filter-matches-p` `builder object` — function
+
+True when `object` passes `builder`'s complete conditions: all of them, or
+with its match `:any`, at least one.  With none, everything passes.
+
+*Example:* A `filter-builder` holds conditions on a description's fields, each a field name, a comparison and the value as it would be typed (a choice by its position).  `filter-matches-p` says whether an object passes them all, or with `filter-match` `:any`, any one.  A condition without a value, or with one that doesn't parse, is left out.
+
+```lisp
+(defclass bug ()
+  ((title :initarg :title)
+   (votes :initarg :votes)
+   (severity :initarg :severity)))
+(define-description bug
+  ((title)
+   (votes :type :integer)
+   (severity :type :choice :choices '(:low :high))))
+(let ((bugs (list (make-instance 'bug :title "Crash on save" :votes 12 :severity :high)
+                  (make-instance 'bug :title "Typo on the about page" :votes 1 :severity :low)
+                  (make-instance 'bug :title "Slow search" :votes 7 :severity :low)))
+      (builder (make-instance 'filter-builder :description 'bug
+                                              :conditions '((votes :>= "5") (severity :is "1")))))
+  (flet ((passing () (loop for bug in bugs when (filter-matches-p builder bug) collect (slot-value bug 'title))))
+    (list (passing)
+          (progn (setf (filter-match builder) :any) (passing))
+          (filter-conditions builder))))
+;; ⇒ (("Crash on save") ("Crash on save" "Slow search") ((VOTES :>= "5") (SEVERITY :IS "1")))
+```
+
+#### `filter-operators` `field` — function
+
+The comparisons a condition on `field` can make: (`operator` . `label`) pairs.
+
+*Example:* The comparisons offered for a field depend on its kind: text, numbers, dates and times, choices, multiple choices, or yes and no.  Each is a keyword and the words shown for it.
+
+```lisp
+(defclass trip ()
+  ((leaving :initarg :leaving)
+   (booked :initarg :booked)))
+(define-description trip
+  ((leaving :type :date)
+   (booked :type :boolean)))
+(list (filter-operators (find-field 'trip 'leaving))
+      (filter-operators (find-field 'trip 'booked)))
+;; ⇒ (((:= . "is") (:< . "is before") (:> . "is after") (:EMPTY . "is empty") (:NOT-EMPTY . "isn't empty")) ((:YES . "is yes") (:NO . "is no")))
+```
+
+#### `add-filter-condition` `builder &optional field-name operator (text "")` — function
+
+Add a condition to `builder`: on `field-name` (by default its first field)
+with `operator` (by default the field's first) and `text`.
+
+*Example:* The builder's buttons call these: a new condition is on the first field with its first comparison unless told otherwise, and conditions are removed by position, from 0.
+
+```lisp
+(defclass pet ()
+  ((name :initarg :name)
+   (age :initarg :age)))
+(define-description pet
+  ((name)
+   (age :type :integer)))
+(let ((builder (make-instance 'filter-builder :description 'pet)))
+  (add-filter-condition builder)
+  (add-filter-condition builder 'age :< "3")
+  (list (filter-conditions builder)
+        (progn (remove-filter-condition builder 0) (filter-conditions builder))
+        (progn (clear-filter-conditions builder) (filter-conditions builder))))
+;; ⇒ (((NAME :CONTAINS "") (AGE :< "3")) ((AGE :< "3")) NIL)
+```
+
+#### `remove-filter-condition` `builder index` — function
+
+Remove `builder`'s condition at `index`, counting from 0.
+
+*Example:* The builder's buttons call these: a new condition is on the first field with its first comparison unless told otherwise, and conditions are removed by position, from 0.
+
+```lisp
+(defclass pet ()
+  ((name :initarg :name)
+   (age :initarg :age)))
+(define-description pet
+  ((name)
+   (age :type :integer)))
+(let ((builder (make-instance 'filter-builder :description 'pet)))
+  (add-filter-condition builder)
+  (add-filter-condition builder 'age :< "3")
+  (list (filter-conditions builder)
+        (progn (remove-filter-condition builder 0) (filter-conditions builder))
+        (progn (clear-filter-conditions builder) (filter-conditions builder))))
+;; ⇒ (((NAME :CONTAINS "") (AGE :< "3")) ((AGE :< "3")) NIL)
+```
+
+#### `clear-filter-conditions` `builder` — function
+
+Remove all `builder`'s conditions.
+
+*Example:* The builder's buttons call these: a new condition is on the first field with its first comparison unless told otherwise, and conditions are removed by position, from 0.
+
+```lisp
+(defclass pet ()
+  ((name :initarg :name)
+   (age :initarg :age)))
+(define-description pet
+  ((name)
+   (age :type :integer)))
+(let ((builder (make-instance 'filter-builder :description 'pet)))
+  (add-filter-condition builder)
+  (add-filter-condition builder 'age :< "3")
+  (list (filter-conditions builder)
+        (progn (remove-filter-condition builder 0) (filter-conditions builder))
+        (progn (clear-filter-conditions builder) (filter-conditions builder))))
+;; ⇒ (((NAME :CONTAINS "") (AGE :< "3")) ((AGE :< "3")) NIL)
+```
+
+#### `data-grid-filter` `object` — generic function
+
+Reads the builder of a data-grid.  The grid's `filter-builder`, when it has `:conditions`.
+
+*Example:* A data grid with `:conditions` has a filter builder above it, and shows only the rows that pass; `data-grid-filter` is that builder.  `:conditions t` starts with none, and a list of conditions starts with those.  `:virtual`, a number of rows, shows that many at once in a box that scrolls through the rest, writing only the rows near those on screen (three screens' worth) and fetching others as it scrolls; without JavaScript it has Previous and Next links.
+
+```lisp
+(defclass reading ()
+  ((hour :initarg :hour)
+   (level :initarg :level)))
+(define-description reading
+  ((hour :type :integer)
+   (level :type :integer)))
+(defclass readings-page (component)
+  ((grid :reader grid
+         :initform (make-instance 'data-grid :description 'reading :virtual 5
+                                             :rows (loop for hour below 100
+                                                         collect (make-instance 'reading :hour hour :level (mod (* hour 7) 10)))
+                                             :conditions '((level :> "6"))))))
+(defmethod children ((self readings-page)) (list (grid self)))
+(defmethod render ((self readings-page)) (render-component (grid self)))
+(with-fresh-applications (("/readings" 'readings-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/readings")
+    (list (filter-conditions (data-grid-filter (grid (session-root (first (list-sessions (find-application "/readings")))))))
+          (cl-ppcre:count-matches "<tr aria-rowindex=\"\\d+\"><td>" (browser-html b))
+          (cl-ppcre:scan-to-strings "\\d+ rows Rows 1–15 of \\d+" (body-text b)))))
+;; ⇒ (((LEVEL :> "6")) 15 "30 rows Rows 1–15 of 30")
+```
+
+#### `pie-chart` `data &key (title "") (size 220) donut (format-value (function princ-to-string))` — function
+
+Write a pie chart of `data`, a list of (`label` . `value`) with `value` a
+non-negative number, as accessible SVG like `bar-chart`'s: a figure captioned
+by `title`, a key, each slice titled with its label, value and share, and the
+data as a table.  `donut` T cuts out the middle and writes the total there.
+`format-value`, a function of a number, writes the values.  `size` is the
+diameter in SVG units; the chart scales to fit.
+
+*Example:* A pie chart of (label . value) pairs, as SVG: each slice titled with its label, value and share, a key, and the data as a table for screen readers.  `:donut t` cuts out the middle and writes the total there.
+
+```lisp
+(let ((html (with-canvas-to-string ()
+              (pie-chart '(("Tea" . 6) ("Coffee" . 3) ("Water" . 1)) :title "Drinks" :donut t))))
+  (list (cl-ppcre:all-matches-as-strings "<title>[^<]*</title>" html)
+        (cl-ppcre:register-groups-bind (total) ("<text class=\"lt-chart-total\"[^>]*>([^<]*)</text>" html) total)))
+;; ⇒ (("<title>Tea: 6 (60%)</title>" "<title>Coffee: 3 (30%)</title>" "<title>Water: 1 (10%)</title>") "10")
+```
+
+#### `stacked-bar-chart` `series &key (title "") (width 480) (height 220) x-labels (format-value (function princ-to-string))` — function
+
+Write a bar chart with a bar for each point of `series`, a list of (`name` .
+`values`) with the values all the same length and non-negative, each bar
+the series' values stacked in order.  It is drawn like `line-chart`: a
+figure captioned by `title`, a key, `x-labels` naming the bars, `format-value`
+writing the values and the axis, and the data as a table.
+
+*Example:* A bar for each point of the series, each series' value stacked on the one before, with a key; the series are (name . values) as for `line-chart`.
+
+```lisp
+(let ((html (with-canvas-to-string ()
+              (stacked-bar-chart '(("Won" 3 5) ("Lost" 2 1)) :title "Matches" :x-labels '("Spring" "Autumn")))))
+  (cl-ppcre:all-matches-as-strings "<title>[^<]*</title>" html))
+;; ⇒ ("<title>Won, Spring: 3</title>" "<title>Lost, Spring: 2</title>" "<title>Won, Autumn: 5</title>" "<title>Lost, Autumn: 1</title>")
+```
+
+#### `scatter-chart` `series &key (title "") (width 480) (height 260) (x-label "") (y-label "") (format-x (function princ-to-string)) (format-y (function princ-to-string))` — function
+
+Write a scatter plot of `series`, a list of (`name` . `points`) with each point
+(X . Y), both real numbers, as accessible SVG: a figure captioned by
+`title`, a key when there is more than one series, `x-label` and `y-label` naming
+the axes, and the points as a table.  Each series has its own colour and
+shape.  `format-x` and `format-y` write the coordinates and the axes.
+
+*Example:* Points, (x . y), for each series (name . points), each series with a colour and a shape of its own, and axes named by `:x-label` and `:y-label`.
+
+```lisp
+(let ((html (with-canvas-to-string ()
+              (scatter-chart '(("Hens" (1 . 250) (2 . 230)) ("Ducks" (1 . 180))) :title "Eggs a year"
+                             :x-label "Age" :y-label "Eggs"))))
+  (list (cl-ppcre:all-matches-as-strings "<title>[^<]*</title>" html)
+        (cl-ppcre:all-matches-as-strings "<(circle|rect) class=\"lt-chart-point [^\"]*\"" html)))
+;; ⇒ (("<title>Hens: 1, 250</title>" "<title>Hens: 2, 230</title>" "<title>Ducks: 1, 180</title>") ("<circle class=\"lt-chart-point lt-series-0\"" "<circle class=\"lt-chart-point lt-series-0\"" "<rect class=\"lt-chart-point lt-series-1\""))
+```
+
+#### `event-calendar` — class
+
+A week (Monday first) or a day of timed events, laid out
+on a grid of hours, with links to the weeks or days before and after, to
+today, and between the two views.  `:events` is a list, or a function
+returning one, called on every render; by default each event is a plist
+such as (`:title` "Standup" `:start` (2026 10 19 9 0) `:minutes` 15), and
+`:event-start`, `:event-minutes` and `:event-title`, functions of an event, read
+other kinds.  `:hours`, (`first` . `last`), is the part of the day shown (8 till
+18); `:step` is the minutes in each row (30).  Events at the same time are
+shown side by side.
+
+With `:on-move`, a function of an event and its new start, events can be
+dragged to another time or day, in steps of `:step` minutes.  Choosing an
+event (a link) also shows buttons that move it a step earlier or later or
+a day either way, which work from the keyboard and without JavaScript.
+The schedule doesn't change events itself: `:on-move` does, and the events
+are read again.  `:event-key`, a function of an event (`identity` by default),
+says which events are the same when they are read afresh.  `:view` is `:week`
+or `:day`, and `:date` the day to show first, by default today.
+
+*Example:* A week (or, with `event-calendar-view` `:day`, a day) of timed events on a grid of hours, by default plists with `:title`, `:start` (year month day hour minute) and `:minutes`.  With `:on-move`, events can be dragged to another time or day; choosing one also shows buttons that move it, which work without JavaScript.  `:on-move` does the moving: here, by replacing the event's start.
+
+```lisp
+(defclass diary-page (component)
+  ((events :initform (list (list :title "Dentist" :start '(2026 10 20 9 0) :minutes 30))
+           :accessor events)
+   (calendar :reader calendar)))
+(defmethod initialize-instance :after ((self diary-page) &key)
+  (setf (slot-value self 'calendar)
+        (make-instance 'event-calendar :date '(2026 10 19) :hours '(8 . 12)
+                                       :events (lambda () (events self))
+                                       :event-key (lambda (event) (getf event :title))
+                                       :on-move (lambda (event start)
+                                                  (setf (events self)
+                                                        (list (list* :start start (alexandria:remove-from-plist event :start))))))))
+(defmethod children ((self diary-page)) (list (calendar self)))
+(defmethod render ((self diary-page)) (render-component (calendar self)))
+(with-fresh-applications (("/diary" 'diary-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/diary")
+    (click b "Dentist")
+    (click b "Later")
+    (click b "Day after")
+    (let ((page (session-root (first (list-sessions (find-application "/diary"))))))
+      (list (getf (first (events page)) :start)
+            (event-calendar-view (calendar page))
+            (event-calendar-date (calendar page))
+            (cl-ppcre:scan-to-strings "Dentist Wed, [^,]*, 2026, [0-9:–]+" (body-text b))))))
+;; ⇒ ((2026 10 21 9 30) :WEEK (2026 10 19) "Dentist Wed, October 21, 2026, 09:30–10:00")
+```
+
+#### `event-calendar-view` `object` — generic function
+
+Reads the view of an event-calendar.  `:week` or `:day`.
+
+*Example:* A week (or, with `event-calendar-view` `:day`, a day) of timed events on a grid of hours, by default plists with `:title`, `:start` (year month day hour minute) and `:minutes`.  With `:on-move`, events can be dragged to another time or day; choosing one also shows buttons that move it, which work without JavaScript.  `:on-move` does the moving: here, by replacing the event's start.
+
+```lisp
+(defclass diary-page (component)
+  ((events :initform (list (list :title "Dentist" :start '(2026 10 20 9 0) :minutes 30))
+           :accessor events)
+   (calendar :reader calendar)))
+(defmethod initialize-instance :after ((self diary-page) &key)
+  (setf (slot-value self 'calendar)
+        (make-instance 'event-calendar :date '(2026 10 19) :hours '(8 . 12)
+                                       :events (lambda () (events self))
+                                       :event-key (lambda (event) (getf event :title))
+                                       :on-move (lambda (event start)
+                                                  (setf (events self)
+                                                        (list (list* :start start (alexandria:remove-from-plist event :start))))))))
+(defmethod children ((self diary-page)) (list (calendar self)))
+(defmethod render ((self diary-page)) (render-component (calendar self)))
+(with-fresh-applications (("/diary" 'diary-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/diary")
+    (click b "Dentist")
+    (click b "Later")
+    (click b "Day after")
+    (let ((page (session-root (first (list-sessions (find-application "/diary"))))))
+      (list (getf (first (events page)) :start)
+            (event-calendar-view (calendar page))
+            (event-calendar-date (calendar page))
+            (cl-ppcre:scan-to-strings "Dentist Wed, [^,]*, 2026, [0-9:–]+" (body-text b))))))
+;; ⇒ ((2026 10 21 9 30) :WEEK (2026 10 19) "Dentist Wed, October 21, 2026, 09:30–10:00")
+```
+
+#### `event-calendar-date` `object` — generic function
+
+Reads the date of an event-calendar.  The day shown, or a day of the week shown, as (`year` `month` `day`).
+
+*Example:* A week (or, with `event-calendar-view` `:day`, a day) of timed events on a grid of hours, by default plists with `:title`, `:start` (year month day hour minute) and `:minutes`.  With `:on-move`, events can be dragged to another time or day; choosing one also shows buttons that move it, which work without JavaScript.  `:on-move` does the moving: here, by replacing the event's start.
+
+```lisp
+(defclass diary-page (component)
+  ((events :initform (list (list :title "Dentist" :start '(2026 10 20 9 0) :minutes 30))
+           :accessor events)
+   (calendar :reader calendar)))
+(defmethod initialize-instance :after ((self diary-page) &key)
+  (setf (slot-value self 'calendar)
+        (make-instance 'event-calendar :date '(2026 10 19) :hours '(8 . 12)
+                                       :events (lambda () (events self))
+                                       :event-key (lambda (event) (getf event :title))
+                                       :on-move (lambda (event start)
+                                                  (setf (events self)
+                                                        (list (list* :start start (alexandria:remove-from-plist event :start))))))))
+(defmethod children ((self diary-page)) (list (calendar self)))
+(defmethod render ((self diary-page)) (render-component (calendar self)))
+(with-fresh-applications (("/diary" 'diary-page :mode :deployment))
+  (let ((b (make-instance 'browser)))
+    (visit b "/diary")
+    (click b "Dentist")
+    (click b "Later")
+    (click b "Day after")
+    (let ((page (session-root (first (list-sessions (find-application "/diary"))))))
+      (list (getf (first (events page)) :start)
+            (event-calendar-view (calendar page))
+            (event-calendar-date (calendar page))
+            (cl-ppcre:scan-to-strings "Dentist Wed, [^,]*, 2026, [0-9:–]+" (body-text b))))))
+;; ⇒ ((2026 10 21 9 30) :WEEK (2026 10 19) "Dentist Wed, October 21, 2026, 09:30–10:00")
 ```
 
 ### JSON endpoints

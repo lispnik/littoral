@@ -154,6 +154,19 @@
     }
   });
 
+  // Where EL is within ROOT, to find its counterpart once ROOT is redrawn.
+  function placeOf(root, el) {
+    var path = [];
+    for (var n = el; n !== root; n = n.parentElement)
+      path.unshift(Array.prototype.indexOf.call(n.parentElement.children, n));
+    return { path: path, tag: el.tagName, text: el.textContent };
+  }
+  function atPlace(root, place) {
+    var n = root;
+    for (var i = 0; n && i < place.path.length; i++) n = n.children[place.path[i]];
+    return n && n.tagName === place.tag && n.textContent === place.text ? n : null;
+  }
+
   // SENT: the focused field as the request left (NIL for pushes).
   function apply(data, sent) {
     if (data.redirect) { window.location.href = data.redirect; return; }
@@ -170,6 +183,10 @@
     Object.keys(data.fragments).forEach(function (id) {
       var old = document.getElementById(id);
       if (!old) return;
+      // A region marked data-lt-keep-focus gives the focus back to the
+      // same element when it has no id, as long as it's unchanged.
+      var place = active && !focused && old.hasAttribute("data-lt-keep-focus") && old.contains(active)
+        ? placeOf(old, active) : null;
       if (old.hasAttribute("aria-live")) {
         // Keep a live region's element, so screen readers announce the
         // change instead of losing the region.
@@ -186,7 +203,7 @@
       // outerHTML drops focus; give it back, or honour autofocus.
       var fresh = document.getElementById(id);
       var target = (focused && fresh.querySelector("#" + CSS.escape(focused))) ||
-                   fresh.querySelector("[autofocus]");
+                   fresh.querySelector("[autofocus]") || (place && atPlace(fresh, place));
       if (target && target.focus) target.focus();
       // Typing goes on while a request is out: when the server sent back the
       // value it was given, keep what has been typed since, and the caret.
@@ -912,6 +929,110 @@
     divider.ltSave = setTimeout(function () { trigger(divider, "data-lt-split", null); }, 400);
   });
 
+  // Virtual grids (.lt-grid-virtual): as the box scrolls, ask for the rows
+  // around those on screen.  Spacers stand for the rest, at the measured
+  // row height, so the scroll bar is right.
+  function virtualRowHeight(box) {
+    var row = box.querySelector("tbody.lt-grid-rows > tr:not(.lt-grid-spacer):not(.lt-grid-editing)");
+    return row ? row.getBoundingClientRect().height : 0;
+  }
+  function virtualCheck(box) {
+    var spacer = box.querySelector("tr.lt-grid-spacer[data-lt-virtual]");
+    var h = virtualRowHeight(box);
+    if (!spacer || !h || box.ltAsking) return;
+    var start = +spacer.getAttribute("data-lt-start"), total = +spacer.getAttribute("data-lt-total");
+    var size = +spacer.getAttribute("data-lt-window"), visible = +spacer.getAttribute("data-lt-visible");
+    var end = Math.min(total, start + size), first = Math.floor(box.scrollTop / h);
+    var margin = Math.floor(visible / 2);
+    if ((start > 0 && first - margin < start) || (end < total && first + visible + margin > end)) {
+      var want = Math.max(0, Math.min(total - size, first - visible));
+      if (want === start) return;
+      spacer.setAttribute("data-lt-want", want);
+      box.ltAsking = true;
+      trigger(spacer, "data-lt-virtual", null);
+    }
+  }
+  function setupVirtual() {
+    document.querySelectorAll(".lt-grid-virtual").forEach(function (box) {
+      box.ltAsking = false;
+      var h = virtualRowHeight(box);
+      if (h) box.style.setProperty("--lt-grid-row", h + "px");
+      if (!box.hasAttribute("data-lt-placed")) {
+        // Back where it was left, when the page comes again.
+        box.setAttribute("data-lt-placed", "");
+        var spacer = box.querySelector("tr.lt-grid-spacer[data-lt-virtual]");
+        var start = spacer ? +spacer.getAttribute("data-lt-start") : 0;
+        if (start > 0 && h) box.scrollTop = (start + +spacer.getAttribute("data-lt-visible")) * h;
+      }
+      virtualCheck(box);
+    });
+  }
+  document.addEventListener("scroll", function (event) {
+    var box = event.target;
+    if (!box.classList || !box.classList.contains("lt-grid-virtual") || box.ltFrame) return;
+    box.ltFrame = requestAnimationFrame(function () { box.ltFrame = 0; virtualCheck(box); });
+  }, true);
+  document.addEventListener("littoral:updated", setupVirtual);
+
+  // Event calendars (.lt-schedule): drag an event to another time or day.
+  // The new start is posted when it is dropped; a plain click chooses it.
+  function pad2(n) { return (n < 10 ? "0" : "") + n; }
+  document.addEventListener("pointerdown", function (event) {
+    var link = event.target.closest ? event.target.closest(".lt-schedule-event-link[data-lt-move]") : null;
+    if (!link || event.button !== 0) return;
+    var item = link.parentNode, grid = link.closest(".lt-schedule-grid");
+    var step = +grid.getAttribute("data-lt-step"), first = +grid.getAttribute("data-lt-first");
+    var slots = +grid.getAttribute("data-lt-slots");
+    var span = parseFloat(item.style.getPropertyValue("--lt-span")) || 1;
+    var grab = event.clientY - item.getBoundingClientRect().top;
+    var x0 = event.clientX, y0 = event.clientY, dragging = false, day = null, slot = 0;
+    function dayAt(x) {
+      return Array.prototype.filter.call(grid.querySelectorAll(".lt-schedule-day"), function (d) {
+        var r = d.getBoundingClientRect();
+        return x >= r.left && x < r.right;
+      })[0];
+    }
+    function move(e) {
+      if (!dragging && Math.abs(e.clientX - x0) + Math.abs(e.clientY - y0) < 6) return;
+      if (!dragging) {
+        dragging = true;
+        item.classList.add("lt-dragging");
+        try { link.setPointerCapture(e.pointerId); } catch (x) {}
+      }
+      day = dayAt(e.clientX) || day || item.closest(".lt-schedule-day");
+      var box = day.querySelector(".lt-schedule-slots"), r = box.getBoundingClientRect();
+      slot = Math.max(0, Math.min(slots - Math.min(span, slots), Math.round((e.clientY - grab - r.top) / (r.height / slots))));
+      var list = box.querySelector(".lt-schedule-events");
+      if (!list) { list = document.createElement("ol"); list.className = "lt-schedule-events"; box.appendChild(list); }
+      if (item.parentNode !== list) list.appendChild(item);
+      item.style.setProperty("--lt-from", slot);
+      item.style.setProperty("--lt-col", 0);
+      item.style.setProperty("--lt-cols", 1);
+    }
+    function up() {
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", up);
+      document.removeEventListener("pointercancel", up);
+      if (!dragging) return;
+      item.classList.remove("lt-dragging");
+      link.ltDragged = Date.now();
+      var minutes = first + slot * step;
+      link.setAttribute("data-lt-to", day.getAttribute("data-lt-day") + " " + pad2(Math.floor(minutes / 60)) + ":" + pad2(minutes % 60));
+      trigger(link, "data-lt-move", null);
+    }
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", up);
+    document.addEventListener("pointercancel", up);
+  });
+  // A drag ends in a click; it mustn't choose the event too.
+  document.addEventListener("click", function (event) {
+    var link = event.target.closest ? event.target.closest(".lt-schedule-event-link") : null;
+    if (link && link.ltDragged && Date.now() - link.ltDragged < 500) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }, true);
+
   var timers = [];
   function scanPeriodicals() {
     timers.forEach(clearInterval);
@@ -947,6 +1068,7 @@
     setupTags();
     setupPalettes();
     setupTooltips();
+    setupVirtual();
     scanLazy();
     scanPeriodicals();
     listen();

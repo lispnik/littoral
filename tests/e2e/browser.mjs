@@ -361,6 +361,69 @@ try {
   await evaluate(`[...document.querySelectorAll(".planet-list a")].find(a => a.textContent === "Mars").click()`);
   check("the split pane's list shows its choice beside it", await waitFor(`document.body.innerText.includes("Red with iron oxide dust")`));
 
+  // Data: a virtual grid fetches rows as it scrolls, puts them in the right
+  // place and comes back where it was left; a condition narrows it in place;
+  // a list loads more as its end is seen, the button's batch taking the
+  // focus; an event dragged to another day and time stays there.
+  await go("/examples/widgets");
+  await clickLink("Big table");
+  await evaluate("window.__data = 1");
+  const rowIndexes = `[...document.querySelectorAll(".lt-grid-rows tr[aria-rowindex]")].map(r => +r.getAttribute("aria-rowindex"))`;
+  check("a virtual grid writes a few rows", await evaluate(`${rowIndexes}.length`) === 36, await evaluate(`${rowIndexes}.length`));
+  await evaluate(`(() => { const box = document.querySelector(".lt-grid-virtual");
+    box.scrollTop = 600 * box.querySelector(".lt-grid-rows tr[aria-rowindex]").getBoundingClientRect().height; })()`);
+  check("and fetches others as it scrolls", await waitFor(`${rowIndexes}.includes(605)`) && await evaluate("window.__data") === 1,
+        JSON.stringify(await evaluate(`${rowIndexes}.slice(0, 3)`)));
+  const rowInView = (n) => evaluate(`(() => { const box = document.querySelector(".lt-grid-virtual").getBoundingClientRect();
+    const row = document.querySelector('.lt-grid-rows tr[aria-rowindex="${n}"]');
+    if (!row) return false; const r = row.getBoundingClientRect(); return r.top >= box.top && r.bottom <= box.bottom; })()`);
+  check("in the right place", await rowInView(603));
+  await sleep(500);
+  await send("Page.reload"); await waitLoad();
+  check("and comes back where it was left", await waitFor(`document.querySelector(".lt-grid-virtual").scrollTop > 0`) && await rowInView(603));
+  const rowCount = `document.querySelector(".lt-grid .lt-batch").firstChild.textContent`;
+  const before = await evaluate(rowCount);
+  await evaluate(`(() => { const s = document.querySelector(".lt-filter select[id$='-0-value']"); s.focus();
+    s.value = "2"; s.dispatchEvent(new Event("change", { bubbles: true })); })()`);
+  check("a condition narrows the grid in place", await waitFor(`${rowCount} !== ${JSON.stringify(before)}`)
+        && await evaluate("window.__data") === 1, before);
+  check("keeping the focus", await evaluate(`document.activeElement.id.endsWith("-0-value")`));
+
+  await clickLink("Load more");
+  const items = `document.querySelectorAll(".lt-load-more-items li").length`;
+  check("a list shows its first batch", await evaluate(items) === 25, await evaluate(items));
+  await evaluate(`(() => { const b = document.querySelector(".lt-load-more-button"); b.focus(); b.click(); })()`);
+  check("its button loads the next, the focus going to the first new item", await waitFor(`${items} >= 50 &&
+    [...document.querySelectorAll(".lt-load-more-items li")].indexOf(document.activeElement) === 25`));
+  const shown = await evaluate(items);
+  await evaluate(`document.querySelector(".lt-load-more-button").scrollIntoView()`);
+  check("it loads more as its end comes into view", await waitFor(`${items} > ${shown}`));
+  check("and the focus stays where it was", await evaluate(`[...document.querySelectorAll(".lt-load-more-items li")].indexOf(document.activeElement)`) === 25);
+
+  await clickLink("Calendar");
+  await evaluate(`(() => {
+    const link = [...document.querySelectorAll(".lt-schedule-event-link")].find(a => a.textContent.includes("Release"));
+    const friday = document.querySelectorAll(".lt-schedule-day")[4].querySelector(".lt-schedule-slots");
+    const from = link.getBoundingClientRect(), to = friday.getBoundingClientRect();
+    const slot = to.height / +document.querySelector(".lt-schedule-grid").getAttribute("data-lt-slots");
+    const at = (target, type, x, y) => target.dispatchEvent(new PointerEvent(type, { bubbles: true, button: 0, pointerId: 1, clientX: x, clientY: y }));
+    at(link, "pointerdown", from.left + 5, from.top + 2);
+    at(document, "pointermove", to.left + 10, to.top + 5 * slot + 2);
+    at(document, "pointerup", to.left + 10, to.top + 5 * slot + 2);
+    link.click();   // the click a drag ends in
+  })()`);
+  const friday = `document.querySelectorAll(".lt-schedule-day")[4].innerText`;
+  check("an event is dragged to another day and time", await waitFor(`${friday}.includes("10:30–11:00") && ${friday}.includes("Release")`),
+        await evaluate(friday));
+  check("without the drag's click choosing it", await evaluate(`!document.querySelector(".lt-schedule-move")`));
+  await send("Page.reload"); await waitLoad();
+  check("and it stays there", (await evaluate(friday)).includes("Release"));
+  await evaluate(`[...document.querySelectorAll(".lt-schedule-event-link")].find(a => a.textContent.includes("Retrospective")).click()`);
+  check("choosing an event puts the focus on its buttons", await waitFor(`document.activeElement.textContent === "Earlier"`));
+  await evaluate(`document.activeElement.click()`);
+  check("which move it, the focus staying", await waitFor(`document.querySelector(".lt-schedule-move").innerText.includes("14:30–15:30")
+    && document.activeElement.textContent === "Earlier"`));
+
   // JSON endpoints, called from the page with fetch.
   await go("/examples/api");
   await evaluate(`document.getElementById("api-post").click()`); await sleep(700);

@@ -49,7 +49,12 @@ then say so instead of failing.  littoral.db's STALE-OBJECT is one."))
    (texts :initform '() :accessor grid-texts :documentation "(FIELD-NAME . TEXT) typed into the row being edited.")
    (originals :initform '() :accessor grid-originals
               :documentation "(FIELD-NAME . TEXT): the row being edited as it was when editing began.")
-   (problems :initform '() :accessor grid-problems))
+   (problems :initform '() :accessor grid-problems)
+   (virtual :initarg :virtual :initform nil :reader grid-virtual
+            :documentation "NIL to page the rows, or how many rows to show at once, scrolling through the rest.")
+   (rows-part :initform nil :reader grid-rows-part)
+   (builder :initform nil :reader data-grid-filter
+            :documentation "The grid's FILTER-BUILDER, when it has :CONDITIONS."))
   (:documentation "A table of a description's objects: a filter box per column,
 sorting by column, paging, and editing a row in place with the description's
 own inputs and validation.  :DESCRIPTION names the description (anything
@@ -63,7 +68,28 @@ same.  A field someone else changed while the row was being edited is
 reported rather than overwritten, and saving again replaces it; so is an
 EDIT-CONFLICT signalled by :ON-SAVE (as STALE-OBJECT is).  :CSV-FILENAME
 adds a Download CSV link (see DATA-GRID-CSV).  Filtering, sorting and
-paging go over AJAX."))
+paging go over AJAX.
+
+:VIRTUAL, a number of rows, shows that many at once in a box that scrolls
+through all of them instead of paging, writing only the rows near those on
+screen and fetching others as it scrolls, so a table of thousands of rows
+stays quick.  Rows are then one line high.  Without JavaScript it pages.
+
+:CONDITIONS T adds a FILTER-BUILDER above the table, for conditions such as
+\"Birthday is before 1950-01-01\"; a list of (FIELD-NAME OPERATOR TEXT)
+starts it with those.  The grid shows only the rows that pass."))
+
+(defmethod initialize-instance :after ((self data-grid) &key conditions)
+  (when (grid-virtual self)
+    (setf (slot-value self 'rows-part) (make-instance 'grid-rows :grid self)))
+  (when conditions
+    (setf (slot-value self 'builder)
+          (make-instance 'filter-builder :description (grid-description self) :fields (grid-field-names self)
+                                         :conditions (if (listp conditions) conditions '())
+                                         :update self :on-change (lambda () (reset-grid-position self))))))
+
+(defmethod children ((self data-grid))
+  (remove nil (list (data-grid-filter self) (grid-rows-part self))))
 
 (defun data-grid-csv (grid)
   "GRID's rows as CSV: those its filters let through, every page, in its
@@ -97,7 +123,11 @@ current order, each field as the grid shows it."
                              (or (null field) (string= (cdr filter) "")
                                  (search (cdr filter) (format-field field (field-value field row)) :test #'char-equal))))
                          (grid-filters grid)))
-                (grid-all-rows grid))))
+                (let ((rows (grid-all-rows grid))
+                      (builder (data-grid-filter grid)))
+                  (if builder
+                      (remove-if-not (lambda (row) (filter-matches-p builder row)) rows)
+                      rows)))))
     (let ((field (and (grid-sort-field grid) (find (grid-sort-field grid) fields :key #'field-name))))
       (if field
           (let ((sorted (stable-sort (copy-list rows) #'value<
@@ -106,14 +136,22 @@ current order, each field as the grid shows it."
             (if (grid-descending-p grid) (reverse sorted) sorted))
           rows))))
 
+(defun reset-grid-position (grid)
+  "Show GRID's first page, or scroll a virtual one back to its top."
+  (setf (grid-page grid) 0)
+  (when (grid-rows-part grid)
+    (setf (rows-start (grid-rows-part grid)) 0)))
+
 (defun set-grid-filter (grid name text)
-  (setf (grid-filters grid) (acons name text (remove name (grid-filters grid) :key #'car))
-        (grid-page grid) 0))
+  (setf (grid-filters grid) (acons name text (remove name (grid-filters grid) :key #'car)))
+  (reset-grid-position grid))
 
 (defun sort-grid (grid name)
   (if (eq (grid-sort-field grid) name)
       (setf (grid-descending-p grid) (not (grid-descending-p grid)))
-      (setf (grid-sort-field grid) name (grid-descending-p grid) nil)))
+      (setf (grid-sort-field grid) name (grid-descending-p grid) nil))
+  (when (grid-rows-part grid)
+    (setf (rows-start (grid-rows-part grid)) 0)))
 
 (defun row-texts (grid row)
   "(FIELD-NAME . TEXT) for each of GRID's fields of ROW."
@@ -174,18 +212,117 @@ current order, each field as the grid shows it."
                       (grid-problems grid)
                       (list (cons :row (translate "Someone else changed this row meanwhile; nothing was saved. Save again to replace their changes.")))))))))))
 
+(defun render-grid-row (grid row fields &optional index)
+  "Write GRID's row for ROW, as an editor when it is the row being edited.
+INDEX, when given, is its aria-rowindex."
+  (if (and (grid-editing grid) (same-row-p grid row (grid-editing grid)))
+      (tr (:class "lt-grid-editing" :aria-rowindex index)
+        (dolist (field fields)
+          (let* ((name (field-name field))
+                 (problem (cdr (assoc name (grid-problems grid)))))
+            (td ()
+              (let ((*next-field-attributes* (list :aria-label (translate (field-label field))
+                                                   :aria-invalid (when problem "true"))))
+                (render-field-input field (format nil "grid-~(~A~)" name)
+                                    (or (cdr (assoc name (grid-texts grid))) "")
+                                    (lambda (text) (setf (grid-texts grid)
+                                                         (acons name text (remove name (grid-texts grid) :key #'car))))))
+              (when problem (div (:class "lt-validation-error") (text problem))))))
+        (td (:class "lt-grid-actions")
+          (let ((problem (cdr (assoc :row (grid-problems grid)))))
+            (when problem (div (:class "lt-validation-error") (text problem))))
+          (submit-button (:callback (lambda () (save-grid-row grid))) (translate "Save"))
+          (cancel-button (:callback (lambda () (setf (grid-editing grid) nil))) (translate "Cancel"))))
+      (tr (:aria-rowindex index)
+        (dolist (field fields)
+          (td () (render-field-value field (field-value field row))))
+        (td (:class "lt-grid-actions")
+          (anchor (:callback (lambda () (edit-grid-row grid row))) (translate "Edit"))))))
+
+(defun render-nothing-row (fields)
+  (tr () (td (:colspan (princ-to-string (1+ (length fields)))) (translate "Nothing matches."))))
+
+;;; A virtual grid's rows: only those near the ones on screen are written
+
+(defclass grid-rows (component updatable)
+  ((grid :initarg :grid :reader rows-grid)
+   (start :initform 0 :accessor rows-start :documentation "The position of the first row written."))
+  (:documentation "The body of a DATA-GRID with :VIRTUAL rows."))
+
+(defmethod updatable-wrapper ((self grid-rows)) (values "tbody" '(:class "lt-grid-rows")))
+(defmethod states ((self grid-rows)) (list self))
+
+(defun grid-window (grid)
+  "How many rows a virtual GRID writes at once: three screens' worth."
+  (* 3 (grid-virtual grid)))
+
+(defun grid-rows-span (part total)
+  "The first row PART writes, and the one after its last, of TOTAL."
+  (let* ((window (grid-window (rows-grid part)))
+         (start (max 0 (min (rows-start part) (- total window)))))
+    (values start (min total (+ start window)))))
+
+(defun spacer-style (rows)
+  (format nil "height: calc(~D * var(--lt-grid-row))" rows))
+
+(defmethod render ((self grid-rows))
+  (let* ((grid (rows-grid self))
+         (fields (grid-fields grid))
+         (rows (grid-visible-rows grid))
+         (total (length rows))
+         (columns (princ-to-string (1+ (length fields)))))
+    (multiple-value-bind (start end) (grid-rows-span self total)
+      ;; Spacers stand for the rows not written, so the scroll bar is right.
+      (tr (:class "lt-grid-spacer" :aria-hidden "true" :style (spacer-style start)
+           :data-lt-start start :data-lt-total total :data-lt-window (grid-window grid)
+           :data-lt-visible (grid-virtual grid)
+           :virtual (ajax :callback (lambda (value)
+                                      (let ((n (ignore-errors (parse-integer value))))
+                                        (when n (setf (rows-start self) (max 0 n)))))
+                          :update self :value "this.getAttribute('data-lt-want')"))
+        (td (:colspan columns)))
+      (if (zerop total)
+          (render-nothing-row fields)
+          (loop for row in (subseq rows start end)
+                for index from (+ start 3)
+                do (render-grid-row grid row fields index)))
+      (tr (:class "lt-grid-spacer" :aria-hidden "true" :style (spacer-style (- total end)))
+        (td (:colspan columns))))))
+
+(defun render-virtual-pager (grid total)
+  "Links to the rows before and after, for pages without JavaScript, which
+can't scroll a virtual grid to them."
+  (let ((part (grid-rows-part grid)))
+    (multiple-value-bind (start end) (grid-rows-span part total)
+      (emit-tag "noscript" '()
+                (lambda ()
+                  (raw "<style>.lt-grid-spacer { display: none; }</style>")
+                  (when (plusp total)
+                    (text (format nil " ~A " (translate "Rows ~D–~D of ~D" (1+ start) end total))))
+                  (when (plusp start)
+                    (anchor (:callback (lambda () (setf (rows-start part) (max 0 (- start (grid-window grid)))))
+                             :rel "prev")
+                      (translate "« Previous")))
+                  (when (< end total)
+                    (text " ")
+                    (anchor (:callback (lambda () (setf (rows-start part) end)) :rel "next")
+                      (translate "Next »"))))))))
+
 (defmethod render ((self data-grid))
   (let* ((fields (grid-fields self))
+         (virtual (grid-virtual self))
          (rows (grid-visible-rows self))
          (pages (max 1 (ceiling (length rows) (grid-page-size self))))
-         (page (min (grid-page self) (1- pages)))
-         (shown (subseq rows (min (length rows) (* page (grid-page-size self)))
-                        (min (length rows) (* (1+ page) (grid-page-size self))))))
+         (page (min (grid-page self) (1- pages))))
+    (when (data-grid-filter self)
+      (render-component (data-grid-filter self)))
     (form (:class "lt-grid")
-      (div (:class "lt-grid-scroll" :tabindex "0" :role "region" :aria-label (translate "Table"))
-        (table (:class "lt-table")
+      (div (:class (list "lt-grid-scroll" (when virtual "lt-grid-virtual"))
+            :style (when virtual (format nil "--lt-grid-visible: ~D" virtual))
+            :tabindex "0" :role "region" :aria-label (translate "Table"))
+        (table (:class "lt-table" :aria-rowcount (when virtual (+ 2 (length rows))))
           (thead ()
-            (tr ()
+            (tr (:aria-rowindex (when virtual 1))
               (dolist (field fields)
                 (let ((name (field-name field)))
                   (th (:aria-sort (when (eq name (grid-sort-field self))
@@ -196,7 +333,7 @@ current order, each field as the grid shows it."
                       (when (eq name (grid-sort-field self))
                         (text (if (grid-descending-p self) " ▼" " ▲")))))))
               (th () (span (:class "lt-visually-hidden") (translate "Actions"))))
-            (tr (:class "lt-grid-filters")
+            (tr (:class "lt-grid-filters" :aria-rowindex (when virtual 2))
               (dolist (field fields)
                 (let ((name (field-name field)))
                   (td ()
@@ -206,34 +343,14 @@ current order, each field as the grid shows it."
                                  :callback (lambda (v) (set-grid-filter self name v))
                                  :on-input (ajax-update self))))))
               (td ())))
-          (tbody ()
-            (if (null shown)
-                (tr () (td (:colspan (princ-to-string (1+ (length fields)))) (translate "Nothing matches.")))
-                (dolist (row shown)
-                  (let ((row row))
-                    (if (and (grid-editing self) (same-row-p self row (grid-editing self)))
-                        (tr (:class "lt-grid-editing")
-                          (dolist (field fields)
-                            (let* ((name (field-name field))
-                                   (problem (cdr (assoc name (grid-problems self)))))
-                              (td ()
-                                (let ((*next-field-attributes* (list :aria-label (translate (field-label field))
-                                                                     :aria-invalid (when problem "true"))))
-                                  (render-field-input field (format nil "grid-~(~A~)" name)
-                                                      (or (cdr (assoc name (grid-texts self))) "")
-                                                      (lambda (text) (setf (grid-texts self)
-                                                                           (acons name text (remove name (grid-texts self) :key #'car))))))
-                                (when problem (div (:class "lt-validation-error") (text problem))))))
-                          (td (:class "lt-grid-actions")
-                            (let ((problem (cdr (assoc :row (grid-problems self)))))
-                              (when problem (div (:class "lt-validation-error") (text problem))))
-                            (submit-button (:callback (lambda () (save-grid-row self))) (translate "Save"))
-                            (cancel-button (:callback (lambda () (setf (grid-editing self) nil))) (translate "Cancel"))))
-                        (tr ()
-                          (dolist (field fields)
-                            (td () (render-field-value field (field-value field row))))
-                          (td (:class "lt-grid-actions")
-                            (anchor (:callback (lambda () (edit-grid-row self row))) (translate "Edit")))))))))))
+          (if virtual
+              (render-component (grid-rows-part self))
+              (let ((shown (subseq rows (min (length rows) (* page (grid-page-size self)))
+                                   (min (length rows) (* (1+ page) (grid-page-size self))))))
+                (tbody ()
+                  (if (null shown)
+                      (render-nothing-row fields)
+                      (dolist (row shown) (render-grid-row self row fields))))))))
       (div (:class "lt-batch")
         (text (translate-plural (length rows) "~D row" "~D rows"))
         (when (grid-csv-filename self)
@@ -242,14 +359,15 @@ current order, each field as the grid shows it."
                    :callback (lambda () (send-download (data-grid-csv self) :filename (grid-csv-filename self)
                                                                             :content-type "text/csv; charset=utf-8")))
             (translate "Download CSV")))
-        (when (> pages 1)
-          (when (plusp page)
-            (anchor (:on-click (ajax :callback (lambda () (setf (grid-page self) (1- page))) :update self) :href "#")
-              (translate "« Previous")))
-          (text (format nil " ~D / ~D " (1+ page) pages))
-          (when (< page (1- pages))
-            (anchor (:on-click (ajax :callback (lambda () (setf (grid-page self) (1+ page))) :update self) :href "#")
-              (translate "Next »"))))))))
+        (cond (virtual (render-virtual-pager self (length rows)))
+              ((> pages 1)
+               (when (plusp page)
+                 (anchor (:on-click (ajax :callback (lambda () (setf (grid-page self) (1- page))) :update self) :href "#")
+                   (translate "« Previous")))
+               (text (format nil " ~D / ~D " (1+ page) pages))
+               (when (< page (1- pages))
+                 (anchor (:on-click (ajax :callback (lambda () (setf (grid-page self) (1+ page))) :update self) :href "#")
+                   (translate "Next »")))))))))
 
 ;;; Charts, as inline SVG
 
@@ -265,12 +383,24 @@ current order, each field as the grid shows it."
 
 (defvar *chart-counter* 0)
 
-(defun chart-figure (title data-table body)
+(defun series-class (n)
+  "The CSS class giving series N its colour (and, in a scatter chart, shape)."
+  (format nil "lt-series-~D" (mod n 6)))
+
+(defun chart-key (names)
+  "Write a key matching each of NAMES to its series' colour."
+  (ul (:class "lt-chart-key")
+    (loop for name in names for n from 0
+          do (li () (span (:class (list "lt-chart-swatch" (series-class n)))) (text (princ-to-string name))))))
+
+(defun chart-figure (title data-table body &optional key)
   "A figure holding an SVG chart, its TITLE, and its data as a table for
-screen readers (and anyone who opens it)."
+screen readers (and anyone who opens it).  KEY, when given, is a thunk
+writing the chart's key."
   (let ((id (format nil "lt-chart-~D" (incf *chart-counter*))))
     (figure (:class "lt-chart")
       (raw (funcall body id))
+      (when key (funcall key))
       (figcaption (:id id) (text title))
       (details (:class "lt-chart-data")
         (summary () (translate "Data"))
@@ -344,14 +474,14 @@ gets a legend."
                        do (format out "<text class=\"lt-chart-axis\" x=\"~A\" y=\"~A\" text-anchor=\"middle\">~A</text>"
                                   (svg-number (x i)) (- height 8) (html-escape (princ-to-string label))))))
            (loop for (name . values) in series for n from 0
-                 do (format out "<polyline class=\"lt-chart-line lt-series-~D\" points=\"~{~A~^ ~}\"><title>~A</title></polyline>"
-                            (mod n 4)
+                 do (format out "<polyline class=\"lt-chart-line ~A\" points=\"~{~A~^ ~}\"><title>~A</title></polyline>"
+                            (series-class n)
                             (loop for v in values for i from 0 collect (format nil "~A,~A" (svg-number (x i)) (svg-number (y v))))
                             (html-escape (princ-to-string name))))
            (when (> (length series) 1)
              (loop for (name) in series for n from 0
-                   do (format out "<text class=\"lt-chart-legend lt-series-~D\" x=\"~A\" y=\"~A\">● ~A</text>"
-                              (mod n 4) (+ left 6 (* n 110)) (+ above 12) (html-escape (princ-to-string name)))))
+                   do (format out "<text class=\"lt-chart-legend ~A\" x=\"~A\" y=\"~A\">● ~A</text>"
+                              (series-class n) (+ left 6 (* n 110)) (+ above 12) (html-escape (princ-to-string name)))))
            (format out "</svg>")))))))
 
 (defun sparkline (values &key (label "") (width 120) (height 28))

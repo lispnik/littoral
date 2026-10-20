@@ -100,13 +100,21 @@ try {
   await audit("contacts editor with errors");
   await go("/examples/login"); await clickLink("Log in"); await audit("login dialog");
   await go("/examples/widgets");
-  for (const tab of ["Tree", "Autocomplete", "Sortable", "Forms", "Inputs", "Layout", "Data grid", "Charts", "Calendar", "Kanban", "Markdown"]) {
+  for (const tab of ["Tree", "Autocomplete", "Sortable", "Forms", "Inputs", "Layout", "Data grid", "Big table", "Load more", "Charts", "Calendar", "Kanban", "Markdown"]) {
     await clickLink(tab); await audit("widgets: " + tab);
   }
   // The drawer, open (it may be open already: it's kept on the server).
   await clickLink("Layout");
   await evaluate(`document.querySelector(".lt-drawer") || document.querySelector(".lt-drawer-toggle").click()`);
   await sleep(500); await audit("widgets: drawer open");
+  // An event chosen, with the buttons that move it.
+  await clickLink("Calendar");
+  await evaluate(`[...document.querySelectorAll(".lt-schedule-event-link")].find(a => a.textContent.includes("Standup")).click()`);
+  await sleep(500); await audit("widgets: an event chosen");
+  // A filter builder with two conditions.
+  await clickLink("Big table");
+  await evaluate(`document.querySelector(".lt-filter-add").click()`);
+  await sleep(500); await audit("widgets: two conditions");
   await go("/examples/store");
   await evaluate(`document.querySelector("a.add").click()`); await waitLoad();
   await clickLink("Checkout"); await audit("store: cart review");
@@ -140,7 +148,7 @@ try {
  for (const page of pages) { await go(page); await phoneCheck(page); }
  await go("/examples/contacts"); await clickLink("Add a contact"); await phoneCheck("contacts editor");
  await go("/examples/widgets");
- for (const tab of ["Tree", "Autocomplete", "Sortable", "Inputs", "Layout"]) { await clickLink(tab); await phoneCheck("widgets: " + tab); }
+ for (const tab of ["Tree", "Autocomplete", "Sortable", "Inputs", "Big table", "Load more", "Charts", "Calendar", "Layout"]) { await clickLink(tab); await phoneCheck("widgets: " + tab); }
  await evaluate(`document.querySelector(".lt-drawer") || document.querySelector(".lt-drawer-toggle").click()`);
  await sleep(500); await phoneCheck("widgets: drawer open");
  await go("/examples/counter"); await clickLink("Halos"); await phoneCheck("halos");

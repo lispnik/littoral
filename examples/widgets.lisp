@@ -1,4 +1,5 @@
-;;;; widgets.lisp — tabs, a command palette, breadcrumbs, a tree, autocomplete, a sortable list, lazy panels, diffs
+;;;; widgets.lisp — tabs, a command palette, breadcrumbs, a tree, autocomplete, a sortable list, lazy panels, diffs,
+;;;; a big virtual table with conditions, a list that loads more, charts and a week of events
 
 (in-package #:littoral-examples)
 
@@ -65,13 +66,24 @@
              :title "Orders this week")
   (line-chart '(("Visits" 120 180 150 220 260 240 300) ("Sign-ups" 12 20 18 30 34 28 41))
               :title "Visits and sign-ups" :x-labels '("Jan" "Feb" "Mar" "Apr" "May" "Jun" "Jul"))
-  (p () "A sparkline, inline: " (sparkline '(3 5 2 8 6 9 4 11 7 12) :label "Ten days of support tickets")))
+  (p () "A sparkline, inline: " (sparkline '(3 5 2 8 6 9 4 11 7 12) :label "Ten days of support tickets"))
+  (div (:class "chart-row")
+    (pie-chart '(("Email" . 41) ("Chat" . 23) ("Phone" . 9) ("Forum" . 6)) :title "Support requests by channel" :donut t)
+    (pie-chart '(("Lisp" . 62) ("JavaScript" . 25) ("CSS" . 13)) :title "This repository's lines"))
+  (stacked-bar-chart '(("Opened" 14 22 18 30) ("Answered" 9 15 19 24) ("Closed" 4 8 12 21))
+                     :title "Tickets by quarter" :x-labels '("Q1" "Q2" "Q3" "Q4"))
+  (scatter-chart '(("Oaks" (12 . 8.5) (25 . 14) (40 . 19) (61 . 23) (80 . 26))
+                   ("Birches" (5 . 6) (11 . 10.5) (20 . 15) (30 . 17) (45 . 18)))
+                 :title "How trees grow" :x-label "Age (years)" :y-label "Height (m)"))
 
 ;;; Calendar
 
 (defclass calendar-section (component)
   ((calendar :reader section-calendar)
-   (chosen :initform nil :accessor section-chosen)))
+   (chosen :initform nil :accessor section-chosen)
+   (week-events :initform (sample-week-events) :accessor section-week-events
+                :documentation "The week's events, replaced on every move.")
+   (week :reader section-week)))
 
 (defun sample-events ()
   (multiple-value-bind (s m h day month year) (decode-universal-time (get-universal-time))
@@ -84,16 +96,126 @@
 (defmethod initialize-instance :after ((self calendar-section) &key)
   (setf (slot-value self 'calendar)
         (make-instance 'calendar :events #'sample-events
-                                 :on-select (lambda (date) (setf (section-chosen self) date)))))
+                                 :on-select (lambda (date) (setf (section-chosen self) date))))
+  (setf (slot-value self 'week)
+        (make-instance 'event-calendar
+                       :events (lambda () (section-week-events self))
+                       :event-key (lambda (event) (getf event :id))
+                       :on-move (lambda (event start)
+                                  (setf (section-week-events self)
+                                        (moved-event (section-week-events self) (getf event :id) start))))))
 
-(defmethod children ((self calendar-section)) (list (section-calendar self)))
+(defmethod children ((self calendar-section)) (list (section-calendar self) (section-week self)))
 (defmethod states ((self calendar-section)) (list self))
 
 (defmethod render ((self calendar-section))
   (h2 () "Calendar")
   (render-component (section-calendar self))
   (when (section-chosen self)
-    (p (:role "status") "You chose " (text (apply #'localized-date (section-chosen self))) ".")))
+    (p (:role "status") "You chose " (text (apply #'localized-date (section-chosen self))) "."))
+  (h2 () "This week")
+  (p () "Drag an event to another time or day, or choose it for buttons that move it.")
+  (render-component (section-week self)))
+
+;;; A week of events, moved by dragging
+
+(defun this-week-day (days)
+  "The date DAYS after this week's Monday, as (YEAR MONTH DAY)."
+  (multiple-value-bind (s m h day month year weekday) (decode-universal-time (get-universal-time))
+    (declare (ignore s m h))
+    (multiple-value-bind (s m h day month year)
+        (decode-universal-time (+ (encode-universal-time 0 0 12 day month year) (* 86400 (- days weekday))))
+      (declare (ignore s m h))
+      (list year month day))))
+
+(defun sample-week-events ()
+  "A week of meetings, this week, as plists."
+  (loop for (id title day hour minute minutes) in '((1 "Standup" 0 9 0 15) (2 "Design review" 0 10 0 60)
+                                                     (3 "Standup" 1 9 0 15) (4 "Lunch with Grace" 1 12 0 60)
+                                                     (5 "Pairing" 2 13 30 90) (6 "Interview" 2 14 0 60)
+                                                     (7 "Release" 3 16 0 30) (8 "Retrospective" 4 15 0 60))
+        collect (list :id id :title title :minutes minutes
+                      :start (append (this-week-day day) (list hour minute)))))
+
+(defun moved-event (events id start)
+  "EVENTS with the one numbered ID starting at START instead."
+  (mapcar (lambda (event)
+            (if (eql (getf event :id) id)
+                (list* :start start (alexandria:remove-from-plist event :start))
+                event))
+          events))
+
+;;; A big table: ten thousand rows in a virtual grid, with conditions
+
+(defclass shipment ()
+  ((number :initarg :number)
+   (city :initarg :city)
+   (weight :initarg :weight)
+   (sent :initarg :sent)
+   (status :initarg :status)
+   (express :initarg :express))
+  (:documentation "A parcel on its way, for the big table."))
+
+(define-description shipment
+  ((number :type :integer :label "No.")
+   (city)
+   (weight :type :integer :label "Weight (kg)")
+   (sent :type :date)
+   (status :type :choice :choices '(:waiting :on-the-way :delivered :returned)
+           :labels (lambda (status) (string-capitalize (substitute #\Space #\- (string status)))))
+   (express :type :boolean)))
+
+(defparameter *shipment-cities*
+  '("Aberdeen" "Bordeaux" "Cork" "Dresden" "Exeter" "Florence" "Geneva" "Hamburg" "Inverness" "Jena"
+    "Krakow" "Lisbon" "Madrid" "Nantes" "Oslo" "Porto" "Quimper" "Rotterdam" "Seville" "Tallinn"))
+
+(defun sample-shipments (count)
+  "COUNT shipments, the same every time."
+  (let ((seed 20261019))
+    (flet ((next (n) (setf seed (mod (+ (* seed 1103515245) 12345) 2147483648)) (mod (floor seed 65536) n)))
+      (loop for number from 1 to count
+            collect (make-instance 'shipment
+                                   :number number
+                                   :city (nth (next 20) *shipment-cities*)
+                                   :weight (1+ (next 40))
+                                   :sent (list 2026 (1+ (next 10)) (1+ (next 28)))
+                                   :status (nth (next 4) '(:waiting :on-the-way :delivered :returned))
+                                   :express (zerop (next 5)))))))
+
+(defclass big-table-section (component)
+  ((grid :reader section-grid))
+  (:documentation "A virtual data grid of ten thousand shipments, with a filter builder."))
+
+(defmethod initialize-instance :after ((self big-table-section) &key)
+  (setf (slot-value self 'grid)
+        (make-instance 'data-grid :description 'shipment :rows (sample-shipments 10000) :virtual 12
+                                  :conditions '((status :is "1")))))
+
+(defmethod children ((self big-table-section)) (list (section-grid self)))
+
+(defmethod render ((self big-table-section))
+  (h2 () "Big table")
+  (p () "Ten thousand shipments in a grid that writes only the rows near those on screen, "
+    "fetching more as it scrolls. Add conditions above it, such as a weight of at least 30 "
+    "or a date before 2026-05-01.")
+  (render-component (section-grid self)))
+
+;;; Load more: Common Lisp's symbols, a batch at a time
+
+(defclass load-more-section (component)
+  ((symbols :reader section-symbols
+            :initform (make-instance 'load-more-list
+                                     :items (lambda () (cl-symbols-starting ""))
+                                     :batch-size 25 :automatic t :list-label "Common Lisp symbols"
+                                     :render-item (lambda (symbol) (code () (text (string-downcase symbol))))))))
+
+(defmethod children ((self load-more-section)) (list (section-symbols self)))
+
+(defmethod render ((self load-more-section))
+  (h2 () "Load more")
+  (p () "Every external symbol of Common Lisp, 25 at a time. More arrive as the end of the list "
+    "scrolls into view, and the button is there for keyboards and pages without JavaScript.")
+  (render-component (section-symbols self)))
 
 ;;; Kanban
 
@@ -580,6 +702,8 @@ multiple-choice, transfer and new-password field kinds."))
                      (cons "Menus" (make-instance 'menus-section))
                      (cons "Layout" (make-instance 'layout-section))
                      (cons "Data grid" (make-instance 'grid-section))
+                     (cons "Big table" (make-instance 'big-table-section))
+                     (cons "Load more" (make-instance 'load-more-section))
                      (cons "Charts" (make-instance 'charts-section))
                      (cons "Calendar" (make-instance 'calendar-section))
                      (cons "Kanban" (make-instance 'kanban-section))
@@ -630,7 +754,8 @@ multiple-choice, transfer and new-password field kinds."))
 .layout-row { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; }
 .planet-list { list-style: none; padding: 0; margin: 0; }
 .planet-list a { display: block; padding: .2rem .4rem; border-radius: 4px; }
-.planet-list a[aria-current] { background: var(--lt-panel); font-weight: 600; }")
+.planet-list a[aria-current] { background: var(--lt-panel); font-weight: 600; }
+.chart-row { display: flex; flex-wrap: wrap; gap: 0 2rem; }")
 
 (defmethod render ((self widget-demo))
   (div (:class "widgets-heading")

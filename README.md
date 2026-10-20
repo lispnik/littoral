@@ -250,6 +250,16 @@ It's an ordinary component, so a flow can `call` it. `/examples/wizard` signs so
 - **`with-popover`** writes a button that opens the browser's own popover, which needs no script and closes on Escape or a click elsewhere. **`with-tooltip`** shows a tip while what it wraps has the pointer or the focus; littoral.js makes the tip that element's description, and Escape hides it.
 - **`drawer`** slides a panel in from the side over the page. Its button opens it, and its close button, Escape or a click outside closes it. The focus goes in and comes back, and whether it's open is kept on the server.
 - **`split-pane`** puts two components side by side, such as a list and the detail of what's chosen, with a divider that can be dragged or moved with the arrow keys. The share is kept on the server, and on a phone the panes stack.
+- **`load-more-list`** shows a long list a batch at a time, with a Load more button after it. With `:automatic t` the next batch also arrives as the end of the list scrolls into view (infinite scrolling). `:fetch`, a function of a start and a count, lets a database page through it. The focus moves to the first new item, and a status line says how many are shown.
+- **`filter-builder`** holds conditions on a description's fields, such as "Status is Open" and "Due is before 2026-11-01". The comparisons suit each field's kind, and the value is entered with an input of that kind. The conditions must all hold, or any one of them. `filter-matches-p` says whether an object passes.
+- **`data-grid`** takes `:conditions t` to put a filter builder above it. With `:virtual 12` it shows 12 rows at a time in a box that scrolls through all of them. Only the rows near those on screen are written, and the rest are fetched as it scrolls, so ten thousand rows stay quick. Without JavaScript it pages instead.
+- **More charts**, drawn as SVG on the server like `bar-chart`:
+  - `pie-chart`, which can be a donut;
+  - `stacked-bar-chart`;
+  - `scatter-chart`, where each series has a shape as well as a colour.
+
+  Each has a key and its data as a table for screen readers.
+- **`event-calendar`** shows a week or a day of timed events on a grid of hours, with events at the same time side by side. With `:on-move`, events can be dragged to another time or day. Choosing an event also shows buttons that move it a step or a day, which work from the keyboard and without JavaScript.
 
 ```lisp
 (define-description party
@@ -258,9 +268,11 @@ It's an ordinary component, so a flow can `call` it. `/examples/wizard` signs so
    (password :type :new-password :min-strength 2)))
 (with-popover ("Shipping") (p () "Free over €50."))
 (make-instance 'split-pane :first message-list :second message-view :position 35)
+(make-instance 'data-grid :description 'shipment :rows shipments :virtual 12 :conditions t)
+(pie-chart '(("Email" . 41) ("Chat" . 23) ("Phone" . 9)) :title "Support requests" :donut t)
 ```
 
-They're in the widgets example. Its Breadcrumbs tab has the breadcrumbs and the in-place editor, in a pantry to browse; the Forms and Inputs tabs have the field kinds, the Menus tab the menus, accordions and disclosures, the Layout tab a popover, a tooltip, a drawer and a split pane, and the Tools tab a lazy panel and a diff view. Its heading has a command palette over the tabs and the other examples. The report example's chart is a lazy panel, and the wiki's history shows each revision's changes. `/examples/monitoring` charts the server's own metrics live.
+They're in the widgets example. Its Breadcrumbs tab has the breadcrumbs and the in-place editor, in a pantry to browse; the Forms and Inputs tabs have the field kinds, the Menus tab the menus, accordions and disclosures, the Layout tab a popover, a tooltip, a drawer and a split pane, the Big table tab ten thousand rows in a virtual grid with conditions, the Load more tab every symbol of Common Lisp a batch at a time, the Charts tab every kind of chart, the Calendar tab a week of events to drag about, and the Tools tab a lazy panel and a diff view. Its heading has a command palette over the tabs and the other examples. The report example's chart is a lazy panel, and the wiki's history shows each revision's changes. `/examples/monitoring` charts the server's own metrics live.
 
 ### Request cycle
 
