@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.5.1 (2026-10-21)
+
+A fix and a feature for JSON endpoints. In 0.5.0 the endpoints of an application registered at `/`, as projects made by `make new` are, all answered 404; now they answer. Endpoints can also describe themselves, and `serve-openapi` serves the description as OpenAPI 3.1 for Swagger UI, Postman and client generators.
 
 ### Added
 - **OpenAPI descriptions of JSON endpoints.** `serve-openapi` answers `GET /openapi.json` with an OpenAPI 3.1 description of an application's endpoints, for Swagger UI, Postman and client generators; `openapi-description` gives it as a hash table. `define-endpoint` takes a docstring (its first sentence is the summary) and options before the body: `:tags`, `:responses`, `:request-body` and `:query`; `register-endpoint` takes them as keywords. Path parameters come from the pattern, errors are described as `{"error": message}`, and with littoral/auth loaded a bearer token is described as optional. The JSON endpoints example serves its own.

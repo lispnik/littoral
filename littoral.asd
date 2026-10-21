@@ -5,7 +5,7 @@
   :long-description #.(uiop:read-file-string (uiop:subpathname *load-pathname* "README.md"))
   :author "Matthew Kennedy"
   :license "MIT"
-  :version "0.5.0"
+  :version "0.5.1"
   :homepage "https://github.com/lispnik/littoral"
   :bug-tracker "https://github.com/lispnik/littoral/issues"
   :source-control (:git "https://github.com/lispnik/littoral.git")
