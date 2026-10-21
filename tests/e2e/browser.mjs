@@ -393,7 +393,9 @@ try {
   await clickLink("Load more");
   const items = `document.querySelectorAll(".lt-load-more-items li").length`;
   check("a list shows its first batch", await evaluate(items) === 25, await evaluate(items));
-  await evaluate(`(() => { const b = document.querySelector(".lt-load-more-button"); b.focus(); b.click(); })()`);
+  // Focusing scrolls the button into view, where the list would load more by
+  // itself too, unless told not to scroll: then only the click loads.
+  await evaluate(`(() => { const b = document.querySelector(".lt-load-more-button"); b.focus({ preventScroll: true }); b.click(); })()`);
   check("its button loads the next, the focus going to the first new item", await waitFor(`${items} >= 50 &&
     [...document.querySelectorAll(".lt-load-more-items li")].indexOf(document.activeElement) === 25`));
   const shown = await evaluate(items);
