@@ -62,3 +62,36 @@
                                                      :content-type "application/x-www-form-urlencoded")
           (raw-request b :post "/inbox/api/read-all" :body "{}" :content-type "application/json"))))
 ;; ⇒ (415 200)
+
+;;;; Example: littoral:serve-openapi littoral:define-endpoint
+;;; SERVE-OPENAPI answers GET /openapi.json with a description of the application's endpoints, for Swagger UI and client generators.  An endpoint's docstring gives its summary (the first sentence) and description; options before the body, unevaluated, give its tags, responses, request body and query parameters.
+(define-endpoint "/shelf" :get "/api/books/:isbn" (isbn)
+  "A book, by its ISBN."
+  :tags ("books") :responses ((200 "The book") (404 "No such book"))
+  (list :isbn isbn :title "Dune"))
+(serve-openapi "/shelf" :title "Shelf" :version "2" :license "MIT")
+;; ⇒ (:GET "/openapi.json")
+(with-fresh-applications (("/shelf" 'component :mode :deployment))
+  (let* ((json (nth-value 2 (raw-request (make-instance 'browser) :get "/shelf/openapi.json")))
+         (spec (com.inuoe.jzon:parse json))
+         (book (gethash "get" (gethash "/api/books/{isbn}" (gethash "paths" spec)))))
+    (list (gethash "title" (gethash "info" spec))
+          (gethash "summary" book)
+          (gethash "operationId" book)
+          (sort (alexandria:hash-table-keys (gethash "responses" book)) #'string<))))
+;; ⇒ ("Shelf" "A book, by its ISBN." "getApiBooksByIsbn" ("200" "404" "default"))
+
+;;;; Example: littoral:openapi-description
+;;; The description itself, as a hash table: here a query parameter, documented with :QUERY.  Endpoints without a docstring are summarised by their method and path.
+(define-endpoint "/shelf" :get "/api/search" ()
+  "Find books."
+  :query (("q" "Words in the title"))
+  (list))
+(define-endpoint "/shelf" :delete "/api/books/:isbn" (isbn)
+  (list :deleted isbn))
+(let* ((paths (gethash "paths" (openapi-description "/shelf")))
+       (finder (gethash "get" (gethash "/api/search" paths)))
+       (q (aref (gethash "parameters" finder) 0)))
+  (list (gethash "name" q) (gethash "in" q)
+        (gethash "summary" (gethash "delete" (gethash "/api/books/{isbn}" paths)))))
+;; ⇒ ("q" "query" "DELETE /api/books/{isbn}")

@@ -56,3 +56,71 @@
         (is (= 200 status)) (is (search "\"name\":\"ada\"" text)))
       (let ((forger (make-instance 'browser :headers '(("authorization" . "Bearer lt_forged")))))
         (is (= 401 (api forger :get "/examples/members/api/me")))))))
+
+(test endpoint-docstrings-and-options
+  ;; A docstring or option is one only when forms follow it.
+  (unwind-protect
+       (progn
+         (define-endpoint "/doc-test" :get "/word" () "a word")
+         (define-endpoint "/doc-test" :get "/keyword" () :false)
+         (define-endpoint "/doc-test" :get "/both" ()
+           "Answer both.  This is said
+in two lines."
+           :tags ("t") :responses ((200 "Both")) :query (("q" "A word"))
+           (list :both t))
+         (with-fresh-applications (("/doc-test" 'component :mode :deployment))
+           (let ((b (make-instance 'browser)))
+             (is (equal "\"a word\"" (nth-value 1 (api b :get "/doc-test/word"))))
+             (is (equal "false" (nth-value 1 (api b :get "/doc-test/keyword"))))
+             (is (equal "{\"both\":true}" (nth-value 1 (api b :get "/doc-test/both"))))))
+         (let ((both (gethash "get" (gethash "/both" (gethash "paths" (openapi-description "/doc-test"))))))
+           (is (equal "Answer both." (gethash "summary" both)))
+           (is (equal "Answer both. This is said in two lines." (gethash "description" both)))
+           (is (equalp #("t") (gethash "tags" both)))
+           (is (equal "q" (gethash "name" (aref (gethash "parameters" both) 0))))
+           (is (equal "Both" (gethash "description" (gethash "200" (gethash "responses" both))))))
+         (is (equal "GET /word" (gethash "summary" (gethash "get" (gethash "/word" (gethash "paths" (openapi-description "/doc-test"))))))))
+    (remhash "/doc-test" littoral::*endpoints*)))
+
+(test openapi-describes-the-endpoints
+  (with-fresh-applications (("/examples/api" 'littoral-examples:api-demo :mode :deployment))
+    (multiple-value-bind (status text) (let ((*endpoint-authenticator* nil)) ; littoral/auth sets one
+                                         (api (make-instance 'browser) :get "/examples/api/openapi.json"))
+      (is (= 200 status))
+      (let* ((spec (com.inuoe.jzon:parse text))
+             (paths (gethash "paths" spec))
+             (note (gethash "/notes/{id}" paths))
+             (post (gethash "post" (gethash "/notes" paths))))
+        (is (equal "3.1.0" (gethash "openapi" spec)))
+        (is (equal "Notes" (gethash "title" (gethash "info" spec))))
+        (is (equal "/examples/api" (gethash "url" (aref (gethash "servers" spec) 0))))
+        ;; Itself not among them.
+        (is (equal '("/notes" "/notes/{id}") (sort (alexandria:hash-table-keys paths) #'string<)))
+        (is (equal '("delete" "get") (sort (alexandria:hash-table-keys note) #'string<)))
+        (is (equal "getNotesById" (gethash "operationId" (gethash "get" note))))
+        (let ((id (aref (gethash "parameters" (gethash "get" note)) 0)))
+          (is (equal "id" (gethash "name" id)))
+          (is (equal "path" (gethash "in" id)))
+          (is (eq t (gethash "required" id))))
+        (is (equal "Add a note." (gethash "summary" post)))
+        (is (gethash "requestBody" post))
+        (is (equal '("201" "400" "422" "default") (sort (alexandria:hash-table-keys (gethash "responses" post)) #'string<)))
+        (is (equal "#/components/schemas/Error"
+                   (gethash "$ref" (gethash "schema" (gethash "application/json" (gethash "content" (gethash "422" (gethash "responses" post))))))))
+        (is (null (gethash "security" spec)) "No authenticator, no security")))
+    (let ((*endpoint-authenticator* (lambda () nil)))
+      (let ((spec (openapi-description "/examples/api")))
+        (is (gethash "bearer" (gethash "securitySchemes" (gethash "components" spec))))
+        (is (= 2 (length (gethash "security" spec))) "A token is optional")))))
+
+(test the-root-application-answers-its-endpoints
+  (unwind-protect
+       (progn
+         (define-endpoint "/" :get "/api/ping" () (list :ok t))
+         (with-fresh-applications (("/" 'component :mode :deployment))
+           (let ((b (make-instance 'browser)))
+             (is (equal "{\"ok\":true}" (nth-value 1 (api b :get "/api/ping"))))
+             (is (= 405 (api b :post "/api/ping" "{}")))
+             ;; Paths it has no endpoint for aren't its pages.
+             (is (= 404 (api b :get "/favicon.ico"))))))
+    (remhash "/" littoral::*endpoints*)))

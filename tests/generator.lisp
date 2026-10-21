@@ -6,8 +6,10 @@
 (in-suite generator)
 
 (defun scratch-directory ()
+  ;; SBCL starts every process with the same random state: seed afresh, so
+  ;; runs don't share paths, nor the fasls compiled from them.
   (uiop:ensure-directory-pathname
-   (merge-pathnames (format nil "littoral-generator-~36R/" (random (expt 36 8)))
+   (merge-pathnames (format nil "littoral-generator-~36R/" (random (expt 36 8) (make-random-state t)))
                     (uiop:temporary-directory))))
 
 (defun first-line (file)

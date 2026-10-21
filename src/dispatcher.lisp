@@ -634,7 +634,11 @@ request couldn't use.  NIL for other requests."
               when (and (> (length path) (length prefix))
                         (string= prefix path :end2 (length prefix))
                         (char= (char path (length prefix)) #\/))
-                return app))))
+                return app)
+        ;; The root application has every path under it, but answers only
+        ;; those its endpoints serve: others aren't pages of it.
+        (let ((root (find-application "/")))
+          (and root (endpoint-serves-path-p "/" path) root)))))
 
 (defun index-page ()
   "A page listing the registered applications."

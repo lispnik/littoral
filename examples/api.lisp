@@ -9,13 +9,21 @@
 (defun api-note (id) (find id *api-notes* :key (lambda (n) (getf n :id))))
 
 (define-endpoint "/examples/api" :get "/notes" ()
+  "The notes, newest first."
+  :tags ("notes")
   (sb-thread:with-mutex (*api-lock*) (coerce *api-notes* 'vector)))
 
 (define-endpoint "/examples/api" :get "/notes/:id" (id)
+  "One note."
+  :tags ("notes") :responses ((200 "The note") (404 "No such note"))
   (or (sb-thread:with-mutex (*api-lock*) (api-note (parse-integer id :junk-allowed t)))
       (endpoint-error 404 "No note ~A." id)))
 
 (define-endpoint "/examples/api" :post "/notes" ()
+  "Add a note.  Only the newest 50 are kept, and a note's text is cut to 200
+characters."
+  :tags ("notes") :request-body "{\"text\": \"…\"}"
+  :responses ((201 "The note, with its id") (400 "The body isn't JSON") (422 "No text"))
   (let* ((body (endpoint-body))
          (text (and (hash-table-p body) (gethash "text" body))))
     (unless (and (stringp text) (plusp (length (string-trim " " text))))
@@ -29,11 +37,16 @@
       (values note 201))))
 
 (define-endpoint "/examples/api" :delete "/notes/:id" (id)
+  "Delete a note."
+  :tags ("notes") :responses ((200 "Its id, as {\"deleted\": id}") (404 "No such note"))
   (sb-thread:with-mutex (*api-lock*)
     (let ((note (api-note (parse-integer id :junk-allowed t))))
       (unless note (endpoint-error 404 "No note ~A." id))
       (setf *api-notes* (remove note *api-notes*))
       (list :deleted (getf note :id)))))
+
+(serve-openapi "/examples/api" :title "Notes" :version "1"
+               :description "The notes the JSON endpoints example keeps.")
 
 (defclass api-demo (component) ()
   (:documentation "A page about the JSON endpoints beside it, which calls them."))
@@ -43,7 +56,9 @@
     (h:h1 () "JSON endpoints")
     (h:p () "This application answers JSON at " (h:code () (h:text (format nil "~A/notes" base)))
       " as well as serving this page. The endpoints share the application's database and "
-      "sign-in, but not its sessions: they suit mobile apps, scripts and webhooks.")
+      "sign-in, but not its sessions: they suit mobile apps, scripts and webhooks. "
+      (h:a (:href (format nil "~A/openapi.json" base)) "Their OpenAPI description")
+      " is made from their docstrings, for tools such as Swagger UI and client generators.")
     (h:pre (:class "api-code" :tabindex "0")
       (h:text (format nil "(define-endpoint \"/examples/api\" :post \"/notes\" ()
   (let ((text (gethash \"text\" (endpoint-body))))

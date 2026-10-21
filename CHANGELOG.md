@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **OpenAPI descriptions of JSON endpoints.** `serve-openapi` answers `GET /openapi.json` with an OpenAPI 3.1 description of an application's endpoints, for Swagger UI, Postman and client generators; `openapi-description` gives it as a hash table. `define-endpoint` takes a docstring (its first sentence is the summary) and options before the body: `:tags`, `:responses`, `:request-body` and `:query`; `register-endpoint` takes them as keywords. Path parameters come from the pattern, errors are described as `{"error": message}`, and with littoral/auth loaded a bearer token is described as optional. The JSON endpoints example serves its own.
+
+### Fixed
+- **Endpoints of an application at `/` answer.** Only `/` itself reached the root application, so its endpoints, such as those of a project made by `make new`, got 404. Paths its endpoints don't serve still do.
+
 ## 0.5.0 (2026-10-21)
 
 This release is about widgets and working together live. It adds breadcrumbs, editing in place, menus, accordions, popovers, drawers and split panes, a command palette, lazy panels, lists that load more, filter builders, virtual data grids, event calendars, more charts and ten more field kinds. On top of server push, it adds presence (who else has a page open), comment threads, notifications and an activity feed, and on Hunchentoot an open push page no longer holds a thread. It also changes how HTML is written: `littoral.html` now has a macro for every HTML element and shadows CL's `map`, `search` and `time`, so a package gives it a nickname, `(:local-nicknames (#:h #:littoral.html))`, and writes `h:div`, rather than using it. To upgrade, replace `(:use … #:littoral.html)` with that nickname, prefix tag and brush calls with `h:`, and rename `var-tag` to `h:var`.

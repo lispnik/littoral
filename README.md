@@ -459,6 +459,19 @@ An application can answer JSON beside its pages, for mobile apps, scripts and we
 - **Who's asking.** `endpoint-user` comes from an `Authorization: Bearer` token made with `create-api-token`, or from the browser's sign-in cookie.
 - **Cross-site safety.** A write signed in by cookie must be sent as `application/json`, which a cross-site form can't do.
 
+**OpenAPI.** `serve-openapi` answers `GET /openapi.json` with an OpenAPI 3.1 description of an application's endpoints, which Swagger UI, Postman and client generators read. It's made from what the endpoints say about themselves: a docstring's first sentence is the summary, and options before the body give the tags, responses, request body and query parameters. Path parameters come from the pattern, and every endpoint is described as answering errors as `{"error": message}`. With `littoral/auth` loaded, the description says requests may carry a bearer token.
+
+```lisp
+(define-endpoint "/notes" :get "/api/notes" ()
+  "The notes, newest first."
+  :tags ("notes") :query (("q" "Words to find")) :responses ((200 "The notes") (401 "Not signed in"))
+  (find-notes (request-parameter "q")))
+
+(serve-openapi "/notes" :title "Notes" :version "1" :license "MIT")
+```
+
+`find-notes` stands for your own code, and `request-parameter` reads the query. `openapi-description` gives the description as a hash table, to change or save.
+
 `/examples/api` calls its own endpoints from the page. The members example answers `GET /examples/members/api/me` and makes API tokens.
 
 ### Background jobs

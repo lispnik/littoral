@@ -143,6 +143,7 @@ under its own name.  Give the package a local nickname, as in
    #:store-thread-comments #:store-add-comment #:store-delete-comment #:call-after-store-change
    ;; JSON endpoints
    #:define-endpoint #:register-endpoint #:endpoint-error #:endpoint-body #:*endpoint-authenticator*
+   #:openapi-description #:serve-openapi
    ;; Health, metrics, request logs
    #:add-health-check #:remove-health-check #:serve-metrics #:metrics-text #:metrics-summary
    #:reset-metrics #:log-requests-to #:*request-log* #:*latency-buckets*

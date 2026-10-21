@@ -7771,6 +7771,12 @@ vectors arrays (#() for an empty one: `nil` is null, as `:null` is), T true,
 plist of extra headers.  `endpoint-error` answers with its status, another
 error with 500, and a method `pattern` doesn't serve with 405.
 
+`body` may start with a docstring, whose first sentence is the endpoint's
+summary in `openapi-description` and the whole its description, and then
+options, unevaluated: `:tags` ("notes"), `:responses` ((201 "Created") (422
+"No text")), `:request-body` "The note, with its text" and `:query` (("q"
+"Words to find")), as for `register-endpoint`.
+
 *Example:* An endpoint's value is its JSON response: a keyword plist is an object, a list of them an array.  `:id` in the pattern becomes the argument `id`, a string.  `endpoint-error` answers with a status and {"error": message}.
 
 ```lisp
@@ -7816,12 +7822,35 @@ error with 500, and a method `pattern` doesn't serve with 405.
 ;; ⇒ ((201 "/notes/api/notes/4" "{\"id\":4,\"text\":\"Feed the cat\"}") (422 NIL "{\"error\":\"A note needs text.\"}") 400)
 ```
 
-#### `register-endpoint` `application-path method pattern function` — function
+*Example:* `serve-openapi` answers `get` /openapi.json with a description of the application's endpoints, for Swagger `ui` and client generators.  An endpoint's docstring gives its summary (the first sentence) and description; options before the body, unevaluated, give its tags, responses, request body and query parameters.
+
+```lisp
+(define-endpoint "/shelf" :get "/api/books/:isbn" (isbn)
+  "A book, by its ISBN."
+  :tags ("books") :responses ((200 "The book") (404 "No such book"))
+  (list :isbn isbn :title "Dune"))
+(serve-openapi "/shelf" :title "Shelf" :version "2" :license "MIT")
+;; ⇒ (:GET "/openapi.json")
+(with-fresh-applications (("/shelf" 'component :mode :deployment))
+  (let* ((json (nth-value 2 (raw-request (make-instance 'browser) :get "/shelf/openapi.json")))
+         (spec (com.inuoe.jzon:parse json))
+         (book (gethash "get" (gethash "/api/books/{isbn}" (gethash "paths" spec)))))
+    (list (gethash "title" (gethash "info" spec))
+          (gethash "summary" book)
+          (gethash "operationId" book)
+          (sort (alexandria:hash-table-keys (gethash "responses" book)) #'string<))))
+;; ⇒ ("Shelf" "A book, by its ISBN." "getApiBooksByIsbn" ("200" "404" "default"))
+```
+
+#### `register-endpoint` `application-path method pattern function &key summary description tags responses request-body query hidden` — function
 
 Serve `function` for `method` requests to `pattern` under `application-path`,
 replacing any endpoint with the same method and pattern.  `pattern`'s `:name`
 segments become `function`'s arguments, URL-decoded strings, in order.
-Returns (`method` `pattern`).
+Returns (`method` `pattern`).  The keywords describe it for `openapi-description`:
+`summary` and `description` are strings, `tags` a list of strings, `responses` a
+list of (`status` `description`), `request-body` a description of the JSON sent,
+`query` a list of (`name` `description`) for query parameters; `hidden` leaves it out.
 
 *Example:* The function behind `define-endpoint`: serve a function you already have.  It returns the method and pattern.
 
@@ -7913,6 +7942,59 @@ Content-Type application/json, or gets 415: a cross-site form can't.
                                                      :content-type "application/x-www-form-urlencoded")
           (raw-request b :post "/inbox/api/read-all" :body "{}" :content-type "application/json"))))
 ;; ⇒ (415 200)
+```
+
+#### `openapi-description` `application-path &key (title (format () "~A API" (normalize-path application-path))) (version "1") description license` — function
+
+An OpenAPI 3.1 description of the endpoints of the application at
+`application-path`, as a hash table, which an endpoint answers as JSON: their
+paths, path and query parameters, request bodies and responses, from what
+`define-endpoint`'s docstrings and options say.  `title`, `version` (the API's,
+"1" by default), `description` and `license` (an `spdx` identifier, such as
+"`mit`") are its info.  With littoral/auth loaded,
+it says requests may carry a bearer API token.
+
+*Example:* The description itself, as a hash table: here a query parameter, documented with `:query`.  Endpoints without a docstring are summarised by their method and path.
+
+```lisp
+(define-endpoint "/shelf" :get "/api/search" ()
+  "Find books."
+  :query (("q" "Words in the title"))
+  (list))
+(define-endpoint "/shelf" :delete "/api/books/:isbn" (isbn)
+  (list :deleted isbn))
+(let* ((paths (gethash "paths" (openapi-description "/shelf")))
+       (finder (gethash "get" (gethash "/api/search" paths)))
+       (q (aref (gethash "parameters" finder) 0)))
+  (list (gethash "name" q) (gethash "in" q)
+        (gethash "summary" (gethash "delete" (gethash "/api/books/{isbn}" paths)))))
+;; ⇒ ("q" "query" "DELETE /api/books/{isbn}")
+```
+
+#### `serve-openapi` `application-path &key (pattern "/openapi.json") title version description license` — function
+
+Answer `get` requests to `pattern` under `application-path` with
+`openapi-description` of its endpoints, with `title`, `version`, `description` and
+`license`, made afresh each time, so it covers endpoints defined later.  Returns (`:get` `pattern`), as `register-endpoint` does.
+
+*Example:* `serve-openapi` answers `get` /openapi.json with a description of the application's endpoints, for Swagger `ui` and client generators.  An endpoint's docstring gives its summary (the first sentence) and description; options before the body, unevaluated, give its tags, responses, request body and query parameters.
+
+```lisp
+(define-endpoint "/shelf" :get "/api/books/:isbn" (isbn)
+  "A book, by its ISBN."
+  :tags ("books") :responses ((200 "The book") (404 "No such book"))
+  (list :isbn isbn :title "Dune"))
+(serve-openapi "/shelf" :title "Shelf" :version "2" :license "MIT")
+;; ⇒ (:GET "/openapi.json")
+(with-fresh-applications (("/shelf" 'component :mode :deployment))
+  (let* ((json (nth-value 2 (raw-request (make-instance 'browser) :get "/shelf/openapi.json")))
+         (spec (com.inuoe.jzon:parse json))
+         (book (gethash "get" (gethash "/api/books/{isbn}" (gethash "paths" spec)))))
+    (list (gethash "title" (gethash "info" spec))
+          (gethash "summary" book)
+          (gethash "operationId" book)
+          (sort (alexandria:hash-table-keys (gethash "responses" book)) #'string<))))
+;; ⇒ ("Shelf" "A book, by its ISBN." "getApiBooksByIsbn" ("200" "404" "default"))
 ```
 
 ### Health, metrics, request logs
