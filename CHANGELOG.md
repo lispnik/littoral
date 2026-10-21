@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 (2026-10-21)
+
+This release is about widgets and working together live. It adds breadcrumbs, editing in place, menus, accordions, popovers, drawers and split panes, a command palette, lazy panels, lists that load more, filter builders, virtual data grids, event calendars, more charts and ten more field kinds. On top of server push, it adds presence (who else has a page open), comment threads, notifications and an activity feed, and on Hunchentoot an open push page no longer holds a thread. It also changes how HTML is written: `littoral.html` now has a macro for every HTML element and shadows CL's `map`, `search` and `time`, so a package gives it a nickname, `(:local-nicknames (#:h #:littoral.html))`, and writes `h:div`, rather than using it. To upgrade, replace `(:use … #:littoral.html)` with that nickname, prefix tag and brush calls with `h:`, and rename `var-tag` to `h:var`.
 
 ### Added
 - **Breadcrumbs from the call stack.** `breadcrumb-trail` names a component, then what it has called, down to what shows now; each link goes back to its level. `breadcrumb-label` names each level (a description editor's is its title). `home` now also drops the dismissed component's answer handler, which no caller could use any more.
@@ -16,7 +18,6 @@
 - **HTTPS without a proxy.** `start` takes `:ssl-certificate-file` and `:ssl-key-file` (and `:ssl-key-password`), on Hunchentoot and Woo. On Hunchentoot the push hub serves event streams over TLS too. Cookies are `Secure` and WebSocket URLs `wss:` even on Woo, which reports every request as http.
 - **Pushes render in parallel.** The push hub renders and writes on `*push-render-threads*` threads (4), each page by one thread at a time, so a broadcast to many pages isn't rendered one page after another.
 - The widgets example has Breadcrumbs (a pantry to browse, fields edited in place), Forms and Menus tabs, the upload example a drop zone, and the jobs demo shows its report's progress in a `durable-job-view`.
-
 - **Lazy panels.** `lazy-panel` sends a placeholder and fills it in over AJAX once the page has loaded, or once it's scrolled into view with `:when-visible t`, so slow parts don't hold the page up. `:content` is a component or a function making one, called only then; without JavaScript a link loads it. The report example's chart is one.
 - **Differences between texts.** `diff-view` shows two texts' differences line by line, inline or side by side, with the words that changed in a changed line marked and long unchanged stretches cut to a few lines of context. `text-diff` gives the comparison as data. The wiki's history shows what each revision changed.
 - **A command palette.** `command-palette` opens on Ctrl-K (⌘K on a Mac) and finds `palette-command`s by fuzzy match as you type (`palette-match-score`); the arrow keys, Enter and Escape work as expected, and it works without JavaScript. `:search` adds commands from what's typed. The admin has one in its header, going to any table or a new record, and the widgets example has one over its tabs.
