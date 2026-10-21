@@ -10,6 +10,39 @@
    (merge-pathnames (format nil "littoral-generator-~36R/" (random (expt 36 8)))
                     (uiop:temporary-directory))))
 
+(defun first-line (file)
+  (with-open-file (in file :external-format :utf-8 :if-does-not-exist nil)
+    (and in (format nil "~S (~D bytes, written at ~D)" (or (read-line in nil) "") (file-length in)
+                    (file-write-date file)))))
+
+(defun loading-context (condition directory)
+  "What was being read when CONDITION was signalled, for a report: the file,
+and for a fasl the sources of that name under DIRECTORY."
+  (let* ((file (or *compile-file-truename* *load-truename*))
+         (sources (cond ((null file) '())
+                        ((equal (pathname-type file) "lisp") (list file))
+                        (t (directory (merge-pathnames (make-pathname :directory '(:relative :wild-inferiors)
+                                                                      :name (pathname-name file) :type "lisp")
+                                                       directory))))))
+    (format nil "~A: ~A~%  compiling ~A, loading ~A~@[ (written at ~D)~], in package ~A; #\\; is ~:[not ~;~]a comment~{~%  ~A starts ~A~}"
+            (type-of condition) condition *compile-file-truename* *load-truename*
+            (and *load-truename* (file-write-date *load-truename*)) (package-name *package*) (get-macro-character #\;)
+            (loop for source in sources collect (enough-namestring source directory) collect (first-line source)))))
+
+(defun load-generated-system (asd system)
+  "Load ASD, then SYSTEM, failing the test with what was being read if it
+signals: the app template's tests once failed to load in CI, with the
+variable APP.LISP unbound, as if a file's first comment had been read as code."
+  (let ((contexts '()))
+    (handler-case
+        ;; Every error, even those handled inside: the last few are reported.
+        (handler-bind ((error (lambda (c) (push (or (ignore-errors (loading-context c (uiop:pathname-directory-pathname asd))) "?") contexts))))
+          (asdf:load-asd asd)
+          (asdf:load-system system))
+      (error (c)
+        (error "Loading ~A signalled ~A~%~{~A~%~}" system c
+               (reverse (subseq contexts 0 (min 3 (length contexts)))))))))
+
 (test generated-projects-work
   (let ((dir (scratch-directory)))
     (unwind-protect
@@ -26,8 +59,7 @@
            (is (null (search "{{" (uiop:read-file-string (merge-pathnames "src/app.lisp" dir)))))
            (is (search "Lt Generated" (uiop:read-file-string (merge-pathnames "src/app.lisp" dir))))
            ;; Load it and run its own suite.
-           (asdf:load-asd (merge-pathnames "lt-generated.asd" dir))
-           (asdf:load-system "lt-generated/tests")
+           (load-generated-system (merge-pathnames "lt-generated.asd" dir) "lt-generated/tests")
            (let ((results (let ((fiveam:*test-dribble* (make-broadcast-stream)))
                             (fiveam:run (uiop:find-symbol* '#:lt-generated '#:lt-generated/tests)))))
              (is (>= (length results) 8))
@@ -63,8 +95,7 @@
            (littoral.generator:make-project "lt-generated-app" :directory dir :template "app")
            (is (probe-file (merge-pathnames "deploy/lt-generated-app.service" dir)))
            (is (search "PUBLIC_URL" (uiop:read-file-string (merge-pathnames "README.md" dir))))
-           (asdf:load-asd (merge-pathnames "lt-generated-app.asd" dir))
-           (asdf:load-system "lt-generated-app/tests")
+           (load-generated-system (merge-pathnames "lt-generated-app.asd" dir) "lt-generated-app/tests")
            (let ((results (let ((fiveam:*test-dribble* (make-broadcast-stream)))
                             (fiveam:run (uiop:find-symbol* '#:lt-generated-app '#:lt-generated-app/tests)))))
              (is (>= (length results) 10))
