@@ -48,15 +48,18 @@ aria-label; other attributes are written as given."
     `(%anchor (list ,@attributes) ,(body-thunk body))))
 
 (defun %form (attributes body)
-  (let ((default (getf attributes :default-action)))
+  (let ((default (getf attributes :default-action))
+        (multipart (getf attributes :multipart)))
     (emit-tag "form"
-              (list* :method "post"
-                     :action (render-action-url (ensure-render-context))
-                     :accept-charset "utf-8"
-                     :enctype (when (getf attributes :multipart) "multipart/form-data")
+              ;; Given attributes replace the ones a form has by default.
+              (list* :method (getf attributes :method "post")
+                     :action (or (getf attributes :action) (render-action-url (ensure-render-context)))
+                     :accept-charset (getf attributes :accept-charset "utf-8")
+                     :enctype (getf attributes :enctype (when multipart "multipart/form-data"))
                      ;; The progress bar's name, while littoral.js uploads.
-                     :data-lt-uploading (when (getf attributes :multipart) (translate "Uploading"))
-                     (strip-attributes attributes :multipart :default-action))
+                     :data-lt-uploading (when multipart (translate "Uploading"))
+                     (strip-attributes attributes :multipart :default-action
+                                       :method :action :accept-charset :enctype))
               (lambda ()
                 ;; Always submitted, but run only when no button was.
                 (when default
@@ -66,7 +69,9 @@ aria-label; other attributes are written as given."
 (defmacro h:form (&rest arguments)
   "A form posting back to the session.  Its fields' callbacks run before
 the action of the button that submitted it.  :DEFAULT-ACTION is a thunk run
-when the form is submitted without a button; :MULTIPART T allows FILE-INPUT."
+when the form is submitted without a button; :MULTIPART T allows FILE-INPUT.
+A given :METHOD, :ACTION, :ACCEPT-CHARSET or :ENCTYPE replaces the form's
+own: :METHOD \"dialog\" closes the dialog the form is in, with no request."
   (multiple-value-bind (attributes body) (split-tag-arguments arguments)
     `(%form (list ,@attributes) ,(body-thunk body))))
 

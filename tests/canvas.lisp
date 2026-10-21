@@ -43,6 +43,23 @@
     (littoral::process-callbacks '(("2" . "typed")) registry)
     (is (equal "typed" hit))))
 
+(test form-attributes-replace-defaults
+  (let ((littoral:*render-context* (make-instance 'littoral::render-context
+                                                  :callbacks (make-instance 'littoral::callback-registry)
+                                                  :action-url "/app?_s=S&_k=K")))
+    (is (string= "<form method=\"post\" action=\"/app?_s=S&amp;_k=K\" accept-charset=\"utf-8\"></form>"
+                 (h:with-canvas-to-string () (h:form ()))))
+    (is (string= "<form method=\"get\" action=\"/find\" accept-charset=\"utf-8\" enctype=\"text/plain\"></form>"
+                 (h:with-canvas-to-string ()
+                   (h:form (:method "get" :action "/find" :enctype "text/plain")))))
+    (let ((out (h:with-canvas-to-string () (h:form (:method "dialog" :multipart t)))))
+      (is (= 1 (count-matches "method=" out)))
+      (is (search "method=\"dialog\"" out))
+      (is (search "enctype=\"multipart/form-data\"" out))))
+  ;; Given an action, a form needs no render context.
+  (is (string= "<form method=\"dialog\" action=\"#\" accept-charset=\"utf-8\"></form>"
+               (html (h:form (:method "dialog" :action "#"))))))
+
 (test value-callbacks-before-action
   (let* ((registry (make-instance 'littoral::callback-registry))
          (log '()))

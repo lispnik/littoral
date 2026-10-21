@@ -45,6 +45,9 @@
 - littoral/mail uses smtp 0.3.6, which exports `make-reply`; tests and examples no longer reach for `smtp::make-reply`.
 - **smtp comes from the ocicl registry**, like every other dependency, so `ocicl install` is all a checkout needs. `tools/fetch-smtp.sh` is gone, and the Docker images no longer install git.
 
+### Fixed
+- **A form's own `:method`, `:action`, `:accept-charset` or `:enctype` replaces the one `h:form` writes by default**, rather than writing the attribute twice, which left the browser using the first. `(h:form (:method "dialog") …)` now closes the dialog it is in, without a request.
+
 ## 0.4.0 (2026-10-18)
 
 This release is about documentation you can trust: an example for nearly every exported function, macro and class, each run by the test suite, a tutorial that goes on to testing, a database, signing in and translation, and a README whose code is checked. Checking it all against the code found and fixed about fifteen bugs, one of them a way for `/config` to be reopened to everyone. Clicks are also 45–70% faster.

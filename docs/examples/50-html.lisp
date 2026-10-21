@@ -276,9 +276,11 @@
 ;; ⇒ "<p>Total: <output for=\"price quantity\">£6</output></p><progress value=\"3\" max=\"10\">3 of 10</progress><meter value=\"0.7\" low=\"0.2\" high=\"0.8\">70%</meter>"
 
 ;;;; Example: littoral.html:dialog
-;;; A dialog box; :OPEN shows it.  CALL-MODAL and SHOW-MODAL draw Littoral's own.
+;;; A dialog box; :OPEN shows it, and a form with :METHOD "dialog" closes it without a request.  CALL-MODAL and SHOW-MODAL draw Littoral's own.
 (h:with-canvas-to-string ()
   (h:dialog (:open t :aria-labelledby "saved")
     (h:h2 (:id "saved") "Saved")
-    (h:p () "Your changes are saved.")))
-;; ⇒ "<dialog open aria-labelledby=\"saved\"><h2 id=\"saved\">Saved</h2><p>Your changes are saved.</p></dialog>"
+    (h:p () "Your changes are saved.")
+    (h:form (:method "dialog" :action "#")
+      (h:input (:type "submit" :value "OK")))))
+;; ⇒ "<dialog open aria-labelledby=\"saved\"><h2 id=\"saved\">Saved</h2><p>Your changes are saved.</p><form method=\"dialog\" action=\"#\" accept-charset=\"utf-8\"><input type=\"submit\" value=\"OK\"></form></dialog>"

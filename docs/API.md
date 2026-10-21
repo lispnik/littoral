@@ -12541,14 +12541,16 @@ Write an HTML summary element.  Arguments are as for `tag`, without the name.
 
 Write an HTML dialog element.  Arguments are as for `tag`, without the name.
 
-*Example:* A dialog box; `:open` shows it.  `call-modal` and `show-modal` draw Littoral's own.
+*Example:* A dialog box; `:open` shows it, and a form with `:method` "dialog" closes it without a request.  `call-modal` and `show-modal` draw Littoral's own.
 
 ```lisp
 (h:with-canvas-to-string ()
   (h:dialog (:open t :aria-labelledby "saved")
     (h:h2 (:id "saved") "Saved")
-    (h:p () "Your changes are saved.")))
-;; ⇒ "<dialog open aria-labelledby=\"saved\"><h2 id=\"saved\">Saved</h2><p>Your changes are saved.</p></dialog>"
+    (h:p () "Your changes are saved.")
+    (h:form (:method "dialog" :action "#")
+      (h:input (:type "submit" :value "OK")))))
+;; ⇒ "<dialog open aria-labelledby=\"saved\"><h2 id=\"saved\">Saved</h2><p>Your changes are saved.</p><form method=\"dialog\" action=\"#\" accept-charset=\"utf-8\"><input type=\"submit\" value=\"OK\"></form></dialog>"
 ```
 
 ### Brushes with callbacks
@@ -12589,6 +12591,8 @@ aria-label; other attributes are written as given.
 A form posting back to the session.  Its fields' callbacks run before
 the action of the button that submitted it.  `:default-action` is a thunk run
 when the form is submitted without a button; `:multipart` T allows `file-input`.
+A given `:method`, `:action`, `:accept-charset` or `:enctype` replaces the form's
+own: `:method` "dialog" closes the dialog the form is in, with no request.
 
 *Example:* A form posts back to the session.  Each field's `:callback` receives what was typed; then the `:callback` of the button pressed runs.  Fields are found in tests by their `:id`.
 
