@@ -48,7 +48,10 @@ BROWSER-ERROR when there is none."
    (next-id :initform 0 :accessor page-next-id)
    (replies :initform (make-hash-table) :reader page-replies)
    (lock :initform (sb-thread:make-mutex :name "browser test") :reader page-lock)
-   (ready :initform (sb-thread:make-waitqueue) :reader page-ready))
+   (ready :initform (sb-thread:make-waitqueue) :reader page-ready)
+   ;; Chrome's Page events: how many loads have started, and the frames loading now.
+   (loads :initform 0 :accessor page-loads)
+   (loading :initform '() :accessor page-loading))
   (:documentation "A Chrome tab, driven over the DevTools protocol."))
 
 (defun send (page method &optional (params (make-hash-table :test 'equal)) (timeout 30))
@@ -97,18 +100,36 @@ seconds."
         do (sleep 0.1)
         finally (fail "Timed out waiting for ~A" javascript)))
 
-(defun settle (page)
-  "Wait for the page (and any navigation a click started) to finish loading."
-  (sleep 0.25)
-  (wait-until page "document.readyState === 'complete'"))
+(defun loads-started (page)
+  (sb-thread:with-mutex ((page-lock page)) (page-loads page)))
+
+(defun settle (page loads &key (timeout 30))
+  "Wait for any navigation begun since PAGE had started LOADS loads to
+finish.  Chrome starts loading as soon as a navigation is asked for, while
+the old page stays complete until the server answers, so this waits on its
+events, not the document."
+  ;; A click that navigates starts loading at once; one that doesn't, never.
+  (loop repeat 5 until (> (loads-started page) loads) do (sleep 0.1))
+  (loop with deadline = (+ (get-internal-real-time) (* timeout internal-time-units-per-second))
+        for quiet = (and (null (sb-thread:with-mutex ((page-lock page)) (page-loading page)))
+                         (ignore-errors (evaluate page "document.readyState === 'complete'")))
+        ;; Quiet for a moment: a page may load another (littoral.js does, from the back/forward cache).
+        until (and quiet
+                   (let ((loads (loads-started page)))
+                     (sleep 0.1)
+                     (and (= loads (loads-started page))
+                          (null (sb-thread:with-mutex ((page-lock page)) (page-loading page))))))
+        do (when (> (get-internal-real-time) deadline) (fail "Timed out waiting for the page to load"))
+           (sleep 0.05)))
 
 (defun visit (page path)
   "Open PATH in PAGE: relative to WITH-CHROME's :base, or a whole URL
 starting with http.  Returns when the page has loaded."
-  (send page "Page.navigate" (params "url" (if (alexandria:starts-with-subseq "http" path)
+  (let ((loads (loads-started page)))
+    (send page "Page.navigate" (params "url" (if (alexandria:starts-with-subseq "http" path)
                                                path
                                                (concatenate 'string (page-base page) path))))
-  (settle page))
+    (settle page loads)))
 
 (defun page-url (page)
   "Where PAGE is: its whole URL, as a string."
@@ -117,28 +138,31 @@ starting with http.  Returns when the page has loaded."
 (defun back (page)
   "Go back in PAGE's history, as the browser's back button does, and wait
 for the page to load."
-  (evaluate page "history.back()")
-  (settle page))
+  (let ((loads (loads-started page)))
+    (evaluate page "history.back()")
+    (settle page loads)))
 
 (defun js-string (string) (com.inuoe.jzon:stringify string))
 
 (defun click-css (page selector)
   "Click the first element the CSS SELECTOR matches, and wait for any page
 it loads.  Signals BROWSER-ERROR when nothing matches."
-  (unless (evaluate page (format nil "(() => { const e = document.querySelector(~A); if (!e) return false; e.click(); return true; })()"
+  (let ((loads (loads-started page)))
+    (unless (evaluate page (format nil "(() => { const e = document.querySelector(~A); if (!e) return false; e.click(); return true; })()"
                                  (js-string selector)))
-    (fail "Nothing matches ~A" selector))
-  (settle page))
+      (fail "Nothing matches ~A" selector))
+    (settle page loads)))
 
 (defun click-text (page text &key (among "a, button"))
   "Click the first link or button (or element the CSS selector AMONG
 selects) whose text is TEXT, or failing that contains it, and wait for any
 page it loads.  Signals BROWSER-ERROR when there is none."
-  (unless (evaluate page (format nil "(() => { const all = [...document.querySelectorAll(~A)];
+  (let ((loads (loads-started page)))
+    (unless (evaluate page (format nil "(() => { const all = [...document.querySelectorAll(~A)];
   const e = all.find(e => e.textContent.trim() === ~A) || all.find(e => e.textContent.includes(~:*~A));
   if (!e) return false; e.click(); return true; })()" (js-string among) (js-string text)))
-    (fail "Nothing (~A) says ~S" among text))
-  (settle page))
+      (fail "Nothing (~A) says ~S" among text))
+    (settle page loads)))
 
 (defun type-into (page selector string)
   "Put STRING in the field the CSS SELECTOR matches, replacing its text: the
@@ -176,6 +200,16 @@ verification) that always says yes, for passkey tests."
   (let ((socket (usocket:socket-listen "127.0.0.1" 0)))
     (prog1 (usocket:get-local-port socket) (usocket:socket-close socket))))
 
+(defun note-page-event (page method params)
+  "Keep track of which of PAGE's frames are loading, from Chrome's events."
+  (let ((frame (and (hash-table-p params) (gethash "frameId" params))))
+    (sb-thread:with-mutex ((page-lock page))
+      (cond ((equal method "Page.frameStartedLoading")
+             (incf (page-loads page))
+             (pushnew frame (page-loading page) :test #'equal))
+            ((member method '("Page.frameStoppedLoading" "Page.frameDetached") :test #'equal)
+             (setf (page-loading page) (remove frame (page-loading page) :test #'equal)))))))
+
 (defun call-with-chrome (function &key (base "http://127.0.0.1:8080") (width 1280) (height 800))
   (let* ((port (free-port))
          (profile (uiop:ensure-directory-pathname
@@ -200,10 +234,11 @@ verification) that always says yes, for passkey tests."
              (wsd:on :message socket
                      (lambda (message)
                        (let ((data (com.inuoe.jzon:parse message)))
-                         (when (gethash "id" data)
-                           (sb-thread:with-mutex ((page-lock page))
-                             (setf (gethash (gethash "id" data) (page-replies page)) data)
-                             (sb-thread:condition-broadcast (page-ready page)))))))
+                         (if (gethash "id" data)
+                             (sb-thread:with-mutex ((page-lock page))
+                               (setf (gethash (gethash "id" data) (page-replies page)) data)
+                               (sb-thread:condition-broadcast (page-ready page)))
+                             (note-page-event page (gethash "method" data) (gethash "params" data))))))
              (wsd:start-connection socket)
              (send page "Page.enable")
              (send page "Runtime.enable")

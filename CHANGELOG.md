@@ -47,6 +47,7 @@
 
 ### Fixed
 - **A form's own `:method`, `:action`, `:accept-charset` or `:enctype` replaces the one `h:form` writes by default**, rather than writing the attribute twice, which left the browser using the first. `(h:form (:method "dialog") …)` now closes the dialog it is in, without a request.
+- **littoral/browser-test waits for slow pages.** `click-text`, `click-css`, `visit` and `back` waited a quarter of a second and then for the document to be complete, but the old page stays complete until the server answers, so a page slower than that (signing in hashes a password) was read before it arrived. They now follow Chrome's loading events.
 
 ## 0.4.0 (2026-10-18)
 

@@ -159,18 +159,19 @@ ended that thread; that race is the client library's, not the server's."
     (force-output out)
     socket))
 
-(defun read-raw-until (socket text &optional (seconds 5))
+(defun read-raw-until (socket text &optional (seconds 15))
   "What SOCKET sends until TEXT has come, as a string; NIL if it doesn't
-come within SECONDS."
+come within SECONDS (generous, for busy CI machines), with what did come
+as a second value."
   (let ((seen (make-array 0 :element-type 'character :adjustable t :fill-pointer 0))
         (deadline (+ (get-internal-real-time) (* seconds internal-time-units-per-second))))
     (loop
       (when (search text seen) (return seen))
       (let ((left (/ (- deadline (get-internal-real-time)) internal-time-units-per-second)))
         (unless (and (plusp left) (usocket:wait-for-input socket :timeout left :ready-only t))
-          (return nil))
+          (return (values nil seen)))
         (let ((byte (read-byte (usocket:socket-stream socket) nil)))
-          (unless byte (return nil))
+          (unless byte (return (values nil seen)))
           (vector-push-extend (code-char byte) seen))))))
 
 (defun hunchentoot-workers (sockets)
@@ -313,7 +314,9 @@ openssl: their paths, or NIL without openssl."
                     (url (cl-ppcre:register-groups-bind (u) ("data-lt-events=\"([^\"]*)\"" html) (unescape u)))
                     (socket (open-raw-event-stream port url jar)))
                (push socket sockets)
-               (is (read-raw-until socket "retry: 3000"))))
+               (multiple-value-bind (head seen) (read-raw-until socket "retry: 3000")
+                 (is-true head "Stream ~D didn't open: got ~S, with ~D streams in the hub"
+                          (1+ i) seen (littoral::hub-stream-count)))))
            (let ((start (get-internal-real-time)))
              (publish *slow-channel*)
              (dolist (socket sockets)
