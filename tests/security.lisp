@@ -122,13 +122,15 @@
 
 (test session-keys-are-unbiased
   ;; Every character of the alphabet turns up about as often as the others.
+  ;; Taking bytes modulo 62 would favour 8 characters by 5 to 4 (1.25); with
+  ;; 20,000 of each expected, chance alone stays well under 1.12.
   (let ((counts (make-hash-table)))
-    (loop repeat 2000
+    (loop repeat 40000
           do (loop for c across (littoral::random-key 31) do (incf (gethash c counts 0))))
     (is (= 62 (hash-table-count counts)))
     (let ((low (loop for v being the hash-values of counts minimize v))
           (high (loop for v being the hash-values of counts maximize v)))
-      (is (< (/ high low) 1.25) "spread ~A..~A" low high))))
+      (is (< (/ high low) 1.12) "spread ~A..~A" low high))))
 
 (test two-tabs-in-one-browser
   ;; Opening an application again in another tab must not lock the first
