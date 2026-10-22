@@ -139,8 +139,8 @@
             (littoral.auth::b64url-encode (client-data "webauthn.create" challenge))
             (littoral.auth::b64url-encode (cbor `(("fmt" . "none") ("attStmt") ("authData" . ,data)))))))
 
-(defun assertion-response (authenticator challenge count &key (origin "http://localhost") tamper)
-  (let* ((data (octets (rp-hash) #(1) (vector 0 0 0 count)))
+(defun assertion-response (authenticator challenge count &key (origin "http://localhost") tamper (verified t))
+  (let* ((data (octets (rp-hash) (vector (if verified 5 1)) (vector 0 0 0 count)))
          (client (client-data "webauthn.get" challenge origin))
          (signature (ironclad:sign-message (getf authenticator :private)
                                            (ironclad:digest-sequence :sha256 (octets data (ironclad:digest-sequence :sha256 client))))))
@@ -159,6 +159,8 @@
       (littoral.auth:add-passkey bob "reg-challenge" (registration-response authenticator "reg-challenge"))
       (is (= 1 (length (littoral.auth:user-factors bob "passkey"))))
       (is (littoral.auth:second-factor-p bob))
+      (is (string= (littoral.auth::b64url-encode (getf authenticator :id))
+                   (littoral.auth::factor-credential-id (first (littoral.auth:user-factors bob "passkey")))))
       ;; Signing in: the right user, and the count moves on.
       (is (string= "bob" (littoral.auth:user-name
                           (littoral.auth:verify-assertion "c1" (assertion-response authenticator "c1" 1)))))
@@ -172,6 +174,13 @@
       ;; Another user's passkey doesn't sign in as Ada.
       (signals littoral.auth:passkey-error
         (littoral.auth:verify-assertion "c6" (assertion-response authenticator "c6" 8) (littoral.auth:find-user "ada")))
+      ;; Alone, a passkey must have verified the user; after Bob's password, his presence is enough.
+      (signals littoral.auth:passkey-error
+        (littoral.auth:verify-assertion "c8" (assertion-response authenticator "c8" 9 :verified nil)))
+      (is (string= "bob" (littoral.auth:user-name
+                          (littoral.auth:verify-assertion "c9" (assertion-response authenticator "c9" 10 :verified nil) bob))))
+      (is (search "\"userVerification\":\"required\"" (littoral.auth::assertion-options "c")))
+      (is (search "\"userVerification\":\"preferred\"" (littoral.auth::assertion-options "c" bob)))
       ;; An unknown key.
       (signals littoral.auth:passkey-error
         (littoral.auth:verify-assertion "c7" (assertion-response (make-authenticator) "c7" 1)))

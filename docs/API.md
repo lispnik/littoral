@@ -20172,8 +20172,10 @@ Y `count`).  Signals `passkey-error` when a check fails.
 
 Check a navigator.credentials.get `response` (a parsed JSON hash table)
 against `challenge`; the user it signs in, its passkey's signature count
-advanced.  With `user`, only `user`'s passkeys count.  Signals `passkey-error` when
-a check fails.
+advanced.  With `user` (the second step after a password), only `user`'s
+passkeys count and the user need only be present; without, the passkey
+stands alone and the authenticator must have verified the user.  Signals
+`passkey-error` when a check fails.
 
 *Example:* Every check a passkey fails signals `passkey-error`, with the reason.  The security settings and the sign-in form handle it; here, a response from a passkey this site doesn't know.
 

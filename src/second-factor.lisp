@@ -19,13 +19,15 @@
    (name :initarg :name :initform nil :accessor factor-name)
    (data :initarg :data :initform nil :accessor factor-data
          :documentation "A TOTP secret (base 32), or a passkey's id and public key.")
+   (credential-id :initarg :credential-id :initform nil :reader factor-credential-id
+                  :documentation "A passkey's credential id (base 64 URL), by which signing in finds it.")
    (counter :initarg :counter :initform 0 :accessor factor-counter
             :documentation "The last TOTP time step used, or the passkey's signature count.")
    (created :initarg :created :initform nil :reader factor-created))
   (:documentation "A second way for a user to prove who they are."))
 
 (define-description auth-factor
-  ((user-id) (kind) (name) (data :type :text) (counter :type :integer) (created :type :integer)))
+  ((user-id) (kind) (name) (data :type :text) (credential-id) (counter :type :integer) (created :type :integer)))
 
 (define-table auth-factor :name "auth_factors")
 
@@ -250,9 +252,11 @@ forged Host header can't make a passkey work elsewhere.)"
 
 (defun assertion-options (challenge &optional user)
   "The JSON options for navigator.credentials.get: USER's passkeys, or any
-passkey for this site when USER is NIL (signing in without a name)."
-  (format nil "{\"challenge\":~A,\"rpId\":~A,\"timeout\":60000,\"userVerification\":\"preferred\",\"allowCredentials\":[~{~A~^,~}]}"
-          (json-escape challenge) (json-escape (rp-id))
+passkey for this site when USER is NIL (signing in without a name).  A
+passkey used alone stands in for the password, so then the authenticator
+must verify the user (fingerprint, face or PIN), not just see them."
+  (format nil "{\"challenge\":~A,\"rpId\":~A,\"timeout\":60000,\"userVerification\":~A,\"allowCredentials\":[~{~A~^,~}]}"
+          (json-escape challenge) (json-escape (rp-id)) (if user "\"preferred\"" "\"required\"")
           (and user (mapcar (lambda (f) (format nil "{\"type\":\"public-key\",\"id\":~A}" (json-escape (passkey-id f))))
                             (user-factors user "passkey")))))
 
@@ -324,13 +328,15 @@ Y COUNT).  Signals PASSKEY-ERROR when a check fails."
 (defun verify-assertion (challenge response &optional user)
   "Check a navigator.credentials.get RESPONSE (a parsed JSON hash table)
 against CHALLENGE; the user it signs in, its passkey's signature count
-advanced.  With USER, only USER's passkeys count.  Signals PASSKEY-ERROR when
-a check fails."
+advanced.  With USER (the second step after a password), only USER's
+passkeys count and the user need only be present; without, the passkey
+stands alone and the authenticator must have verified the user.  Signals
+PASSKEY-ERROR when a check fails."
   (let* ((id (gethash "id" response))
          (inner (gethash "response" response))
          (factor (and (stringp id)
-                      (find id (db-select 'auth-factor :where "kind = ?" :params (list "passkey"))
-                            :key #'passkey-id :test #'string=)))
+                      (first (db-select 'auth-factor :where "kind = ? AND credential_id = ?"
+                                                     :params (list "passkey" id)))))
          (owner (and factor (find-user-by-id (factor-user-id factor)))))
     (unless (and factor owner (user-active-p owner)) (refuse "that passkey isn't known here"))
     (when (and user (not (equal (princ-to-string (user-id user)) (factor-user-id factor))))
@@ -340,7 +346,7 @@ a check fails."
           (signature (b64url-decode (gethash "signature" inner))))
       (check-client-data client-data "webauthn.get" challenge)
       (multiple-value-bind (flags count) (check-authenticator-data data)
-        (declare (ignore flags))
+        (unless (or user (logbitp 2 flags)) (refuse "the user wasn't verified"))
         (multiple-value-bind (x y) (passkey-key factor)
           (unless (es256-valid-p x y (concatenate '(simple-array (unsigned-byte 8) (*)) data
                                                   (ironclad:digest-sequence :sha256 client-data))
@@ -362,7 +368,7 @@ PASSKEY-ERROR when the response fails a check."
     (multiple-value-bind (id x y count)
         (verify-registration challenge (gethash "clientDataJSON" inner) (gethash "attestationObject" inner))
       (prog1 (db-insert (make-instance 'auth-factor :user-id (princ-to-string (user-id user)) :kind "passkey" :name name
-                                                    :data (format nil "~A ~A ~A" id (b64url-encode x) (b64url-encode y))
+                                                    :credential-id id :data (format nil "~A ~A ~A" id (b64url-encode x) (b64url-encode y))
                                                     :counter count :created (get-universal-time)))
         (audit-user "second-factor.added" user :kind "passkey" :name name)))))
 

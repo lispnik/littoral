@@ -190,7 +190,7 @@ CREATE TRIGGER mig_trigger AFTER INSERT ON mig_notes BEGIN UPDATE mig_notes SET 
   (littoral.mail:create-mail-tables)
   (littoral.jobs:create-job-tables)
   (is (littoral.auth:find-user "ada") "Nothing lost")
-  (is (equal '("littoral-audit 1" "littoral-auth 1" "littoral-auth 2" "littoral-jobs 1" "littoral-jobs 2" "littoral-mail 1" "littoral-users 1")
+  (is (equal '("littoral-audit 1" "littoral-auth 1" "littoral-auth 2" "littoral-auth 3" "littoral-jobs 1" "littoral-jobs 2" "littoral-mail 1" "littoral-users 1")
              (sort (mapcar (lambda (row) (format nil "~A ~D" (getf row :|component|) (getf row :|version|)))
                            (littoral.db:db-query "SELECT component, version FROM schema_migrations"))
                    #'string<))

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- **A passkey used alone must verify the user.** Signing in with only a passkey now asks for, and requires, user verification (a fingerprint, face or PIN), since it stands in for the password; a touch is no longer enough. As the second step after a password, the user need only be present, as before.
+- **Signing in with a passkey finds it by index.** Passkeys keep their credential id in a column of their own, `auth_factors.credential_id`, with a unique index; before, each passkey sign-in read every passkey. A migration adds the column and fills it in for existing passkeys.
+
 ## 0.5.1 (2026-10-21)
 
 A fix and a feature for JSON endpoints. In 0.5.0 the endpoints of an application registered at `/`, as projects made by `make new` are, all answered 404; now they answer. Endpoints can also describe themselves, and `serve-openapi` serves the description as OpenAPI 3.1 for Swagger UI, Postman and client generators.
