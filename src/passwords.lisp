@@ -142,3 +142,53 @@ Django's or Werkzeug's PBKDF2.  False for anything else, never an error."
   (not (cl-ppcre:register-groups-bind ((#'parse-integer iterations))
            ("^PBKDF2\\$SHA256:(\\d+)\\$" (string-upcase hash))
          (>= iterations *pbkdf2-iterations*))))
+
+;;; Choosing a new password (NIST SP 800-63B): long enough, not a common or
+;;; easily guessed one, and, when asked, not one known from a breach.
+
+(defvar *min-password-length* 8 "The fewest characters a new password may have.")
+
+(defvar *check-breached-passwords* nil
+  "When true, NEW-PASSWORD-PROBLEM also refuses passwords that Have I Been
+Pwned has seen in breaches.  Only the first 5 hex digits of the password's
+SHA-1 leave the server (its range API); when the service can't be reached,
+the password isn't refused for that.")
+
+(defvar *pwned-range-function*
+  (lambda (prefix)
+    (dex:get (format nil "https://api.pwnedpasswords.com/range/~A" prefix)
+             :headers '(("Add-Padding" . "true")) :connect-timeout 3 :read-timeout 3))
+  "A function of a 5-digit SHA-1 prefix (upper case hex) giving Have I Been
+Pwned's answer: a line SUFFIX:COUNT for each breached hash with that prefix.
+Replace it to ask a local copy of the data instead.")
+
+(defun breached-password-p (password)
+  "True when Have I Been Pwned has seen PASSWORD in a breach; NIL when not,
+or when it can't be asked."
+  (let* ((hash (string-upcase (ironclad:byte-array-to-hex-string
+                               (ironclad:digest-sequence :sha1 (octets password)))))
+         (suffix (subseq hash 5)))
+    (handler-case
+        (loop for line in (cl-ppcre:split "\\r?\\n" (funcall *pwned-range-function* (subseq hash 0 5)))
+              for colon = (position #\: line)
+              thereis (and colon (string-equal suffix line :end2 colon)
+                           ;; Padding lines, which hide how many there are, count 0.
+                           (plusp (or (parse-integer line :start (1+ colon) :junk-allowed t) 0))))
+      (error () nil))))
+
+(defun new-password-problem (password &key user words)
+  "Why PASSWORD won't do as a new password, as a translated sentence, or NIL
+when it will: shorter than *MIN-PASSWORD-LENGTH*, a common password, too easy
+to guess (PASSWORD-STRENGTH 0, counting USER's name and email address and
+WORDS against it), or, with *CHECK-BREACHED-PASSWORDS*, known from a breach."
+  (let ((words (append (and user (list (user-name user) (user-email user))) words)))
+    (cond ((< (length password) *min-password-length*)
+           (translate "Passwords need at least ~D characters." *min-password-length*))
+          ((littoral::common-password-p password)
+           (translate "This is one of the most common passwords."))
+          ((zerop (password-strength password :words words))
+           (format nil "~A~@[ ~A~]" (translate "That password is too easy to guess.")
+                   (first (nth-value 1 (password-strength password :words words)))))
+          ((and *check-breached-passwords* (breached-password-p password))
+           (translate "That password has appeared in a data breach; please choose another."))
+          (t nil))))

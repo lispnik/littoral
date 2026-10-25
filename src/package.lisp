@@ -166,7 +166,7 @@ under its own name.  Give the package a local nickname, as in
    #:application-max-sessions #:application-error-handler #:application-expired-notice
    #:application-stylesheets #:application-scripts #:application-credentials
    #:reap-all-sessions #:start-reaper #:stop-reaper #:session-expired-notice
-   #:*instance-id* #:*max-request-size* #:*new-sessions-per-minute* #:*trust-forwarded-for*
+   #:*instance-id* #:*max-request-size* #:*new-sessions-per-minute* #:*trust-forwarded-for* #:*hsts-max-age*
    #:*max-event-streams* #:*max-event-streams-per-session*
    #:application-max-request-size #:application-local-only-p #:application-language
    #:application-around-actions #:application-around-request #:application-websockets-p

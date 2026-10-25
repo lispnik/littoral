@@ -56,3 +56,31 @@
       (littoral.auth:authenticate "ada" "correct horse battery")
       (list kept (subseq (littoral.auth:user-password-hash (littoral.auth:find-user "ada")) 0 7)))))
 ;; ⇒ ("$2b$" "PBKDF2$")
+
+;;;; Example: littoral.auth:new-password-problem littoral.auth:*min-password-length*
+;;; Why a new password won't do, or NIL: too short, one of the most common passwords (digits and symbols added don't help), or too easy to guess, counting the user's own name and address for little.  The reset form uses it.
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.auth:create-auth-tables)
+  (let ((bob (littoral.auth:add-user "bob" "bob@example.org" "another passphrase")))
+    (list (littoral.auth:new-password-problem "short")
+          (littoral.auth:new-password-problem "Sunshine2024!")
+          (littoral.auth:new-password-problem "bob-example-org" :user bob)
+          (littoral.auth:new-password-problem "copper kettle at noon" :user bob)
+          (let ((littoral.auth:*min-password-length* 12))
+            (littoral.auth:new-password-problem "tq8#Lm2v")))))
+;; ⇒ ("Passwords need at least 8 characters." "This is one of the most common passwords." "That password is too easy to guess. Avoid words from your name or email address." NIL "Passwords need at least 12 characters.")
+
+;;;; Example: littoral.auth:breached-password-p littoral.auth:*check-breached-passwords* littoral.auth:*pwned-range-function*
+;;; With *CHECK-BREACHED-PASSWORDS*, passwords Have I Been Pwned has seen in breaches are refused too.  Only the first five hex digits of the password's SHA-1 are sent; the answer lists the rest of every breached hash that starts with them.  Here a stand-in answers as the service would, for one password.
+(let* ((hash (string-upcase (ironclad:byte-array-to-hex-string
+                             (ironclad:digest-sequence :sha1 (sb-ext:string-to-octets "copper kettle at noon")))))
+       (littoral.auth:*pwned-range-function*
+         (lambda (prefix)
+           (if (string= prefix (subseq hash 0 5))
+               (format nil "~A:41~C~C" (subseq hash 5) #\Return #\Newline)
+               "")))
+       (littoral.auth:*check-breached-passwords* t))
+  (list (littoral.auth:breached-password-p "copper kettle at noon")
+        (littoral.auth:breached-password-p "a kettle of copper fish")
+        (littoral.auth:new-password-problem "copper kettle at noon")))
+;; ⇒ (T NIL "That password has appeared in a data breach; please choose another.")

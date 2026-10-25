@@ -80,6 +80,17 @@ so browsers may cache it for good yet never run a stale copy."
     :x-frame-options "SAMEORIGIN")
   "Headers added to every page, redirect and AJAX response.")
 
+(defvar *hsts-max-age* 31536000
+  "How many seconds a browser that has reached this site over HTTPS must
+use only HTTPS for it (Strict-Transport-Security), or NIL not to ask.  Sent
+only on HTTPS responses, for this host alone, not its subdomains.")
+
+(defun security-headers ()
+  "*SECURITY-HEADERS*, with Strict-Transport-Security over HTTPS."
+  (if (and *hsts-max-age* *request* (secure-request-p))
+      (append *security-headers* (list :strict-transport-security (format nil "max-age=~D" *hsts-max-age*)))
+      *security-headers*))
+
 (defun pending-cookie-headers ()
   "The Set-Cookie headers queued in the current session by SET-COOKIE, as a
 plist, taking them from the queue."
@@ -98,13 +109,13 @@ plist, taking them from the queue."
                       :cache-control "no-store")
                 headers
                 (pending-cookie-headers)
-                *security-headers*)
+                (security-headers))
         (list html)))
 
 (defun redirect-response (url &key headers)
   "A Lack 302 response to URL."
   (list 302 (append (list :location url :cache-control "no-store") headers
-                    (pending-cookie-headers) *security-headers*)
+                    (pending-cookie-headers) (security-headers))
         (list "")))
 
 (defvar *max-request-size* (* 10 1024 1024)
@@ -404,7 +415,7 @@ page, and answer the components to update as JSON."
   (let ((body (ajax-json session continuation (current-parameters))))
     (list 200 (append (list :content-type "application/json; charset=utf-8" :cache-control "no-store")
                       (pending-cookie-headers)
-                      *security-headers*)
+                      (security-headers))
           (list body))))
 
 (defun ajax-json (session continuation parameters)
@@ -485,7 +496,7 @@ render the page it names."
   (let ((continuation (find-continuation session (request-parameter "_k"))))
     (cond ((and (null continuation) (request-parameter "_lt_events"))
            ;; A stream for a page that is gone: 204 tells EventSource to stop.
-           (list 204 *security-headers* (list "")))
+           (list 204 (security-headers) (list "")))
           ((null continuation)
            ;; A page forgotten or never made: show the session as it is now.
            (redirect-response (page-url session (new-continuation session))))
@@ -498,7 +509,7 @@ render the page it names."
           ((request-parameter "_lt_live")
            ;; A development page asking whether code it shows has changed.
            (let ((version (or (ignore-errors (parse-integer (request-parameter "_lt_live"))) 0)))
-             (list 200 (list* :content-type "application/json" :cache-control "no-store" *security-headers*)
+             (list 200 (list* :content-type "application/json" :cache-control "no-store" (security-headers))
                    (list (format nil "{\"reload\":~:[false~;true~]}" (live-check session version))))))
           (t
            (restore-snapshot (continuation-snapshot continuation))
@@ -575,23 +586,23 @@ application signs its user back in), rather than start one here that the
 request couldn't use.  NIL for other requests."
   (flet ((json (text)
            (list 200 (list* :content-type "application/json; charset=utf-8" :cache-control "no-store"
-                            *security-headers*)
+                            (security-headers))
                  (list text))))
     (cond ((request-parameter "_lt_ajax") (json "{\"reload\":true}"))
           ((request-parameter "_lt_live") (json "{\"reload\":true}"))
           ((request-parameter "_lt_events")
-           (list 200 (list* :content-type "text/event-stream" :cache-control "no-store" *security-headers*)
+           (list 200 (list* :content-type "text/event-stream" :cache-control "no-store" (security-headers))
                  (list (format nil "event: reload~%data: {}~%~%"))))
           ;; A refused WebSocket falls back to the event stream, which reloads.
           ((request-parameter "_lt_ws")
-           (list 410 (list* :content-type "text/plain" *security-headers*) (list "This page's session is gone."))))))
+           (list 410 (list* :content-type "text/plain" (security-headers)) (list "This page's session is gone."))))))
 
 (defun handle-application (app)
   "Answer a request for APP: authorise it, then find or start its session."
   (let ((*application* app))
     (cond
       ((and (application-local-only-p app) (not (local-request-p)))
-       (list 403 (list* :content-type "text/plain" *security-headers*)
+       (list 403 (list* :content-type "text/plain" (security-headers))
              (list "This application only answers requests from the machine it runs on.")))
       ((not (authorized-p app))
         (list 401 (list :content-type "text/plain"
@@ -613,7 +624,7 @@ request couldn't use.  NIL for other requests."
              (cond ((and (null session) (gone-session-response)))
                    ((and (null session) (not (allow-new-session-p)))
                     (count-metric "littoral_sessions_refused_total" (list (application-path app)))
-                    (list 429 (list* :content-type "text/plain" :retry-after "60" *security-headers*)
+                    (list 429 (list* :content-type "text/plain" :retry-after "60" (security-headers))
                           (list "Too many new sessions from this address; try again in a minute.")))
                    ((null session)
                     (start-session app :expired (and key (null found) t)))
@@ -659,10 +670,10 @@ the body is touched."
          (headers (getf env :headers))
          (chunked (and headers (search "chunked" (or (gethash "transfer-encoding" headers) "")))))
     (cond ((and length (> length limit))
-           (list 413 (list* :content-type "text/plain" :connection "close" *security-headers*)
+           (list 413 (list* :content-type "text/plain" :connection "close" (security-headers))
                  (list (format nil "The request is larger than the ~:D bytes allowed." limit))))
           ((and chunked (null length))
-           (list 411 (list* :content-type "text/plain" *security-headers*)
+           (list 411 (list* :content-type "text/plain" (security-headers))
                  (list "A request body needs a Content-Length.")))
           (t nil))))
 

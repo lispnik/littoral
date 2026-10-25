@@ -88,6 +88,21 @@
           (browser-status (visit (make-instance 'browser :headers headers) "/hello")))))
 ;; ⇒ (200 429)
 
+;;;; Example: littoral:*hsts-max-age*
+;;; Over HTTPS, responses ask browsers to use only HTTPS for this host for *HSTS-MAX-AGE* seconds (a year); NIL leaves the header out.  Plain HTTP never gets it.  A proxy that ends TLS says so with X-Forwarded-Proto.
+(defclass hello (component) ())
+(defmethod render ((self hello))
+  (h:p () "Hello"))
+(with-fresh-applications (("/hello" 'hello))
+  (flet ((hsts (&rest headers)
+           (getf (second (funcall (make-lack-app) (make-env :get "/hello" :extra-headers headers)))
+                 :strict-transport-security)))
+    (list (hsts)
+          (hsts '("x-forwarded-proto" . "https"))
+          (let ((*hsts-max-age* nil))
+            (hsts '("x-forwarded-proto" . "https"))))))
+;; ⇒ (NIL "max-age=31536000" NIL)
+
 ;;;; Example: littoral:*max-event-streams* littoral:*max-event-streams-per-session*
 ;;; A page with subscribers opens an event stream for server push.  Past either limit, the stream is refused with 503 and the browser tries again later.
 (defvar *headlines* (make-channel "headlines"))

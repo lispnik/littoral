@@ -166,6 +166,10 @@
             (fill-in other "new-password-again" "short")
             (press other "Save and sign in")
             (is (has-text-p other "at least 8 characters"))
+            (fill-in other "new-password" "password2024")
+            (fill-in other "new-password-again" "password2024")
+            (press other "Save and sign in")
+            (is (has-text-p other "one of the most common passwords"))
             (fill-in other "new-password" "a brand new passphrase")
             (fill-in other "new-password-again" "a brand new passphrase")
             (press other "Save and sign in")
@@ -327,6 +331,71 @@ and that URL."
         (multiple-value-bind (user why) (littoral.auth:authenticate "bob" "another passphrase")
           (is (null user))
           (is (search "Too many" why)))))))
+
+(test a-new-password-signs-out-elsewhere
+  (with-auth (b)
+    (sign-in-as b "bob" "another passphrase")
+    (let ((phone (make-instance 'browser))
+          (bob (littoral.auth:find-user "bob")))
+      (visit phone "/m")
+      (sign-in-as phone "bob" "another passphrase")
+      (littoral.auth:create-api-token bob)
+      (flet ((api-tokens ()
+               (length (littoral.db:db-query "SELECT id FROM auth_tokens WHERE purpose = 'api'"))))
+        (is (= 1 (api-tokens)))
+        ;; Bob changes his password on his phone: the phone stays signed in, nothing else does.
+        (let ((*session* (littoral::find-session
+                          (find-application "/m")
+                          (cl-ppcre:register-groups-bind (k) ("_s=([^&]+)" (browser-url phone)) k)))
+              (*application* (find-application "/m"))
+              (*request* (lack/request:make-request (make-env :get "/m"))))
+          (littoral.auth:set-password bob "a fresh new passphrase")
+          (is (equal '(t) (mapcar (lambda (s) (getf s :current)) (littoral.auth:user-sessions bob)))))
+        (is (= 0 (api-tokens)))
+        (let ((littoral.auth:*auth-session-check-seconds* 0))
+          (visit b (browser-url b))
+          (is (has-text-p b "Not signed in"))
+          (visit phone (browser-url phone))
+          (is (has-text-p phone "Signed in as bob")))
+        ;; Outside a request, every sign-in ends; unless asked not to.
+        (littoral.auth:create-api-token bob)
+        (littoral.auth:set-password bob "yet another passphrase" :sign-out-others nil)
+        (is (= 1 (length (littoral.auth:user-sessions bob))))
+        (is (= 1 (api-tokens)))
+        (littoral.auth:set-password bob "one more passphrase")
+        (is (null (littoral.auth:user-sessions bob)))
+        (is (= 0 (api-tokens)))))))
+
+(test new-passwords-are-checked
+  (with-auth (b)
+    (let ((bob (littoral.auth:find-user "bob")))
+      (flet ((problem (password &rest keys)
+               (apply #'littoral.auth:new-password-problem password keys)))
+        (is (search "at least 8" (problem "short")))
+        (is (search "most common" (problem "Password123!")))
+        (is (search "too easy to guess" (problem "aaaaaaaaaaaa")))
+        (is (search "too easy to guess" (problem "bob-example-org" :user bob)))
+        (is (null (problem "bob-example-org")))
+        (is (null (problem "a brand new passphrase" :user bob)))
+        (let ((littoral.auth:*min-password-length* 30))
+          (is (search "at least 30" (problem "a brand new passphrase"))))
+        ;; Breaches, through Have I Been Pwned's range API.
+        (let* ((hash (string-upcase (ironclad:byte-array-to-hex-string
+                                     (ironclad:digest-sequence :sha1 (sb-ext:string-to-octets "a brand new passphrase")))))
+               (asked nil)
+               (count 3)
+               (littoral.auth:*check-breached-passwords* t)
+               (littoral.auth:*pwned-range-function*
+                 (lambda (prefix)
+                   (setf asked prefix)
+                   (format nil "0000000000000000000000000000000000A:12~C~C~A:~D~C~C" #\Return #\Newline
+                           (subseq hash 5) count #\Return #\Newline))))
+          (is (search "data breach" (problem "a brand new passphrase")))
+          (is (string= (subseq hash 0 5) asked) "Only the prefix is sent")
+          (setf count 0)                ; a padding line
+          (is (null (problem "a brand new passphrase")))
+          (let ((littoral.auth:*pwned-range-function* (lambda (prefix) (declare (ignore prefix)) (error "offline"))))
+            (is (null (problem "a brand new passphrase")) "An unreachable service refuses nothing")))))))
 
 (test old-auth-rows-are-purged
   (with-auth (b)

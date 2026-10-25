@@ -64,6 +64,20 @@
         (littoral.auth:totp-uri "JBSWY3DPEHPK3PXP" "ada@example.org" "The Shop")))
 ;; ⇒ (32 "otpauth://totp/The%20Shop:ada%40example.org?secret=JBSWY3DPEHPK3PXP&issuer=The%20Shop&algorithm=SHA1&digits=6&period=30")
 
+;;;; Example: littoral.auth:*factor-key* littoral.auth:encrypt-factor-secrets
+;;; With a factor key (32 bytes; in production, $LITTORAL_FACTOR_KEY), authenticator-app secrets are kept encrypted (AES-256-GCM), so a copy of the database can't make codes.  Secrets kept before the key was set still work, and are encrypted when next used; ENCRYPT-FACTOR-SECRETS encrypts them all at once.
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
+      (secret (littoral.auth:new-totp-secret)))
+  (littoral.auth:create-auth-tables)
+  (let ((ada (littoral.auth:add-user "ada" "ada@example.org" "correct horse battery")))
+    (littoral.db:db-insert (make-instance 'littoral.auth::auth-factor
+                                          :user-id (princ-to-string (littoral.auth:user-id ada)) :kind "totp"
+                                          :name "App" :data secret :counter 0 :created (get-universal-time)))
+    (let ((littoral.auth:*factor-key* (ironclad:random-data 32)))
+      (list (littoral.auth:encrypt-factor-secrets)
+            (subseq (getf (first (littoral.db:db-query "SELECT data FROM auth_factors")) :|data|) 0 5)))))
+;; ⇒ (1 "aes1:")
+
 ;;;; Example: littoral.auth:base32-encode littoral.auth:base32-decode
 (list (littoral.auth:base32-encode (sb-ext:string-to-octets "Hello!"))
       (sb-ext:octets-to-string (littoral.auth:base32-decode "jbsw y3dp ee")))

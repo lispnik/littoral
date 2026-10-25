@@ -25,9 +25,10 @@
                       (setf (sign-in-message self) (translate "That code isn't right.")))))
           (t
            (let* ((factor (first (user-factors user "totp")))
-                  (step (and factor (verify-totp (factor-data factor) code :after (factor-counter factor)))))
+                  (step (and factor (verify-totp (totp-secret factor) code :after (factor-counter factor)))))
              (if step
                  (progn (setf (factor-counter factor) step)
+                        (seal-factor factor)
                         (db-save factor)
                         (note-attempt name t)
                         (finish-second-step self user "password+totp"))
@@ -97,7 +98,8 @@ passkeys and recovery codes."))
     (if step
         (progn
           (db-insert (make-instance 'auth-factor :user-id (princ-to-string (user-id user)) :kind "totp"
-                                                 :name (translate "Authenticator app") :data secret :counter step
+                                                 :name (translate "Authenticator app")
+                                                 :data (seal-totp-secret secret (user-id user)) :counter step
                                                  :created (get-universal-time)))
           (audit-user "second-factor.added" user :kind "totp")
           (setf (settings-totp-secret self) nil (settings-message self) nil)

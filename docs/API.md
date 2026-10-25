@@ -9685,6 +9685,29 @@ behind a proxy that sets that header itself.
 ;; ⇒ (200 429)
 ```
 
+#### `*hsts-max-age*` — variable
+
+How many seconds a browser that has reached this site over HTTPS must
+use only HTTPS for it (Strict-Transport-Security), or `nil` not to ask.  Sent
+only on HTTPS responses, for this host alone, not its subdomains.
+
+*Example:* Over HTTPS, responses ask browsers to use only HTTPS for this host for `*hsts-max-age*` seconds (a year); `nil` leaves the header out.  Plain HTTP never gets it.  A proxy that ends TLS says so with X-Forwarded-Proto.
+
+```lisp
+(defclass hello (component) ())
+(defmethod render ((self hello))
+  (h:p () "Hello"))
+(with-fresh-applications (("/hello" 'hello))
+  (flet ((hsts (&rest headers)
+           (getf (second (funcall (make-lack-app) (make-env :get "/hello" :extra-headers headers)))
+                 :strict-transport-security)))
+    (list (hsts)
+          (hsts '("x-forwarded-proto" . "https"))
+          (let ((*hsts-max-age* nil))
+            (hsts '("x-forwarded-proto" . "https"))))))
+;; ⇒ (NIL "max-age=31536000" NIL)
+```
+
 #### `*max-event-streams*` — variable
 
 Most event streams open at once; more get 503.
@@ -18878,6 +18901,116 @@ Django's) or with fewer than `*pbkdf2-iterations*`, where the store can write.
 ;; ⇒ ("$2b$" "PBKDF2$")
 ```
 
+#### `new-password-problem` `password &key user words` — function
+
+Why `password` won't do as a new password, as a translated sentence, or `nil`
+when it will: shorter than `*min-password-length*`, a common password, too easy
+to guess (`password-strength` 0, counting `user`'s name and email address and
+`words` against it), or, with `*check-breached-passwords*`, known from a breach.
+
+*Example:* Why a new password won't do, or `nil`: too short, one of the most common passwords (digits and symbols added don't help), or too easy to guess, counting the user's own name and address for little.  The reset form uses it.
+
+```lisp
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.auth:create-auth-tables)
+  (let ((bob (littoral.auth:add-user "bob" "bob@example.org" "another passphrase")))
+    (list (littoral.auth:new-password-problem "short")
+          (littoral.auth:new-password-problem "Sunshine2024!")
+          (littoral.auth:new-password-problem "bob-example-org" :user bob)
+          (littoral.auth:new-password-problem "copper kettle at noon" :user bob)
+          (let ((littoral.auth:*min-password-length* 12))
+            (littoral.auth:new-password-problem "tq8#Lm2v")))))
+;; ⇒ ("Passwords need at least 8 characters." "This is one of the most common passwords." "That password is too easy to guess. Avoid words from your name or email address." NIL "Passwords need at least 12 characters.")
+```
+
+#### `*min-password-length*` — variable
+
+The fewest characters a new password may have.
+
+*Example:* Why a new password won't do, or `nil`: too short, one of the most common passwords (digits and symbols added don't help), or too easy to guess, counting the user's own name and address for little.  The reset form uses it.
+
+```lisp
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:")))
+  (littoral.auth:create-auth-tables)
+  (let ((bob (littoral.auth:add-user "bob" "bob@example.org" "another passphrase")))
+    (list (littoral.auth:new-password-problem "short")
+          (littoral.auth:new-password-problem "Sunshine2024!")
+          (littoral.auth:new-password-problem "bob-example-org" :user bob)
+          (littoral.auth:new-password-problem "copper kettle at noon" :user bob)
+          (let ((littoral.auth:*min-password-length* 12))
+            (littoral.auth:new-password-problem "tq8#Lm2v")))))
+;; ⇒ ("Passwords need at least 8 characters." "This is one of the most common passwords." "That password is too easy to guess. Avoid words from your name or email address." NIL "Passwords need at least 12 characters.")
+```
+
+#### `*check-breached-passwords*` — variable
+
+When true, `new-password-problem` also refuses passwords that Have I Been
+Pwned has seen in breaches.  Only the first 5 hex digits of the password's
+`sha-1` leave the server (its range API); when the service can't be reached,
+the password isn't refused for that.
+
+*Example:* With `*check-breached-passwords*`, passwords Have I Been Pwned has seen in breaches are refused too.  Only the first five hex digits of the password's `sha-1` are sent; the answer lists the rest of every breached hash that starts with them.  Here a stand-in answers as the service would, for one password.
+
+```lisp
+(let* ((hash (string-upcase (ironclad:byte-array-to-hex-string
+                             (ironclad:digest-sequence :sha1 (sb-ext:string-to-octets "copper kettle at noon")))))
+       (littoral.auth:*pwned-range-function*
+         (lambda (prefix)
+           (if (string= prefix (subseq hash 0 5))
+               (format nil "~A:41~C~C" (subseq hash 5) #\Return #\Newline)
+               "")))
+       (littoral.auth:*check-breached-passwords* t))
+  (list (littoral.auth:breached-password-p "copper kettle at noon")
+        (littoral.auth:breached-password-p "a kettle of copper fish")
+        (littoral.auth:new-password-problem "copper kettle at noon")))
+;; ⇒ (T NIL "That password has appeared in a data breach; please choose another.")
+```
+
+#### `breached-password-p` `password` — function
+
+True when Have I Been Pwned has seen `password` in a breach; `nil` when not,
+or when it can't be asked.
+
+*Example:* With `*check-breached-passwords*`, passwords Have I Been Pwned has seen in breaches are refused too.  Only the first five hex digits of the password's `sha-1` are sent; the answer lists the rest of every breached hash that starts with them.  Here a stand-in answers as the service would, for one password.
+
+```lisp
+(let* ((hash (string-upcase (ironclad:byte-array-to-hex-string
+                             (ironclad:digest-sequence :sha1 (sb-ext:string-to-octets "copper kettle at noon")))))
+       (littoral.auth:*pwned-range-function*
+         (lambda (prefix)
+           (if (string= prefix (subseq hash 0 5))
+               (format nil "~A:41~C~C" (subseq hash 5) #\Return #\Newline)
+               "")))
+       (littoral.auth:*check-breached-passwords* t))
+  (list (littoral.auth:breached-password-p "copper kettle at noon")
+        (littoral.auth:breached-password-p "a kettle of copper fish")
+        (littoral.auth:new-password-problem "copper kettle at noon")))
+;; ⇒ (T NIL "That password has appeared in a data breach; please choose another.")
+```
+
+#### `*pwned-range-function*` — variable
+
+A function of a 5-digit `sha-1` prefix (upper case hex) giving Have I Been
+Pwned's answer: a line `suffix:count` for each breached hash with that prefix.
+Replace it to ask a local copy of the data instead.
+
+*Example:* With `*check-breached-passwords*`, passwords Have I Been Pwned has seen in breaches are refused too.  Only the first five hex digits of the password's `sha-1` are sent; the answer lists the rest of every breached hash that starts with them.  Here a stand-in answers as the service would, for one password.
+
+```lisp
+(let* ((hash (string-upcase (ironclad:byte-array-to-hex-string
+                             (ironclad:digest-sequence :sha1 (sb-ext:string-to-octets "copper kettle at noon")))))
+       (littoral.auth:*pwned-range-function*
+         (lambda (prefix)
+           (if (string= prefix (subseq hash 0 5))
+               (format nil "~A:41~C~C" (subseq hash 5) #\Return #\Newline)
+               "")))
+       (littoral.auth:*check-breached-passwords* t))
+  (list (littoral.auth:breached-password-p "copper kettle at noon")
+        (littoral.auth:breached-password-p "a kettle of copper fish")
+        (littoral.auth:new-password-problem "copper kettle at noon")))
+;; ⇒ (T NIL "That password has appeared in a data breach; please choose another.")
+```
+
 ### Tables and users
 
 #### `create-auth-tables` `&key (users t)` — function
@@ -19029,9 +19162,12 @@ The user whose `user-id` is `id`, or `nil`.
 ;; ⇒ ("ada" "ada" "ada" NIL)
 ```
 
-#### `set-password` `user password` — function
+#### `set-password` `user password &key (sign-out-others t)` — function
 
-Give `user` the new `password`, and void their outstanding reset links.
+Give `user` the new `password`, and void their outstanding reset links.  With
+`sign-out-others` (the default), also end `user`'s other sign-ins and void their
+API tokens: whoever knew the old password, or kept a sign-in cookie, is shut
+out, while this session, if it is `user`'s, stays signed in.
 
 ```lisp
 (let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
@@ -20037,6 +20173,52 @@ The otpauth:// address an authenticator app reads, from a QR code or a link.
   (list (length secret)
         (littoral.auth:totp-uri "JBSWY3DPEHPK3PXP" "ada@example.org" "The Shop")))
 ;; ⇒ (32 "otpauth://totp/The%20Shop:ada%40example.org?secret=JBSWY3DPEHPK3PXP&issuer=The%20Shop&algorithm=SHA1&digits=6&period=30")
+```
+
+#### `*factor-key*` — variable
+
+The key that encrypts authenticator-app secrets in the database: 32
+bytes, as an octet vector or a string of 64 hex digits or base 64.  `nil`
+takes $LITTORAL_FACTOR_KEY; with neither, secrets are kept as they are.
+Whoever reads a secret can make its codes, so keep the key out of the
+database and its backups.
+
+*Example:* With a factor key (32 bytes; in production, $LITTORAL_FACTOR_KEY), authenticator-app secrets are kept encrypted (`aes-256-gcm`), so a copy of the database can't make codes.  Secrets kept before the key was set still work, and are encrypted when next used; `encrypt-factor-secrets` encrypts them all at once.
+
+```lisp
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
+      (secret (littoral.auth:new-totp-secret)))
+  (littoral.auth:create-auth-tables)
+  (let ((ada (littoral.auth:add-user "ada" "ada@example.org" "correct horse battery")))
+    (littoral.db:db-insert (make-instance 'littoral.auth::auth-factor
+                                          :user-id (princ-to-string (littoral.auth:user-id ada)) :kind "totp"
+                                          :name "App" :data secret :counter 0 :created (get-universal-time)))
+    (let ((littoral.auth:*factor-key* (ironclad:random-data 32)))
+      (list (littoral.auth:encrypt-factor-secrets)
+            (subseq (getf (first (littoral.db:db-query "SELECT data FROM auth_factors")) :|data|) 0 5)))))
+;; ⇒ (1 "aes1:")
+```
+
+#### `encrypt-factor-secrets` — function
+
+Encrypt, with the `factor-key`, every authenticator-app secret still kept as
+it is, such as those added before the key was set; how many.  (Signing in
+also encrypts the one it uses.)
+
+*Example:* With a factor key (32 bytes; in production, $LITTORAL_FACTOR_KEY), authenticator-app secrets are kept encrypted (`aes-256-gcm`), so a copy of the database can't make codes.  Secrets kept before the key was set still work, and are encrypted when next used; `encrypt-factor-secrets` encrypts them all at once.
+
+```lisp
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
+      (secret (littoral.auth:new-totp-secret)))
+  (littoral.auth:create-auth-tables)
+  (let ((ada (littoral.auth:add-user "ada" "ada@example.org" "correct horse battery")))
+    (littoral.db:db-insert (make-instance 'littoral.auth::auth-factor
+                                          :user-id (princ-to-string (littoral.auth:user-id ada)) :kind "totp"
+                                          :name "App" :data secret :counter 0 :created (get-universal-time)))
+    (let ((littoral.auth:*factor-key* (ironclad:random-data 32)))
+      (list (littoral.auth:encrypt-factor-secrets)
+            (subseq (getf (first (littoral.db:db-query "SELECT data FROM auth_factors")) :|data|) 0 5)))))
+;; ⇒ (1 "aes1:")
 ```
 
 #### `base32-encode` `octets` — function

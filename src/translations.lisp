@@ -154,7 +154,9 @@
   ("If that address belongs to an account, a link to choose a new password is on its way."
    "Si cette adresse correspond à un compte, un lien pour choisir un nouveau mot de passe vous a été envoyé.")
   ("Send me a link" "M'envoyer un lien") ("New password" "Nouveau mot de passe") ("Again" "Confirmation")
-  ("Passwords need at least 8 characters." "Le mot de passe doit faire au moins 8 caractères.")
+  ("Passwords need at least ~D characters." "Le mot de passe doit faire au moins ~D caractères.")
+  ("That password is too easy to guess." "Ce mot de passe est trop facile à deviner.")
+  ("That password has appeared in a data breach; please choose another." "Ce mot de passe figure dans une fuite de données ; choisissez-en un autre.")
   ("The passwords differ." "Les mots de passe diffèrent.")
   ("Save and sign in" "Enregistrer et se connecter")
   ("That link has expired or been used. Ask for a new one." "Ce lien a expiré ou a déjà servi. Demandez-en un nouveau.")
@@ -327,7 +329,9 @@ Le lien ne sert qu'une fois, pendant une heure.  Si ce n'était pas vous, ignore
   ("If that address belongs to an account, a link to choose a new password is on its way."
    "Falls diese Adresse zu einem Konto gehört, ist ein Link zum Wählen eines neuen Passworts unterwegs.")
   ("Send me a link" "Link senden") ("New password" "Neues Passwort") ("Again" "Wiederholen")
-  ("Passwords need at least 8 characters." "Passwörter brauchen mindestens 8 Zeichen.")
+  ("Passwords need at least ~D characters." "Passwörter brauchen mindestens ~D Zeichen.")
+  ("That password is too easy to guess." "Dieses Passwort ist zu leicht zu erraten.")
+  ("That password has appeared in a data breach; please choose another." "Dieses Passwort ist bei einem Datenleck bekannt geworden; bitte wählen Sie ein anderes.")
   ("The passwords differ." "Die Passwörter stimmen nicht überein.")
   ("Save and sign in" "Speichern und anmelden")
   ("That link has expired or been used. Ask for a new one." "Dieser Link ist abgelaufen oder wurde schon benutzt. Fordern Sie einen neuen an.")
@@ -499,7 +503,9 @@ Der Link funktioniert einmal, eine Stunde lang.  Falls Sie das nicht waren, igno
   ("If that address belongs to an account, a link to choose a new password is on its way."
    "Si esa dirección pertenece a una cuenta, le hemos enviado un enlace para elegir una contraseña nueva.")
   ("Send me a link" "Enviarme un enlace") ("New password" "Contraseña nueva") ("Again" "Repetir")
-  ("Passwords need at least 8 characters." "La contraseña debe tener al menos 8 caracteres.")
+  ("Passwords need at least ~D characters." "La contraseña debe tener al menos ~D caracteres.")
+  ("That password is too easy to guess." "Esa contraseña es demasiado fácil de adivinar.")
+  ("That password has appeared in a data breach; please choose another." "Esa contraseña ha aparecido en una filtración de datos; elija otra.")
   ("The passwords differ." "Las contraseñas no coinciden.")
   ("Save and sign in" "Guardar e iniciar sesión")
   ("That link has expired or been used. Ask for a new one." "Ese enlace ha caducado o ya se ha usado. Pida uno nuevo.")

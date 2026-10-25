@@ -240,7 +240,17 @@
       (multiple-value-bind (status headers) (raw-request b :get (browser-url b))
         (is (= 200 status))
         (is (string= "same-origin" (getf headers :referrer-policy)))
-        (is (string= "nosniff" (getf headers :x-content-type-options)))))))
+        (is (string= "nosniff" (getf headers :x-content-type-options)))
+        (is (null (getf headers :strict-transport-security)) "Not over plain HTTP")))))
+
+(test strict-transport-security-over-https
+  (with-fresh-applications (("/c" 'littoral-examples:counter))
+    (let ((app (make-lack-app))
+          (env (make-env :get "/c")))
+      (setf (gethash "x-forwarded-proto" (getf env :headers)) "https")
+      (is (string= "max-age=31536000" (getf (second (funcall app env)) :strict-transport-security)))
+      (let ((littoral:*hsts-max-age* nil))
+        (is (null (getf (second (funcall app env)) :strict-transport-security)))))))
 
 (test secure-cookie-over-https
   (with-fresh-applications (("/c" 'littoral-examples:counter :cookie-sessions t))

@@ -2,7 +2,13 @@
 
 ## Unreleased
 
+### Added
+- **HSTS.** HTTPS responses carry `Strict-Transport-Security: max-age=31536000`, so a browser that has reached the site over HTTPS never tries plain HTTP for it, where a first request could be downgraded. `*hsts-max-age*` sets the time; NIL leaves the header out. It covers the host alone, not its subdomains.
+- **Encrypted authenticator-app secrets.** With `$LITTORAL_FACTOR_KEY` (or `littoral.auth:*factor-key*`), 32 bytes as hex or base 64, TOTP secrets are kept encrypted with AES-256-GCM, bound to their user, so whoever reads the database or a backup can't make codes. Secrets kept before the key was set still work and are encrypted when next used; `encrypt-factor-secrets` encrypts them all at once. Without a key, secrets are kept as before.
+- **New passwords are checked.** `new-password-problem` refuses passwords shorter than `*min-password-length*` (8), common ones (with digits or symbols added too), and those too easy to guess, counting the user's name and email address for little. The reset form uses it. With `*check-breached-passwords*`, passwords Have I Been Pwned has seen in breaches are refused as well (`breached-password-p`); only five hex digits of the password's SHA-1 are sent, and an unreachable service refuses nothing. littoral/auth now depends on dexador for that.
+
 ### Changed
+- **Changing a password signs out everywhere else.** `set-password`, which password reset uses, now ends the user's other sign-ins and voids their API tokens, so someone holding a stolen "keep me signed in" cookie or a token is shut out; the session making the change stays signed in. `:sign-out-others nil` keeps the old behaviour.
 - **A passkey used alone must verify the user.** Signing in with only a passkey now asks for, and requires, user verification (a fingerprint, face or PIN), since it stands in for the password; a touch is no longer enough. As the second step after a password, the user need only be present, as before.
 - **Signing in with a passkey finds it by index.** Passkeys keep their credential id in a column of their own, `auth_factors.credential_id`, with a unique index; before, each passkey sign-in read every passkey. A migration adds the column and fills it in for existing passkeys.
 

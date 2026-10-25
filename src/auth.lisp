@@ -36,6 +36,8 @@
    ;; Passwords
    #:hash-password #:verify-password #:password-needs-rehash-p #:bcrypt-hash
    #:*pbkdf2-iterations* #:*rehash-on-sign-in*
+   #:new-password-problem #:*min-password-length* #:*check-breached-passwords* #:breached-password-p
+   #:*pwned-range-function*
    ;; Tables and users
    #:create-auth-tables #:drop-auth-tables #:purge-expired-auth-rows
    #:add-user #:find-user #:find-user-by-email #:find-user-by-id
@@ -53,7 +55,7 @@
    #:endpoint-user #:require-endpoint-user #:create-api-token #:revoke-api-tokens
    ;; Second factors
    #:security-settings #:second-factor-p #:user-factors #:*offer-passkeys*
-   #:hotp #:totp-code #:verify-totp #:new-totp-secret #:totp-uri #:base32-encode #:base32-decode
+   #:hotp #:totp-code #:verify-totp #:new-totp-secret #:totp-uri #:*factor-key* #:encrypt-factor-secrets #:base32-encode #:base32-decode
    #:make-recovery-codes #:use-recovery-code #:recovery-codes-left
    #:add-passkey #:verify-registration #:verify-assertion #:passkey-error #:cbor-decode #:qr-svg
    ;; Roles and permissions
@@ -428,12 +430,23 @@ permissions tables, and the audit log."
   (let ((hash (and user (user-password-hash user))))
     (and hash password (store-verify-password *user-store* password hash) t)))
 
-(defun set-password (user password)
-  "Give USER the new PASSWORD, and void their outstanding reset links."
+(defun set-password (user password &key (sign-out-others t))
+  "Give USER the new PASSWORD, and void their outstanding reset links.  With
+SIGN-OUT-OTHERS (the default), also end USER's other sign-ins and void their
+API tokens: whoever knew the old password, or kept a sign-in cookie, is shut
+out, while this session, if it is USER's, stays signed in."
   (store-set-password-hash *user-store* user (hash-password password))
-  (db-execute "DELETE FROM auth_tokens WHERE user_id = ? AND purpose = ?"
-              (princ-to-string (user-id user)) "reset")
-  (audit-user "password.changed" user)
+  (let ((id (princ-to-string (user-id user))))
+    (db-execute "DELETE FROM auth_tokens WHERE user_id = ? AND purpose = ?" id "reset")
+    (if sign-out-others
+        (let* ((current (and *session* (equal (session-property :user-id) (user-id user))
+                             (session-property :auth-session)))
+               (sessions (if current
+                             (db-execute "DELETE FROM auth_sessions WHERE user_id = ? AND id <> ?" id current)
+                             (db-execute "DELETE FROM auth_sessions WHERE user_id = ?" id)))
+               (tokens (db-execute "DELETE FROM auth_tokens WHERE user_id = ? AND purpose = ?" id "api")))
+          (audit-user "password.changed" user :signed-out sessions :api-tokens-revoked tokens))
+        (audit-user "password.changed" user)))
   user)
 
 (defun add-user (name email password &key roles)
@@ -1004,12 +1017,13 @@ The link works once, for an hour.  If it wasn't you, ignore this mail."
       (h:div (:class "lt-buttons")
         (h:submit-button (:callback
                         (lambda ()
-                          (cond ((< (length (reset-password self)) 8)
-                                 (setf (reset-message self) (translate "Passwords need at least 8 characters.")))
-                                ((string/= (reset-password self) (reset-again self))
-                                 (setf (reset-message self) (translate "The passwords differ.")))
-                                (t (let ((user (find-user-by-id (reset-user-id self))))
-                                     (set-password user (reset-password self))
+                          (let* ((user (find-user-by-id (reset-user-id self)))
+                                 (problem (and (string= (reset-password self) (reset-again self))
+                                               (new-password-problem (reset-password self) :user user))))
+                            (cond ((string/= (reset-password self) (reset-again self))
+                                   (setf (reset-message self) (translate "The passwords differ.")))
+                                  (problem (setf (reset-message self) problem))
+                                  (t (set-password user (reset-password self))
                                      (log-in user)
                                      (answer self user))))))
           (translate "Save and sign in"))))))

@@ -62,6 +62,55 @@
           (press other "Verify")
           (is (has-text-p other "That code isn't right.")))))))
 
+(test authenticator-secrets-are-encrypted
+  (let ((secret (littoral.auth:new-totp-secret))
+        (key (ironclad:random-data 32)))
+    (let ((littoral.auth:*factor-key* nil))
+      (is (string= secret (littoral.auth::seal-totp-secret secret "7")) "Without a key, kept as it is"))
+    (let* ((littoral.auth:*factor-key* key)
+           (sealed (littoral.auth::seal-totp-secret secret "7")))
+      (is (alexandria:starts-with-subseq "aes1:" sealed))
+      (is (not (search secret sealed)))
+      (is (string/= sealed (littoral.auth::seal-totp-secret secret "7")) "A fresh nonce each time")
+      (is (string= secret (littoral.auth::open-totp-secret sealed "7")))
+      (is (string= secret (littoral.auth::open-totp-secret secret "7")) "Secrets from before the key still read")
+      (signals error (littoral.auth::open-totp-secret sealed "8") "Bound to its user")
+      (let ((littoral.auth:*factor-key* (ironclad:random-data 32)))
+        (signals error (littoral.auth::open-totp-secret sealed "7")))
+      (let ((littoral.auth:*factor-key* nil))
+        (signals error (littoral.auth::open-totp-secret sealed "7")))
+      ;; Keys as text: hex or base 64; other lengths are refused.
+      (let ((littoral.auth:*factor-key* (ironclad:byte-array-to-hex-string key)))
+        (is (string= secret (littoral.auth::open-totp-secret sealed "7"))))
+      (let ((littoral.auth:*factor-key* (cl-base64:usb8-array-to-base64-string key)))
+        (is (string= secret (littoral.auth::open-totp-secret sealed "7"))))
+      (let ((littoral.auth:*factor-key* "too short"))
+        (signals error (littoral.auth::factor-key))))))
+
+(test signing-in-with-an-encrypted-secret
+  (with-auth (b)
+    (let* ((secret (give-totp "bob"))        ; kept before there was a key
+           (littoral.auth:*factor-key* (ironclad:random-data 32))
+           (bob (littoral.auth:find-user "bob")))
+      (flet ((stored () (littoral.auth::factor-data (first (littoral.auth:user-factors bob "totp")))))
+        (is (string= secret (stored)))
+        (sign-in-as b "bob" "another passphrase")
+        (fill-in b "sign-in-code" (littoral.auth:totp-code secret))
+        (press b "Verify")
+        (is (has-text-p b "Signed in as bob"))
+        ;; Signing in encrypted it; it still works.
+        (is (alexandria:starts-with-subseq "aes1:" (stored)))
+        (let ((other (make-instance 'browser)))
+          (visit other "/m")
+          (sign-in-as other "bob" "another passphrase")
+          (fill-in other "sign-in-code" (littoral.auth:totp-code secret (+ (get-universal-time) 30)))
+          (press other "Verify")
+          (is (has-text-p other "Signed in as bob")))
+        ;; ENCRYPT-FACTOR-SECRETS does the rest at once.
+        (give-totp "ada")
+        (is (= 1 (littoral.auth:encrypt-factor-secrets)))
+        (is (= 0 (littoral.auth:encrypt-factor-secrets)))))))
+
 (test recovery-codes
   (with-auth (b)
     (give-totp "bob")

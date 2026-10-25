@@ -165,7 +165,7 @@ Signals ENDPOINT-ERROR 400 when it isn't JSON."
 
 (defun json-response (status value &optional headers)
   (list status (append (list :content-type "application/json; charset=utf-8" :cache-control "no-store")
-                       headers *security-headers*)
+                       headers (security-headers))
         (list (json-value value))))
 
 (defun answer-endpoint (app function arguments)

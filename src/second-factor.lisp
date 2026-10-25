@@ -112,6 +112,77 @@ later than AFTER (so a code works once), or NIL."
   "A new random authenticator-app secret: 160 bits, in base 32."
   (base32-encode (ironclad:random-data 20)))
 
+(defvar *factor-key* nil
+  "The key that encrypts authenticator-app secrets in the database: 32
+bytes, as an octet vector or a string of 64 hex digits or base 64.  NIL
+takes $LITTORAL_FACTOR_KEY; with neither, secrets are kept as they are.
+Whoever reads a secret can make its codes, so keep the key out of the
+database and its backups.")
+
+(defun factor-key ()
+  "*FACTOR-KEY* or $LITTORAL_FACTOR_KEY as 32 octets, or NIL."
+  (let ((key (or *factor-key* (let ((env (uiop:getenv "LITTORAL_FACTOR_KEY")))
+                                (and env (plusp (length env)) env)))))
+    (when key
+      (let ((octets (cond ((not (stringp key)) (coerce key '(simple-array (unsigned-byte 8) (*))))
+                          ((cl-ppcre:scan "^[0-9a-fA-F]{64}$" key) (ironclad:hex-string-to-byte-array key))
+                          (t (ignore-errors (b64url-decode (string-right-trim "=" key)))))))
+        (unless (= (length octets) 32)
+          (error "The factor key must be 32 bytes, as 64 hex digits or base 64."))
+        octets))))
+
+(defparameter *sealed-prefix* "aes1:" "What starts a secret encrypted by SEAL-TOTP-SECRET.")
+
+(defun factor-cipher (key iv user-id &optional tag)
+  (let ((mode (apply #'ironclad:make-authenticated-encryption-mode :gcm :cipher-name :aes :key key
+                     :initialization-vector iv (and tag (list :tag tag)))))
+    ;; Bound to its user: a sealed secret copied to another user's row won't open.
+    (ironclad:process-associated-data mode (sb-ext:string-to-octets (princ-to-string user-id) :external-format :utf-8))
+    mode))
+
+(defun seal-totp-secret (secret user-id)
+  "SECRET as kept for the user USER-ID: encrypted (AES-256-GCM) with the
+FACTOR-KEY, or as it is without one."
+  (let ((key (factor-key)))
+    (if key
+        (let* ((iv (ironclad:random-data 12))
+               (mode (factor-cipher key iv user-id))
+               (sealed (ironclad:encrypt-message mode (sb-ext:string-to-octets secret :external-format :utf-8))))
+          (concatenate 'string *sealed-prefix*
+                       (b64url-encode (concatenate '(vector (unsigned-byte 8)) iv sealed (ironclad:produce-tag mode)))))
+        secret)))
+
+(defun open-totp-secret (data user-id)
+  "The secret SEAL-TOTP-SECRET kept as DATA for the user USER-ID.  Signals
+an error when it is sealed and the key is missing or wrong."
+  (if (alexandria:starts-with-subseq *sealed-prefix* data)
+      (let ((key (or (factor-key) (error "An authenticator-app secret is encrypted, but no factor key is set.")))
+            (octets (b64url-decode (subseq data (length *sealed-prefix*)))))
+        (sb-ext:octets-to-string
+         (ironclad:decrypt-message (factor-cipher key (subseq octets 0 12) user-id (subseq octets (- (length octets) 16)))
+                                   (subseq octets 12 (- (length octets) 16)))
+         :external-format :utf-8))
+      data))
+
+(defun totp-secret (factor)
+  "FACTOR's authenticator-app secret, decrypted."
+  (open-totp-secret (factor-data factor) (factor-user-id factor)))
+
+(defun seal-factor (factor)
+  "Encrypt FACTOR's secret when it was kept as it is and there is a key now."
+  (when (and (equal (factor-kind factor) "totp") (factor-key)
+             (not (alexandria:starts-with-subseq *sealed-prefix* (factor-data factor))))
+    (setf (factor-data factor) (seal-totp-secret (factor-data factor) (factor-user-id factor)))
+    t))
+
+(defun encrypt-factor-secrets ()
+  "Encrypt, with the FACTOR-KEY, every authenticator-app secret still kept as
+it is, such as those added before the key was set; how many.  (Signing in
+also encrypts the one it uses.)"
+  (unless (factor-key) (error "Set *FACTOR-KEY* or $LITTORAL_FACTOR_KEY first."))
+  (loop for factor in (db-select 'auth-factor :where "kind = ?" :params (list "totp"))
+        count (when (seal-factor factor) (db-save factor) t)))
+
 (defun totp-uri (secret account issuer)
   "The otpauth:// address an authenticator app reads, from a QR code or a link."
   (format nil "otpauth://totp/~A:~A?secret=~A&issuer=~A&algorithm=SHA1&digits=6&period=~D"
