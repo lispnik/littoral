@@ -8112,7 +8112,9 @@ Start the request counts and timings, and `define-metric`'s metrics, again from 
 
 Write a line to `stream` for every request: JSON (`format` `:json`, the
 default, for log collectors) with the fields time, method, path, app, kind,
-status, ms and address, or text (`:text`).  The path leaves out the query
+status, ms, address, id (the request's `*request-id*`), and, when known, user,
+bytes, agent and referrer; or text (`:text`), the same with spaces between and
+"-" for what isn't known.  The path and referrer leave out the query
 string, where session keys ride.  `nil` for `stream` stops logging.  It sets
 `*request-log*`, so it replaces any log already set.
 
@@ -8137,7 +8139,9 @@ string, where session keys ride.  `nil` for `stream` stops logging.  It sets
 #### `*request-log*` — variable
 
 A function of a plist describing each request (`:time` `:method` `:path` `:app` `:kind`
-`:status` `:milliseconds` `:address`), or `nil`.  See `log-requests-to`.
+`:status` `:milliseconds` `:address` `:request-id` `:user` `:user-agent` `:referrer`
+`:bytes`), or `nil`.  `:user`, `:user-agent`, `:referrer` and `:bytes` may be `nil`.  See
+`log-requests-to`.
 
 *Example:* Any function of a plist can take the log: here one that keeps each request's kind and status.
 
@@ -8159,6 +8163,63 @@ A function of a plist describing each request (`:time` `:method` `:path` `:app` 
 Upper bounds, in seconds, of the request duration histogram's buckets, and
 the default buckets of `define-metric`'s histograms.  Changing it starts the
 request histogram again, since counts can't be moved between buckets.
+
+#### `*request-id*` — variable
+
+The id of the request being answered: random, or the proxy's X-Request-Id
+when `*trust-forwarded-for*`.  It goes back in the response's X-Request-Id
+header, into the request log and onto error pages, so a report of a failure
+can be matched with its log line.  `nil` outside a request.
+
+*Example:* Every request has an id: in its log entry, in the response's X-Request-Id header, and on the error page, so someone reporting a failure can quote it.  Behind a trusted proxy (`*trust-forwarded-for*`) the proxy's own X-Request-Id is used.
+
+```lisp
+(defclass hello (component) ())
+(defmethod render ((self hello)) (h:p () "Hello"))
+(with-fresh-applications (("/hello" 'hello :mode :deployment))
+  (let* ((logged nil)
+         (*request-log* (lambda (entry) (setf logged (getf entry :request-id))))
+         (headers (second (funcall (make-lack-app) (make-env :get "/hello")))))
+    (list (length logged) (equal logged (getf headers :x-request-id)))))
+;; ⇒ (16 T)
+```
+
+#### `*request-log-user-function*` — variable
+
+A function of no arguments, called in a session's request, giving the id
+of the user it is signed in to (logged as `:user`), or `nil`.  littoral/auth sets
+it.  Give an id, never a name or an address.
+
+*Example:* Who each request was for: a function of no arguments, called in the session's request, giving an id for the log's user field.  littoral/auth sets it to the signed-in user's id; this one gives every session the same.
+
+```lisp
+(defclass hello (component) ())
+(defmethod render ((self hello)) (h:p () "Hello"))
+(with-fresh-applications (("/hello" 'hello :mode :deployment))
+  (let* ((users '())
+         (*request-log* (lambda (entry) (push (getf entry :user) users)))
+         (*request-log-user-function* (lambda () "42")))
+    (visit (make-instance 'browser) "/hello")
+    users))
+;; ⇒ ("42" "42")
+```
+
+#### `log-requests-from-environment` — function
+
+Start the request log that $LITTORAL_REQUEST_LOG names, unless one is
+set already: "json" or "stdout" (JSON lines on standard output),
+"text" (text lines there), or a file to add JSON lines to.  Empty or
+"off" logs nothing.  `start` calls it.  Returns `*request-log*`.
+
+*Example:* `start` calls it, so a deployment can turn the log on without code: $LITTORAL_REQUEST_LOG is "json" (or "stdout"), "text", or a file to add JSON lines to.  Unset, empty or "off", there's no log.
+
+```lisp
+(let ((*request-log* nil))
+  (setf (uiop:getenv "LITTORAL_REQUEST_LOG") "off")
+  (prog1 (log-requests-from-environment)
+    (setf (uiop:getenv "LITTORAL_REQUEST_LOG") "")))
+;; ⇒ NIL
+```
 
 #### `add-metrics-source` `name function` — function
 
@@ -20181,7 +20242,8 @@ The key that encrypts authenticator-app secrets in the database: 32
 bytes, as an octet vector or a string of 64 hex digits or base 64.  `nil`
 takes $LITTORAL_FACTOR_KEY; with neither, secrets are kept as they are.
 Whoever reads a secret can make its codes, so keep the key out of the
-database and its backups.
+database and its backups.  To change it, move the old one to
+`*old-factor-keys*`.
 
 *Example:* With a factor key (32 bytes; in production, $LITTORAL_FACTOR_KEY), authenticator-app secrets are kept encrypted (`aes-256-gcm`), so a copy of the database can't make codes.  Secrets kept before the key was set still work, and are encrypted when next used; `encrypt-factor-secrets` encrypts them all at once.
 
@@ -20199,11 +20261,45 @@ database and its backups.
 ;; ⇒ (1 "aes1:")
 ```
 
+#### `*old-factor-keys*` — variable
+
+Keys that secrets may still be encrypted with, after `*factor-key*`
+changed: a list, in any of `*factor-key*`'s forms.  `nil` takes
+$LITTORAL_OLD_FACTOR_KEYS, separated by commas.  A secret is encrypted again
+with the current key when it is next used, or by `encrypt-factor-secrets`;
+after that has run, the old keys can go.
+
+*Example:* Changing the factor key: the old one moves to `*old-factor-keys*` (in production, $LITTORAL_OLD_FACTOR_KEYS, separated by commas), so secrets encrypted with it still open.  Each secret names its key by a short hash.  `encrypt-factor-secrets` moves them all to the new key; after that the old key can go.
+
+```lisp
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
+      (old (ironclad:random-data 32))
+      (new (ironclad:random-data 32)))
+  (littoral.auth:create-auth-tables)
+  (let ((ada (littoral.auth:add-user "ada" "ada@example.org" "correct horse battery")))
+    (littoral.db:db-insert (make-instance 'littoral.auth::auth-factor
+                                          :user-id (princ-to-string (littoral.auth:user-id ada)) :kind "totp"
+                                          :name "App" :data (littoral.auth:new-totp-secret) :counter 0
+                                          :created (get-universal-time)))
+    (let ((littoral.auth:*factor-key* old)) (littoral.auth:encrypt-factor-secrets))
+    (flet ((stored-key-id ()
+             (second (cl-ppcre:split ":" (getf (first (littoral.db:db-query "SELECT data FROM auth_factors")) :|data|)))))
+      (let ((before (stored-key-id))
+            (moved (let ((littoral.auth:*factor-key* new)
+                         (littoral.auth:*old-factor-keys* (list old)))
+                     (littoral.auth:encrypt-factor-secrets))))
+        (list moved (string= before (stored-key-id)))))))
+;; ⇒ (1 NIL)
+```
+
 #### `encrypt-factor-secrets` — function
 
-Encrypt, with the `factor-key`, every authenticator-app secret still kept as
-it is, such as those added before the key was set; how many.  (Signing in
-also encrypts the one it uses.)
+Encrypt with the current `factor-key` every authenticator-app secret that
+isn't yet: those kept as they are, such as those added before there was a
+key, and those encrypted with one of the `old-factor-keys`.  Returns how many
+changed; once it has run, the old keys can be dropped.  (Signing in also
+encrypts the secret it uses.)  Signals an error, changing nothing, when a
+secret opens with none of the keys.
 
 *Example:* With a factor key (32 bytes; in production, $LITTORAL_FACTOR_KEY), authenticator-app secrets are kept encrypted (`aes-256-gcm`), so a copy of the database can't make codes.  Secrets kept before the key was set still work, and are encrypted when next used; `encrypt-factor-secrets` encrypts them all at once.
 

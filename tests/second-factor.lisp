@@ -32,12 +32,18 @@
     (is (search "otpauth://totp/Shop:ada?secret=" (littoral.auth:totp-uri secret "ada" "Shop")))
     (is (search "<svg class=\"lt-qr\"" (littoral.auth:qr-svg (littoral.auth:totp-uri secret "ada" "Shop"))))))
 
-(defun give-totp (name)
-  "Give the user NAME an authenticator app; its secret."
-  (let ((user (littoral.auth:find-user name))
-        (secret (littoral.auth:new-totp-secret)))
-    (littoral.db:db-insert (make-instance 'littoral.auth::auth-factor :user-id (princ-to-string (littoral.auth:user-id user))
-                                                                      :kind "totp" :name "App" :data secret :counter 0
+(defun give-totp (name &key key)
+  "Give the user NAME an authenticator app, its secret sealed with KEY if
+given; its secret."
+  (let* ((user (littoral.auth:find-user name))
+         (id (princ-to-string (littoral.auth:user-id user)))
+         (secret (littoral.auth:new-totp-secret)))
+    (littoral.db:db-insert (make-instance 'littoral.auth::auth-factor :user-id id
+                                                                      :kind "totp" :name "App" :counter 0
+                                                                      :data (if key
+                                                                                (let ((littoral.auth:*factor-key* key))
+                                                                                  (littoral.auth::seal-totp-secret secret id))
+                                                                                secret)
                                                                       :created (get-universal-time)))
     secret))
 
@@ -110,6 +116,61 @@
         (give-totp "ada")
         (is (= 1 (littoral.auth:encrypt-factor-secrets)))
         (is (= 0 (littoral.auth:encrypt-factor-secrets)))))))
+
+(test changing-the-factor-key
+  (let* ((secret (littoral.auth:new-totp-secret))
+         (old (ironclad:random-data 32))
+         (new (ironclad:random-data 32))
+         (sealed (let ((littoral.auth:*factor-key* old)) (littoral.auth::seal-totp-secret secret "7"))))
+    (is (search (format nil "aes1:~A:" (littoral.auth::factor-key-id old)) sealed) "Names its key")
+    (let ((littoral.auth:*factor-key* new))
+      (signals error (littoral.auth::open-totp-secret sealed "7") "The old key is needed")
+      (let ((littoral.auth:*old-factor-keys* (list (ironclad:byte-array-to-hex-string old))))
+        (is (string= secret (littoral.auth::open-totp-secret sealed "7")))))
+    ;; Secrets sealed before keys had ids open with whichever key fits.
+    (let ((idless (cl-ppcre:regex-replace "^aes1:[0-9a-f]+:" sealed "aes1:"))
+          (littoral.auth:*factor-key* new)
+          (littoral.auth:*old-factor-keys* (list old)))
+      (is (string= secret (littoral.auth::open-totp-secret idless "7"))))
+    (let ((littoral.auth:*factor-key* "too short")
+          (littoral.auth:*old-factor-keys* nil))
+      (signals error (littoral.auth::factor-key)))
+    (let ((littoral.auth:*old-factor-keys* (list "too short")))
+      (signals error (littoral.auth::old-factor-keys)))))
+
+(test rotating-the-factor-key
+  (with-auth (b)
+    (let* ((old (ironclad:random-data 32))
+           (new (ironclad:random-data 32))
+           (secret (give-totp "bob" :key old))
+           (bob (littoral.auth:find-user "bob")))
+      (flet ((stored () (littoral.auth::factor-data (first (littoral.auth:user-factors bob "totp")))))
+        (is (search (littoral.auth::factor-key-id old) (stored)))
+        (let ((littoral.auth:*factor-key* new)
+              (littoral.auth:*old-factor-keys* (list old)))
+          ;; Signing in reads it with the old key and seals it with the new one.
+          (sign-in-as b "bob" "another passphrase")
+          (fill-in b "sign-in-code" (littoral.auth:totp-code secret))
+          (press b "Verify")
+          (is (has-text-p b "Signed in as bob"))
+          (is (search (littoral.auth::factor-key-id new) (stored)))
+          ;; ENCRYPT-FACTOR-SECRETS moves the rest at once.
+          (give-totp "ada" :key old)
+          (is (= 1 (littoral.auth:encrypt-factor-secrets)))
+          (is (= 0 (littoral.auth:encrypt-factor-secrets))))
+        ;; Without the old key nothing changes: every secret must open first.
+        (littoral.auth:add-user "carol" "carol@example.org" "a long enough passphrase")
+        (give-totp "carol" :key old)
+        (let ((littoral.auth:*factor-key* new) (littoral.auth:*old-factor-keys* nil))
+          (signals error (littoral.auth:encrypt-factor-secrets)))
+        ;; And the new key alone still signs bob in.
+        (let ((littoral.auth:*factor-key* new) (littoral.auth:*old-factor-keys* nil)
+              (other (make-instance 'browser)))
+          (visit other "/m")
+          (sign-in-as other "bob" "another passphrase")
+          (fill-in other "sign-in-code" (littoral.auth:totp-code secret (+ (get-universal-time) 30)))
+          (press other "Verify")
+          (is (has-text-p other "Signed in as bob")))))))
 
 (test recovery-codes
   (with-auth (b)

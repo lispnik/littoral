@@ -78,6 +78,27 @@
             (subseq (getf (first (littoral.db:db-query "SELECT data FROM auth_factors")) :|data|) 0 5)))))
 ;; ⇒ (1 "aes1:")
 
+;;;; Example: littoral.auth:*old-factor-keys*
+;;; Changing the factor key: the old one moves to *OLD-FACTOR-KEYS* (in production, $LITTORAL_OLD_FACTOR_KEYS, separated by commas), so secrets encrypted with it still open.  Each secret names its key by a short hash.  ENCRYPT-FACTOR-SECRETS moves them all to the new key; after that the old key can go.
+(let ((littoral.db:*database* '(:sqlite3 :database-name ":memory:"))
+      (old (ironclad:random-data 32))
+      (new (ironclad:random-data 32)))
+  (littoral.auth:create-auth-tables)
+  (let ((ada (littoral.auth:add-user "ada" "ada@example.org" "correct horse battery")))
+    (littoral.db:db-insert (make-instance 'littoral.auth::auth-factor
+                                          :user-id (princ-to-string (littoral.auth:user-id ada)) :kind "totp"
+                                          :name "App" :data (littoral.auth:new-totp-secret) :counter 0
+                                          :created (get-universal-time)))
+    (let ((littoral.auth:*factor-key* old)) (littoral.auth:encrypt-factor-secrets))
+    (flet ((stored-key-id ()
+             (second (cl-ppcre:split ":" (getf (first (littoral.db:db-query "SELECT data FROM auth_factors")) :|data|)))))
+      (let ((before (stored-key-id))
+            (moved (let ((littoral.auth:*factor-key* new)
+                         (littoral.auth:*old-factor-keys* (list old)))
+                     (littoral.auth:encrypt-factor-secrets))))
+        (list moved (string= before (stored-key-id)))))))
+;; ⇒ (1 NIL)
+
 ;;;; Example: littoral.auth:base32-encode littoral.auth:base32-decode
 (list (littoral.auth:base32-encode (sb-ext:string-to-octets "Hello!"))
       (sb-ext:octets-to-string (littoral.auth:base32-decode "jbsw y3dp ee")))

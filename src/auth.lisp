@@ -55,7 +55,7 @@
    #:endpoint-user #:require-endpoint-user #:create-api-token #:revoke-api-tokens
    ;; Second factors
    #:security-settings #:second-factor-p #:user-factors #:*offer-passkeys*
-   #:hotp #:totp-code #:verify-totp #:new-totp-secret #:totp-uri #:*factor-key* #:encrypt-factor-secrets #:base32-encode #:base32-decode
+   #:hotp #:totp-code #:verify-totp #:new-totp-secret #:totp-uri #:*factor-key* #:*old-factor-keys* #:encrypt-factor-secrets #:base32-encode #:base32-decode
    #:make-recovery-codes #:use-recovery-code #:recovery-codes-left
    #:add-passkey #:verify-registration #:verify-assertion #:passkey-error #:cbor-decode #:qr-svg
    ;; Roles and permissions
@@ -358,6 +358,7 @@ permissions tables, and the audit log."
   (when users (migrate :littoral-users))
   (migrate :littoral-auth)
   (littoral.audit:create-audit-tables)
+  (check-factor-keys)
   (sb-thread:with-mutex (*auth-databases-lock*)
     (pushnew (copy-tree *database*) *auth-databases* :test #'equal))
   (when users (migrate-role-column)))
@@ -723,6 +724,12 @@ looked at no more often than *AUTH-SESSION-CHECK-SECONDS*."
     (and id (sign-in-stands-p)
          (let ((user (find-user-by-id id)))
            (and user (user-active-p user) user)))))
+
+;; The request log's user: the session's id, without asking the database.
+(setf littoral:*request-log-user-function*
+      (lambda ()
+        (let ((id (and *session* (session-property :user-id))))
+          (and id (princ-to-string id)))))
 
 (setf littoral:*presence-name-function*
       (lambda ()

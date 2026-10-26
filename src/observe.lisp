@@ -4,6 +4,7 @@
 ;;;;   (add-health-check "database" (lambda () (littoral.db:db-query "SELECT 1")))
 ;;;;   (serve-metrics)              Prometheus text at /metrics, from this machine only
 ;;;;   (log-requests-to *standard-output*)          one JSON line per request
+;;;;   LITTORAL_REQUEST_LOG=json|text|FILE          the same, set up by START
 ;;;;
 ;;;; Every request is counted by application, kind (page, action, ajax,
 ;;;; events, websocket, static, other) and status, and timed into a
@@ -38,7 +39,33 @@ request histogram again, since counts can't be moved between buckets.")
 
 (defvar *request-log* nil
   "A function of a plist describing each request (:TIME :METHOD :PATH :APP :KIND
-:STATUS :MILLISECONDS :ADDRESS), or NIL.  See LOG-REQUESTS-TO.")
+:STATUS :MILLISECONDS :ADDRESS :REQUEST-ID :USER :USER-AGENT :REFERRER
+:BYTES), or NIL.  :USER, :USER-AGENT, :REFERRER and :BYTES may be NIL.  See
+LOG-REQUESTS-TO.")
+
+(defun note-request-user ()
+  "Remember for the request log who the current session's request is for."
+  (when (and *request-id* *request-log* *request-log-user-function*)
+    (setf *request-log-user* (ignore-errors (funcall *request-log-user-function*)))))
+
+(defun new-request-id (env)
+  "The id of the request ENV: the proxy's, when it is trusted and plain enough
+to log, or 16 random hex digits."
+  (let ((given (and *trust-forwarded-for*
+                    (gethash "x-request-id" (getf env :headers (make-hash-table))))))
+    (if (and given (cl-ppcre:scan "^[A-Za-z0-9._:-]{1,128}$" given))
+        given
+        (ironclad:byte-array-to-hex-string (ironclad:random-data 8)))))
+
+(defun without-query (url)
+  "URL up to its query string or fragment, which may carry session keys."
+  (and url (subseq url 0 (or (position-if (lambda (c) (member c '(#\? #\#))) url) (length url)))))
+
+(defun response-bytes (response)
+  "The length of RESPONSE's body when it says, or NIL (a stream, a file)."
+  (and (consp response)
+       (let ((length (getf (second response) :content-length)))
+         (and (integerp length) length))))
 
 (defun query-has-p (query name)
   "True when the query string QUERY has the parameter NAME."
@@ -89,7 +116,15 @@ request histogram again, since counts can't be moved between buckets.")
        (funcall *request-log*
                 (list :time (get-universal-time) :method (string (getf env :request-method))
                       :path path :app app :kind kind :status status
-                      :milliseconds (float (* 1000 seconds)) :address (getf env :remote-addr)))))))
+                      :milliseconds (float (* 1000 seconds)) :address (getf env :remote-addr)
+                      :request-id *request-id* :user *request-log-user*
+                      :user-agent (header-value env "user-agent")
+                      :referrer (without-query (header-value env "referer"))
+                      :bytes (response-bytes response)))))))
+
+(defun header-value (env name)
+  (let ((headers (getf env :headers)))
+    (and (hash-table-p headers) (gethash name headers))))
 
 ;;; Counters and histograms of the other systems: littoral/jobs counts job
 ;;; runs, littoral/auth sign-ins, and so on.
@@ -203,25 +238,59 @@ LABEL-VALUES, even when it fails.  Returns BODY's values."
 (defun log-requests-to (stream &key (format :json))
   "Write a line to STREAM for every request: JSON (FORMAT :JSON, the
 default, for log collectors) with the fields time, method, path, app, kind,
-status, ms and address, or text (:TEXT).  The path leaves out the query
+status, ms, address, id (the request's *REQUEST-ID*), and, when known, user,
+bytes, agent and referrer; or text (:TEXT), the same with spaces between and
+\"-\" for what isn't known.  The path and referrer leave out the query
 string, where session keys ride.  NIL for STREAM stops logging.  It sets
 *REQUEST-LOG*, so it replaces any log already set."
   (setf *request-log*
         (and stream
              (let ((lock (sb-thread:make-mutex :name "littoral request log")))
                (lambda (entry)
-                 (let ((line (if (eq format :json)
-                                 (format nil "{\"time\":~A,\"method\":~A,\"path\":~A,\"app\":~A,\"kind\":~A,\"status\":~D,\"ms\":~,1F,\"address\":~A}"
-                                         (json-string (iso-time (getf entry :time))) (json-string (getf entry :method))
-                                         (json-string (getf entry :path)) (json-string (getf entry :app))
-                                         (json-string (getf entry :kind)) (getf entry :status)
-                                         (getf entry :milliseconds) (json-string (or (getf entry :address) "")))
-                                 (format nil "~A ~A ~A ~A ~D ~,1Fms ~A" (iso-time (getf entry :time))
-                                         (getf entry :method) (getf entry :path) (getf entry :kind)
-                                         (getf entry :status) (getf entry :milliseconds) (or (getf entry :address) "")))))
+                 (let ((line (if (eq format :json) (request-log-json entry) (request-log-text entry))))
                    (sb-thread:with-mutex (lock)
                      (write-line line stream)
                      (force-output stream))))))))
+
+(defun request-log-json (entry)
+  (with-output-to-string (out)
+    (format out "{\"time\":~A,\"method\":~A,\"path\":~A,\"app\":~A,\"kind\":~A,\"status\":~D,\"ms\":~,1F,\"address\":~A,\"id\":~A"
+            (json-string (iso-time (getf entry :time))) (json-string (getf entry :method))
+            (json-string (getf entry :path)) (json-string (getf entry :app))
+            (json-string (getf entry :kind)) (getf entry :status)
+            (getf entry :milliseconds) (json-string (or (getf entry :address) ""))
+            (json-string (or (getf entry :request-id) "")))
+    (let ((user (getf entry :user)) (bytes (getf entry :bytes)))
+      (when user (format out ",\"user\":~A" (json-string (princ-to-string user))))
+      (when bytes (format out ",\"bytes\":~D" bytes)))
+    (loop for (key name) in '((:user-agent "agent") (:referrer "referrer"))
+          for value = (getf entry key)
+          when value do (format out ",\"~A\":~A" name (json-string value)))
+    (write-char #\} out)))
+
+(defun request-log-text (entry)
+  (flet ((field (key) (let ((value (getf entry key))) (if value (princ-to-string value) "-"))))
+    (format nil "~A ~A ~A ~A ~D ~,1Fms ~A ~A ~A ~A" (iso-time (getf entry :time))
+            (getf entry :method) (getf entry :path) (getf entry :kind)
+            (getf entry :status) (getf entry :milliseconds) (field :address)
+            (field :request-id) (field :user) (field :bytes))))
+
+(defun log-requests-from-environment ()
+  "Start the request log that $LITTORAL_REQUEST_LOG names, unless one is
+set already: \"json\" or \"stdout\" (JSON lines on standard output),
+\"text\" (text lines there), or a file to add JSON lines to.  Empty or
+\"off\" logs nothing.  START calls it.  Returns *REQUEST-LOG*."
+  (let ((setting (uiop:getenv "LITTORAL_REQUEST_LOG")))
+    (when (and (null *request-log*) setting (plusp (length setting))
+               (not (string-equal setting "off")))
+      (cond ((member setting '("json" "stdout") :test #'string-equal)
+             (log-requests-to *standard-output*))
+            ((string-equal setting "text")
+             (log-requests-to *standard-output* :format :text))
+            (t
+             (log-requests-to (open setting :direction :output :if-exists :append
+                                            :if-does-not-exist :create :external-format :utf-8))))))
+  *request-log*)
 
 ;;; Health
 

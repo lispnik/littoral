@@ -117,19 +117,43 @@ later than AFTER (so a code works once), or NIL."
 bytes, as an octet vector or a string of 64 hex digits or base 64.  NIL
 takes $LITTORAL_FACTOR_KEY; with neither, secrets are kept as they are.
 Whoever reads a secret can make its codes, so keep the key out of the
-database and its backups.")
+database and its backups.  To change it, move the old one to
+*OLD-FACTOR-KEYS*.")
+
+(defvar *old-factor-keys* nil
+  "Keys that secrets may still be encrypted with, after *FACTOR-KEY*
+changed: a list, in any of *FACTOR-KEY*'s forms.  NIL takes
+$LITTORAL_OLD_FACTOR_KEYS, separated by commas.  A secret is encrypted again
+with the current key when it is next used, or by ENCRYPT-FACTOR-SECRETS;
+after that has run, the old keys can go.")
+
+(defun parse-factor-key (key)
+  "KEY, in any of *FACTOR-KEY*'s forms, as 32 octets."
+  (let ((octets (cond ((not (stringp key)) (coerce key '(simple-array (unsigned-byte 8) (*))))
+                      ((cl-ppcre:scan "^[0-9a-fA-F]{64}$" key) (ironclad:hex-string-to-byte-array key))
+                      (t (ignore-errors (b64url-decode (string-right-trim "=" key)))))))
+    (unless (= (length octets) 32)
+      (error "A factor key must be 32 bytes, as 64 hex digits or base 64."))
+    octets))
 
 (defun factor-key ()
   "*FACTOR-KEY* or $LITTORAL_FACTOR_KEY as 32 octets, or NIL."
   (let ((key (or *factor-key* (let ((env (uiop:getenv "LITTORAL_FACTOR_KEY")))
                                 (and env (plusp (length env)) env)))))
-    (when key
-      (let ((octets (cond ((not (stringp key)) (coerce key '(simple-array (unsigned-byte 8) (*))))
-                          ((cl-ppcre:scan "^[0-9a-fA-F]{64}$" key) (ironclad:hex-string-to-byte-array key))
-                          (t (ignore-errors (b64url-decode (string-right-trim "=" key)))))))
-        (unless (= (length octets) 32)
-          (error "The factor key must be 32 bytes, as 64 hex digits or base 64."))
-        octets))))
+    (and key (parse-factor-key key))))
+
+(defun old-factor-keys ()
+  "*OLD-FACTOR-KEYS* or $LITTORAL_OLD_FACTOR_KEYS, each as 32 octets."
+  (mapcar #'parse-factor-key
+          (or *old-factor-keys*
+              (remove "" (mapcar (lambda (key) (string-trim " " key))
+                                 (cl-ppcre:split "," (or (uiop:getenv "LITTORAL_OLD_FACTOR_KEYS") "")))
+                      :test #'string=))))
+
+(defun factor-key-id (key)
+  "A short name for KEY, kept with what it seals: the first 4 bytes of its
+SHA-256 hash, in hex.  It names the key without giving it away."
+  (ironclad:byte-array-to-hex-string (subseq (ironclad:digest-sequence :sha256 key) 0 4)))
 
 (defparameter *sealed-prefix* "aes1:" "What starts a secret encrypted by SEAL-TOTP-SECRET.")
 
@@ -142,46 +166,94 @@ database and its backups.")
 
 (defun seal-totp-secret (secret user-id)
   "SECRET as kept for the user USER-ID: encrypted (AES-256-GCM) with the
-FACTOR-KEY, or as it is without one."
+FACTOR-KEY, as \"aes1:\", the key's FACTOR-KEY-ID, \":\" and the
+nonce, encrypted secret and tag in base 64; or as it is without a key."
   (let ((key (factor-key)))
     (if key
         (let* ((iv (ironclad:random-data 12))
                (mode (factor-cipher key iv user-id))
                (sealed (ironclad:encrypt-message mode (sb-ext:string-to-octets secret :external-format :utf-8))))
-          (concatenate 'string *sealed-prefix*
+          (concatenate 'string *sealed-prefix* (factor-key-id key) ":"
                        (b64url-encode (concatenate '(vector (unsigned-byte 8)) iv sealed (ironclad:produce-tag mode)))))
         secret)))
 
+(defun sealed-secret-parts (data)
+  "The key id (NIL in secrets sealed before ids were kept) and the octets of
+the sealed secret DATA."
+  (let* ((rest (subseq data (length *sealed-prefix*)))
+         (colon (position #\: rest)))
+    (values (and colon (subseq rest 0 colon))
+            (b64url-decode (if colon (subseq rest (1+ colon)) rest)))))
+
+(defun open-with-key (key octets user-id)
+  (sb-ext:octets-to-string
+   (ironclad:decrypt-message (factor-cipher key (subseq octets 0 12) user-id (subseq octets (- (length octets) 16)))
+                             (subseq octets 12 (- (length octets) 16)))
+   :external-format :utf-8))
+
 (defun open-totp-secret (data user-id)
-  "The secret SEAL-TOTP-SECRET kept as DATA for the user USER-ID.  Signals
-an error when it is sealed and the key is missing or wrong."
+  "The secret SEAL-TOTP-SECRET kept as DATA for the user USER-ID, by the
+FACTOR-KEY or one of the OLD-FACTOR-KEYS.  Signals an error when it is
+sealed and no key opens it."
   (if (alexandria:starts-with-subseq *sealed-prefix* data)
-      (let ((key (or (factor-key) (error "An authenticator-app secret is encrypted, but no factor key is set.")))
-            (octets (b64url-decode (subseq data (length *sealed-prefix*)))))
-        (sb-ext:octets-to-string
-         (ironclad:decrypt-message (factor-cipher key (subseq octets 0 12) user-id (subseq octets (- (length octets) 16)))
-                                   (subseq octets 12 (- (length octets) 16)))
-         :external-format :utf-8))
+      (multiple-value-bind (id octets) (sealed-secret-parts data)
+        (let* ((keys (remove nil (cons (factor-key) (old-factor-keys))))
+               (named (and id (find id keys :key #'factor-key-id :test #'string=))))
+          (cond ((null keys)
+                 (error "An authenticator-app secret is encrypted, but no factor key is set."))
+                (named (open-with-key named octets user-id))
+                (id (error "An authenticator-app secret is encrypted with a key that isn't set (key id ~A)." id))
+                (t
+                 ;; From before keys had ids: whichever key opens it.
+                 (or (loop for key in keys
+                           thereis (ignore-errors (open-with-key key octets user-id)))
+                     (error "No factor key opens an authenticator-app secret."))))))
       data))
 
 (defun totp-secret (factor)
   "FACTOR's authenticator-app secret, decrypted."
   (open-totp-secret (factor-data factor) (factor-user-id factor)))
 
+(defun sealed-with-current-key-p (data key)
+  "True when DATA is sealed with KEY and names it."
+  (and (alexandria:starts-with-subseq *sealed-prefix* data)
+       (equal (sealed-secret-parts data) (factor-key-id key))))
+
 (defun seal-factor (factor)
-  "Encrypt FACTOR's secret when it was kept as it is and there is a key now."
-  (when (and (equal (factor-kind factor) "totp") (factor-key)
-             (not (alexandria:starts-with-subseq *sealed-prefix* (factor-data factor))))
-    (setf (factor-data factor) (seal-totp-secret (factor-data factor) (factor-user-id factor)))
-    t))
+  "Encrypt FACTOR's secret with the current FACTOR-KEY when it is kept as it
+is or with another key.  True when it changed."
+  (let ((key (factor-key)))
+    (when (and (equal (factor-kind factor) "totp") key
+               (not (sealed-with-current-key-p (factor-data factor) key)))
+      (setf (factor-data factor) (seal-totp-secret (totp-secret factor) (factor-user-id factor)))
+      t)))
 
 (defun encrypt-factor-secrets ()
-  "Encrypt, with the FACTOR-KEY, every authenticator-app secret still kept as
-it is, such as those added before the key was set; how many.  (Signing in
-also encrypts the one it uses.)"
+  "Encrypt with the current FACTOR-KEY every authenticator-app secret that
+isn't yet: those kept as they are, such as those added before there was a
+key, and those encrypted with one of the OLD-FACTOR-KEYS.  Returns how many
+changed; once it has run, the old keys can be dropped.  (Signing in also
+encrypts the secret it uses.)  Signals an error, changing nothing, when a
+secret opens with none of the keys."
   (unless (factor-key) (error "Set *FACTOR-KEY* or $LITTORAL_FACTOR_KEY first."))
-  (loop for factor in (db-select 'auth-factor :where "kind = ?" :params (list "totp"))
-        count (when (seal-factor factor) (db-save factor) t)))
+  (let ((factors (db-select 'auth-factor :where "kind = ?" :params (list "totp"))))
+    ;; Every secret must open before any is written.
+    (mapc #'totp-secret factors)
+    (with-transaction ()
+      (loop for factor in factors
+            count (when (seal-factor factor) (db-save factor) t)))))
+
+(defun check-factor-keys ()
+  "Warn when the factor keys are malformed, or when this database has
+encrypted authenticator-app secrets but no key is set.  CREATE-AUTH-TABLES
+calls it, so a deployment hears at start rather than at a sign-in."
+  (handler-case
+      (progn (old-factor-keys)
+             (unless (factor-key)
+               (when (db-query "SELECT 1 FROM auth_factors WHERE kind = ? AND data LIKE ? LIMIT 1" "totp" "aes1:%")
+                 (warn "Littoral: authenticator-app secrets are encrypted, but no factor key is set ~
+($LITTORAL_FACTOR_KEY); signing in with them will fail."))))
+    (error (e) (warn "Littoral: ~A" e))))
 
 (defun totp-uri (secret account issuer)
   "The otpauth:// address an authenticator app reads, from a QR code or a link."

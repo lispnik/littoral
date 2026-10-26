@@ -147,6 +147,7 @@ under its own name.  Give the package a local nickname, as in
    ;; Health, metrics, request logs
    #:add-health-check #:remove-health-check #:serve-metrics #:metrics-text #:metrics-summary
    #:reset-metrics #:log-requests-to #:*request-log* #:*latency-buckets*
+   #:*request-id* #:*request-log-user-function* #:log-requests-from-environment
    #:add-metrics-source #:remove-metrics-source #:metric-label
    #:define-metric #:count-metric #:observe-metric #:timing-metric
    ;; Background jobs

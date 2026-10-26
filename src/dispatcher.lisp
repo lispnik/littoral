@@ -136,6 +136,19 @@ NIL for no limit.")
   "When true, take the client address from X-Forwarded-For.  Set it only
 behind a proxy that sets that header itself.")
 
+(defvar *request-id* nil
+  "The id of the request being answered: random, or the proxy's X-Request-Id
+when *TRUST-FORWARDED-FOR*.  It goes back in the response's X-Request-Id
+header, into the request log and onto error pages, so a report of a failure
+can be matched with its log line.  NIL outside a request.")
+
+(defvar *request-log-user-function* nil
+  "A function of no arguments, called in a session's request, giving the id
+of the user it is signed in to (logged as :USER), or NIL.  littoral/auth sets
+it.  Give an id, never a name or an address.")
+
+(defvar *request-log-user* nil "The :USER of the request being answered.")
+
 (defun client-address (&optional (request *request*))
   "The address the request came from, by X-Forwarded-For when trusted."
   (let ((forwarded (gethash "x-forwarded-for" (lack/request:request-headers request))))
@@ -399,7 +412,8 @@ session that has gone; the application's EXPIRED-NOTICE is shown first."
         (initial-request root *request*)
         (prepare-tasks root)
         (when (and expired (application-expired-notice app))
-          (show root (make-instance (application-expired-notice app)))))
+          (show root (make-instance (application-expired-notice app))))
+        (note-request-user))
       (redirect-response (page-url session (new-continuation session))
                          :headers (list :set-cookie
                                         (if (application-cookie-sessions-p app)
@@ -559,7 +573,11 @@ the handler falls back to the standard page."
                                    (if (development-p app)
                                       ;; While the stack is still there.
                                       (debugger-response condition)
-                                      (simple-page 500 "Internal Server Error")))))))
+                                      (simple-page 500 "Internal Server Error"
+                                                   (if *request-id*
+                                                       (format nil "<p>~A</p>"
+                                                               (h:html-escape (translate "Reference: ~A" *request-id*)))
+                                                       ""))))))))
           (funcall thunk)))))
 
 (defun authorized-p (app)
@@ -632,7 +650,8 @@ request couldn't use.  NIL for other requests."
                     (let ((*session* session))
                       (sb-thread:with-recursive-lock ((session-lock session))
                         (setf (session-last-access session) (now-seconds))
-                        (handle-session-request session))))))))))))))
+                        (prog1 (handle-session-request session)
+                          (note-request-user)))))))))))))))
 
 ;;; Dispatch
 
@@ -775,9 +794,17 @@ not set :SCRIPT-NAME (lack's mount middleware does not)."
     (lambda (env)
       (with-sane-printing ()
         (let* ((start (get-internal-real-time))
-               (response (with-content-length (handle-request env prefix))))
+               (*request-id* (new-request-id env))
+               (*request-log-user* nil)
+               (response (with-request-id (with-content-length (handle-request env prefix)))))
           (observe-request env response start)
           response)))))
+
+(defun with-request-id (response)
+  "RESPONSE with an X-Request-Id header, unless it streams."
+  (if (consp response)
+      (list* (first response) (list* :x-request-id *request-id* (second response)) (cddr response))
+      response))
 
 (defvar *handler* nil)
 
@@ -846,6 +873,7 @@ Returns the Clack handler."
     (load-configuration configuration-file))
   (start-reaper)
   (start-live-watcher)
+  (log-requests-from-environment)
   (unless (member address '("127.0.0.1" "localhost" "::1") :test #'equal)
     (let ((open (remove-if-not #'development-p (list-applications))))
       (when open

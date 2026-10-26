@@ -332,6 +332,16 @@ and that URL."
           (is (null user))
           (is (search "Too many" why)))))))
 
+(test request-logs-name-the-signed-in-user
+  (with-auth (b)
+    (let* ((users '())
+           (littoral:*request-log* (lambda (entry) (push (getf entry :user) users))))
+      (visit b "/m")
+      (is (null (first users)))
+      (sign-in-as b "bob" "another passphrase")
+      (visit b (browser-url b))
+      (is (equal (princ-to-string (littoral.auth:user-id (littoral.auth:find-user "bob"))) (first users))))))
+
 (test a-new-password-signs-out-elsewhere
   (with-auth (b)
     (sign-in-as b "bob" "another passphrase")

@@ -100,6 +100,37 @@
                       (list (gethash "method" entry) (gethash "path" entry) (gethash "status" entry)))))))
 ;; ⇒ (("GET" "/hello" 302) ("GET" "/hello" 200))
 
+;;;; Example: littoral:*request-id*
+;;; Every request has an id: in its log entry, in the response's X-Request-Id header, and on the error page, so someone reporting a failure can quote it.  Behind a trusted proxy (*TRUST-FORWARDED-FOR*) the proxy's own X-Request-Id is used.
+(defclass hello (component) ())
+(defmethod render ((self hello)) (h:p () "Hello"))
+(with-fresh-applications (("/hello" 'hello :mode :deployment))
+  (let* ((logged nil)
+         (*request-log* (lambda (entry) (setf logged (getf entry :request-id))))
+         (headers (second (funcall (make-lack-app) (make-env :get "/hello")))))
+    (list (length logged) (equal logged (getf headers :x-request-id)))))
+;; ⇒ (16 T)
+
+;;;; Example: littoral:*request-log-user-function*
+;;; Who each request was for: a function of no arguments, called in the session's request, giving an id for the log's user field.  littoral/auth sets it to the signed-in user's id; this one gives every session the same.
+(defclass hello (component) ())
+(defmethod render ((self hello)) (h:p () "Hello"))
+(with-fresh-applications (("/hello" 'hello :mode :deployment))
+  (let* ((users '())
+         (*request-log* (lambda (entry) (push (getf entry :user) users)))
+         (*request-log-user-function* (lambda () "42")))
+    (visit (make-instance 'browser) "/hello")
+    users))
+;; ⇒ ("42" "42")
+
+;;;; Example: littoral:log-requests-from-environment
+;;; START calls it, so a deployment can turn the log on without code: $LITTORAL_REQUEST_LOG is "json" (or "stdout"), "text", or a file to add JSON lines to.  Unset, empty or "off", there's no log.
+(let ((*request-log* nil))
+  (setf (uiop:getenv "LITTORAL_REQUEST_LOG") "off")
+  (prog1 (log-requests-from-environment)
+    (setf (uiop:getenv "LITTORAL_REQUEST_LOG") "")))
+;; ⇒ NIL
+
 ;;;; Example: littoral:*request-log*
 ;;; Any function of a plist can take the log: here one that keeps each request's kind and status.
 (defclass hello (component) ())
