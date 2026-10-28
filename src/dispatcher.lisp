@@ -274,7 +274,8 @@ add, then the session and page keys."
   (let* ((path (normalize-path (or (lack/request:request-path-info request) "/")))
          (base (application-path app))
          (rest (if (string= base "/") path (subseq path (min (length path) (length base))))))
-    (mapcar #'quri:url-decode
+    ;; A segment with a broken escape (%zz) is kept as it came.
+    (mapcar (lambda (segment) (or (ignore-errors (quri:url-decode segment)) segment))
             (remove "" (cl-ppcre:split "/" rest) :test #'string=))))
 
 ;;; Rendering a page
@@ -735,8 +736,11 @@ parsing, and whatever reads the body (an endpoint) answers it."
                    copy)
                  env)))
       (setf env (with-body env))
+      ;; fast-http's parsers signal EOF, a condition but not an error, with
+      ;; ERROR when a body stops short: unhandled, it would enter the
+      ;; debugger, which ends a server running without one.
       (handler-case (lack/request:make-request env)
-        (error ()
+        ((or error fast-http.parser:eof) ()
           (let ((plain (with-body env)))
         (setf (getf plain :content-type) "application/octet-stream")
         (let ((headers (getf plain :headers)))
@@ -796,9 +800,36 @@ not set :SCRIPT-NAME (lack's mount middleware does not)."
         (let* ((start (get-internal-real-time))
                (*request-id* (new-request-id env))
                (*request-log-user* nil)
-               (response (with-request-id (with-content-length (handle-request env prefix)))))
+               (response (with-request-id
+                             (with-content-length
+                                 (call-guarding-request (lambda () (handle-request env prefix)))))))
           (observe-request env response start)
           response)))))
+
+(defun call-guarding-request (thunk)
+  "Call THUNK, answering 500 instead of entering the debugger when something
+goes unhandled, unless *DEBUG-ERRORS*.  That covers what handlers of ERROR
+miss: an exhausted stack, or a condition that isn't an error signalled with
+ERROR.  A server run with the debugger disabled would otherwise exit, and
+one with it enabled would leave the thread waiting in it."
+  (if *debug-errors*
+      (funcall thunk)
+      (let ((failure nil))
+        (catch 'request-failed
+          (return-from call-guarding-request
+            (flet ((fail (condition)
+                     (setf failure condition)
+                     (throw 'request-failed nil)))
+              (let ((sb-ext:*invoke-debugger-hook* (lambda (condition hook) (declare (ignore hook)) (fail condition))))
+                ;; Before handlers further out, which may not expect it.
+                (handler-bind ((storage-condition #'fail))
+                  (funcall thunk))))))
+        (ignore-errors
+         (format *error-output* "~&Littoral: request ~A failed: ~A~%" *request-id*
+                 (or (ignore-errors (princ-to-string failure)) (type-of failure)))
+         (force-output *error-output*))
+        (simple-page 500 "Internal Server Error"
+                     (format nil "<p>~A</p>" (h:html-escape (translate "Reference: ~A" *request-id*)))))))
 
 (defun with-request-id (response)
   "RESPONSE with an X-Request-Id header, unless it streams."

@@ -20,6 +20,7 @@
                #:quri
                #:cl-base64
                #:lack-request
+               #:fast-http
                #:com.inuoe.jzon
                #:flexi-streams
                #:clack
@@ -220,7 +221,8 @@
                              (:file "durable-jobs")
                              (:file "audit")
                              (:file "comments")
-                             (:file "migrations"))))
+                             (:file "migrations")
+                             (:file "fuzz"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
                                        (uiop:find-symbol* :littoral :littoral/tests))

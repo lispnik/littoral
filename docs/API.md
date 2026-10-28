@@ -20483,10 +20483,12 @@ A passkey registration or assertion that fails a check, with the reason.
 ;; ⇒ "Passkey refused: that passkey isn't known here"
 ```
 
-#### `cbor-decode` `octets &optional (start 0)` — function
+#### `cbor-decode` `octets &optional (start 0) (depth 0)` — function
 
 The CBOR item at `start` in `octets`, and where the next begins.  Maps become
-alists, byte strings octet vectors.
+alists, byte strings octet vectors.  Signals an error for what WebAuthn
+doesn't use (indefinite lengths), items nested more than `*cbor-depth-limit*`
+deep, and lengths or counts longer than what is left.
 
 *Example:* As much CBOR as WebAuthn uses: maps become alists, byte strings octet vectors.  The second value is where the next item starts.
 

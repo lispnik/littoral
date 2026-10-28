@@ -1,10 +1,20 @@
 SBCL ?= sbcl
 PORT ?= 8080
 
-.PHONY: new tour build docker test examples test-chrome test-postgres e2e a11y bench load docs clean-check run tracker lint clean
+.PHONY: new tour build docker test fuzz examples test-chrome test-postgres e2e a11y bench load docs clean-check run tracker lint clean
 
 test:
 	$(SBCL) --non-interactive --eval '(asdf:test-system :littoral)'
+
+# The fuzz suite alone, with RUNS times its cases on a random seed (make test
+# runs it once, on a fixed seed).  A failure names its seed: SEED=… repeats it.
+#   make fuzz [RUNS=20] [SEED=random]
+RUNS ?= 20
+SEED ?= random
+fuzz:
+	LITTORAL_FUZZ_SEED=$(SEED) LITTORAL_FUZZ_RUNS=$(RUNS) $(SBCL) --non-interactive \
+	  --eval '(asdf:load-system :littoral/tests)' \
+	  --eval '(uiop:quit (if (fiveam:run! (quote littoral/tests::fuzz)) 0 1))'
 
 # The examples in a real headless Chrome, driven from Lisp (set CHROME if it isn't found):
 test-chrome:

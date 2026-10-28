@@ -69,6 +69,7 @@ From a REPL: `(asdf:load-system :littoral/generator)`, then `(littoral.generator
 Other targets:
 
 ```sh
+make fuzz          # random and mutated input, many cases on a random seed (SEED=… repeats one)
 make test-chrome   # the examples in headless Chrome, driven from Lisp
 make e2e           # littoral.js in headless Chrome (needs Node 22+)
 make a11y          # WCAG checks (axe-core) over every example page

@@ -11,10 +11,18 @@
 - **The request log from the environment.** `start` reads `$LITTORAL_REQUEST_LOG` (`json`, `text` or a file) through `log-requests-from-environment`, so a deployment can log requests without code.
 - **Changing the factor key.** Old keys go in `$LITTORAL_OLD_FACTOR_KEYS` (or `littoral.auth:*old-factor-keys*`); secrets sealed with them still open, and are sealed again with the current key when next used or by `encrypt-factor-secrets`, which now checks every secret opens before changing any. Each sealed secret names its key by a short hash (`aes1:KEYID:…`); those sealed before then still open. `create-auth-tables` warns when keys are malformed, or when secrets are encrypted but no key is set.
 
+- **Fuzz tests.** A `fuzz` suite feeds random and mutated input to the passkey parsers, the decoders, sealed secrets, escaping, the SQL splitter, whole requests and JSON endpoints. `make test` runs it on a fixed seed; `make fuzz` runs many more cases on a random one.
+
 ### Changed
 - **Changing a password signs out everywhere else.** `set-password`, which password reset uses, now ends the user's other sign-ins and voids their API tokens, so someone holding a stolen "keep me signed in" cookie or a token is shut out; the session making the change stays signed in. `:sign-out-others nil` keeps the old behaviour.
 - **A passkey used alone must verify the user.** Signing in with only a passkey now asks for, and requires, user verification (a fingerprint, face or PIN), since it stands in for the password; a touch is no longer enough. As the second step after a password, the user need only be present, as before.
 - **Signing in with a passkey finds it by index.** Passkeys keep their credential id in a column of their own, `auth_factors.credential_id`, with a unique index; before, each passkey sign-in read every passkey. A migration adds the column and fills it in for existing passkeys.
+
+### Fixed
+These were found by the new fuzz tests.
+- **A broken multipart body could stop the server.** fast-http signals a condition that isn't an error when a multipart body stops short, so the handler that turns broken bodies into empty ones missed it. It reached the debugger, which ends a server running without one; one request from anyone did it. Such bodies are now no body, and every request runs under a guard that answers 500 for anything that would reach the debugger, such as an exhausted stack.
+- **Passkey parsing.** Deeply nested CBOR exhausted the stack (now at most 16 levels, and no length past the data's end). A COSE key whose coordinates weren't 32-byte strings could make the encoder ask for a terabyte and stop the process; such keys are refused. Signatures must be strict DER: one signature no longer verifies in several encodings. Base 64 with other characters in it is refused, where cl-base64 skipped them with a warning.
+- **Requests.** A plain request with `_lt_ws` (no WebSocket upgrade) got 500, now 400; WebSocket refusals carry the security headers, HSTS included. A JSON endpoint given a body that isn't UTF-8 answers 400, not 500, and a path segment with a broken escape matches no endpoint instead of failing.
 
 ## 0.5.1 (2026-10-21)
 

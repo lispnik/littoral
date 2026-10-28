@@ -119,7 +119,10 @@ options, unevaluated: :TAGS (\"notes\"), :RESPONSES ((201 \"Created\") (422
                    (= (length pattern) (length segments)))
           (let ((arguments '()))
             (when (every (lambda (want have)
-                           (cond ((char= (char want 0) #\:) (push (quri:url-decode have) arguments) t)
+                           (cond ((char= (char want 0) #\:)
+                                  ;; A broken escape (%zz) matches nothing.
+                                  (let ((decoded (ignore-errors (quri:url-decode have))))
+                                    (and decoded (push decoded arguments) t)))
                                  (t (string= want have))))
                          pattern segments)
               (return (values function (nreverse arguments))))))))))
@@ -158,7 +161,9 @@ Signals ENDPOINT-ERROR 400 when it isn't JSON."
          (octets (and raw (plusp length) (<= length *max-request-size*)
                       (let ((buffer (make-array length :element-type '(unsigned-byte 8))))
                         (subseq buffer 0 (read-sequence buffer raw)))))
-         (text (and octets (plusp (length octets)) (sb-ext:octets-to-string octets :external-format :utf-8))))
+         (text (and octets (plusp (length octets))
+                    (handler-case (sb-ext:octets-to-string octets :external-format :utf-8)
+                      (error () (endpoint-error 400 "The body isn't JSON."))))))
     (and text
          (handler-case (com.inuoe.jzon:parse text :max-depth 32)
            (error () (endpoint-error 400 "The body isn't JSON."))))))

@@ -303,9 +303,16 @@ only their hashes are kept, so show them once."
 
 ;;; CBOR, as much as WebAuthn needs
 
-(defun cbor-decode (octets &optional (start 0))
+(defparameter *cbor-depth-limit* 16
+  "How deeply CBOR-DECODE lets items nest; WebAuthn's go four deep.")
+
+(defun cbor-decode (octets &optional (start 0) (depth 0))
   "The CBOR item at START in OCTETS, and where the next begins.  Maps become
-alists, byte strings octet vectors."
+alists, byte strings octet vectors.  Signals an error for what WebAuthn
+doesn't use (indefinite lengths), items nested more than *CBOR-DEPTH-LIMIT*
+deep, and lengths or counts longer than what is left."
+  (when (> depth *cbor-depth-limit*) (error "CBOR: nested too deeply"))
+  (when (>= start (length octets)) (error "CBOR: the data stops short"))
   (let* ((initial (aref octets start))
          (major (ash initial -5))
          (info (logand initial 31))
@@ -317,8 +324,11 @@ alists, byte strings octet vectors."
                       (dotimes (i size) (setf value (logior (ash value 8) (aref octets (+ position i)))))
                       (incf position size)
                       value))
-                   (t (error "CBOR: indefinite lengths aren't supported")))))
+                   (t (error "CBOR: indefinite lengths aren't supported"))))
+           (left () (- (length octets) position)))
       (let ((n (argument)))
+        ;; Every byte and text string's byte, array item and map pair takes a byte at least.
+        (when (and (<= 2 major 5) (> n (left))) (error "CBOR: a length runs past the end"))
         (ecase major
           (0 (values n position))
           (1 (values (- -1 n) position))
@@ -326,25 +336,31 @@ alists, byte strings octet vectors."
           (3 (values (sb-ext:octets-to-string octets :start position :end (+ position n) :external-format :utf-8)
                      (+ position n)))
           (4 (let ((items '()))
-               (dotimes (i n) (multiple-value-bind (item next) (cbor-decode octets position)
+               (dotimes (i n) (multiple-value-bind (item next) (cbor-decode octets position (1+ depth))
                                 (push item items) (setf position next)))
                (values (nreverse items) position)))
           (5 (let ((pairs '()))
                (dotimes (i n)
-                 (multiple-value-bind (key next) (cbor-decode octets position)
-                   (multiple-value-bind (value after) (cbor-decode octets next)
+                 (multiple-value-bind (key next) (cbor-decode octets position (1+ depth))
+                   (multiple-value-bind (value after) (cbor-decode octets next (1+ depth))
                      (push (cons key value) pairs) (setf position after))))
                (values (nreverse pairs) position)))
-          (6 (cbor-decode octets position))
+          (6 (cbor-decode octets position (1+ depth)))
           (7 (values (case n (20 :false) (21 t) (22 :null) (t :undefined)) position)))))))
 
 ;;; Base 64 URL, as WebAuthn writes binary
 
 (defun b64url-encode (octets)
+  (check-type octets (vector (unsigned-byte 8)))
   (string-right-trim "=" (substitute #\_ #\/ (substitute #\- #\+ (cl-base64:usb8-array-to-base64-string octets)))))
 
 (defun b64url-decode (string)
-  (let ((s (substitute #\/ #\_ (substitute #\+ #\- string))))
+  "The octets STRING encodes in base 64 URL (or plain base 64), padded or
+not.  Signals an error for any other character, which cl-base64 would skip."
+  (unless (and (stringp string) (cl-ppcre:scan "^[A-Za-z0-9_+/-]*={0,2}$" string)
+               (/= 1 (mod (length (string-right-trim "=" string)) 4)))
+    (error "Not base 64: ~S" string))
+  (let ((s (substitute #\/ #\_ (substitute #\+ #\- (string-right-trim "=" string)))))
     (cl-base64:base64-string-to-usb8-array
      (concatenate 'string s (make-string (mod (- 4 (mod (length s) 4)) 4) :initial-element #\=)))))
 
@@ -424,7 +440,11 @@ must verify the user (fingerprint, face or PIN), not just see them."
   "The (X . Y) of an ES256 COSE key."
   (unless (and (eql (cdr (assoc 3 alist)) -7) (eql (cdr (assoc 1 alist)) 2) (eql (cdr (assoc -1 alist)) 1))
     (refuse "only ES256 (P-256) keys are accepted"))
-  (cons (cdr (assoc -2 alist)) (cdr (assoc -3 alist))))
+  (let ((x (cdr (assoc -2 alist))) (y (cdr (assoc -3 alist))))
+    (unless (and (typep x '(vector (unsigned-byte 8))) (= 32 (length x))
+                 (typep y '(vector (unsigned-byte 8))) (= 32 (length y)))
+      (refuse "the key is malformed"))
+    (cons x y)))
 
 (defun verify-registration (challenge client-data-b64 attestation-b64)
   "Check a navigator.credentials.create response, its client data and
@@ -443,17 +463,30 @@ Y COUNT).  Signals PASSKEY-ERROR when a check fails."
           (values (b64url-encode id) (car key) (cdr key) count))))))
 
 (defun der-to-raw (der)
-  "An ECDSA signature in DER as R and S, 32 bytes each."
-  (flet ((integer-at (position)
-           (unless (= (aref der position) 2) (refuse "the signature is malformed"))
-           (let* ((length (aref der (1+ position)))
-                  (bytes (subseq der (+ position 2) (+ position 2 length)))
-                  (bytes (subseq bytes (max 0 (- (length bytes) 32)))))
-             (values (concatenate '(vector (unsigned-byte 8)) (make-array (- 32 (length bytes)) :initial-element 0) bytes)
-                     (+ position 2 length)))))
-    (unless (= (aref der 0) #x30) (refuse "the signature is malformed"))
-    (multiple-value-bind (r next) (integer-at 2)
-      (concatenate '(simple-array (unsigned-byte 8) (*)) r (integer-at next)))))
+  "An ECDSA signature in DER as R and S, 32 bytes each.  Only DER's one
+encoding is taken: lengths that match, integers positive and as short as
+they can be, nothing after."
+  (flet ((malformed () (refuse "the signature is malformed")))
+    (flet ((integer-at (position)
+             (unless (and (< (1+ position) (length der)) (= (aref der position) 2)) (malformed))
+             (let ((length (aref der (1+ position)))
+                   (start (+ position 2)))
+               (unless (and (<= 1 length 33) (<= (+ start length) (length der))) (malformed))
+               (let ((first (aref der start)))
+                 ;; Not negative, and no zero byte but one that keeps it so.
+                 (when (or (>= first #x80)
+                           (and (zerop first) (or (= length 1) (< (aref der (1+ start)) #x80))))
+                   (malformed)))
+               (let ((bytes (subseq der start (+ start length))))
+                 (when (zerop (aref bytes 0)) (setf bytes (subseq bytes 1)))
+                 (unless (<= (length bytes) 32) (malformed))
+                 (values (concatenate '(vector (unsigned-byte 8)) (make-array (- 32 (length bytes)) :initial-element 0) bytes)
+                         (+ start length))))))
+      (unless (and (>= (length der) 8) (= (aref der 0) #x30) (= (aref der 1) (- (length der) 2))) (malformed))
+      (multiple-value-bind (r next) (integer-at 2)
+        (multiple-value-bind (s end) (integer-at next)
+          (unless (= end (length der)) (malformed))
+          (concatenate '(simple-array (unsigned-byte 8) (*)) r s))))))
 
 (defun es256-valid-p (x y message der-signature)
   "True when DER-SIGNATURE is the P-256 key (X, Y)'s on MESSAGE."

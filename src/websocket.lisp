@@ -153,9 +153,13 @@ other clients still need the session and page keys."
 (defun handle-websocket (session continuation)
   "Answer a page's WebSocket request: carry its AJAX and its pushes.  403
 from another site, 503 beyond the stream limits."
+  (unless (string-equal "websocket" (gethash "upgrade" (lack/request:request-headers *request*) ""))
+    (return-from handle-websocket
+      (list 400 (list* :content-type "text/plain" (littoral::security-headers))
+            (list "Not a WebSocket request."))))
   (unless (same-origin-p *request*)
     (return-from handle-websocket
-      (list 403 (list* :content-type "text/plain" littoral::*security-headers*)
+      (list 403 (list* :content-type "text/plain" (littoral::security-headers))
             (list "Cross-origin WebSocket refused."))))
   (let ((refusal (littoral::too-many-streams-response session)))
     (when refusal (return-from handle-websocket refusal)))
