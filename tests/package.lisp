@@ -10,6 +10,31 @@
 
 (def-suite littoral :description "All Littoral tests.")
 
+;; With $LITTORAL_TEST_WATCHDOG set to N, a run still going after N seconds
+;; prints every thread's backtrace and exits with code 3, so a hang shows
+;; where it waits instead of running into CI's time limit.
+(let ((seconds (ignore-errors (parse-integer (or (uiop:getenv "LITTORAL_TEST_WATCHDOG") "")))))
+  (when (and seconds (plusp seconds))
+    (sb-thread:make-thread
+     (lambda ()
+       (sleep seconds)
+       (format *error-output* "~&Littoral test watchdog: still running after ~D s; every thread's backtrace:~%"
+               seconds)
+       (dolist (thread (sb-thread:list-all-threads))
+         (unless (eq thread sb-thread:*current-thread*)
+           (format *error-output* "~&--- ~A~%" (sb-thread:thread-name thread))
+           (finish-output *error-output*)
+           (ignore-errors
+            (sb-thread:interrupt-thread
+             thread (lambda ()
+                      (let ((*print-length* 5) (*print-level* 3))
+                        (sb-debug:print-backtrace :count 40 :stream *error-output*))
+                      (finish-output *error-output*))))
+           (sleep 0.5)))
+       (sleep 2)
+       (sb-ext:exit :code 3 :abort t))
+     :name "littoral test watchdog")))
+
 ;; The suite starts hundreds of sessions from 127.0.0.1 a minute; the rate
 ;; limit has a test of its own.
 (setf littoral:*new-sessions-per-minute* nil)

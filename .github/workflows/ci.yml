@@ -94,6 +94,9 @@ jobs:
           fi
 
       - name: Unit tests
+        env:
+          # A hang prints every thread's backtrace before the job's time limit.
+          LITTORAL_TEST_WATCHDOG: "1200"
         run: |
           sbcl --non-interactive \
             --eval '(asdf:initialize-source-registry (list :source-registry (list :directory (uiop:getcwd)) :inherit-configuration))' \
