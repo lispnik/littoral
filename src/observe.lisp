@@ -314,11 +314,13 @@ signals or returns NIL.  Replaces any check called NAME."
       (let* ((results (loop for (name . check) in *health-checks*
                             collect (cons name (handler-case (if (funcall check) "ok" "failing")
                                                  (error (e) (format nil "failing: ~A" e))))))
-             (ok (every (lambda (r) (string= (cdr r) "ok")) results)))
-        (list (if ok 200 503)
+             (ok (every (lambda (r) (string= (cdr r) "ok")) results))
+             (draining (draining-p)))
+        ;; A draining process answers 503, so load balancers send new visitors elsewhere.
+        (list (if (and ok (not draining)) 200 503)
               (list :content-type "application/json" :cache-control "no-store")
               (list (format nil "{\"status\":~A,\"uptime\":~D,\"checks\":{~{~A~^,~}}}"
-                            (json-string (if ok "ok" "failing")) (- (get-universal-time) *started*)
+                            (json-string (cond (draining "draining") (ok "ok") (t "failing"))) (- (get-universal-time) *started*)
                             (loop for (name . result) in results
                                   collect (format nil "~A:~A" (json-string name) (json-string result)))))))))
 
@@ -348,6 +350,14 @@ NAME is 0.  Replaces any source called NAME."
 (defun remove-metrics-source (name)
   "Forget the metrics source NAME."
   (setf *metrics-sources* (remove name *metrics-sources* :key #'car :test #'string=)))
+
+(defun write-draining-metrics (out)
+  "Write whether this process is draining (see DRAIN) to OUT."
+  (format out "# HELP littoral_draining 1 while this process drains its sessions before ~
+stopping.~%# TYPE littoral_draining gauge~%littoral_draining ~D~%"
+          (if (draining-p) 1 0)))
+
+(add-metrics-source "draining" 'write-draining-metrics)
 
 (defun write-metrics-sources (out)
   "Write each source's metrics to OUT, and whether it could."

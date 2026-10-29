@@ -588,6 +588,9 @@ WHERE status = 'queued' AND run_at <= ? GROUP BY queue" now)))
 
 (littoral:add-metrics-source "durable-jobs" 'write-job-metrics)
 
+;; A draining process leaves the queue to the process replacing it.
+(littoral:add-drain-hook "durable-jobs" 'stop-job-runner)
+
 (defun purge-durable-jobs (&key (older-than (* 7 24 3600)) (statuses '("done" "cancelled")))
   "Delete jobs with one of STATUSES that finished more than OLDER-THAN
 seconds ago; how many."

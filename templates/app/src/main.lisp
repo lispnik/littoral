@@ -102,9 +102,11 @@ expired sign-ins and tokens, and audit events more than a year old."
   ;; Keep the audit log longer, or drop this line, if you must keep it.
   (littoral.audit:purge-audit-log :older-than (* 365 24 3600)))
 
-(defun serve (&key (port {{port}}) (address "127.0.0.1") (mode :development) (database (database-spec)))
+(defun serve (&key (port {{port}}) (address "127.0.0.1") (mode :development) (database (database-spec))
+                   instance-id)
   "Register the application, start sending its mail and running its jobs, and
-start the web server.  Mail comes from $MAIL_FROM."
+start the web server.  Mail comes from $MAIL_FROM.  INSTANCE-ID prefixes
+session keys, so a proxy can route each to its process."
   (let ((from (uiop:getenv "MAIL_FROM")))
     (when (and from (plusp (length from)))
       (setf littoral.mail:*mail-from* from)))
@@ -112,7 +114,7 @@ start the web server.  Mail comes from $MAIL_FROM."
   ;; The runner first: mail delivery then uses it rather than starting its own.
   (littoral.jobs:start-job-runner :database database)
   (littoral.mail:start-mail-delivery :database database :mailer (mailer))
-  (start :port port :address address))
+  (start :port port :address address :instance-id instance-id))
 
 (defun env-flag-p (name)
   "True when the environment variable NAME is set to something other than
@@ -123,7 +125,9 @@ empty, 0, false or no."
 (defun toplevel ()
   "The entry point of the executable `make build` writes: serves in deployment
 mode on $PORT (default {{port}}) and $ADDRESS, with $PUBLIC_URL as the address
-mail links use, and $TRUST_PROXY set when behind a reverse proxy.  With the
+mail links use, and $TRUST_PROXY set when behind a reverse proxy.  With
+$INSTANCE_ID, session keys start with it, and SIGUSR1 drains the process
+(deploy/handover.sh).  With the
 argument migrate, brings the database up to date and stops; with
 migrations, lists the migrations; with dkim-record, prints the DNS record
 for $DKIM_KEY_FILE; with create-user NAME EMAIL PASSWORD [admin], adds that
@@ -152,7 +156,9 @@ user instead."
   (let ((public-url (uiop:getenv "PUBLIC_URL")))
     (setf littoral.auth:*public-url* (and public-url (plusp (length public-url)) public-url)
           *trust-forwarded-for* (env-flag-p "TRUST_PROXY")))
+  (drain-on-signal)
   (serve :port (parse-integer (or (uiop:getenv "PORT") "{{port}}"))
          :address (or (uiop:getenv "ADDRESS") "127.0.0.1")
-         :mode :deployment)
+         :mode :deployment
+         :instance-id (let ((id (uiop:getenv "INSTANCE_ID"))) (and id (plusp (length id)) id)))
   (loop (sleep 3600)))

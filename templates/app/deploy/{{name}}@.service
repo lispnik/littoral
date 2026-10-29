@@ -1,0 +1,39 @@
+# /etc/systemd/system/{{name}}@.service — one instance of a Littoral
+# application, for deploys that keep sessions (handover.sh).  %i is the
+# instance id, a or b; /etc/{{name}}/%i.env gives its port:
+#   /etc/{{name}}/a.env:  PORT=8081        /etc/{{name}}/b.env:  PORT=8082
+# The executable starts with :instance-id from $INSTANCE_ID and calls
+# DRAIN-ON-SIGNAL, so SIGUSR1 drains it.  A drained instance exits with
+# code 0, so systemd doesn't restart it.
+[Unit]
+Description={{name}} instance %i (Littoral)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{name}}
+Group={{name}}
+WorkingDirectory=/opt/{{name}}
+ExecStart=/opt/{{name}}/{{name}}
+Environment=INSTANCE_ID=%i
+Environment=ADDRESS=127.0.0.1
+Environment=PUBLIC_URL=https://{{name}}.example.org
+Environment=TRUST_PROXY=1
+Environment=DATA_DIR=/opt/{{name}}/data
+EnvironmentFile=/etc/{{name}}/%i.env
+EnvironmentFile=-/etc/{{name}}.env
+Restart=on-failure
+RestartSec=2
+# SBCL ignores SIGTERM while Hunchentoot threads run; give it a moment, then kill.
+TimeoutStopSec=5
+KillSignal=SIGTERM
+SendSIGKILL=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/{{name}}/data
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

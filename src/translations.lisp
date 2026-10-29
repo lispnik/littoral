@@ -159,6 +159,7 @@
   ("That password has appeared in a data breach; please choose another." "Ce mot de passe figure dans une fuite de données ; choisissez-en un autre.")
   ("The passwords differ." "Les mots de passe diffèrent.")
   ("Reference: ~A" "Référence : ~A")
+  ("This server is being replaced. Please try again." "Ce serveur est en cours de remplacement. Veuillez réessayer.")
   ("Save and sign in" "Enregistrer et se connecter")
   ("That link has expired or been used. Ask for a new one." "Ce lien a expiré ou a déjà servi. Demandez-en un nouveau.")
   ("Signing in with that provider didn't work. Please try again."
@@ -335,6 +336,7 @@ Le lien ne sert qu'une fois, pendant une heure.  Si ce n'était pas vous, ignore
   ("That password has appeared in a data breach; please choose another." "Dieses Passwort ist bei einem Datenleck bekannt geworden; bitte wählen Sie ein anderes.")
   ("The passwords differ." "Die Passwörter stimmen nicht überein.")
   ("Reference: ~A" "Referenz: ~A")
+  ("This server is being replaced. Please try again." "Dieser Server wird gerade ersetzt. Bitte versuchen Sie es erneut.")
   ("Save and sign in" "Speichern und anmelden")
   ("That link has expired or been used. Ask for a new one." "Dieser Link ist abgelaufen oder wurde schon benutzt. Fordern Sie einen neuen an.")
   ("Signing in with that provider didn't work. Please try again."
@@ -510,6 +512,7 @@ Der Link funktioniert einmal, eine Stunde lang.  Falls Sie das nicht waren, igno
   ("That password has appeared in a data breach; please choose another." "Esa contraseña ha aparecido en una filtración de datos; elija otra.")
   ("The passwords differ." "Las contraseñas no coinciden.")
   ("Reference: ~A" "Referencia: ~A")
+  ("This server is being replaced. Please try again." "Este servidor se está sustituyendo. Inténtelo de nuevo.")
   ("Save and sign in" "Guardar e iniciar sesión")
   ("That link has expired or been used. Ask for a new one." "Ese enlace ha caducado o ya se ha usado. Pida uno nuevo.")
   ("Signing in with that provider didn't work. Please try again."

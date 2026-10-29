@@ -10509,6 +10509,146 @@ Prepended to every URL littoral writes: the mount prefix given to
 ;; ⇒ "/apps/tally"
 ```
 
+#### `drain` `&key (seconds (longest-session-timeout)) (exit t)` — function
+
+Start draining: keep serving this process's sessions, but start no new
+ones, and answer /healthz with 503 so a load balancer sends new visitors
+elsewhere.  The drain hooks run now.  Once no session is left, or after
+`seconds` (by default the longest session timeout), the server stops, and
+with `exit` the process exits with code 0.  Returns at once.
+
+*Example:* `drain` hands a process's place to a new one: the sessions it has go on working, but it starts none (a new visitor gets 503, which the proxy retries on the other process), and /healthz answers 503.  Once its sessions have gone, or after the deadline, the server stops, and the process exits unless :exit nil.  `cancel-drain` takes it back.
+
+```lisp
+(defclass tally (component)
+  ((count :initform 0 :accessor tally-count)))
+(defmethod states ((self tally)) (list self))
+(defmethod render ((self tally))
+  (h:p () (h:text (tally-count self)))
+  (h:anchor (:callback (lambda () (incf (tally-count self)))) "add"))
+(with-fresh-applications (("/tally" 'tally :mode :deployment))
+  (let ((old (make-instance 'browser)))
+    (visit old "/tally")
+    (unwind-protect
+         (let ((*error-output* (make-broadcast-stream)))
+           (drain :exit nil)
+           (click old "add")
+           (list (draining-p)
+                 (body-text old)
+                 (raw-request (make-instance 'browser) :get "/tally")
+                 (raw-request old :get "/healthz")))
+      (cancel-drain))))
+;; ⇒ (T "1 add" 503 503)
+```
+
+#### `cancel-drain` — function
+
+Stop draining: start sessions again, as before `drain`.  Hooks are not undone.
+
+*Example:* `drain` hands a process's place to a new one: the sessions it has go on working, but it starts none (a new visitor gets 503, which the proxy retries on the other process), and /healthz answers 503.  Once its sessions have gone, or after the deadline, the server stops, and the process exits unless :exit nil.  `cancel-drain` takes it back.
+
+```lisp
+(defclass tally (component)
+  ((count :initform 0 :accessor tally-count)))
+(defmethod states ((self tally)) (list self))
+(defmethod render ((self tally))
+  (h:p () (h:text (tally-count self)))
+  (h:anchor (:callback (lambda () (incf (tally-count self)))) "add"))
+(with-fresh-applications (("/tally" 'tally :mode :deployment))
+  (let ((old (make-instance 'browser)))
+    (visit old "/tally")
+    (unwind-protect
+         (let ((*error-output* (make-broadcast-stream)))
+           (drain :exit nil)
+           (click old "add")
+           (list (draining-p)
+                 (body-text old)
+                 (raw-request (make-instance 'browser) :get "/tally")
+                 (raw-request old :get "/healthz")))
+      (cancel-drain))))
+;; ⇒ (T "1 add" 503 503)
+```
+
+#### `draining-p` — function
+
+True while this process is draining: serving the sessions it has, and starting none.
+
+*Example:* `drain` hands a process's place to a new one: the sessions it has go on working, but it starts none (a new visitor gets 503, which the proxy retries on the other process), and /healthz answers 503.  Once its sessions have gone, or after the deadline, the server stops, and the process exits unless :exit nil.  `cancel-drain` takes it back.
+
+```lisp
+(defclass tally (component)
+  ((count :initform 0 :accessor tally-count)))
+(defmethod states ((self tally)) (list self))
+(defmethod render ((self tally))
+  (h:p () (h:text (tally-count self)))
+  (h:anchor (:callback (lambda () (incf (tally-count self)))) "add"))
+(with-fresh-applications (("/tally" 'tally :mode :deployment))
+  (let ((old (make-instance 'browser)))
+    (visit old "/tally")
+    (unwind-protect
+         (let ((*error-output* (make-broadcast-stream)))
+           (drain :exit nil)
+           (click old "add")
+           (list (draining-p)
+                 (body-text old)
+                 (raw-request (make-instance 'browser) :get "/tally")
+                 (raw-request old :get "/healthz")))
+      (cancel-drain))))
+;; ⇒ (T "1 add" 503 503)
+```
+
+#### `add-drain-hook` `name function` — function
+
+Have `drain` call `function`, of no arguments, when draining begins: to stop
+work the new process will take over, such as a job runner.  Replaces any
+hook called `name`.  Returns `name`.
+
+*Example:* A drain hook stops work the new process will take over when draining begins.  littoral/jobs adds one that stops the job runner, since the new process runs the queue.
+
+```lisp
+(let ((stopped nil))
+  (add-drain-hook "indexer" (lambda () (setf stopped t)))
+  (unwind-protect
+       (let ((*error-output* (make-broadcast-stream)))
+         (with-fresh-applications ()
+           (drain :exit nil))
+         stopped)
+    (cancel-drain)
+    (remove-drain-hook "indexer")))
+;; ⇒ T
+```
+
+#### `remove-drain-hook` `name` — function
+
+Forget the drain hook `name`.
+
+*Example:* A drain hook stops work the new process will take over when draining begins.  littoral/jobs adds one that stops the job runner, since the new process runs the queue.
+
+```lisp
+(let ((stopped nil))
+  (add-drain-hook "indexer" (lambda () (setf stopped t)))
+  (unwind-protect
+       (let ((*error-output* (make-broadcast-stream)))
+         (with-fresh-applications ()
+           (drain :exit nil))
+         stopped)
+    (cancel-drain)
+    (remove-drain-hook "indexer")))
+;; ⇒ T
+```
+
+#### `drain-on-signal` `&optional (signal sigusr1)` — function
+
+Drain (see `drain`) when the process receives `signal`, `sigusr1` by default,
+as `systemctl kill -s `usr1`` sends.  The handler only starts a thread.
+
+*Example:* An executable calls `drain-on-signal` at startup, so a deploy can say `systemctl kill -s `usr1` bookshop@a` to drain the old process.  It returns the signal it handles.
+
+```lisp
+(= (drain-on-signal) sb-unix:sigusr1)
+;; ⇒ T
+```
+
 #### `configure-admin` `&key user password (path "/config")` — function
 
 Serve the configuration application at `path`.  With `user` and `password` it

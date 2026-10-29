@@ -132,3 +132,43 @@
             (not (null (find-application "/hello"))))
   (stop))
 ;; ⇒ T
+
+;;;; Example: littoral:drain littoral:draining-p littoral:cancel-drain
+;;; DRAIN hands a process's place to a new one: the sessions it has go on working, but it starts none (a new visitor gets 503, which the proxy retries on the other process), and /healthz answers 503.  Once its sessions have gone, or after the deadline, the server stops, and the process exits unless :exit nil.  CANCEL-DRAIN takes it back.
+(defclass tally (component)
+  ((count :initform 0 :accessor tally-count)))
+(defmethod states ((self tally)) (list self))
+(defmethod render ((self tally))
+  (h:p () (h:text (tally-count self)))
+  (h:anchor (:callback (lambda () (incf (tally-count self)))) "add"))
+(with-fresh-applications (("/tally" 'tally :mode :deployment))
+  (let ((old (make-instance 'browser)))
+    (visit old "/tally")
+    (unwind-protect
+         (let ((*error-output* (make-broadcast-stream)))
+           (drain :exit nil)
+           (click old "add")
+           (list (draining-p)
+                 (body-text old)
+                 (raw-request (make-instance 'browser) :get "/tally")
+                 (raw-request old :get "/healthz")))
+      (cancel-drain))))
+;; ⇒ (T "1 add" 503 503)
+
+;;;; Example: littoral:add-drain-hook littoral:remove-drain-hook
+;;; A drain hook stops work the new process will take over when draining begins.  littoral/jobs adds one that stops the job runner, since the new process runs the queue.
+(let ((stopped nil))
+  (add-drain-hook "indexer" (lambda () (setf stopped t)))
+  (unwind-protect
+       (let ((*error-output* (make-broadcast-stream)))
+         (with-fresh-applications ()
+           (drain :exit nil))
+         stopped)
+    (cancel-drain)
+    (remove-drain-hook "indexer")))
+;; ⇒ T
+
+;;;; Example: littoral:drain-on-signal
+;;; An executable calls DRAIN-ON-SIGNAL at startup, so a deploy can say `systemctl kill -s USR1 bookshop@a` to drain the old process.  It returns the signal it handles.
+(= (drain-on-signal) sb-unix:sigusr1)
+;; ⇒ T

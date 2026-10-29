@@ -1,0 +1,44 @@
+# Caddy in front of two instances of a Littoral application, a on 8081 and
+# b on 8082, for deploys that keep sessions (handover.sh).  Nothing here
+# changes from one deploy to the next:
+# - a request whose session key starts a. goes to a, or to b once a has
+#   gone (b then starts it a new session, and an AUTH-ROOT signs it back in);
+# - any other request goes to an instance whose /healthz answers 200, so not
+#   to one that is draining.
+# With cookie sessions, match {cookie._s_shop} (the cookie is named _s and
+# the application's path with / as _) instead of {query._s}.
+bookshop.example.org {
+    request_body {
+        max_size 10MB
+    }
+
+    @instance_a expression `{query._s}.startsWith("a.")`
+    handle @instance_a {
+        reverse_proxy 127.0.0.1:8081 127.0.0.1:8082 {
+            lb_policy first
+            lb_try_duration 5s
+            fail_duration 10s
+            flush_interval -1
+        }
+    }
+
+    @instance_b expression `{query._s}.startsWith("b.")`
+    handle @instance_b {
+        reverse_proxy 127.0.0.1:8082 127.0.0.1:8081 {
+            lb_policy first
+            lb_try_duration 5s
+            fail_duration 10s
+            flush_interval -1
+        }
+    }
+
+    handle {
+        reverse_proxy 127.0.0.1:8081 127.0.0.1:8082 {
+            lb_policy round_robin
+            lb_try_duration 5s
+            health_uri /healthz
+            health_interval 2s
+            flush_interval -1
+        }
+    }
+}

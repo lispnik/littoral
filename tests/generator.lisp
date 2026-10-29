@@ -96,6 +96,8 @@ variable APP.LISP unbound, as if a file's first comment had been read as code."
          (let ((*standard-output* (make-broadcast-stream)))
            (littoral.generator:make-project "lt-generated-app" :directory dir :template "app")
            (is (probe-file (merge-pathnames "deploy/lt-generated-app.service" dir)))
+           (is (search "INSTANCE_ID=%i" (uiop:read-file-string (merge-pathnames "deploy/lt-generated-app@.service" dir))))
+           (is (probe-file (merge-pathnames "deploy/handover.sh" dir)))
            (is (search "PUBLIC_URL" (uiop:read-file-string (merge-pathnames "README.md" dir))))
            (load-generated-system (merge-pathnames "lt-generated-app.asd" dir) "lt-generated-app/tests")
            (let ((results (let ((fiveam:*test-dribble* (make-broadcast-stream)))

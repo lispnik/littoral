@@ -115,7 +115,33 @@ Sessions (component trees, back-button snapshots, flows in progress) live in the
 
 Sign-ins are kept in the database (`auth_sessions`), so a browser that lands on another process, or comes back after a restart, is still signed in. Only its page state starts afresh. All processes must share the database.
 
-## 7. Server push at scale
+## 7. Deploying without losing sessions
+
+A restart ends every session: whatever people had on their pages, such as a cart, a half-finished checkout or a step of a wizard, is gone (sign-ins aren't, since they're in the database). Sessions can't be saved, because they are live objects, closures and continuations. So a deploy that keeps them keeps the old process running until its sessions end, while a new one takes everybody else:
+
+1. The application runs as two instances, `a` on port 8081 and `b` on 8082, each with its instance id, so their session keys start `a.` and `b.`. One serves; the other is idle.
+2. The proxy sends a request whose key starts `a.` to `a`, one starting `b.` to `b`, and any other to whichever instance takes new sessions.
+3. A deploy starts the new version as the idle instance, waits for its `/healthz`, then sends the old one SIGUSR1, which drains it (`littoral:drain`):
+   - its sessions go on working, AJAX, server push and WebSockets included;
+   - it starts no sessions: a new visitor gets 503, which the proxy retries on the new instance, and a page whose session it no longer has is sent to the same URL without the key, which the proxy gives to the new instance;
+   - `/healthz` answers 503 with `"status":"draining"`, and `littoral_draining` is 1;
+   - drain hooks (`add-drain-hook`) run; littoral/jobs' stops the job runner, so the new version runs the queue, mail delivery included.
+4. Once its last session has ended, or after the longest session timeout (`(drain :seconds …)`), the old instance stops and exits with code 0. Pages still open then reload and start afresh on the new instance; an `auth-root` application signs its user back in.
+
+The files, in [docs/deploy/](deploy/):
+- [app@.service](deploy/app@.service): a systemd unit for each instance (`bookshop@a`, `bookshop@b`), with its port in `/etc/bookshop/a.env` and `b.env`. It sets `INSTANCE_ID`, which the executable passes to `start :instance-id`, and the executable calls `(drain-on-signal)` at startup.
+- [handover.sh](deploy/handover.sh) `APP EXECUTABLE`: puts the new executable in place, starts it as the idle instance, and once it's healthy, drains the old one. If the new one doesn't become healthy within a minute, it is stopped and the old one goes on serving. `(cancel-drain)` in the old instance takes a drain back.
+- [nginx-handover.conf](deploy/nginx-handover.conf) and [Caddyfile.handover](deploy/Caddyfile.handover): proxies that route by key, fall back to the other instance when one has exited, and send new visitors only to an instance that takes them. Neither changes from one deploy to the next. With Caddy, a new visitor may get the 503 in the two seconds before its health check notices the drain; nginx retries it.
+
+Projects made with `TEMPLATE=app` have the unit and the script in `deploy/`, and their executables read `INSTANCE_ID` and handle SIGUSR1.
+
+What to bear in mind:
+- **Both versions run at once, against the same database.** A migration may add tables and columns the old version ignores, but not drop or rename what it still reads. Remove those in the following deploy.
+- **State kept in memory is split while both run.** Each process has its own shared objects (the wiki and chat room in the examples), and presence only sees pages on its own process.
+- **A proxy is needed.** A single process with nothing in front can only restart.
+- **The deadline still ends sessions.** A session still in use when the old instance's time is up is lost, as at a restart. The default deadline is the longest session timeout (30 minutes unless set), which an idle session would have reached anyway.
+
+## 8. Server push at scale
 
 An open page with server push holds a connection, but not a thread. On Hunchentoot, one thread, the push hub, serves every open stream; on Linux, 10,000 open pages and their sessions added about 40 MB to the server's heap. On macOS, SBCL waits on sockets with `select(2)`, so a Hunchentoot server there holds about 1,000 connections at most. Woo serves push from its event loops and has no such limit:
 
@@ -126,7 +152,7 @@ An open page with server push holds a connection, but not a thread. On Hunchento
 
 The README's "Deployment and scale" section has measurements of both.
 
-## 8. Health checks, metrics and logs
+## 9. Health checks, metrics and logs
 
 - **Health.** Point the load balancer or uptime monitor at `/healthz`. It answers 200, or 503 when a check fails. Add checks with `(add-health-check "database" (lambda () (littoral.db:db-query "SELECT 1")))`. Checks run outside any application, so when an application gets its database from `using-database` rather than `connect-database`, bind `littoral.db:*database*` to its spec inside the check.
 - **Metrics.** `(serve-metrics)` serves Prometheus metrics at `/metrics` to the machine itself. Scrape from there, or expose the path only to your monitoring network. Two are worth alerting on:
@@ -141,7 +167,7 @@ The README's "Deployment and scale" section has measurements of both.
   - `littoral_smtp_pool_waiting > 0` for long: raise the mailer's `:pool-size`.
 - **Logs.** `(log-requests-to *standard-output*)` sends a JSON line per request to the journal. It never includes the query string, which carries session keys.
 
-## 9. Checklist
+## 10. Checklist
 
 - [ ] Applications registered with `:mode :deployment`
 - [ ] Littoral listening on 127.0.0.1, behind a proxy with TLS

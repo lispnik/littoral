@@ -179,6 +179,7 @@ under its own name.  Give the package a local nickname, as in
    #:register-application #:unregister-application #:find-application
    #:list-applications
    #:make-lack-app #:start #:stop #:*debug-errors* #:url-for #:*base-path*
+   #:drain #:cancel-drain #:draining-p #:add-drain-hook #:remove-drain-hook #:drain-on-signal
    #:configure-admin
    ;; Languages
    #:translate #:translate-plural #:define-translations #:add-translations #:load-translations

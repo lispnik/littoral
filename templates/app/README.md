@@ -20,7 +20,7 @@ Data lives in SQLite under `data/` (or `$DATA_DIR`). Set `DATABASE_URL=postgres:
 - `src/app.lisp`: the pages: who's signed in, and the notes with editors to add, change and remove them. `restricted` shows a sign-in prompt until someone signs in.
 - `src/main.lisp`: the database, `register-app`, `serve`, `create-user` and the executable's `toplevel`.
 - `tests/app.lisp`: signing in, editing notes, and checking they stay private.
-- `deploy/`: a systemd unit and a Caddyfile.
+- `deploy/`: a systemd unit and a Caddyfile, and for deploys that keep sessions, a unit per instance and `handover.sh`.
 
 Sign-ins are kept in the database, so they survive restarts; the sign-in form offers "Keep me signed in". "Forgot your password?" mails a reset link. Mail goes into an outbox table and the job runner sends it, trying again if the mail server is down: set `SMTP_URL` to send it, or it's printed to the log. Background jobs (`define-job` and `enqueue-job`, in `src/main.lisp`) are kept in the database too, so they survive restarts; a nightly one, `tidy-up`, deletes sent mail and finished jobs, expired sign-ins and tokens, and audit events more than a year old. Change or remove its `purge-audit-log` line if you must keep the audit log longer. An audit log records sign-ins, failures, password and role changes, and the admin's edits; the admin shows it under "Audit log".
 
@@ -33,6 +33,7 @@ Sign-ins are kept in the database, so they survive restarts; the sign-in form of
 | `PORT`, `ADDRESS` | where to listen (default {{port}}, 127.0.0.1) |
 | `PUBLIC_URL` | the site's address, for links in mail; required in deployment |
 | `TRUST_PROXY` | set behind a reverse proxy, so limits see real client addresses |
+| `INSTANCE_ID` | starts every session key, so a proxy can route each to its process; SIGUSR1 then drains it |
 | `DATABASE_URL` or `DATA_DIR` | PostgreSQL, or where the SQLite file goes |
 | `SMTP_URL` | the mail server: `smtp://user:password@host:587` (STARTTLS) or `smtps://…:465` (TLS); without it, mail is printed to the log |
 | `MAIL_FROM` | the From address, such as `Bookshop <hello@example.org>` |
@@ -49,5 +50,7 @@ docker exec {{name}} {{name}} migrations     # which migrations have been applie
 ```
 
 keeps the SQLite file in the volume `{{name}}-data` (or pass `DATABASE_URL`). The image checks `/healthz` itself.
+
+To deploy without losing anyone's page state, run two instances, `deploy/{{name}}@.service` as `{{name}}@a` (port 8081) and `{{name}}@b` (8082), behind a proxy that routes by session key, and deploy with `sh deploy/handover.sh {{name}} bin/{{name}}`: it starts the new version as the idle instance and drains the old one. The deployment guide's "Deploying without losing sessions" has the proxy configurations.
 
 [Littoral's deployment guide](https://lispnik.github.io/littoral/deployment.html) covers the rest.

@@ -222,7 +222,8 @@
                              (:file "audit")
                              (:file "comments")
                              (:file "migrations")
-                             (:file "fuzz"))))
+                             (:file "fuzz")
+                             (:file "handover"))))
   :perform (asdf:test-op (op c)
              (unless (uiop:symbol-call :fiveam :run!
                                        (uiop:find-symbol* :littoral :littoral/tests))

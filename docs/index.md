@@ -1139,6 +1139,8 @@ With cookie sessions, route on the cookie instead. Turning `proxy_buffering` off
 
 **Restarts.** Sessions don't survive a restart. A session is a graph of live objects, the closures its pages' callbacks hold, and cl-cont continuations for flows in progress. None of these can be serialised, which is also true of Seaside outside image-based persistence. Configuration does survive (see `:configuration-file`). Keep data that must last in your own store, not in components. Use `:expired-notice` to tell people when their session is gone.
 
+A deploy needn't restart: run two instances and drain the old one (`drain`), which goes on serving its sessions while the new version takes everyone else. [The deployment guide](deployment.md) has the unit files, a script and proxy configurations.
+
 What a restart costs is small. A page whose session is gone starts a new one when it's next loaded. Its AJAX requests, event stream, WebSocket and live-redefinition checks are told to reload the page rather than being given a new session they can't use. Sign-ins are kept in the database, so an `auth-root` application signs the user straight back in.
 
 ## License

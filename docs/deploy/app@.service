@@ -1,0 +1,39 @@
+# /etc/systemd/system/bookshop@.service — one instance of a Littoral
+# application, for deploys that keep sessions (handover.sh).  %i is the
+# instance id, a or b; /etc/bookshop/%i.env gives its port:
+#   /etc/bookshop/a.env:  PORT=8081        /etc/bookshop/b.env:  PORT=8082
+# The executable starts with :instance-id from $INSTANCE_ID and calls
+# DRAIN-ON-SIGNAL, so SIGUSR1 drains it.  A drained instance exits with
+# code 0, so systemd doesn't restart it.
+[Unit]
+Description=Bookshop instance %i (Littoral)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bookshop
+Group=bookshop
+WorkingDirectory=/opt/bookshop
+ExecStart=/opt/bookshop/bookshop
+Environment=INSTANCE_ID=%i
+Environment=ADDRESS=127.0.0.1
+Environment=PUBLIC_URL=https://bookshop.example.org
+Environment=TRUST_PROXY=1
+Environment=DATA_DIR=/opt/bookshop/data
+EnvironmentFile=/etc/bookshop/%i.env
+EnvironmentFile=-/etc/bookshop.env
+Restart=on-failure
+RestartSec=2
+# SBCL ignores SIGTERM while Hunchentoot threads run; give it a moment, then kill.
+TimeoutStopSec=5
+KillSignal=SIGTERM
+SendSIGKILL=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/bookshop/data
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

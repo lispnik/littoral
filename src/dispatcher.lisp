@@ -644,6 +644,8 @@ request couldn't use.  NIL for other requests."
                   ;; this browser its own instead (no session fixation).
                   (session (and found (browser-matches-p found) found)))
              (cond ((and (null session) (gone-session-response)))
+                   ((and (null session) (draining-p))
+                    (draining-response app key))
                    ((and (null session) (not (allow-new-session-p)))
                     (count-metric "littoral_sessions_refused_total" (list (application-path app)))
                     (list 429 (list* :content-type "text/plain" :retry-after "60" (security-headers))
@@ -947,3 +949,137 @@ watching for redefinitions, as START began).  Returns NIL."
   (when *handler*
     (clack:stop *handler*)
     (setf *handler* nil)))
+
+;;; Draining: handing sessions over to a new process
+;;;
+;;; A deploy starts the new version beside this one, under another instance
+;;; id, and tells this one to drain.  It keeps serving the sessions it has,
+;;; starts none, and stops once they are gone or the deadline passes.  The
+;;; proxy sends requests naming this instance's keys here, and the rest to
+;;; whichever instance takes them (docs/deployment.md).
+
+(defvar *draining* nil
+  "While draining, a plist (:STARTED time :DEADLINE time :EXIT boolean),
+times as universal times; otherwise NIL.")
+
+(defvar *drain-thread* nil "The thread that stops the server once drained.")
+
+(defvar *drain-hooks* '()
+  "(NAME . FUNCTION) pairs, called when draining begins.")
+
+(defun draining-p ()
+  "True while this process is draining: serving the sessions it has, and starting none."
+  (and *draining* t))
+
+(defun add-drain-hook (name function)
+  "Have DRAIN call FUNCTION, of no arguments, when draining begins: to stop
+work the new process will take over, such as a job runner.  Replaces any
+hook called NAME.  Returns NAME."
+  (setf *drain-hooks* (append (remove name *drain-hooks* :key #'car :test #'string=)
+                              (list (cons name function))))
+  name)
+
+(defun remove-drain-hook (name)
+  "Forget the drain hook NAME."
+  (setf *drain-hooks* (remove name *drain-hooks* :key #'car :test #'string=)))
+
+(defun longest-session-timeout ()
+  "The longest session timeout of the registered applications, in seconds."
+  (reduce #'max (mapcar #'application-session-timeout (list-applications)) :initial-value 1800))
+
+(defun live-session-count ()
+  "How many sessions the registered applications have, idle ones reaped first."
+  (reap-all-sessions)
+  (loop for app in (list-applications)
+        sum (sb-thread:with-mutex ((application-lock app))
+              (hash-table-count (application-sessions app)))))
+
+(defun drain (&key (seconds (longest-session-timeout)) (exit t))
+  "Start draining: keep serving this process's sessions, but start no new
+ones, and answer /healthz with 503 so a load balancer sends new visitors
+elsewhere.  The drain hooks run now.  Once no session is left, or after
+SECONDS (by default the longest session timeout), the server stops, and
+with EXIT the process exits with code 0.  Returns at once."
+  (unless *draining*
+    (let ((now (get-universal-time)))
+      (setf *draining* (list :started now :deadline (+ now seconds) :exit exit)))
+    (format *error-output* "~&Littoral: draining; ~D session~:P left, stopping within ~D s.~%"
+            (live-session-count) seconds)
+    (loop for (name . function) in *drain-hooks*
+          do (handler-case (funcall function)
+               (error (e) (format *error-output* "~&Littoral: drain hook ~A failed: ~A~%" name e))))
+    (let ((applications *applications*)
+          (errors *error-output*))
+      (setf *drain-thread*
+            (sb-thread:make-thread
+             (lambda ()
+               ;; Threads don't inherit bindings: watch the applications DRAIN saw.
+               (let ((*applications* applications)
+                     (*error-output* errors))
+                 (loop until (drain-step) do (sleep 2))))
+             :name "littoral drain"))))
+  *draining*)
+
+(defun drain-step ()
+  "When draining is over (no session left, or the deadline passed), stop
+the server, and exit if DRAIN was asked to.  True when it's over."
+  (let ((draining *draining*))
+    (cond ((null draining) t)
+          ((or (zerop (live-session-count))
+               (>= (get-universal-time) (getf draining :deadline)))
+           (format *error-output* "~&Littoral: drained; stopping.~%")
+           (finish-output *error-output*)
+           (stop)
+           (when (getf draining :exit)
+             (sb-ext:exit :code 0 :abort t))
+           t)
+          (t nil))))
+
+(defun cancel-drain ()
+  "Stop draining: start sessions again, as before DRAIN.  Hooks are not undone."
+  (let ((thread *drain-thread*))
+    (setf *drain-thread* nil
+          *draining* nil)
+    (when (and thread (not (eq thread sb-thread:*current-thread*)) (sb-thread:thread-alive-p thread))
+      (sb-thread:terminate-thread thread)
+      (sb-thread:join-thread thread :default nil :timeout 5)))
+  nil)
+
+(defun drain-on-signal (&optional (signal sb-unix:sigusr1))
+  "Drain (see DRAIN) when the process receives SIGNAL, SIGUSR1 by default,
+as `systemctl kill -s USR1` sends.  The handler only starts a thread."
+  (sb-sys:enable-interrupt signal
+                           (lambda (&rest arguments)
+                             (declare (ignore arguments))
+                             (sb-thread:make-thread #'drain :name "littoral drain signal")))
+  signal)
+
+(defun session-parameter-p (name)
+  "True for the parameters that name a session, a page or a request of littoral's own."
+  (or (member name '("_s" "_k") :test #'string=)
+      (and (>= (length name) 4) (string= "_lt_" name :end2 4))))
+
+(defun url-without-session ()
+  "The request's URL without the parameters naming its session and page."
+  (let* ((uri (or (lack/request:request-uri *request*) "/"))
+         (q (position #\? uri))
+         (kept (and q (remove-if (lambda (parameter) (session-parameter-p (first parameter)))
+                                 (ignore-errors (quri:url-decode-params (subseq uri (1+ q))))))))
+    (if kept
+        (format nil "~A?~A" (subseq uri 0 q) (quri:url-encode-params kept))
+        (subseq uri 0 q))))
+
+(defun draining-response (app key)
+  "The answer, while draining, to a request of APP that has no session here.
+One naming a KEY is sent to the same URL without it, which the proxy gives
+to another instance; one naming none gets 503, which proxies retry elsewhere."
+  (if key
+      (list 303 (append (list :location (url-without-session) :cache-control "no-store")
+                        (when (application-cookie-sessions-p app)
+                          (list :set-cookie (format nil "~A; Max-Age=0"
+                                                    (session-cookie-header (session-cookie-name app) "" app))))
+                        (security-headers))
+            (list ""))
+      (list 503 (list* :content-type "text/plain; charset=utf-8" :retry-after "1" :connection "close"
+                       (security-headers))
+            (list (translate "This server is being replaced. Please try again.")))))
