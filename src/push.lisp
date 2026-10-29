@@ -53,6 +53,11 @@ marking the stream closed is enough (it ends at its next wake or keepalive).")
               :documentation "The presences its page is in (see presence.lisp).")
    (activity :initform nil :accessor stream-activity :documentation "What its person is doing there, or NIL.")
    (viewer :initform nil :accessor stream-viewer :documentation "Its person's name, or NIL for a guest.")
+   (opened :initform (get-internal-real-time) :reader stream-opened)
+   (request-id :initform *request-id* :reader stream-request-id
+               :documentation "The id of the request that opened it, for the request log.")
+   (address :initform (and *request* (lack/request:request-remote-addr *request*)) :reader stream-address)
+   (updates :initform 0 :accessor stream-updates :documentation "Events written to it, keepalives aside.")
    (lock :initform (sb-thread:make-mutex :name "littoral event stream") :reader stream-lock)
    (waitqueue :initform (sb-thread:make-waitqueue) :reader stream-waitqueue))
   (:documentation "One open page's server-sent event connection and the work queued for it."))
@@ -81,12 +86,18 @@ is noticed, so this bounds how long a gone page keeps its connection.")
   (sb-thread:with-mutex (*event-streams-lock*) (push stream *event-streams*))
   (presence-stream-changed stream))
 
+(defvar *stream-closed-function* nil
+  "A function called with each event stream as it closes: the request log's (observe.lisp).")
+
 (defun unregister-event-stream (stream)
   (let ((found nil))
     (sb-thread:with-mutex (*event-streams-lock*)
       (setf found (member stream *event-streams*)
             *event-streams* (remove stream *event-streams*)))
-    (when found (presence-stream-changed stream))))
+    (when found
+      (presence-stream-changed stream)
+      (when *stream-closed-function*
+        (ignore-errors (funcall *stream-closed-function* stream))))))
 
 (defun take-pending-now (stream)
   "STREAM's queued work, without waiting."
@@ -106,14 +117,17 @@ is noticed, so this bounds how long a gone page keeps its connection.")
                     (sb-thread:with-recursive-lock ((session-lock *session*))
                       (take-toasts)))))
       (when toasts
-        (funcall writer (format nil "event: toast~%data: ~A~%~%" (toasts-json toasts)))))
+        (funcall writer (format nil "event: toast~%data: ~A~%~%" (toasts-json toasts)))
+        (incf (stream-updates stream))))
     (setf pending (remove :toasts pending)))
   (cond ((member :reload pending)
-         (funcall writer (format nil "event: reload~%data: ~%~%")))
+         (funcall writer (format nil "event: reload~%data: ~%~%"))
+         (incf (stream-updates stream)))
         (pending
          (let ((json (pushed-fragments stream pending)))
            (when json
-             (funcall writer (format nil "event: update~%data: ~A~%~%" json)))))
+             (funcall writer (format nil "event: update~%data: ~A~%~%" json))
+             (incf (stream-updates stream)))))
         (t nil)))
 
 (defun serve-stream (stream writer)

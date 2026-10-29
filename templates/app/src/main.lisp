@@ -125,7 +125,9 @@ empty, 0, false or no."
 (defun toplevel ()
   "The entry point of the executable `make build` writes: serves in deployment
 mode on $PORT (default {{port}}) and $ADDRESS, with $PUBLIC_URL as the address
-mail links use, and $TRUST_PROXY set when behind a reverse proxy.  With
+mail links use, and $TRUST_PROXY set when behind a reverse proxy.  New
+passwords are checked against Have I Been Pwned unless
+$CHECK_BREACHED_PASSWORDS is 0.  With
 $INSTANCE_ID, session keys start with it, and SIGUSR1 drains the process
 (deploy/handover.sh).  With the
 argument migrate, brings the database up to date and stops; with
@@ -155,7 +157,10 @@ user instead."
         (uiop:quit 0))))
   (let ((public-url (uiop:getenv "PUBLIC_URL")))
     (setf littoral.auth:*public-url* (and public-url (plusp (length public-url)) public-url)
-          *trust-forwarded-for* (env-flag-p "TRUST_PROXY")))
+          *trust-forwarded-for* (env-flag-p "TRUST_PROXY")
+          ;; Refuse new passwords seen in breaches.  Only five hex digits of
+          ;; each password's SHA-1 go to Have I Been Pwned.
+          littoral.auth:*check-breached-passwords* (not (equal (uiop:getenv "CHECK_BREACHED_PASSWORDS") "0"))))
   (drain-on-signal)
   (serve :port (parse-integer (or (uiop:getenv "PORT") "{{port}}"))
          :address (or (uiop:getenv "ADDRESS") "127.0.0.1")

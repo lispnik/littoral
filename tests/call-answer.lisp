@@ -80,6 +80,21 @@
       (press b "Yes")
       (is (has-text-p b "Nobody is logged in")))))
 
+(test validation-errors-backtrack
+  ;; Found by the request-sequence fuzzer: the error a validation shows
+  ;; belongs to its page, so going back to the form before shows none.
+  (with-fresh-applications (("/login" 'littoral-examples:login-demo :mode :deployment))
+    (let ((b (make-instance 'browser)))
+      (visit b "/login")
+      (click b "Log in")
+      (let ((asked (browser-url b)))
+        (fill-in b "username" "admin")
+        (fill-in b "password" "wrong")
+        (press b "Log in")
+        (is (has-text-p b "wrong password"))
+        (back-to b asked)
+        (is (not (has-text-p b "wrong password")))))))
+
 (test form-decoration
   (let* ((c (make-instance 'component))
          (registry (make-instance 'littoral::callback-registry))

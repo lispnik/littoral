@@ -221,6 +221,28 @@ LABEL-VALUES, even when it fails.  Returns BODY's values."
     (clrhash *request-counts*) (clrhash *request-times*)
     (dolist (metric *metrics*) (clrhash (metric-values metric)))))
 
+(define-metric "littoral_event_stream_seconds" :histogram
+  "How long open pages' event streams stayed open, by application."
+  :labels '("app") :buckets '(1 10 60 300 1800 3600 14400 86400))
+
+(defun note-stream-closed (stream)
+  "Count and log STREAM, an event stream that has closed: how long it was
+open and how many events it sent, under the id of the request that opened it."
+  (let* ((seconds (/ (- (get-internal-real-time) (stream-opened stream)) internal-time-units-per-second))
+         (app (application-path (session-application (stream-session stream)))))
+    (observe-metric "littoral_event_stream_seconds" seconds (list app))
+    (when *request-log*
+      (funcall *request-log*
+               (list :time (get-universal-time) :method "GET" :path app :app app
+                     :kind "events-closed" :status 200 :milliseconds (float (* 1000 seconds))
+                     :address (stream-address stream) :request-id (stream-request-id stream)
+                     :user (and *request-log-user-function*
+                                (let ((*session* (stream-session stream)))
+                                  (ignore-errors (funcall *request-log-user-function*))))
+                     :updates (stream-updates stream))))))
+
+(setf *stream-closed-function* 'note-stream-closed)
+
 (define-metric "littoral_sessions_created_total" :counter "Sessions started, by application." :labels '("app"))
 (define-metric "littoral_sessions_ended_total" :counter
   "Sessions forgotten, by application and why: expired (idle too long) or evicted (over :max-sessions)."
@@ -260,9 +282,10 @@ string, where session keys ride.  NIL for STREAM stops logging.  It sets
             (json-string (getf entry :kind)) (getf entry :status)
             (getf entry :milliseconds) (json-string (or (getf entry :address) ""))
             (json-string (or (getf entry :request-id) "")))
-    (let ((user (getf entry :user)) (bytes (getf entry :bytes)))
+    (let ((user (getf entry :user)) (bytes (getf entry :bytes)) (updates (getf entry :updates)))
       (when user (format out ",\"user\":~A" (json-string (princ-to-string user))))
-      (when bytes (format out ",\"bytes\":~D" bytes)))
+      (when bytes (format out ",\"bytes\":~D" bytes))
+      (when updates (format out ",\"updates\":~D" updates)))
     (loop for (key name) in '((:user-agent "agent") (:referrer "referrer"))
           for value = (getf entry key)
           when value do (format out ",\"~A\":~A" name (json-string value)))

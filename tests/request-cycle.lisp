@@ -241,6 +241,8 @@
         (is (= 200 status))
         (is (string= "same-origin" (getf headers :referrer-policy)))
         (is (string= "nosniff" (getf headers :x-content-type-options)))
+        (is (string= "same-origin" (getf headers :cross-origin-opener-policy)))
+        (is (search "camera=()" (getf headers :permissions-policy)))
         (is (null (getf headers :strict-transport-security)) "Not over plain HTTP")))))
 
 (test strict-transport-security-over-https
@@ -261,6 +263,30 @@
         (let ((env (make-env :get "/c")))
           (setf (gethash "x-forwarded-proto" (getf env :headers)) "https")
           (is (search "; Secure" (cookie env))))))))
+
+(test host-cookies-over-https
+  ;; Over HTTPS the session and browser cookies take the __Host- prefix (and
+  ;; so the path /), and are read back under it.
+  (dolist (cookie-sessions '(nil t))
+    (with-fresh-applications (("/counter" 'littoral-examples:counter :mode :deployment
+                                          :cookie-sessions cookie-sessions))
+      (let ((b (make-instance 'browser)))
+        (setf (browser-headers b) (list (cons "x-forwarded-proto" "https")))
+        (multiple-value-bind (status headers) (raw-request b :get "/counter")
+          (declare (ignore status))
+          (let ((cookie (getf headers :set-cookie)))
+            (is (alexandria:starts-with-subseq
+                 (if cookie-sessions "__Host-_s_counter=" "__Host-_ltb_counter=") cookie))
+            (is (search "; Path=/;" cookie))
+            (is (search "; Secure" cookie))))
+        (visit b "/counter")
+        (click b "++")
+        (click b "++")
+        (is (= 2 (count-shown b))))
+      ;; Over plain HTTP, as before.
+      (let ((cookie (getf (nth-value 1 (raw-request (make-instance 'browser) :get "/counter")) :set-cookie)))
+        (is (alexandria:starts-with-subseq (if cookie-sessions "_s_counter=" "_ltb_counter=") cookie))
+        (is (search "; Path=/counter;" cookie))))))
 
 (test max-sessions-evicts-least-recent
   (with-fresh-applications (("/counter" 'littoral-examples:counter :max-sessions 2))

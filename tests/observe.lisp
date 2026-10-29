@@ -260,3 +260,26 @@
         (is (search "le=\"60\"" (metrics-text))))
       (visit b "/rebucketed")
       (is (not (search "le=\"60\"" (metrics-text)))))))
+
+(test closed-event-streams-are-logged
+  (reset-metrics)
+  (littoral-examples:clear-room)
+  (let ((lines (make-string-output-stream)))
+    (log-requests-to lines)
+    (unwind-protect
+         (with-fresh-applications (("/chat" 'littoral-examples:chat :mode :deployment))
+           (let ((bob (make-instance 'browser)) (sink (make-instance 'sink)))
+             (join-chat bob "bob")
+             (let ((thread (open-stream bob sink)))
+               (close-event-streams)
+               (is (wait-for (lambda () (not (sb-thread:thread-alive-p thread))))))))
+      (log-requests-to nil))
+    (let ((closed (find-if (lambda (line) (search "events-closed" line))
+                           (uiop:split-string (get-output-stream-string lines) :separator '(#\Newline)))))
+      (is (not (null closed)))
+      (when closed
+        (let ((entry (com.inuoe.jzon:parse closed)))
+          (is (equal "/chat" (gethash "app" entry)))
+          (is (integerp (gethash "updates" entry)))
+          (is (plusp (length (gethash "id" entry))))))))
+  (is (eql 1 (metric-value "littoral_event_stream_seconds_count{app=\"/chat\"}"))))

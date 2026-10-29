@@ -77,7 +77,12 @@ so browsers may cache it for good yet never run a stale copy."
   '(;; Session keys ride in URLs: never send them to other sites.
     :referrer-policy "same-origin"
     :x-content-type-options "nosniff"
-    :x-frame-options "SAMEORIGIN")
+    :x-frame-options "SAMEORIGIN"
+    ;; A page opened from another site gets no handle on this one's window.
+    :cross-origin-opener-policy "same-origin"
+    ;; Powerful features no Littoral page asks for; an application that
+    ;; needs one changes this list.
+    :permissions-policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
   "Headers added to every page, redirect and AJAX response.")
 
 (defvar *hsts-max-age* 31536000
@@ -185,16 +190,19 @@ were not told to trust."
 
 (defun browser-cookie-name (app)
   "The cookie that ties APP's URL sessions to the browser that started them."
-  (format nil "_ltb~A" (substitute #\_ #\/ (application-path app))))
+  (host-cookie-name (format nil "_ltb~A" (substitute #\_ #\/ (application-path app)))))
 
 (defun request-cookie (name)
   "The value of the current request's cookie NAME, or NIL."
   (cdr (assoc name (lack/request:request-cookies *request*) :test #'string=)))
 
 (defun session-cookie-header (name value app)
-  "A Set-Cookie value for NAME=VALUE scoped to APP, Secure over HTTPS."
+  "A Set-Cookie value for NAME=VALUE scoped to APP, Secure over HTTPS.  A
+__Host- cookie (see HOST-COOKIE-NAME) must have the path /."
   (format nil "~A=~A; Path=~A; HttpOnly; SameSite=Lax~:[~;; Secure~]"
-          name value (application-base-url app) (secure-request-p)))
+          name value
+          (if (alexandria:starts-with-subseq "__Host-" name) "/" (application-base-url app))
+          (secure-request-p)))
 
 (defun set-cookie (name value &key max-age path (http-only t) (same-site "Lax")
                                 (session *session*))

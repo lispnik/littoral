@@ -235,6 +235,10 @@ answering :OK."))
    (error-message :initform nil :accessor validation-error-message))
   (:documentation "Refuses answers the validator rejects and shows why."))
 
+(defmethod states ((decoration validation-decoration))
+  ;; The error shown belongs to the page: going back shows that page's.
+  (list decoration))
+
 (defmethod validate-answer ((decoration validation-decoration) value)
   (setf (validation-error-message decoration) (funcall (validator decoration) value)))
 

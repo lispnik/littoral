@@ -183,9 +183,15 @@ APPLICATION-WEBSOCKETS-P.  Returns the APPLICATION."
           (alexandria:hash-table-values (application-sessions app)))
         #'> :key #'session-last-access))
 
+(defun host-cookie-name (name)
+  "NAME with the __Host- prefix over HTTPS: browsers then accept the cookie
+only from this host, over HTTPS, for every path, so neither a subdomain nor
+a plain-HTTP page can plant one."
+  (if (and *request* (secure-request-p)) (concatenate 'string "__Host-" name) name))
+
 (defun session-cookie-name (app)
   "The cookie that carries APP's session key when it uses cookie sessions."
-  (format nil "_s~A" (substitute #\_ #\/ (application-path app))))
+  (host-cookie-name (format nil "_s~A" (substitute #\_ #\/ (application-path app)))))
 
 (defun application-offered-languages (app)
   "APP's LANGUAGE and its other LANGUAGES."

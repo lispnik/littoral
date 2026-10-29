@@ -33,6 +33,7 @@ Sign-ins are kept in the database, so they survive restarts; the sign-in form of
 | `PORT`, `ADDRESS` | where to listen (default {{port}}, 127.0.0.1) |
 | `PUBLIC_URL` | the site's address, for links in mail; required in deployment |
 | `TRUST_PROXY` | set behind a reverse proxy, so limits see real client addresses |
+| `CHECK_BREACHED_PASSWORDS` | `0` stops checking new passwords against Have I Been Pwned (only five hex digits of each password's SHA-1 are sent) |
 | `INSTANCE_ID` | starts every session key, so a proxy can route each to its process; SIGUSR1 then drains it |
 | `DATABASE_URL` or `DATA_DIR` | PostgreSQL, or where the SQLite file goes |
 | `SMTP_URL` | the mail server: `smtp://user:password@host:587` (STARTTLS) or `smtps://…:465` (TLS); without it, mail is printed to the log |

@@ -164,6 +164,11 @@ REQUEST-PARAMETER.")
   (:documentation "Wraps a component's rendering or intercepts its answers.
 Specialise RENDER-DECORATION and call RENDER-INNER for what it wraps."))
 
+(defmethod states ((decoration decoration))
+  "A decoration with state of its own, such as an error it shows, names it
+here, as a component does; snapshots then save it with the page."
+  '())
+
 (defgeneric decoration-kind (decoration)
   (:documentation ":GLOBAL decorations sit outside a delegation and so stay
 visible while another component is shown in their owner's place; :LOCAL

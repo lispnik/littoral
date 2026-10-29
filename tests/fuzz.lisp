@@ -413,6 +413,124 @@ changed, a field's value replaced by junk, or a field left out."
             (is (and (eq :returned what) (integerp status) (< status 500))
                 "seed ~D run ~D: ~S gave ~S ~S" (fuzz-seed) run body what status)))))))
 
+;;; Sequences of requests: clicks, forms, AJAX, reloads and the back button
+;;;
+;;; A virtual user wanders an example in random steps, checking the rules
+;;; the request cycle promises: no request fails; going back to a page shows
+;;; it as it was shown; showing a page again shows it the same (rendering
+;;; changes no state); and no action changes snapshotted state in place.
+
+(defparameter *sequence-applications*
+  '(("/counter" littoral-examples:counter) ("/multi" littoral-examples:multi-counter)
+    ("/guess" littoral-examples::guess-game) ("/todo" littoral-examples::todo-list)
+    ("/topics" littoral-examples::topics) ("/report" littoral-examples::element-table)
+    ("/store" littoral-examples:store) ("/wizard" littoral-examples::wizard-demo)
+    ("/dialogs" littoral-examples::dialogs-demo)
+    ;; The party as last saved is data, kept outside STATES: the back button
+    ;; doesn't undo saving it.
+    ("/widgets" littoral-examples::widget-demo "(?s)<dl class=\"party-saved\">.*?</dl>")
+    ("/contacts" littoral-examples::contacts-app) ("/login" littoral-examples:login-demo))
+  "The examples the sequences wander, each (PATH CLASS [UNDONE]): UNDONE, a
+regular expression, matches what a page shows that the back button doesn't
+undo, such as saved data.  Left out: examples showing the time (the AJAX
+demo's clock) or sharing state between sessions.")
+
+(defun page-action-links (b)
+  "The links on B's page that act (they name a page key), as (TEXT . HREF)."
+  (let ((links '()))
+    (cl-ppcre:do-register-groups (href text) ("(?is)<a\\b[^>]*?href=\"([^\"]*)\"[^>]*>(.*?)</a>" (browser-html b))
+      (let ((href (unescape href)))
+        (when (and (plusp (length href)) (find (char href 0) "/?") (search "_k=" href))
+          (push (cons (strip-tags text) href) links))))
+    (nreverse links)))
+
+(defun page-submit-labels (b)
+  "The labels of the submit buttons on B's page."
+  (let ((labels '()))
+    (cl-ppcre:do-register-groups (text) ("(?is)<button\\b[^>]*type=\"submit\"[^>]*>(.*?)</button>" (browser-html b))
+      (push (strip-tags text) labels))
+    (cl-ppcre:do-register-groups (value) ("(?is)<input\\b[^>]*type=\"submit\"[^>]*value=\"([^\"]*)\"" (browser-html b))
+      (push (unescape value) labels))
+    (remove "" (nreverse labels) :test #'string=)))
+
+(defvar *not-undone* nil "What the application being wandered shows that the back button doesn't undo.")
+
+(defun page-state-text (b)
+  "B's page text, toasts left out (they show once, by design), and what
+*NOT-UNDONE* matches."
+  (let ((html (browser-html b)))
+    (setf (browser-html b)
+          (cl-ppcre:regex-replace-all "(?s)<div class=\"lt-toast [^\"]*\"[^>]*>.*?</div>"
+                                      (if *not-undone* (cl-ppcre:regex-replace-all *not-undone* html "") html)
+                                      ""))
+    (prog1 (body-text b) (setf (browser-html b) html))))
+
+(defun wander (path steps)
+  "Take STEPS random steps through the application at PATH.  Returns the
+problems found, each a string, and the steps taken."
+  (let ((b (make-instance 'browser))
+        (shown (make-hash-table :test 'equal))
+        (problems '())
+        (taken '()))
+    (flet ((problem (format &rest arguments)
+             (push (format nil "~?~%  after ~{~A~^, ~}" format arguments (reverse taken)) problems))
+           (note () (setf (gethash (browser-url b) shown) (page-state-text b))))
+      (handler-bind ((state-changed-in-place
+                       (lambda (w) (push (princ-to-string w) problems) (muffle-warning w))))
+        (visit b path)
+        (note)
+        (dotimes (i steps)
+          (let* ((links (page-action-links b))
+                 (labels (page-submit-labels b))
+                 (specs (ajax-specs b "on-click"))
+                 (action (pick (append (and links '(:click :click :click)) (and labels '(:press :press))
+                                       (and specs '(:ajax)) '(:back :back :reload)))))
+            (multiple-value-bind (what detail)
+                (outcome
+                 (lambda ()
+                   (ecase action
+                     (:click (let ((link (pick links)))
+                               (push (format nil "click ~S" (first link)) taken)
+                               (visit b (rest link))))
+                     (:press (let ((label (pick labels)))
+                               (push (format nil "press ~S" label) taken)
+                               (press b label)))
+                     (:ajax (let ((spec (pick specs)))
+                              (push "ajax" taken)
+                              (ajax-request b (first spec) (rest spec))
+                              (visit b (browser-url b))))
+                     (:reload (let ((before (page-state-text b)) (url (browser-url b)))
+                                (push "reload" taken)
+                                (visit b url)
+                                (when (and (string= url (browser-url b)) (string/= before (page-state-text b)))
+                                  (problem "Showing the page again changed it:~%  ~A~%  ~A"
+                                           before (page-state-text b)))))
+                     (:back (let ((url (pick (alexandria:hash-table-keys shown))))
+                              (push (format nil "back to ~A" url) taken)
+                              (visit b url)
+                              ;; An isolated page redirects to the session as it is now.
+                              (when (and (string= url (browser-url b))
+                                         (string/= (gethash url shown) (page-state-text b)))
+                                (problem "Going back showed the page differently:~%  was ~A~%  now ~A"
+                                         (gethash url shown) (page-state-text b))))))))
+              (unless (eq what :returned)
+                (problem "~A: ~S ~A" action what detail)))
+            (when (and (browser-status b) (>= (browser-status b) 500))
+              (problem "Status ~D" (browser-status b)))
+            (note)))))
+    (values (nreverse problems) (reverse taken))))
+
+(test fuzz-request-sequences
+  (let ((*check-state-changed-in-place* t))
+    (fuzzing (run 3)
+      (dolist (entry *sequence-applications*)
+        (destructuring-bind (path class &optional not-undone) entry
+          (littoral::forget-state-changes-warned)
+          (with-fresh-applications ((path class :mode :deployment))
+            (let ((problems (let ((*not-undone* not-undone)) (wander path 30))))
+              (is (null problems) "Seed ~D, run ~D, ~A:~%~{~A~%~}" (fuzz-seed) run path
+                  (subseq problems 0 (min 3 (length problems)))))))))))
+
 ;;; What fuzzing found, kept as plain tests
 
 (define-condition fuzz-not-an-error () ()
