@@ -295,6 +295,10 @@ through Swank, when there is one.")
                         (milliseconds (getf stats :actions))
                         (milliseconds (getf stats :snapshot))
                         (getf stats :objects))))
+        (when (getf stats :changed-in-place)
+          (h:strong (:class "lt-toolbar-warning"
+                     :title "Changed in place, so the back button can't undo it")
+            (h:text (format nil "changed in place: ~{~A~^, ~} · " (getf stats :changed-in-place)))))
         (h:text (format nil "render ~A"
                       (milliseconds (/ (- (get-internal-real-time) start)
                                        internal-time-units-per-second))))))))

@@ -11,6 +11,7 @@ A Seaside-style web framework for SBCL. See README.md for the user-facing tour.
 - Load order is serial (see `littoral.asd`): util → context → i18n → translations → callbacks → html/{canvas,tags,brushes} → component → decoration → dialogs → backtracking → task → widgets → session → application → configuration → ajax → dispatcher → push → live → tools/{halos,config}.
 - Invariants:
   - `decorations` lists are replaced, never mutated, because snapshots store them by value.
+  - Snapshots share slot values, so values in `states` objects are replaced, not changed in place (or the object is named `(deep …)`). In development mode `take-snapshot` keeps a copy of each saved list, vector and hash table (`snapshot-fingerprints`), and `run-actions`/`ajax-json` call `warn-of-state-changed-in-place` on the old snapshot after the callbacks, which warns `state-changed-in-place`. Values that are themselves in `states` and slots in `shared-state-slots` aren't checked. Tests catch the warning with `handler-bind` and clear `*state-changes-warned*` with `forget-state-changes-warned`.
   - Rendering must not change state (`*rendering*` makes `show`/`answer`/`home` signal). Tasks are started by `prepare-tasks` after the callbacks run, never during render. Derived data, such as a report's rows, is computed on demand rather than stored at render time.
   - Every URL goes through `url-for` or `page-url`, so the mount prefix and `update-url` apply.
   - AJAX requests reuse the page's continuation and re-snapshot it; they do not create a new `_k`.

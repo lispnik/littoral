@@ -11,6 +11,8 @@
 - **The request log from the environment.** `start` reads `$LITTORAL_REQUEST_LOG` (`json`, `text` or a file) through `log-requests-from-environment`, so a deployment can log requests without code.
 - **Changing the factor key.** Old keys go in `$LITTORAL_OLD_FACTOR_KEYS` (or `littoral.auth:*old-factor-keys*`); secrets sealed with them still open, and are sealed again with the current key when next used or by `encrypt-factor-secrets`, which now checks every secret opens before changing any. Each sealed secret names its key by a short hash (`aes1:KEYID:…`); those sealed before then still open. `create-auth-tables` warns when keys are malformed, or when secrets are encrypted but no key is set.
 
+- **State changed in place is noticed.** A list, vector, string or hash table that the back button's snapshots share, changed in place by a page's actions (`nconc`, `(setf gethash)`, `sort`…), changes in every snapshot, so going back can't undo it. In development mode Littoral now compares what each snapshot saved after the actions run, warns with `state-changed-in-place` (once per slot), and names the slot in the toolbar. `shared-state-slots` lists slots changed in place on purpose; `*check-state-changed-in-place*` turns the check on everywhere (T) or off (NIL).
+
 - **Fuzz tests.** A `fuzz` suite feeds random and mutated input to the passkey parsers, the decoders, sealed secrets, escaping, the SQL splitter, whole requests and JSON endpoints. `make test` runs it on a fixed seed; `make fuzz` runs many more cases on a random one.
 
 ### Changed

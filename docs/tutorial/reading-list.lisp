@@ -195,6 +195,9 @@
 (defmethod initialize-instance :after ((self reading-list) &key)
   (setf (slot-value self 'shelf) (make-instance 'shelf :owner self)))
 
+(defmethod shared-state-slots ((self reading-list))
+  '(rows))
+
 (defmethod states ((self reading-list))
   (list self))
 

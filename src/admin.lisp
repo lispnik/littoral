@@ -381,6 +381,10 @@ page shown in its place."))
 (defmethod states ((self admin))
   (list self))
 
+;; A cache of each class's list, made when first shown.
+(defmethod shared-state-slots ((self admin))
+  '(lists))
+
 (defun class-list-for (admin class)
   "ADMIN's list for CLASS, made once."
   (or (gethash class (admin-lists admin))

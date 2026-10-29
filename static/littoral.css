@@ -36,6 +36,7 @@ label { margin-right: 1em; }
               padding: .4rem 1rem; font-size: .85rem; background: var(--lt-panel);
               border-top: 1px solid var(--lt-border); }
 .lt-toolbar-time { margin-left: auto; color: var(--lt-muted); }
+.lt-toolbar-warning { color: var(--lt-error); }
 .lt-halo { border: 1px dashed var(--lt-accent); margin: .3rem 0; }
 .lt-halo-bar { display: flex; flex-wrap: wrap; gap: .1rem .6rem; font-size: .75rem; padding: .1rem .4rem;
                background: var(--lt-panel); border-bottom: 1px dashed var(--lt-accent); }

@@ -127,7 +127,9 @@ LITTORAL.HTML is there too, as H.")
     ("LITTORAL.AUTH" "*AUTH-DATABASES*" :clear)
     ("LITTORAL.JOBS" "*JOB-DATABASES*" :clear)
     ("LITTORAL.MAIL" "*MAIL-DATABASES*" :clear)
-    ("LITTORAL.DB" "*MIGRATED*" :clear))
+    ("LITTORAL.DB" "*MIGRATED*" :clear)
+    ;; Which slots have warned of changes in place: each example warns afresh.
+    ("LITTORAL" "*STATE-CHANGES-WARNED*" :empty))
   "Registries in systems this one doesn't depend on, as (PACKAGE NAME HOW):
 each example gets its own, :EMPTY or a :COPY, when the system is loaded.
 Registries other threads read are changed globally instead, and put back

@@ -97,6 +97,8 @@ under its own name.  Give the package a local nickname, as in
    ;; Backtracking
    #:snapshot #:take-snapshot #:restore-snapshot #:begin-isolation #:end-isolation
    #:deep #:deep-copy #:snapshot-entries
+   #:state-changed-in-place #:state-changed-object #:state-changed-slot
+   #:shared-state-slots #:*check-state-changed-in-place*
    ;; Tasks
    #:task #:define-flow #:flow
    ;; AJAX and push

@@ -31,6 +31,44 @@
       (body-text b))))
 ;; ⇒ "Rope: 1 Add rope"
 
+;;;; Example: littoral:state-changed-in-place littoral:state-changed-object littoral:state-changed-slot littoral:*check-state-changed-in-place*
+;;; In development mode, a list, vector or hash table that a snapshot saved and an action then changed in place is noticed: the back button can't undo such a change, so Littoral signals this warning (once per slot) and the toolbar names the slot.  *check-state-changed-in-place* is :development by default; T checks in deployment mode too, NIL never.
+(defclass logbook (component)
+  ((entries :initform (list "Cast off") :accessor entries)))
+(defmethod states ((self logbook)) (list self))
+(defmethod render ((self logbook))
+  (h:anchor (:callback (lambda () (nconc (entries self) (list "Anchored")))) "Log"))
+(with-fresh-applications (("/log" 'logbook :mode :development))
+  (let ((b (make-instance 'browser))
+        (noticed '()))
+    (visit b "/log")
+    (handler-bind ((state-changed-in-place
+                     (lambda (warning)
+                       (push (list (type-of (state-changed-object warning))
+                                   (state-changed-slot warning))
+                             noticed)
+                       (muffle-warning warning))))
+      (click b "Log"))
+    noticed))
+;; ⇒ ((LOGBOOK ENTRIES))
+
+;;;; Example: littoral:shared-state-slots
+;;; A slot whose value is shared and changed in place on purpose, such as a cache, is listed by shared-state-slots, and changing it isn't warned of.  The back button doesn't undo it, which for a cache is what's wanted.
+(defclass chart-table (component)
+  ((soundings :initform (make-hash-table) :reader soundings)))
+(defmethod states ((self chart-table)) (list self))
+(defmethod shared-state-slots ((self chart-table)) '(soundings))
+(defmethod render ((self chart-table))
+  (h:anchor (:callback (lambda () (setf (gethash :harbour (soundings self)) 12))) "Sound"))
+(with-fresh-applications (("/chart" 'chart-table :mode :development))
+  (let ((b (make-instance 'browser))
+        (warnings 0))
+    (visit b "/chart")
+    (handler-bind ((state-changed-in-place (lambda (w) (incf warnings) (muffle-warning w))))
+      (click b "Sound"))
+    warnings))
+;; ⇒ 0
+
 ;;;; Example: littoral:deep-copy
 ;;; Lists, vectors, strings and hash tables are copied; shared structure stays shared, and other objects are not copied.
 (let* ((buoy (make-instance 'component))

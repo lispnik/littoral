@@ -335,7 +335,7 @@ Pages showing a subscriber open a server-sent event stream. After `publish`, lit
 
 ## 10. The whole list
 
-Now the list gets its finished class, with the search query, the rows, the shelf and the recently-finished line as well as the books. The shelf needs to know its list, so it's made once the list exists:
+Now the list gets its finished class, with the search query, the rows, the shelf and the recently-finished line as well as the books. The shelf needs to know its list, so it's made once the list exists. The rows are a cache, which grows as books are added and is never undone by the back button, so `shared-state-slots` says so; otherwise, in development mode, Littoral would warn that the table is changed in place:
 
 ```lisp
 (defclass reading-list (component)
@@ -353,6 +353,9 @@ Now the list gets its finished class, with the search query, the rows, the shelf
 
 (defmethod initialize-instance :after ((self reading-list) &key)
   (setf (slot-value self 'shelf) (make-instance 'shelf :owner self)))
+
+(defmethod shared-state-slots ((self reading-list))
+  '(rows))
 ```
 
 The `states` method from step 3 still applies. The list's children are the recently-finished line and the shelf. Its `render` draws them, with the search box, the form from step 3, and a link that starts the task. A `style` method gives the page some CSS:

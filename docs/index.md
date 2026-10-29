@@ -1108,7 +1108,7 @@ A Pharo image runs Smalltalk on one OS thread, so the first column of littoral i
 - **Not compared:** server push. Seaside's WebSocket and Comet packages work differently from littoral's event streams.
 - **Caveats:** other applications kept one or two cores busy during these runs. The littoral runs varied by up to ±30%, Seaside's by under 10%: one thread is less disturbed by others. Seaside's ratios to littoral are therefore conservative, if anything.
 
-**State that the back button sees.** Snapshots copy the slots of the objects `states` names, but share the slots' values. A list changed in place therefore changes in every snapshot. Either replace such values (`(setf (items self) (append …))`) or name the object as `(deep object)` in `states`. A deep entry copies the object's lists, vectors, strings and hash tables. Other instances are still shared, and cycles are kept.
+**State that the back button sees.** Snapshots copy the slots of the objects `states` names, but share the slots' values. A list changed in place therefore changes in every snapshot. Either replace such values (`(setf (items self) (append …))`) or name the object as `(deep object)` in `states`. A deep entry copies the object's lists, vectors, strings and hash tables. Other instances are still shared, and cycles are kept. In development mode, Littoral notices such a value changed in place by a page's actions: it warns (`state-changed-in-place`, once per slot) and the toolbar names the slot. A slot changed in place on purpose, such as a cache, can be listed by `shared-state-slots`.
 
 **Several processes.** Sessions live in the memory of the process that made them. To run several processes behind one site, give each one an instance id; it prefixes every session key:
 

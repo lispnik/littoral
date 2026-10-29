@@ -452,6 +452,7 @@ posts and WebSocket messages alike."
     ;; URLs name the old one, so move to a new page.
     (unless (or *redirect* (string= key (session-key session)))
       (setf *redirect* (page-url session (new-continuation session))))
+    (warn-of-state-changed-in-place (continuation-snapshot continuation))
     (setf (continuation-snapshot continuation) (take-snapshot root))
     ;; What the page shows may have changed, and with it the presences it's in.
     (note-session-presences session)
@@ -496,13 +497,15 @@ and return a redirect to it; otherwise NIL."
       ;; A callback sent a file: answer with it, and keep the page.
       (when *download*
         (return-from run-actions *download*))
-      (let* ((acted (get-internal-real-time))
+      (let* ((changed (warn-of-state-changed-in-place (continuation-snapshot continuation)))
+             (acted (get-internal-real-time))
              (page (new-continuation session))
              (done (get-internal-real-time)))
         (setf (session-last-action session)
               (list :actions (/ (- acted start) internal-time-units-per-second)
                     :snapshot (/ (- done acted) internal-time-units-per-second)
-                    :objects (length (snapshot-entries (continuation-snapshot page)))))
+                    :objects (length (snapshot-entries (continuation-snapshot page)))
+                    :changed-in-place changed))
         (redirect-response (or *redirect* (page-url session page)))))))
 
 (defun handle-session-request (session)
